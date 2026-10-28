@@ -1,12 +1,15 @@
-# Smart TV Plus — Android 4.4.4
-Native Android TV viewer (API 19+). No content editing is available to viewers.
+# Smart TV Plus 4.4.4
+
+Android TV viewer, API 19+, with a separate admin catalog editor.
+
 ## Admin
-Only GitHub repository collaborators with write access can edit `content/catalog.json` via GitHub's web editor. Example:
-```json
-{"items":[{"title":"Demo licensed video","type":"فيلم","url":"https://example.com/licensed-video.mp4"}]}
-```
-Types can be فيلم, مسلسل, قناة. Use only authorized streaming URLs. Changes appear when viewers tap تحديث المكتبة.
-## Build
-GitHub Actions → Build Android 4.4.4 APK → Run workflow → Artifacts. APK is a debug build, not yet hardware-tested.
-## Compatibility
-Android 4.4.4 uses platform VideoView: codec and HLS support depend on device firmware. HTTP is enabled for legacy sources; use HTTPS when possible. Admin authorization is GitHub repository write permissions, not an in-app login.
+Open `admin/index.html` locally in a modern browser. Import the existing `content/catalog.json`, add movies, shows or channels with **licensed HTTPS direct media URLs**, download the JSON, and commit it to `content/catalog.json` on GitHub. Only repository writers can publish updates. The editor is not an authenticated hosted CMS; it does not directly write to GitHub.
+
+## Viewer
+The APK has no editing controls. It reads the public catalog from GitHub when opened or when the user selects refresh. This is suitable only for a **public catalog**; do not put private links, secrets, or credentials in it.
+
+## APK build
+GitHub Actions > Build Android 4.4.4 APK > Run workflow, then download the resulting artifact. Build has not been verified on hardware.
+
+## Caveats
+Android 4.4.4 codec and HLS support varies by device; VideoView may fail for modern formats. GitHub raw content availability requires internet access. The initial catalog is empty until you add licensed content. There is no automatic launch on TV boot yet. Do not claim crash-free operation before device testing.
