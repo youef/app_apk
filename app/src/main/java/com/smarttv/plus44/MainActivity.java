@@ -15,7 +15,7 @@ public class MainActivity extends Activity {
  String read(InputStream in)throws IOException{if(in==null)return "";try{ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1){out.write(b,0,n);if(out.size()>2000000)throw new IOException("Response too large");}return out.toString("UTF-8");}finally{in.close();}}
  void load(){if(loading)return;loading=true;status("جار تحميل المكتبة...");
  new Thread(()->{HttpURLConnection c=null;try{
- URL u=new URL(feed+"&cache_bust="+System.currentTimeMillis());c=(HttpURLConnection)u.openConnection();c.setRequestMethod("GET");c.setRequestProperty("apikey",apiKey);c.setRequestProperty("Accept","application/json");c.setRequestProperty("Cache-Control","no-cache");c.setConnectTimeout(15000);c.setReadTimeout(15000);
+ URL u=new URL(feed);c=(HttpURLConnection)u.openConnection();c.setRequestMethod("GET");c.setRequestProperty("apikey",apiKey);c.setRequestProperty("Accept","application/json");c.setRequestProperty("Cache-Control","no-cache");c.setConnectTimeout(15000);c.setReadTimeout(15000);
  int code=c.getResponseCode();String body=read(code>=200&&code<300?c.getInputStream():c.getErrorStream());if(code!=200)throw new IOException("HTTP "+code+" "+body.substring(0,Math.min(150,body.length())));
  JSONArray items=new JSONArray(body);runOnUiThread(()->{loading=false;list.removeAllViews();if(items.length()==0){list.addView(label("المكتبة فارغة حاليًا. ستظهر الأفلام والمسلسلات بعد نشرها من لوحة الإدارة."));return;}
  for(int i=0;i<items.length();i++){JSONObject o=items.optJSONObject(i);if(o==null)continue;String name=o.optString("title","بدون عنوان"),type=o.optString("type","movie"),url=o.optString("stream_url","");
