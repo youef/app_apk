@@ -1,12 +1,8 @@
-name: Build Android 4.4.4 APK
+name: Build clean Android 4.4 APK
 on:
   workflow_dispatch:
   push:
-    paths:
-      - 'app/**'
-      - 'build.gradle'
-      - 'settings.gradle'
-      - '.github/workflows/build-apk.yml'
+    branches: [main]
 permissions:
   contents: write
 jobs:
@@ -19,36 +15,32 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
-        with:
-          packages: 'platform-tools platforms;android-33 build-tools;33.0.2'
-      - name: Build debug APK
+      - name: Install legacy SDK
+        run: sdkmanager "platforms;android-28" "build-tools;28.0.3"
+      - name: Build and validate
         run: |
           wget -q https://services.gradle.org/distributions/gradle-7.6-bin.zip -O /tmp/gradle.zip
           unzip -q /tmp/gradle.zip -d /tmp
-          /tmp/gradle-7.6/bin/gradle assembleDebug --no-daemon
+          /tmp/gradle-7.6/bin/gradle clean assembleDebug --no-daemon
           APK=app/build/outputs/apk/debug/app-debug.apk
           test -s "$APK"
-          "$ANDROID_HOME/build-tools/33.0.2/aapt" dump badging "$APK" | tee apk-badging.txt
-          grep -q "sdkVersion:'16'" apk-badging.txt
-          grep -q "package: name='com.aseel.tvlegacy'" apk-badging.txt
-          unzip -t "$APK" | tail -n 1
+          "$ANDROID_HOME/build-tools/28.0.3/aapt" dump badging "$APK" > apk-badging.txt
+          cat apk-badging.txt
+          grep -Fq "sdkVersion:'19'" apk-badging.txt
+          grep -Fq "package: name='com.aseel.tv'" apk-badging.txt
+          unzip -t "$APK"
           unzip -Z1 "$APK" > apk-files.txt
-          grep -qx "classes.dex" apk-files.txt
-          "$ANDROID_HOME/build-tools/33.0.2/apksigner" verify --verbose --min-sdk-version 16 "$APK" | tee apk-signature.txt
-          grep -q "Verified using v1 scheme (JAR signing): true" apk-signature.txt
-          cp "$APK" SmartTVPlus-Android-4.4.4.apk
+          grep -Fxq "classes.dex" apk-files.txt
+          "$ANDROID_HOME/build-tools/28.0.3/apksigner" verify --verbose --min-sdk-version 19 "$APK" > apk-signature.txt
+          cat apk-signature.txt
+          grep -Fq "Verified using v1 scheme (JAR signing): true" apk-signature.txt
+          cp "$APK" Aseel-TV-Android-4.4.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: SmartTVPlus44-APK
-          path: SmartTVPlus-Android-4.4.4.apk
-      - name: Publish APK to GitHub Releases
+          name: Aseel-TV-Android-4.4
+          path: Aseel-TV-Android-4.4.apk
+      - name: Publish fresh release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION=$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" app/build.gradle | head -n1)
-          test -n "$VERSION"
-          TAG="v$VERSION"
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --target "$GITHUB_SHA" --title "Smart TV Plus $TAG" --notes "Android 4.4.4+ APK. Debug-signed test build; not a production release."
-          fi
-          gh release upload "$TAG" SmartTVPlus-Android-4.4.4.apk --clobber
+          gh release create fresh-v1.0.0 Aseel-TV-Android-4.4.apk --target "$GITHUB_SHA" --title "Aseel TV - Fresh 1.0.0" --notes "Minimal Android 4.4.4 installation compatibility test. Offline test app."
