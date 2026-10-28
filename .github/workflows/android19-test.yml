@@ -3,6 +3,8 @@ name: Aseel TV - Phase 1 Android 4.4 Install Test
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -75,8 +77,8 @@ jobs:
           path: build/reports/
           retention-days: 14
           if-no-files-found: error
-      - name: Publish prerelease only after successful checks
-        if: success()
+      - name: Publish prerelease only after successful checks on main
+        if: success() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
