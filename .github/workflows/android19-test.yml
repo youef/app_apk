@@ -23,6 +23,9 @@ jobs:
           java-version: '17'
       - name: Setup Android SDK using JDK 17
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+          log-accepted-android-sdk-licenses: false
       - name: Install pinned SDK packages using JDK 17
         run: |
           set -Eeuo pipefail
