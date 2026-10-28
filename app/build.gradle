@@ -1,0 +1,43 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.aseel.tv'
+    compileSdk 33
+    buildToolsVersion '33.0.2'
+
+    defaultConfig {
+        applicationId 'com.aseel.tv'
+        minSdk 19
+        targetSdk 28
+        versionCode 1
+        versionName '0.1.0-install-test'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_7
+        targetCompatibility JavaVersion.VERSION_1_7
+    }
+
+    signingConfigs {
+        debug {
+            // V1 is mandatory for Android 4.4; V2 improves newer-device support.
+            enableV1Signing true
+            enableV2Signing true
+        }
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+            shrinkResources false
+            signingConfig signingConfigs.debug
+        }
+        release {
+            minifyEnabled false
+        }
+    }
+}
+
+// Intentionally no dependencies for offline installation test.

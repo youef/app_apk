@@ -1,0 +1,79 @@
+name: Aseel TV - Phase 1 Android 4.4 Install Test
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android19:
+    name: Build and validate API 19 APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout clean project
+        uses: actions/checkout@v4
+      - name: Set JDK 11 (build only)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+      - name: Install Gradle 7.5
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '7.5'
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install pinned SDK packages
+        run: |
+          sdkmanager --install "platforms;android-33" "build-tools;33.0.2"
+      - name: Build clean debug APK and run static compatibility gate
+        id: validate
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p build/reports
+          gradle clean assembleDebug --no-daemon --stacktrace
+          python3 scripts/validate_apk.py app/build/outputs/apk/debug/app-debug.apk | tee build/reports/validation.log
+          cp app/build/outputs/apk/debug/app-debug.apk build/reports/Aseel-TV-API19-TEST.apk
+          sha256sum build/reports/Aseel-TV-API19-TEST.apk | tee build/reports/SHA256SUMS.txt
+      - name: Write build report
+        if: always()
+        shell: bash
+        env:
+          BUILD_OUTCOME: ${{ steps.validate.outcome }}
+        run: |
+          mkdir -p build/reports
+          {
+            echo "# Aseel TV — Android API 19 Phase 1"
+            echo ""
+            echo "- Commit: ${GITHUB_SHA}"
+            echo "- Build and static checks: ${BUILD_OUTCOME}"
+            echo "- Min SDK: 19; Java language level: 7; Gradle: 7.5; AGP: 7.4.2"
+            echo "- Actual installation on TV: NOT TESTED"
+            echo "- This APK uses an ephemeral CI-generated debug signing key; it is not a production key."
+          } > build/reports/phase1-report.md
+          cat build/reports/phase1-report.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload APK and report even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Aseel-TV-Phase1-${{ github.run_number }}
+          path: build/reports/
+          retention-days: 14
+          if-no-files-found: error
+      - name: Publish prerelease only after successful checks
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          TAG="phase1-test-${GITHUB_SHA:0:7}"
+          gh release create "$TAG" build/reports/Aseel-TV-API19-TEST.apk build/reports/phase1-report.md build/reports/SHA256SUMS.txt \
+            --target "$GITHUB_SHA" \
+            --title "Aseel TV — API 19 installation test ${GITHUB_SHA:0:7}" \
+            --notes "Offline Android 4.4.4 installation and remote-control test only. Debug-signed V1 APK; not validated on physical TV." \
+            --prerelease

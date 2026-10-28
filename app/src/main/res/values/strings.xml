@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">أسيل | أفلام ومسلسلات</string>
+    <string name="intro_title">أسيل</string>
+    <string name="intro_subtitle">أفلام ومسلسلات</string>
+    <string name="test_status">تم تشغيل اختبار أسيل دون إنترنت بنجاح</string>
+    <string name="test_hint">استخدم أسهم الريموت للانتقال بين الزرين ثم اضغط OK</string>
+    <string name="test_button">اختبار زر OK</string>
+    <string name="exit_button">خروج</string>
+    <string name="test_passed">نجح اختبار زر OK في الريموت</string>
+    <string name="test_footer">الإصدار التجريبي الأول • Android 4.4.4 • المرحلة 1</string>
+</resources>

@@ -1,0 +1,16 @@
+# Android/Gradle generated output
+.gradle/
+build/
+app/build/
+local.properties
+*.iml
+.idea/
+.cxx/
+captures/
+*.apk
+*.aab
+*.jks
+*.keystore
+# Keep credentials out of version control
+.env
+.env.*
