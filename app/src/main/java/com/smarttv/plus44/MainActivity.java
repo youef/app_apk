@@ -1,29 +1,54 @@
 package com.smarttv.plus44;
-import android.app.*; import android.os.*; import android.graphics.Color; import android.view.*; import android.widget.*; import android.media.*; import android.net.Uri; import org.json.*; import java.net.*; import java.io.*;
+import android.app.Activity;
+import android.os.Bundle;
+import android.graphics.Color;
+import android.net.Uri;
+import android.view.View;
+import android.widget.*;
+import org.json.*;
+import java.io.*;
+import java.net.*;
+import javax.net.ssl.HttpsURLConnection;
+
 public class MainActivity extends Activity {
- LinearLayout root,list; VideoView activeVideo;
- final String feed="https://qyzmlwtvzzgooccqxglq.supabase.co/rest/v1/catalog_items?select=title,type,stream_url&published=eq.true";
- final String apiKey="sb_publishable_Mcev7qFw9oLWgKO7GBT8Kg_nHvaQ3ES";
- Handler handler=new Handler(); boolean loading=false;
- public void onCreate(Bundle b){super.onCreate(b);showHome();}
- TextView label(String s){TextView t=new TextView(this);t.setText(s);t.setTextColor(Color.WHITE);t.setTextSize(18);t.setPadding(8,14,8,14);return t;}
- void showHome(){if(activeVideo!=null){activeVideo.stopPlayback();activeVideo=null;}root=new LinearLayout(this);root.setOrientation(1);root.setPadding(22,18,22,10);root.setBackgroundColor(Color.rgb(9,12,28));setContentView(root);
- TextView title=label("أسيل  |  أفلام ومسلسلات");title.setTextColor(Color.rgb(247,204,125));title.setTextSize(28);root.addView(title);
- Button refresh=new Button(this);refresh.setText("↻  تحديث مكتبة أسيل");root.addView(refresh);refresh.setOnClickListener(v->load());
- ScrollView sc=new ScrollView(this);root.addView(sc,new LinearLayout.LayoutParams(-1,0,1));list=new LinearLayout(this);list.setOrientation(1);sc.addView(list);load();}
- void status(String s){list.removeAllViews();list.addView(label(s));}
- String read(InputStream in)throws IOException{if(in==null)return "";try{ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1){out.write(b,0,n);if(out.size()>2000000)throw new IOException("Response too large");}return out.toString("UTF-8");}finally{in.close();}}
- void load(){if(loading)return;loading=true;status("جار تحميل المكتبة...");
- new Thread(()->{HttpURLConnection c=null;try{
- URL u=new URL(feed);c=(HttpURLConnection)u.openConnection();if(c instanceof javax.net.ssl.HttpsURLConnection && android.os.Build.VERSION.SDK_INT<21){((javax.net.ssl.HttpsURLConnection)c).setSSLSocketFactory(new Tls12SocketFactory());}c.setRequestMethod("GET");c.setRequestProperty("apikey",apiKey);c.setRequestProperty("Accept","application/json");c.setRequestProperty("Cache-Control","no-cache");c.setConnectTimeout(15000);c.setReadTimeout(15000);
- int code=c.getResponseCode();String body=read(code>=200&&code<300?c.getInputStream():c.getErrorStream());if(code!=200)throw new IOException("HTTP "+code+" "+body.substring(0,Math.min(150,body.length())));
- JSONArray items=new JSONArray(body);runOnUiThread(()->{loading=false;list.removeAllViews();if(items.length()==0){list.addView(label("أهلًا بك في أسيل ✦\\nالمكتبة فارغة حاليًا، وستظهر الأعمال المرخصة عند إضافتها من لوحة الإدارة."));return;}
- for(int i=0;i<items.length();i++){JSONObject o=items.optJSONObject(i);if(o==null)continue;String name=o.optString("title","بدون عنوان"),type=o.optString("type","movie"),url=o.optString("stream_url","");
- Button b=new Button(this);b.setText(("series".equals(type)?"مسلسل":("channel".equals(type)?"قناة":"فيلم"))+" | "+name);b.setAllCaps(false);b.setTextColor(Color.WHITE);b.setBackgroundColor(Color.rgb(37,44,78));list.addView(b);b.setOnClickListener(v->play(url));}});
- }catch(Exception e){final String reason=e.getClass().getSimpleName()+": "+e.getMessage();runOnUiThread(()->{loading=false;status("تعذر تحديث المكتبة.\n"+reason+"\nتحقق من التاريخ والوقت والاتصال، ثم حاول مجددًا.");});}
- finally{if(c!=null)c.disconnect();}}).start();}
- void play(String url){if(!url.startsWith("https://")&&!url.startsWith("http://")){Toast.makeText(this,"رابط تشغيل غير متاح",Toast.LENGTH_LONG).show();return;}
- root.removeAllViews();activeVideo=new VideoView(this);root.addView(activeVideo,new LinearLayout.LayoutParams(-1,0,1));Button back=new Button(this);back.setText("رجوع للمكتبة");root.addView(back);back.setOnClickListener(v->showHome());
- activeVideo.setVideoURI(Uri.parse(url));MediaController controls=new MediaController(this);controls.setAnchorView(activeVideo);activeVideo.setMediaController(controls);activeVideo.setOnErrorListener((mp,a,b)->{Toast.makeText(this,"تعذر تشغيل الفيديو؛ قد تكون الصيغة غير مدعومة",Toast.LENGTH_LONG).show();return true;});activeVideo.requestFocus();activeVideo.start();}
- @Override public void onBackPressed(){showHome();}
+ private LinearLayout root,items;
+ private VideoView video;
+ private volatile boolean loading=false;
+ private static final String API="https://qyzmlwtvzzgooccqxglq.supabase.co/rest/v1/catalog_items?select=title,type,stream_url&published=eq.true";
+ private static final String KEY="sb_publishable_Mcev7qFw9oLWgKO7GBT8Kg_nHvaQ3ES";
+ @Override public void onCreate(Bundle state){super.onCreate(state);home();}
+ private TextView text(String value,int size){TextView t=new TextView(this);t.setText(value);t.setTextSize(size);t.setTextColor(Color.WHITE);t.setPadding(16,12,16,12);return t;}
+ private void home(){
+  if(video!=null){video.stopPlayback();video=null;}
+  root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(18,18,18,12);root.setBackgroundColor(Color.rgb(9,12,28));setContentView(root);
+  TextView title=text("أسيل | أفلام ومسلسلات",28);title.setTextColor(Color.rgb(247,204,125));root.addView(title);
+  Button refresh=new Button(this);refresh.setText("تحديث مكتبة أسيل");root.addView(refresh);refresh.setOnClickListener(new View.OnClickListener(){public void onClick(View v){load();}});
+  ScrollView scroll=new ScrollView(this);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+  items=new LinearLayout(this);items.setOrientation(LinearLayout.VERTICAL);scroll.addView(items);load();
+ }
+ private void status(String message){items.removeAllViews();items.addView(text(message,18));}
+ private static String read(InputStream in)throws IOException{if(in==null)return "";try{ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1){out.write(b,0,n);if(out.size()>2000000)throw new IOException("Response too large");}return out.toString("UTF-8");}finally{in.close();}}
+ private void load(){
+  if(loading)return;loading=true;status("جار تحميل المكتبة...");
+  new Thread(new Runnable(){public void run(){HttpURLConnection conn=null;try{
+   conn=(HttpURLConnection)new URL(API).openConnection();
+   if(conn instanceof HttpsURLConnection && android.os.Build.VERSION.SDK_INT<21){((HttpsURLConnection)conn).setSSLSocketFactory(new Tls12SocketFactory());}
+   conn.setConnectTimeout(15000);conn.setReadTimeout(15000);conn.setRequestProperty("apikey",KEY);conn.setRequestProperty("Accept","application/json");
+   int code=conn.getResponseCode();String response=read(code<400?conn.getInputStream():conn.getErrorStream());
+   if(code!=200)throw new IOException("HTTP "+code+" "+response.substring(0,Math.min(120,response.length())));
+   final JSONArray result=new JSONArray(response);
+   runOnUiThread(new Runnable(){public void run(){loading=false;items.removeAllViews();if(result.length()==0){status("مكتبة أسيل فارغة حاليًا. ستظهر الأعمال المرخصة بعد نشرها.");return;}
+    for(int i=0;i<result.length();i++){JSONObject o=result.optJSONObject(i);if(o==null)continue;final String url=o.optString("stream_url","");
+     Button b=new Button(MainActivity.this);String type=o.optString("type","movie");b.setText(("series".equals(type)?"مسلسل":("channel".equals(type)?"قناة":"فيلم"))+" | "+o.optString("title","بدون عنوان"));b.setAllCaps(false);items.addView(b);
+     b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){play(url);}});
+    }
+   }});
+  }catch(final Exception error){runOnUiThread(new Runnable(){public void run(){loading=false;status("تعذر تحديث المكتبة: "+error.getClass().getSimpleName()+"\n"+error.getMessage());}});}
+  finally{if(conn!=null)conn.disconnect();}}}).start();
+ }
+ private void play(String url){if(!url.startsWith("https://")&&!url.startsWith("http://")){Toast.makeText(this,"رابط التشغيل غير صالح",Toast.LENGTH_LONG).show();return;}
+  root.removeAllViews();video=new VideoView(this);root.addView(video,new LinearLayout.LayoutParams(-1,0,1));Button back=new Button(this);back.setText("رجوع");root.addView(back);back.setOnClickListener(new View.OnClickListener(){public void onClick(View v){home();}});
+  video.setVideoURI(Uri.parse(url));MediaController controller=new MediaController(this);controller.setAnchorView(video);video.setMediaController(controller);video.setOnErrorListener(new android.media.MediaPlayer.OnErrorListener(){public boolean onError(android.media.MediaPlayer mp,int what,int extra){Toast.makeText(MainActivity.this,"صيغة الفيديو غير مدعومة",Toast.LENGTH_LONG).show();return true;}});video.start();
+ }
+ @Override public void onBackPressed(){home();}
 }
