@@ -26,7 +26,13 @@ jobs:
           wget -q https://services.gradle.org/distributions/gradle-7.6-bin.zip -O /tmp/gradle.zip
           unzip -q /tmp/gradle.zip -d /tmp
           /tmp/gradle-7.6/bin/gradle assembleDebug --no-daemon
-          cp app/build/outputs/apk/debug/app-debug.apk SmartTVPlus-Android-4.4.4.apk
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/33.0.2/aapt" dump badging "$APK" | tee apk-badging.txt
+          grep -q "sdkVersion:'19'" apk-badging.txt
+          grep -q "package: name='com.smarttv.plus44.compat'" apk-badging.txt
+          "$ANDROID_HOME/build-tools/33.0.2/apksigner" verify --verbose "$APK"
+          cp "$APK" SmartTVPlus-Android-4.4.4.apk
       - uses: actions/upload-artifact@v4
         with:
           name: SmartTVPlus44-APK
