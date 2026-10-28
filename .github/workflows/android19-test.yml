@@ -16,7 +16,19 @@ jobs:
     steps:
       - name: Checkout clean project
         uses: actions/checkout@v4
-      - name: Set JDK 11 (build only)
+      - name: Set JDK 17 for modern Android SDK manager
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Setup Android SDK using JDK 17
+        uses: android-actions/setup-android@v3
+      - name: Install pinned SDK packages using JDK 17
+        run: |
+          set -Eeuo pipefail
+          java -version
+          sdkmanager --install "platforms;android-33" "build-tools;33.0.2"
+      - name: Switch to JDK 11 for AGP 7.4.2 build
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -25,11 +37,6 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '7.5'
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-      - name: Install pinned SDK packages
-        run: |
-          sdkmanager --install "platforms;android-33" "build-tools;33.0.2"
       - name: Build clean debug APK and run static compatibility gate
         id: validate
         shell: bash
