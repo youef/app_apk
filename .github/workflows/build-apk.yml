@@ -16,7 +16,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK packages
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-33" "build-tools;33.0.2"
       - name: Build debug APK
         run: |
           wget -q https://services.gradle.org/distributions/gradle-7.6-bin.zip -O /tmp/gradle.zip
