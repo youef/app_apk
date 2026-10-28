@@ -7,19 +7,19 @@ public class MainActivity extends Activity {
  Handler handler=new Handler(); boolean loading=false;
  public void onCreate(Bundle b){super.onCreate(b);showHome();}
  TextView label(String s){TextView t=new TextView(this);t.setText(s);t.setTextColor(Color.WHITE);t.setTextSize(18);t.setPadding(8,14,8,14);return t;}
- void showHome(){if(activeVideo!=null){activeVideo.stopPlayback();activeVideo=null;}root=new LinearLayout(this);root.setOrientation(1);root.setPadding(22,18,22,10);root.setBackgroundColor(Color.rgb(12,18,30));setContentView(root);
- TextView title=label("SMART TV PLUS  |  الأفلام والمسلسلات والقنوات");title.setTextSize(23);root.addView(title);
- Button refresh=new Button(this);refresh.setText("تحديث المكتبة");root.addView(refresh);refresh.setOnClickListener(v->load());
+ void showHome(){if(activeVideo!=null){activeVideo.stopPlayback();activeVideo=null;}root=new LinearLayout(this);root.setOrientation(1);root.setPadding(22,18,22,10);root.setBackgroundColor(Color.rgb(9,12,28));setContentView(root);
+ TextView title=label("أسيل  |  أفلام ومسلسلات");title.setTextColor(Color.rgb(247,204,125));title.setTextSize(28);root.addView(title);
+ Button refresh=new Button(this);refresh.setText("↻  تحديث مكتبة أسيل");root.addView(refresh);refresh.setOnClickListener(v->load());
  ScrollView sc=new ScrollView(this);root.addView(sc,new LinearLayout.LayoutParams(-1,0,1));list=new LinearLayout(this);list.setOrientation(1);sc.addView(list);load();}
  void status(String s){list.removeAllViews();list.addView(label(s));}
  String read(InputStream in)throws IOException{if(in==null)return "";try{ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1){out.write(b,0,n);if(out.size()>2000000)throw new IOException("Response too large");}return out.toString("UTF-8");}finally{in.close();}}
  void load(){if(loading)return;loading=true;status("جار تحميل المكتبة...");
  new Thread(()->{HttpURLConnection c=null;try{
- URL u=new URL(feed);c=(HttpURLConnection)u.openConnection();c.setRequestMethod("GET");c.setRequestProperty("apikey",apiKey);c.setRequestProperty("Accept","application/json");c.setRequestProperty("Cache-Control","no-cache");c.setConnectTimeout(15000);c.setReadTimeout(15000);
+ URL u=new URL(feed);c=(HttpURLConnection)u.openConnection();if(c instanceof javax.net.ssl.HttpsURLConnection && android.os.Build.VERSION.SDK_INT<21){((javax.net.ssl.HttpsURLConnection)c).setSSLSocketFactory(new Tls12SocketFactory());}c.setRequestMethod("GET");c.setRequestProperty("apikey",apiKey);c.setRequestProperty("Accept","application/json");c.setRequestProperty("Cache-Control","no-cache");c.setConnectTimeout(15000);c.setReadTimeout(15000);
  int code=c.getResponseCode();String body=read(code>=200&&code<300?c.getInputStream():c.getErrorStream());if(code!=200)throw new IOException("HTTP "+code+" "+body.substring(0,Math.min(150,body.length())));
- JSONArray items=new JSONArray(body);runOnUiThread(()->{loading=false;list.removeAllViews();if(items.length()==0){list.addView(label("المكتبة فارغة حاليًا. ستظهر الأفلام والمسلسلات بعد نشرها من لوحة الإدارة."));return;}
+ JSONArray items=new JSONArray(body);runOnUiThread(()->{loading=false;list.removeAllViews();if(items.length()==0){list.addView(label("أهلًا بك في أسيل ✦\\nالمكتبة فارغة حاليًا، وستظهر الأعمال المرخصة عند إضافتها من لوحة الإدارة."));return;}
  for(int i=0;i<items.length();i++){JSONObject o=items.optJSONObject(i);if(o==null)continue;String name=o.optString("title","بدون عنوان"),type=o.optString("type","movie"),url=o.optString("stream_url","");
- Button b=new Button(this);b.setText(("series".equals(type)?"مسلسل":("channel".equals(type)?"قناة":"فيلم"))+" | "+name);b.setAllCaps(false);list.addView(b);b.setOnClickListener(v->play(url));}});
+ Button b=new Button(this);b.setText(("series".equals(type)?"مسلسل":("channel".equals(type)?"قناة":"فيلم"))+" | "+name);b.setAllCaps(false);b.setTextColor(Color.WHITE);b.setBackgroundColor(Color.rgb(37,44,78));list.addView(b);b.setOnClickListener(v->play(url));}});
  }catch(Exception e){final String reason=e.getClass().getSimpleName()+": "+e.getMessage();runOnUiThread(()->{loading=false;status("تعذر تحديث المكتبة.\n"+reason+"\nتحقق من التاريخ والوقت والاتصال، ثم حاول مجددًا.");});}
  finally{if(c!=null)c.disconnect();}}).start();}
  void play(String url){if(!url.startsWith("https://")&&!url.startsWith("http://")){Toast.makeText(this,"رابط تشغيل غير متاح",Toast.LENGTH_LONG).show();return;}
