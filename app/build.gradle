@@ -8,11 +8,11 @@ android {
     buildToolsVersion '33.0.2'
 
     defaultConfig {
-        applicationId 'com.aseel.tv'
+        applicationId 'com.aseel.tv.preview'
         minSdk 19
         targetSdk 28
-        versionCode 1
-        versionName '0.1.0-install-test'
+        versionCode 2
+        versionName '0.2.0-preview-install-fix'
     }
 
     compileOptions {
@@ -40,4 +40,5 @@ android {
     }
 }
 
-// Intentionally no dependencies for offline installation test.
+// Standalone preview package; does not overwrite com.aseel.tv on TV.
+// No network or runtime dependencies in the offline test.
