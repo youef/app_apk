@@ -24,9 +24,11 @@ def check(condition, msg):
 
 check(apk.is_file() and apk.stat().st_size > 0, "APK exists and is non-empty")
 badging = run([tools / "aapt", "dump", "badging", apk])
-check("package: name='com.aseel.tv'" in badging, "package id com.aseel.tv")
+check("package: name='com.aseel.tv.preview'" in badging, "independent preview package id")
+check("package: name='com.aseel.tv'" not in badging, "does not overwrite the original application")
 check("sdkVersion:'19'" in badging, "minSdkVersion = 19")
 check("targetSdkVersion:'28'" in badging, "targetSdkVersion = 28")
+check("versionCode='2'" in badging, "preview versionCode = 2")
 check("uses-feature: name='android.hardware.touchscreen'" not in badging, "touchscreen not required")
 with zipfile.ZipFile(apk, "r") as archive:
     check(archive.testzip() is None, "ZIP CRC integrity")
