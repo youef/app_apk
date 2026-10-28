@@ -7,6 +7,8 @@ on:
       - 'build.gradle'
       - 'settings.gradle'
       - '.github/workflows/build-apk.yml'
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -24,7 +26,19 @@ jobs:
           wget -q https://services.gradle.org/distributions/gradle-7.6-bin.zip -O /tmp/gradle.zip
           unzip -q /tmp/gradle.zip -d /tmp
           /tmp/gradle-7.6/bin/gradle assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk SmartTVPlus-Android-4.4.4.apk
       - uses: actions/upload-artifact@v4
         with:
           name: SmartTVPlus44-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: SmartTVPlus-Android-4.4.4.apk
+      - name: Publish APK to GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" app/build.gradle | head -n1)
+          test -n "$VERSION"
+          TAG="v$VERSION"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "Smart TV Plus $TAG" --notes "Android 4.4.4+ APK. Debug-signed test build; not a production release."
+          fi
+          gh release upload "$TAG" SmartTVPlus-Android-4.4.4.apk --clobber
