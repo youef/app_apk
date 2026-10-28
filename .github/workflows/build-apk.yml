@@ -31,7 +31,8 @@ jobs:
           "$ANDROID_HOME/build-tools/33.0.2/aapt" dump badging "$APK" | tee apk-badging.txt
           grep -q "sdkVersion:'19'" apk-badging.txt
           grep -q "package: name='com.smarttv.plus44.compat'" apk-badging.txt
-          "$ANDROID_HOME/build-tools/33.0.2/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/33.0.2/apksigner" verify --verbose --min-sdk-version 19 "$APK" | tee apk-signature.txt
+          grep -q "Verified using v1 scheme (JAR signing): true" apk-signature.txt
           cp "$APK" SmartTVPlus-Android-4.4.4.apk
       - uses: actions/upload-artifact@v4
         with:
