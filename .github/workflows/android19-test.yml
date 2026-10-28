@@ -50,8 +50,8 @@ jobs:
           mkdir -p build/reports
           gradle clean assembleDebug --no-daemon --stacktrace
           python3 scripts/validate_apk.py app/build/outputs/apk/debug/app-debug.apk | tee build/reports/validation.log
-          cp app/build/outputs/apk/debug/app-debug.apk build/reports/Aseel-TV-API19-TEST.apk
-          sha256sum build/reports/Aseel-TV-API19-TEST.apk | tee build/reports/SHA256SUMS.txt
+          cp app/build/outputs/apk/debug/app-debug.apk build/reports/Aseel-TV-API19-PREVIEW-FIX.apk
+          sha256sum build/reports/Aseel-TV-API19-PREVIEW-FIX.apk | tee build/reports/SHA256SUMS.txt
       - name: Write build report
         if: always()
         shell: bash
@@ -65,6 +65,8 @@ jobs:
             echo "- Commit: ${GITHUB_SHA}"
             echo "- Build and static checks: ${BUILD_OUTCOME}"
             echo "- Min SDK: 19; Java language level: 7; Gradle: 7.5; AGP: 7.4.2"
+            echo "- Preview package: com.aseel.tv.preview (separate from original com.aseel.tv)"
+            echo "- CI debug signing is ephemeral; future same-package upgrades require a persistent signing key."
             echo "- Actual installation on TV: NOT TESTED"
             echo "- This APK uses an ephemeral CI-generated debug signing key; it is not a production key."
           } > build/reports/phase1-report.md
@@ -73,7 +75,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Aseel-TV-Phase1-${{ github.run_number }}
+          name: Aseel-TV-Preview-Install-Fix-${{ github.run_number }}
           path: build/reports/
           retention-days: 14
           if-no-files-found: error
@@ -84,7 +86,7 @@ jobs:
         shell: bash
         run: |
           TAG="phase1-test-${GITHUB_SHA:0:7}"
-          gh release create "$TAG" build/reports/Aseel-TV-API19-TEST.apk build/reports/phase1-report.md build/reports/SHA256SUMS.txt \
+          gh release create "$TAG" build/reports/Aseel-TV-API19-PREVIEW-FIX.apk build/reports/phase1-report.md build/reports/SHA256SUMS.txt \
             --target "$GITHUB_SHA" \
             --title "Aseel TV — API 19 installation test ${GITHUB_SHA:0:7}" \
             --notes "Offline Android 4.4.4 installation and remote-control test only. Debug-signed V1 APK; not validated on physical TV." \
