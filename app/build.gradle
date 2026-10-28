@@ -1,3 +1,3 @@
 plugins { id 'com.android.application' }
 android { namespace 'com.smarttv.plus44'; compileSdk 33
- defaultConfig { applicationId 'com.smarttv.plus44'; minSdk 19; targetSdk 28; versionCode 1; versionName '1.0' } }
+ defaultConfig { applicationId 'com.smarttv.plus44'; minSdk 19; targetSdk 28; versionCode 2; versionName '1.1.0' } }
