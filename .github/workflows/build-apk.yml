@@ -32,7 +32,8 @@ jobs:
           grep -q "sdkVersion:'16'" apk-badging.txt
           grep -q "package: name='com.aseel.tvlegacy'" apk-badging.txt
           unzip -t "$APK" | tail -n 1
-          unzip -l "$APK" | grep -q "classes.dex"
+          unzip -Z1 "$APK" > apk-files.txt
+          grep -qx "classes.dex" apk-files.txt
           "$ANDROID_HOME/build-tools/33.0.2/apksigner" verify --verbose --min-sdk-version 16 "$APK" | tee apk-signature.txt
           grep -q "Verified using v1 scheme (JAR signing): true" apk-signature.txt
           cp "$APK" SmartTVPlus-Android-4.4.4.apk
