@@ -19,9 +19,12 @@ jobs:
           java-version: '17'
       - name: Use preinstalled Android SDK and install platform 33
         run: |
-          echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager "platforms;android-33" "build-tools;33.0.2"
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          SDK_MGR="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDK_MGR"
+          yes | "$SDK_MGR" --licenses > /dev/null || true
+          "$SDK_MGR" "platforms;android-33" "build-tools;33.0.2"
       - name: Install Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
