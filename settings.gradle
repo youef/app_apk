@@ -5,5 +5,12 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
-rootProject.name = 'AseelTV'
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = 'YouTubeTVLegacy'
 include ':app'

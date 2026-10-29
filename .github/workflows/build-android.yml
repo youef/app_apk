@@ -1,0 +1,41 @@
+name: Build Android 4.4 TV APK
+on:
+  push:
+    branches:
+      - youtube-tv-kitkat
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install JDK 11
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install SDK platform 33
+        run: sdkmanager "platforms;android-33" "build-tools;33.0.2"
+      - name: Install Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '7.6'
+      - name: Build debug APK
+        run: gradle --no-daemon :app:assembleDebug
+      - name: Verify minSdk 19 and APK contents
+        run: |
+          test -f app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/33.0.2/aapt" dump badging app/build/outputs/apk/debug/app-debug.apk | tee /tmp/apk-info.txt
+          grep "sdkVersion:'19'" /tmp/apk-info.txt
+      - name: Publish installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: YouTube-TV-Legacy-Android-4.4-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
