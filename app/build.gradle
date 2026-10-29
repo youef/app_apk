@@ -5,12 +5,12 @@ android {
     compileSdkVersion 28
     buildToolsVersion '33.0.2'
     defaultConfig {
-        applicationId 'sa.aseel.tv.full'
+        applicationId 'sa.aseel.tv.kitkatfix'
         minSdkVersion 19
         targetSdkVersion 28
         ndk { abiFilters "armeabi-v7a" }
-        versionCode 8
-        versionName '1.3.1-secure-tls'
+        versionCode 1
+        versionName '1.4.0-install-repair'
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_7
