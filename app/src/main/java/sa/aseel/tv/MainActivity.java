@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.app.ActivityManager;
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
+import android.os.Handler;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -45,6 +47,14 @@ public final class MainActivity extends Activity {
     private String lastMode="home";
     private boolean loading=false,hasLoaded=false;
     private long lastUpdatedAt=0L;
+    private final Handler refreshHandler=new Handler();
+    private final Runnable refreshLoop=new Runnable(){
+        public void run(){
+            if(hasLoaded&&!loading&&System.currentTimeMillis()-lastUpdatedAt>=5L*60L*1000L)
+                loadCatalog();
+            refreshHandler.postDelayed(this,60L*1000L);
+        }
+    };
     private JSONArray movies=new JSONArray(),series=new JSONArray(),channels=new JSONArray(),categories=new JSONArray();
     private CatalogApi api;
     private SharedPreferences prefs;
@@ -244,9 +254,15 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onResume(){
         super.onResume();
-        if(hasLoaded && !loading && System.currentTimeMillis()-lastUpdatedAt > 15L*60L*1000L){
+        if(hasLoaded && !loading && System.currentTimeMillis()-lastUpdatedAt > 5L*60L*1000L){
             loadCatalog();
         }
+        refreshHandler.removeCallbacks(refreshLoop);
+        refreshHandler.postDelayed(refreshLoop,60L*1000L);
+    }
+    @Override protected void onPause(){
+        refreshHandler.removeCallbacks(refreshLoop);
+        super.onPause();
     }
     private void section(String title,JSONArray list,String type,int max){
         if(list.length()==0)return;
@@ -313,6 +329,7 @@ public final class MainActivity extends Activity {
         final String t=type, id=str(item,"id"),url=str(item,"stream_url");
         if(!"series".equals(t)){
             Button play=button("▶ تشغيل");actions.addView(play,lp(dp(160),dp(54)));
+            play.setText("channel".equals(t)&&"official_link".equals(str(item,"playback_mode"))?"فتح البث الرسمي":"▶ تشغيل");
             play.setOnClickListener(new View.OnClickListener(){public void onClick(View v){play(item,null,null,null);}});
         }else{
             Button episodes=button("عرض الحلقات");actions.addView(episodes,lp(dp(180),dp(54)));
@@ -327,6 +344,15 @@ public final class MainActivity extends Activity {
     }
     private void play(JSONObject item,String nextUrl,String nextId,String nextTitle){
         String url=str(item,"stream_url");
+        if("official_link".equals(str(item,"playback_mode"))){
+            String official=str(item,"official_url");
+            if(!official.startsWith("https://")){showStatus("رابط الجهة الرسمية غير صالح");return;}
+            try{
+                Intent browser=new Intent(Intent.ACTION_VIEW,Uri.parse(official));
+                startActivity(browser);
+            }catch(Exception e){showStatus("لا يوجد متصفح متوافق لفتح البث الرسمي على التلفزيون");}
+            return;
+        }
         if(!url.startsWith("https://")){showStatus("لا يمكن تشغيل رابط غير HTTPS");return;}
         Intent i=new Intent(this,PlayerActivity.class);
         i.putExtra("stream_url",url);i.putExtra("title",str(item,"title_ar"));
