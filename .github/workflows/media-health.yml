@@ -1,0 +1,24 @@
+name: Aseel Media URL Health Audit
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['scripts/check_media_urls.py', '.github/workflows/media-health.yml']
+  schedule:
+    - cron: '17 4 * * *'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe HTTPS source for MP4 signature or HLS manifest
+        run: python3 scripts/check_media_urls.py
+      - name: Save audit results (never auto-publish unverified media)
+        uses: actions/upload-artifact@v4
+        with:
+          name: aseel-media-audit
+          path: media-check-results.json
+          if-no-files-found: error
