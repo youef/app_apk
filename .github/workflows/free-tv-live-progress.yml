@@ -1,0 +1,24 @@
+name: Aseel Free TV Live Progress Audit
+on:
+  push:
+    branches: [main]
+    paths: ['scripts/free-tv-passed.json', 'scripts/check_live_progress.py', '.github/workflows/free-tv-live-progress.yml']
+  workflow_dispatch:
+  schedule:
+    - cron: '10 5 * * *'
+permissions:
+  contents: read
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check moving live media sequences, not only HTTP responses
+        run: python3 scripts/check_live_progress.py
+      - name: Keep machine-readable evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: aseel-free-tv-live-progress
+          path: free-tv-live-progress.json
+          if-no-files-found: error

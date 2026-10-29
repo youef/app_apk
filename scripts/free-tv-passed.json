@@ -1,0 +1,223 @@
+{
+  "source": "https://github.com/Free-TV/IPTV",
+  "checks": "HLS media playlist and real media segment",
+  "candidates": [
+    {
+      "name": "Al Saudiya",
+      "url": "https://shd-gcp-live.edgenextcdn.net/live/bitmovin-saudi-tv/2ad66056b51fd8c1b624854623112e43/index.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "SBC Saudi Arabia",
+      "url": "https://shd-gcp-live.edgenextcdn.net/live/bitmovin-sbc/90e09c0c28db26435799b4a14892a167/index.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "Al Saudiya Alaan",
+      "url": "https://shd-gcp-live.edgenextcdn.net/live/bitmovin-ksa-now/71ed3aa814c643306c0a8bc4fcc7d17f/index.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "Al Ekhbariya",
+      "url": "https://shd-gcp-live.edgenextcdn.net/live/bitmovin-al-ekhbaria/297b3ef1cd0633ad9cfba7473a686a06/index.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "Al Rayyan",
+      "url": "https://alrayyancdn.vidgyor.com/pub-noalrayy3pwz0l/liveabr/playlist_dvr.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "Al Rayyan Old TV",
+      "url": "https://alrayyancdn.vidgyor.com/pub-nooldraybinbdh/liveabr/playlist_dvr.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "Al Jazeera Mubasher",
+      "url": "https://live-hls-web-ajm.getaj.net/AJM/index.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "Al Jazeera 2",
+      "url": "https://live-hls-web-aja2-gcp.thehlive.com/AJA2/index.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "Al Ghad TV",
+      "url": "https://eazyvwqssi.erbvr.com/alghadtv/alghadtv.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "Sky News Arabia",
+      "url": "https://stream.skynewsarabia.com/hls/sna.m3u8",
+      "format": "fMP4",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "Al Arabiya Business",
+      "url": "https://live.alarabiya.net/alarabiapublish/aswaaq.smil/playlist.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "MBC Masr 1",
+      "url": "https://shd-gcp-live.edgenextcdn.net/live/bitmovin-mbc-masr/956eac069c78a35d47245db6cdbb1575/index.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "MBC Masr 2",
+      "url": "https://shd-gcp-live.edgenextcdn.net/live/bitmovin-mbc-masr-2/754931856515075b0aabf0e583495c68/index.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "MBC 1",
+      "url": "https://shd-gcp-live.edgenextcdn.net/live/bitmovin-mbc-1/15cf99af5de54063fdabfefe66adc075/index.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "MBC 3",
+      "url": "https://shd-gcp-live.edgenextcdn.net/live/bitmovin-mbc-3-usa/5d58265a862a476dc7f97694addb5ded/index.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "MBC 4",
+      "url": "https://shd-gcp-live.edgenextcdn.net/live/bitmovin-mbc-4/24f134f1cd63db9346439e96b86ca6ed/index.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "MBC 5",
+      "url": "https://shd-gcp-live.edgenextcdn.net/live/bitmovin-mbc-5/ee6b000cee0629411b666ab26cb13e9b/index.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "MBC Drama",
+      "url": "https://shd-gcp-live.edgenextcdn.net/live/bitmovin-mbc-drama/2c28a458e2f3253e678b07ac7d13fe71/index.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "MBC Bollywood",
+      "url": "https://shd-gcp-live.edgenextcdn.net/live/bitmovin-mbc-bollywood/546eb40d7dcf9a209255dd2496903764/index.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "TRT Arabi",
+      "url": "https://tv-trtarabi.medya.trt.com.tr/master.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "TRT 1",
+      "url": "https://tv-trt1.medya.trt.com.tr/master.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "TRT Haber",
+      "url": "https://tv-trthaber.medya.trt.com.tr/master.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "TRT Müzik",
+      "url": "https://tv-trtmuzik.medya.trt.com.tr/master.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "TRT World",
+      "url": "https://tv-trtworld.medya.trt.com.tr/master.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "TRT Avaz",
+      "url": "https://tv-trtavaz.medya.trt.com.tr/master.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "BBC News",
+      "url": "https://vs-hls-push-ww-live.akamaized.net/x=4/i=urn:bbc:pips:service:bbc_news_channel_hd/t=3840/v=pv14/b=5070016/main.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "Euronews Hungarian",
+      "url": "https://cdn-euronews.akamaized.net/live/eds/euronews-hu/25075/index.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "Al Araby TV",
+      "url": "https://live.kwikmotion.com/alaraby1live/alaraby_abr/playlist.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "Bloomberg",
+      "url": "https://bloomberg.com/media-manifest/streams/us.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "TRT EBA Ortaokul",
+      "url": "https://tv-e-okul01.medya.trt.com.tr/master.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    },
+    {
+      "name": "MBC Persia",
+      "url": "https://shd-gcp-live.edgenextcdn.net/live/bitmovin-mbc-persia/818ee8e4b592dc497608f066d825bfb4/index.m3u8",
+      "format": "TS",
+      "verified_at": "2026-10-29",
+      "segment_code": 206
+    }
+  ]
+}
