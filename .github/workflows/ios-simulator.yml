@@ -1,0 +1,53 @@
+name: Aseel TV - iOS Simulator for Appetize
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios-simulator.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  ios-simulator:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build native arm64 iOS Simulator app
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          SDK="$(xcrun --sdk iphonesimulator --show-sdk-path)"
+          xcrun swiftc --version
+          mkdir -p dist/AseelTV.app
+          cp ios/Info.plist dist/AseelTV.app/Info.plist
+          xcrun swiftc -sdk "$SDK" -target arm64-apple-ios15.0-simulator \
+            -parse-as-library -O ios/AseelApp.swift \
+            -o dist/AseelTV.app/AseelTV
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" dist/AseelTV.app/Info.plist
+          lipo -archs dist/AseelTV.app/AseelTV | grep -q arm64
+          codesign --force --sign - dist/AseelTV.app
+          cd dist
+          zip -qr aseel-tv-ios-simulator.app.zip AseelTV.app
+          unzip -t aseel-tv-ios-simulator.app.zip
+          shasum -a 256 aseel-tv-ios-simulator.app.zip
+      - name: Upload simulator ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aseel-tv-ios-appetize
+          path: dist/aseel-tv-ios-simulator.app.zip
+          if-no-files-found: error
+          retention-days: 30
+      - name: Release iPhone Simulator ZIP
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: aseel-ios-simulator-preview
+          name: Aseel TV - iPhone Simulator Appetize Preview
+          prerelease: true
+          make_latest: false
+          body: |
+            Native Swift UIKit app. Upload the included .app.zip to Appetize.
+            Simulator only: physical iPhone builds require Apple signing.
+          files: dist/aseel-tv-ios-simulator.app.zip
+          fail_on_unmatched_files: true
