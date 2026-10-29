@@ -28,6 +28,9 @@ jobs:
 
       - name: Set up Android command line tools
         uses: android-actions/setup-android@v3
+        with:
+          # The obsolete SDK package "tools" has been removed upstream.
+          packages: platform-tools
 
       - name: Install pinned Android SDK and Build Tools
         run: |
