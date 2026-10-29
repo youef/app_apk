@@ -3,6 +3,8 @@ package sa.aseel.tv;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -13,223 +15,382 @@ import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
+import android.widget.EditText;
+import android.widget.HorizontalScrollView;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-
-import java.util.Locale;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
- * Aseel TV - Phase 1, offline Android 4.4.4 installation diagnostic.
- * Java 7, native platform Views only, no network and no native libraries.
+ * Aseel TV — native light-weight Arabic TV catalog for API 19+.
+ * Catalog items are shown only after server-side publishing and rights approval.
+ * All navigation is possible using D-pad + OK; no Google Play Services.
  */
 public final class MainActivity extends Activity {
-    private static final int NAVY = Color.rgb(7, 17, 32);
-    private static final int GOLD = Color.rgb(206, 174, 108);
-    private static final int WHITE = Color.rgb(243, 244, 245);
-    private static final int MUTED = Color.rgb(177, 189, 202);
-    private TextView status;
-    private TextView diagnostics;
-    private boolean diagnosticsVisible;
-
-    @Override
-    public void onCreate(Bundle state) {
-        super.onCreate(state);
-
-        getWindow().getDecorView().setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
-
-        DisplayMetrics metrics = getResources().getDisplayMetrics();
-        int pageMargin = dp(24);
-        int contentWidth = Math.min(metrics.widthPixels - (2 * pageMargin), dp(880));
-
-        ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(true);
-        scroll.setBackground(makeBackground());
-        scroll.setVerticalScrollBarEnabled(false);
-
-        LinearLayout outer = new LinearLayout(this);
-        outer.setOrientation(LinearLayout.VERTICAL);
-        outer.setGravity(Gravity.CENTER);
-        outer.setPadding(pageMargin, dp(18), pageMargin, dp(18));
-        scroll.addView(outer, new ScrollView.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-
-        LinearLayout body = new LinearLayout(this);
-        body.setOrientation(LinearLayout.VERTICAL);
-        body.setGravity(Gravity.CENTER_HORIZONTAL);
-        body.setPadding(dp(30), dp(22), dp(30), dp(22));
-        GradientDrawable cardBg = new GradientDrawable();
-        cardBg.setColor(Color.rgb(13, 28, 48));
-        cardBg.setCornerRadius(dp(18));
-        cardBg.setStroke(dp(1), Color.rgb(72, 78, 84));
-        body.setBackgroundDrawable(cardBg);
-        outer.addView(body, new LinearLayout.LayoutParams(contentWidth,
-                ViewGroup.LayoutParams.WRAP_CONTENT));
-
-        TextView logo = text("أسيل", 46, GOLD, true);
-        logo.setGravity(Gravity.CENTER);
-        body.addView(logo, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-
-        TextView label = text("ASEEL TV  •  أفلام ومسلسلات", 17, MUTED, false);
-        label.setGravity(Gravity.CENTER);
-        body.addView(label, margin(0, dp(5), 0, dp(13)));
-
-        TextView success = text("تم تشغيل أسيل بنجاح", 27, WHITE, true);
-        success.setGravity(Gravity.CENTER);
-        body.addView(success, margin(0, dp(3), 0, dp(6)));
-
-        TextView hint = text("اختبار التثبيت الأولي — بدون إنترنت أو تشغيل فيديو", 16, MUTED, false);
-        hint.setGravity(Gravity.CENTER);
-        body.addView(hint, margin(0, 0, 0, dp(20)));
-
-        status = text("استخدم أسهم الريموت، ثم اضغط OK للاختيار", 16, GOLD, false);
-        status.setGravity(Gravity.CENTER);
-        body.addView(status, margin(0, 0, 0, dp(13)));
-
-        Button remote = button("اختبار زر OK بالريموت");
-        body.addView(remote, margin(0, dp(5), 0, dp(5)));
-        remote.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                status.setText("نجح الاختبار: تم استقبال زر OK");
-            }
-        });
-
-        Button details = button("عرض مواصفات هذه الشاشة");
-        body.addView(details, margin(0, dp(5), 0, dp(5)));
-        details.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                diagnosticsVisible = !diagnosticsVisible;
-                diagnostics.setVisibility(diagnosticsVisible ? View.VISIBLE : View.GONE);
-                status.setText(diagnosticsVisible ? "تم قراءة بيانات الجهاز محليًا" : "تم إخفاء بيانات الجهاز");
-            }
-        });
-
-        Button exit = button("إغلاق التطبيق");
-        body.addView(exit, margin(0, dp(5), 0, dp(5)));
-        exit.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                finish();
-            }
-        });
-
-        diagnostics = text(buildDiagnostics(), 14, WHITE, false);
-        diagnostics.setGravity(Gravity.RIGHT);
-        diagnostics.setTextDirection(View.TEXT_DIRECTION_RTL);
-        diagnostics.setLineSpacing(dp(3), 1.0f);
-        diagnostics.setVisibility(View.GONE);
-        body.addView(diagnostics, margin(0, dp(18), 0, 0));
-
-        TextView footer = text("Android 4.4.4 / API 19  •  Phase 1  •  v0.1.0", 13, MUTED, false);
-        footer.setGravity(Gravity.CENTER);
-        outer.addView(footer, margin(0, dp(15), 0, 0));
-
-        setContentView(scroll);
-        remote.requestFocus();
+    private static final int NAVY=0xFF081526, PANEL=0xFF12263E, GOLD=0xFFE5BF7D, WHITE=0xFFF7F6F0, MUTED=0xFFBBC5D1;
+    private final String[] labels={"الرئيسية","الأفلام","المسلسلات","القنوات","المفضلة","البحث","الإعدادات"};
+    private final String[] modes={"home","movie","series","channel","favorites","search","settings"};
+    private LinearLayout stage,root,menu;
+    private ScrollView scrolling;
+    private TextView notice;
+    private String mode="home";
+    private String lastMode="home";
+    private boolean loading=false,hasLoaded=false;
+    private JSONArray movies=new JSONArray(),series=new JSONArray(),channels=new JSONArray(),categories=new JSONArray();
+    private CatalogApi api;
+    private SharedPreferences prefs;
+    @Override public void onCreate(Bundle bundle){
+        super.onCreate(bundle);
+        prefs=getSharedPreferences("aseel_user_v2",MODE_PRIVATE);
+        api=new CatalogApi(this);
+        buildShell();
+        render();
+        loadCatalog();
     }
-
-    @Override
-    public boolean onKeyUp(int keyCode, KeyEvent event) {
-        if (status != null) {
-            if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
-                status.setText("تم استقبال سهم الأعلى");
-            } else if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-                status.setText("تم استقبال سهم الأسفل");
-            } else if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
-                status.setText("تم استقبال سهم اليسار");
-            } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-                status.setText("تم استقبال سهم اليمين");
+    private int dp(int val){return Math.round(val*getResources().getDisplayMetrics().density);}
+    private LinearLayout vertical(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;}
+    private LinearLayout horizontal(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.HORIZONTAL);l.setGravity(Gravity.CENTER_VERTICAL);return l;}
+    private LinearLayout.LayoutParams lp(int w,int h){return new LinearLayout.LayoutParams(w,h);}
+    private LinearLayout.LayoutParams gap(int top,int bottom){
+        LinearLayout.LayoutParams p=lp(-1,-2);p.setMargins(0,dp(top),0,dp(bottom));return p;
+    }
+    private GradientDrawable background(int color,int radius,int stroke){
+        GradientDrawable g=new GradientDrawable();g.setColor(color);
+        g.setCornerRadius(dp(radius));if(stroke!=0)g.setStroke(dp(1),stroke);return g;
+    }
+    private TextView text(String value,int size,int color,boolean bold){
+        TextView t=new TextView(this);t.setText(value);t.setTextSize(size);t.setTextColor(color);
+        t.setTextDirection(View.TEXT_DIRECTION_RTL);
+        if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+        return t;
+    }
+    private void buildShell(){
+        root=vertical();root.setBackgroundColor(NAVY);root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+        LinearLayout top=horizontal();top.setBackgroundColor(0xFF101D30);
+        top.setPadding(dp(20),dp(9),dp(20),dp(9));
+        root.addView(top,lp(-1,-2));
+        TextView brand=text("أسيل",31,GOLD,true);
+        top.addView(brand,lp(dp(110),-2));
+        TextView tag=text("ASEEL TV",11,MUTED,false);
+        top.addView(tag,lp(dp(76),-2));
+        HorizontalScrollView nav=new HorizontalScrollView(this);
+        nav.setHorizontalScrollBarEnabled(false);nav.setFillViewport(false);
+        top.addView(nav,new LinearLayout.LayoutParams(0,dp(48),1));
+        menu=horizontal();nav.addView(menu);
+        for(int i=0;i<labels.length;i++){
+            final String target=modes[i];
+            Button b=button(labels[i]);b.setTextSize(14);
+            LinearLayout.LayoutParams p=lp(dp(102),dp(44));p.setMargins(dp(3),0,dp(3),0);
+            menu.addView(b,p);
+            b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){mode=target;render();}});
+        }
+        notice=text("",12,MUTED,false);
+        notice.setPadding(dp(24),dp(4),dp(24),dp(4));
+        notice.setVisibility(View.GONE);root.addView(notice,lp(-1,-2));
+        scrolling=new ScrollView(this);scrolling.setFillViewport(true);
+        scrolling.setSmoothScrollingEnabled(false);
+        root.addView(scrolling,new LinearLayout.LayoutParams(-1,0,1));
+        stage=vertical();stage.setPadding(dp(22),dp(14),dp(22),dp(28));
+        scrolling.addView(stage,new ScrollView.LayoutParams(-1,-2));
+        setContentView(root);
+    }
+    private Button button(String label){
+        final Button b=new Button(this);
+        b.setText(label);b.setTextSize(16);b.setTextColor(WHITE);b.setAllCaps(false);
+        b.setPadding(dp(9),dp(5),dp(9),dp(5));
+        b.setFocusable(true);
+        b.setBackgroundDrawable(background(PANEL,9,0xFF3A536A));
+        b.setOnFocusChangeListener(new View.OnFocusChangeListener(){
+            public void onFocusChange(View view,boolean focused){
+                b.setBackgroundDrawable(background(focused?GOLD:PANEL,9,focused?0xFFF9E5B7:0xFF3A536A));
+                b.setTextColor(focused?NAVY:WHITE);
+                b.setScaleX(focused?1.03f:1f);b.setScaleY(focused?1.03f:1f);
+            }
+        });
+        return b;
+    }
+    private void title(String heading,String caption){
+        TextView h=text(heading,25,GOLD,true);stage.addView(h,gap(7,4));
+        if(caption!=null){TextView c=text(caption,14,MUTED,false);stage.addView(c,gap(0,12));}
+    }
+    private void empty(String text){
+        TextView e=text(text,18,MUTED,false);
+        e.setGravity(Gravity.CENTER);e.setPadding(dp(24),dp(34),dp(24),dp(34));
+        stage.addView(e,gap(20,15));
+    }
+    private void showStatus(String value){
+        notice.setText(value);notice.setVisibility(value.length()==0?View.GONE:View.VISIBLE);
+    }
+    private String str(JSONObject x,String key){return x.optString(key,"").equals("null")?"":x.optString(key,"");}
+    private JSONArray data(String m){
+        if("movie".equals(m))return movies;
+        if("series".equals(m))return series;
+        if("channel".equals(m))return channels;
+        return new JSONArray();
+    }
+    private void loadCatalog(){
+        if(loading)return;
+        loading=true;showStatus("جاري تحديث المحتوى...");
+        new Thread(new Runnable(){public void run(){
+            JSONArray m=new JSONArray(),s=new JSONArray(),c=new JSONArray(),cat=new JSONArray();
+            String failure="";
+            try{m=api.list("aseel_movies");}catch(Exception e){failure="تعذر تحميل الأفلام: "+e.getClass().getSimpleName();}
+            try{s=api.list("aseel_series");}catch(Exception e){failure="تعذر تحميل المسلسلات: "+e.getClass().getSimpleName();}
+            try{c=api.list("aseel_channels");}catch(Exception e){failure="تعذر تحميل القنوات: "+e.getClass().getSimpleName();}
+            try{cat=api.listQuery("aseel_categories","?select=*&order=sort_order.asc&limit=60");}catch(Exception ignored){}
+            final JSONArray fm=m,fs=s,fc=c,fcat=cat;
+            final String err=failure;
+            runOnUiThread(new Runnable(){public void run(){
+                movies=fm;series=fs;channels=fc;categories=fcat;
+                hasLoaded=true;loading=false;
+                showStatus(err.length()>0?"لا يمكن تحديث بعض البيانات؛ افحص الاتصال والشهادات. "+err:"");
+                render();
+            }});
+        }}).start();
+    }
+    private void render(){
+        if(stage==null)return;
+        stage.removeAllViews();scrolling.scrollTo(0,0);
+        if("home".equals(mode)){home();return;}
+        if("movie".equals(mode)||"series".equals(mode)||"channel".equals(mode)){listing(mode,false);return;}
+        if("favorites".equals(mode)){favorites();return;}
+        if("search".equals(mode)){search();return;}
+        if("settings".equals(mode)){settings();return;}
+    }
+    private void home(){
+        LinearLayout hero=vertical();hero.setPadding(dp(25),dp(16),dp(25),dp(16));
+        hero.setBackgroundDrawable(background(0xFF1C324A,14,0xFF6C604E));
+        stage.addView(hero,gap(2,12));
+        TextView heroTitle=text("أسيل | عالم السينما في بيتك",30,GOLD,true);hero.addView(heroTitle);
+        TextView heroSub=text("أفلام ومسلسلات وقنوات مرخصة — استمتع بالتصفح من الريموت",17,WHITE,false);
+        hero.addView(heroSub,gap(2,14));
+        Button go=button("استعرض الأفلام");hero.addView(go,lp(dp(200),dp(49)));
+        go.setOnClickListener(new View.OnClickListener(){public void onClick(View v){mode="movie";render();}});
+        if(!hasLoaded){empty("جاري الاتصال بمكتبة أسيل...");return;}
+        section("أحدث الأفلام",movies,"movie",8);
+        section("المسلسلات",series,"series",8);
+        section("القنوات المباشرة",channels,"channel",8);
+        ArrayList<JSONObject> recent=new ArrayList<JSONObject>();
+        addRecent(recent,movies,"movie");addRecent(recent,series,"series");
+        if(!recent.isEmpty()){
+            title("متابعة المشاهدة","استكمل من الموضع المحفوظ على هذا التلفزيون");
+            cards(recent,8);
+        }
+        if(movies.length()+series.length()+channels.length()==0)
+            empty("المكتبة خالية حاليًا. ستظهر الأعمال المعتمدة تلقائيًا بعد إضافتها من لوحة الإدارة.");
+    }
+    private void section(String title,JSONArray list,String type,int max){
+        if(list.length()==0)return;
+        title(title,null);
+        ArrayList<JSONObject> items=new ArrayList<JSONObject>();
+        for(int i=0;i<list.length()&&i<max;i++){
+            JSONObject o=list.optJSONObject(i);if(o!=null){try{o.put("_type",type);}catch(Exception ignored){}items.add(o);}
+        }
+        cards(items,max);
+    }
+    private void listing(String type,boolean unused){
+        String t="movie".equals(type)?"الأفلام":"series".equals(type)?"المسلسلات":"القنوات";
+        title(t,"جميع العناصر المنشورة والمصرح بحقوقها");
+        final JSONArray list=data(type);
+        if(!hasLoaded){empty("جاري تحميل البيانات...");return;}
+        if(list.length()==0){empty("لا توجد أعمال متاحة في هذا القسم.");return;}
+        ArrayList<JSONObject> all=new ArrayList<JSONObject>();
+        for(int i=0;i<list.length();i++){JSONObject o=list.optJSONObject(i);
+            if(o!=null){try{o.put("_type",type);}catch(Exception ignored){}all.add(o);}}
+        cards(all,AppConfig.MAX_ITEMS);
+    }
+    private void cards(ArrayList<JSONObject> all,int max){
+        if(all.isEmpty())return;
+        HorizontalScrollView scroller=new HorizontalScrollView(this);
+        scroller.setHorizontalScrollBarEnabled(false);
+        LinearLayout holder=horizontal();holder.setGravity(Gravity.TOP);
+        scroller.addView(holder);
+        stage.addView(scroller,gap(4,20));
+        for(int i=0;i<all.size()&&i<max;i++){
+            final JSONObject item=all.get(i);
+            LinearLayout card=vertical();card.setPadding(dp(5),dp(5),dp(5),dp(7));
+            card.setBackgroundDrawable(background(0xFF132740,12,0xFF2C4057));
+            LinearLayout.LayoutParams cardLp=lp(dp(168),-2);cardLp.setMargins(dp(6),0,dp(6),0);
+            holder.addView(card,cardLp);
+            ImageView poster=new ImageView(this);poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            poster.setBackgroundDrawable(background(0xFF29415B,8,0));
+            card.addView(poster,lp(-1,dp(162)));
+            PosterLoader.load(poster,str(item,"poster_url"));
+            TextView name=text(str(item,"title_ar"),16,WHITE,true);name.setSingleLine(true);
+            name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            card.addView(name,gap(8,2));
+            String year=str(item,"release_year");
+            TextView meta=text(year.length()>0?year+"  •  "+str(item,"quality"):str(item,"quality"),12,MUTED,false);
+            card.addView(meta);
+            Button detail=button("عرض التفاصيل");detail.setTextSize(13);card.addView(detail,gap(7,0));
+            detail.setOnClickListener(new View.OnClickListener(){
+                public void onClick(View v){lastMode=mode;details(item);}
+            });
+        }
+    }
+    private void details(final JSONObject item){
+        stage.removeAllViews();scrolling.scrollTo(0,0);
+        Button back=button("رجوع إلى القائمة");stage.addView(back,lp(dp(220),dp(48)));
+        back.setOnClickListener(new View.OnClickListener(){public void onClick(View v){mode=lastMode;render();}});
+        title(str(item,"title_ar"),str(item,"title_original"));
+        String description=str(item,"description");
+        if(description.length()>0){TextView d=text(description,17,WHITE,false);stage.addView(d,gap(8,15));}
+        TextView about=text("سنة الإنتاج: "+str(item,"release_year")+"    اللغة: "+str(item,"language_code")+"    الجودة: "+str(item,"quality")
+                +"\nصاحب الحقوق: "+str(item,"rights_holder")
+                +"\nالترخيص: "+str(item,"license_reference"),15,MUTED,false);
+        stage.addView(about,gap(5,20));
+        LinearLayout actions=horizontal();stage.addView(actions,gap(2,15));
+        String type=str(item,"_type");if(type.length()==0)type="movie";
+        final String t=type, id=str(item,"id"),url=str(item,"stream_url");
+        if(!"series".equals(t)){
+            Button play=button("▶ تشغيل");actions.addView(play,lp(dp(160),dp(54)));
+            play.setOnClickListener(new View.OnClickListener(){public void onClick(View v){play(item,null);}});
+        }else{
+            Button episodes=button("عرض الحلقات");actions.addView(episodes,lp(dp(180),dp(54)));
+            episodes.setOnClickListener(new View.OnClickListener(){public void onClick(View v){loadEpisodes(item);}});
+        }
+        Button favorite=button(isFavorite(t,id)?"إزالة من المفضلة":"إضافة للمفضلة");
+        LinearLayout.LayoutParams fp=lp(dp(190),dp(54));fp.setMargins(dp(10),0,0,0);
+        actions.addView(favorite,fp);
+        favorite.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            toggleFavorite(t,id);favorite.setText(isFavorite(t,id)?"إزالة من المفضلة":"إضافة للمفضلة");
+        }});
+    }
+    private void play(JSONObject item,String nextUrl){
+        String url=str(item,"stream_url");
+        if(!url.startsWith("https://")){showStatus("لا يمكن تشغيل رابط غير HTTPS");return;}
+        Intent i=new Intent(this,PlayerActivity.class);
+        i.putExtra("stream_url",url);i.putExtra("title",str(item,"title_ar"));
+        i.putExtra("item_id",str(item,"id"));if(nextUrl!=null)i.putExtra("next_url",nextUrl);
+        startActivity(i);
+    }
+    private void loadEpisodes(final JSONObject seriesItem){
+        stage.removeAllViews();title("تحميل الحلقات...","يرجى الانتظار");
+        new Thread(new Runnable(){public void run(){
+            final ArrayList<JSONObject> entries=new ArrayList<JSONObject>();
+            String failure="";
+            try {
+                String seriesId=str(seriesItem,"id");
+                JSONArray seasons=api.listQuery("aseel_seasons","?select=*&series_id=eq."+seriesId+"&order=number.asc&limit=100");
+                for(int i=0;i<seasons.length();i++){
+                    JSONObject season=seasons.getJSONObject(i);
+                    JSONArray eps=api.listQuery("aseel_episodes","?select=*&season_id=eq."+str(season,"id")+"&order=number.asc&limit=100");
+                    for(int j=0;j<eps.length();j++){
+                        JSONObject ep=eps.getJSONObject(j);ep.put("_type","episode");
+                        ep.put("_season",season.optInt("number"));entries.add(ep);
+                    }
+                }
+            }catch(Exception e){failure=e.getClass().getSimpleName();}
+            final String f=failure;
+            runOnUiThread(new Runnable(){public void run(){
+                stage.removeAllViews();
+                Button back=button("رجوع إلى المسلسل");stage.addView(back,lp(dp(205),dp(50)));
+                back.setOnClickListener(new View.OnClickListener(){public void onClick(View v){details(seriesItem);}});
+                title("حلقات "+str(seriesItem,"title_ar"),null);
+                if(!f.isEmpty())empty("تعذر جلب الحلقات: "+f);
+                else if(entries.isEmpty())empty("لم تُنشر حلقات مرخصة لهذا المسلسل بعد.");
+                for(int k=0;k<entries.size();k++){
+                    final JSONObject e=entries.get(k);
+                    final String next=k+1<entries.size()?str(entries.get(k+1),"stream_url"):null;
+                    Button b=button("الموسم "+e.optInt("_season")+" | الحلقة "+e.optInt("number")+" — "+str(e,"title_ar"));
+                    stage.addView(b,gap(3,3));
+                    b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){play(e,next);}});
+                }
+            }});
+        }}).start();
+    }
+    private Set<String> saved(){return new HashSet<String>(prefs.getStringSet("favorites",new HashSet<String>()));}
+    private boolean isFavorite(String type,String id){return saved().contains(type+":"+id);}
+    private void toggleFavorite(String type,String id){
+        Set<String> set=saved();String key=type+":"+id;
+        if(set.contains(key))set.remove(key);else set.add(key);
+        prefs.edit().putStringSet("favorites",set).apply();
+    }
+    private void favorites(){
+        title("المفضلة","محفوظة محليًا على هذه الشاشة دون تسجيل حساب");
+        ArrayList<JSONObject> all=new ArrayList<JSONObject>();
+        collectFavorites(all,movies,"movie");collectFavorites(all,series,"series");collectFavorites(all,channels,"channel");
+        if(all.isEmpty())empty("أضف فيلمًا أو مسلسلًا أو قناة من صفحة التفاصيل.");
+        else cards(all,AppConfig.MAX_ITEMS);
+    }
+    private void collectFavorites(ArrayList<JSONObject> all,JSONArray catalog,String type){
+        for(int i=0;i<catalog.length();i++){
+            JSONObject item=catalog.optJSONObject(i);
+            if(item!=null&&isFavorite(type,str(item,"id"))){
+                try{item.put("_type",type);}catch(Exception ignored){}
+                all.add(item);
             }
         }
-        return super.onKeyUp(keyCode, event);
     }
-
-    private Button button(String label) {
-        final Button button = new Button(this);
-        button.setText(label);
-        button.setTextColor(WHITE);
-        button.setTextSize(17);
-        button.setAllCaps(false);
-        button.setFocusable(true);
-        button.setFocusableInTouchMode(false);
-        button.setPadding(dp(16), dp(8), dp(16), dp(8));
-        button.setMinimumHeight(dp(50));
-        button.setBackgroundDrawable(buttonBackground(false));
-        button.setOnFocusChangeListener(new View.OnFocusChangeListener() {
-            public void onFocusChange(View view, boolean hasFocus) {
-                button.setBackgroundDrawable(buttonBackground(hasFocus));
-                button.setTextColor(hasFocus ? NAVY : WHITE);
-                button.setScaleX(hasFocus ? 1.025f : 1.0f);
-                button.setScaleY(hasFocus ? 1.025f : 1.0f);
+    private void addRecent(ArrayList<JSONObject> all,JSONArray catalog,String type){
+        for(int i=0;i<catalog.length();i++){
+            JSONObject item=catalog.optJSONObject(i);
+            if(item!=null&&prefs.getInt("position_"+str(item,"id"),0)>10000){
+                try{item.put("_type",type);}catch(Exception ignored){}all.add(item);
             }
-        });
-        return button;
-    }
-
-    private GradientDrawable buttonBackground(boolean focused) {
-        GradientDrawable bg = new GradientDrawable();
-        bg.setCornerRadius(dp(9));
-        bg.setColor(focused ? GOLD : Color.rgb(30, 48, 69));
-        bg.setStroke(dp(2), focused ? Color.rgb(252, 223, 149) : Color.rgb(86, 102, 116));
-        return bg;
-    }
-
-    private GradientDrawable makeBackground() {
-        GradientDrawable bg = new GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                new int[]{NAVY, Color.rgb(17, 35, 57), NAVY});
-        return bg;
-    }
-
-    private TextView text(String value, int sp, int color, boolean bold) {
-        TextView view = new TextView(this);
-        view.setText(value);
-        view.setTextSize(sp);
-        view.setTextColor(color);
-        view.setTextDirection(View.TEXT_DIRECTION_RTL);
-        if (bold) {
-            view.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         }
-        return view;
     }
-
-    private LinearLayout.LayoutParams margin(int left, int top, int right, int bottom) {
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        p.setMargins(left, top, right, bottom);
-        return p;
+    private void search(){
+        title("البحث","اكتب اسم فيلم أو مسلسل أو قناة باستخدام لوحة المفاتيح");
+        final EditText input=new EditText(this);
+        input.setTextSize(20);input.setTextColor(WHITE);input.setHintTextColor(MUTED);
+        input.setHint("ابحث عن عنوان...");input.setSingleLine(true);
+        input.setBackgroundDrawable(background(PANEL,10,0xFF54718A));
+        input.setPadding(dp(18),dp(9),dp(18),dp(9));
+        stage.addView(input,lp(-1,dp(55)));
+        final Button submit=button("بحث");stage.addView(submit,gap(8,10));
+        submit.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            String query=input.getText().toString().trim().toLowerCase();
+            // Hide keyboard while retaining search query and results.
+            ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(input.getWindowToken(),0);
+            while(stage.getChildCount()>3)stage.removeViewAt(3);
+            ArrayList<JSONObject> found=new ArrayList<JSONObject>();
+            filter(found,movies,"movie",query);filter(found,series,"series",query);filter(found,channels,"channel",query);
+            if(found.isEmpty())empty("لا توجد نتائج مطابقة.");else cards(found,AppConfig.MAX_ITEMS);
+        }});
     }
-
-    private int dp(int value) {
-        return Math.round(value * getResources().getDisplayMetrics().density);
-    }
-
-    private String buildDiagnostics() {
-        DisplayMetrics display = new DisplayMetrics();
-        getWindowManager().getDefaultDisplay().getRealMetrics(display);
-        ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
-        ActivityManager.MemoryInfo memory = new ActivityManager.MemoryInfo();
-        if (am != null) {
-            am.getMemoryInfo(memory);
+    private void filter(ArrayList<JSONObject> found,JSONArray list,String type,String query){
+        if(query.length()==0)return;
+        for(int i=0;i<list.length();i++){
+            JSONObject j=list.optJSONObject(i);
+            if(j!=null&&(str(j,"title_ar").toLowerCase().contains(query)||str(j,"title_original").toLowerCase().contains(query))){
+                try{j.put("_type",type);}catch(Exception ignored){}found.add(j);
+            }
         }
-        long memoryMb = memory.totalMem / (1024L * 1024L);
-        return "الشركة: " + safe(Build.MANUFACTURER)
-                + "\nالطراز: " + safe(Build.MODEL)
-                + "\nالعلامة: " + safe(Build.BRAND)
-                + "\nاللوحة: " + safe(Build.BOARD)
-                + "\nالمعالج/الشريحة: " + safe(Build.HARDWARE)
-                + "\nالمعمارية: " + safe(Build.CPU_ABI)
-                + "\nAndroid: " + safe(Build.VERSION.RELEASE)
-                + "\nAPI: " + Build.VERSION.SDK_INT
-                + "\nKernel: " + safe(System.getProperty("os.version"))
-                + "\nالذاكرة الإجمالية (تقريبًا): " + memoryMb + " MB"
-                + "\nدقة مساحة عرض الشاشة: " + display.widthPixels + " × " + display.heightPixels
-                + "\nDPI: " + display.densityDpi
-                + "\nإصدار النظام: " + safe(Build.DISPLAY);
     }
-
-    private String safe(String value) {
-        return value == null || value.length() == 0 ? "غير متاح" : value;
+    private void settings(){
+        title("الإعدادات والتشخيص","قياسات فعلية من التلفزيون للمساعدة في تحديد مشكلات التوافق");
+        Button refresh=button("تحديث مكتبة المحتوى");stage.addView(refresh,lp(dp(260),dp(52)));
+        refresh.setOnClickListener(new View.OnClickListener(){public void onClick(View v){loadCatalog();}});
+        DisplayMetrics m=new DisplayMetrics();getWindowManager().getDefaultDisplay().getRealMetrics(m);
+        ActivityManager am=(ActivityManager)getSystemService(Context.ACTIVITY_SERVICE);
+        ActivityManager.MemoryInfo memory=new ActivityManager.MemoryInfo();
+        if(am!=null)am.getMemoryInfo(memory);
+        String info="الشركة: "+Build.MANUFACTURER+"\nالطراز: "+Build.MODEL+"\nاللوحة: "+Build.BOARD
+            +"\nالشريحة: "+Build.HARDWARE+"\nالمعمارية: "+Build.CPU_ABI
+            +"\nAndroid: "+Build.VERSION.RELEASE+" / API "+Build.VERSION.SDK_INT
+            +"\nKernel: "+System.getProperty("os.version")
+            +"\nRAM: "+(memory.totalMem/(1024*1024))+" MB"
+            +"\nالدقة: "+m.widthPixels+" × "+m.heightPixels
+            +"\nDPI: "+m.densityDpi+"\nBuild: "+Build.DISPLAY
+            +"\nالمحتوى: "+movies.length()+" أفلام، "+series.length()+" مسلسلات، "+channels.length()+" قنوات"
+            +"\nاتصال البيانات: HTTPS/TLS 1.2 مع التحقق من الشهادات"
+            +"\nتنبيه: مشغل HLS وبعض خوارزميات الفيديو تعتمد على قدرات الجهاز.";
+        TextView stats=text(info,16,WHITE,false);stats.setLineSpacing(dp(5),1f);
+        stats.setPadding(dp(15),dp(12),dp(15),dp(12));
+        stats.setBackgroundDrawable(background(PANEL,12,0xFF3C5068));
+        stage.addView(stats,gap(18,12));
+    }
+    @Override public void onBackPressed(){
+        if("home".equals(mode))super.onBackPressed();
+        else{mode="home";render();}
     }
 }
