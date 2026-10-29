@@ -2,7 +2,7 @@ name: Aseel Film Codec Audit
 on:
   push:
     branches: [main]
-    paths: ['scripts/check_codecs.py', '.github/workflows/codec-audit.yml']
+    paths: ['scripts/check_codecs.py', 'scripts/media-candidates.json', '.github/workflows/codec-audit.yml']
   workflow_dispatch:
 permissions:
   contents: read

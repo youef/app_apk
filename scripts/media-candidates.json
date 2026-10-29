@@ -161,6 +161,10 @@
     {
       "name": "Sintel test 720p",
       "url": "https://test-videos.co.uk/vids/sintel/mp4/h264/720/Sintel_720_10s_2MB.mp4"
+    },
+    {
+      "name": "Full Big Buck Bunny CC BY 3.0 mirror 720p",
+      "url": "https://uploads.video-commander.com/sample/BigBuckBunny.mp4"
     }
   ]
 }

@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['scripts/check_media_urls.py', '.github/workflows/media-health.yml']
+    paths: ['scripts/check_media_urls.py', 'scripts/media-candidates.json', '.github/workflows/media-health.yml']
   schedule:
     - cron: '17 4 * * *'
 permissions:
