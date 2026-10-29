@@ -1,10 +1,7 @@
 name: Aseel TV Admin - GitHub Pages
+# Run manually after Repository Settings > Pages > Source: GitHub Actions.
+# GitHub App token currently lacks permission to enable Pages automatically.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'admin/**'
-      - '.github/workflows/admin-pages.yml'
   workflow_dispatch:
 permissions:
   contents: read
@@ -29,8 +26,6 @@ jobs:
           cp admin/index.html admin/style.css admin/app.js admin/config.js _site/
           touch _site/.nojekyll
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
