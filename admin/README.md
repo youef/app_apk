@@ -30,3 +30,6 @@ on conflict (user_id) do update set active=true;
 - الحجم الأقصى: 3MB، MIME: JPG/PNG/WebP.
 
 لا تضف أي قائمة IPTV مقرصنة، أو مفاتيح إدارة إلى المستودع أو التطبيق.
+
+## حالة النشر (29 أكتوبر 2026)
+محاولة إنشاء المشروع `aseel-tv-admin` في فريق Vercel المتصل رُفضت بخطأ `403 Forbidden`؛ لم تُنشأ بيئة إنتاج. يمكن تفعيل **GitHub Pages** من إعدادات المستودع (Pages → Source: GitHub Actions) ثم تشغيل سير العمل `Aseel TV Admin - GitHub Pages` يدويًا. لا تدّعِ أن الرابط يعمل قبل تحقق نجاح النشر. حتى ذلك الوقت ملفات لوحة الإدارة موجودة في `admin/` وجاهزة للنشر، لكن جدول `aseel_admins` لا يضم مستخدمًا معتمدًا بعد.
