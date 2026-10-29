@@ -6,6 +6,8 @@ import android.graphics.drawable.GradientDrawable;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Build;
+import android.util.Log;
 import android.os.Handler;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -27,6 +29,8 @@ public final class PlayerActivity extends Activity {
     private final Handler handler=new Handler();
     private String id, nextUrl, nextId, nextTitle, currentUrl;
     private boolean ready=false;
+    private LegacyStreamProxy mediaProxy;
+    private String playerMode="native";
     private final Runnable tick=new Runnable(){
         public void run(){
             if(video!=null&&ready){
@@ -117,13 +121,15 @@ public final class PlayerActivity extends Activity {
         video.setOnErrorListener(new MediaPlayer.OnErrorListener(){
             public boolean onError(MediaPlayer mp,int what,int extra){
                 ready=false;
-                error.setText("تعذر تشغيل الفيديو. قد لا يدعم التلفزيون الصيغة أو الشهادة أو بروتوكول الاتصال. رمز الخطأ: "+what+"/"+extra);
+                String diagnostics=mediaProxy!=null?mediaProxy.getLastError():"";
+                String code="Android API "+Build.VERSION.SDK_INT+" | "+playerMode+" | MediaPlayer "+what+"/"+extra;
+                String details=diagnostics.length()>0?"\nالشبكة: "+diagnostics:"\nقد يكون السبب شهادة TLS أو تنسيق الفيديو أو قدرات المحاكي/الشاشة.";
+                error.setText("تعذر تشغيل الفيديو.\n"+code+details);
+                Log.e("AseelVideo","Playback failed: "+code+" "+diagnostics);
                 return true;
             }
         });
-        try{video.setVideoURI(Uri.parse(url));video.requestFocus();}catch(Exception exception){
-            error.setText("تعذر إعداد المشغل: "+exception.getClass().getSimpleName());
-        }
+        openStream(url);
     }
     private void playNext(){
         if(nextUrl==null||!nextUrl.startsWith("https://"))return;
@@ -137,9 +143,38 @@ public final class PlayerActivity extends Activity {
             if(nextTitle!=null&&nextTitle.length()>0)title.setText(nextTitle);
             nextId=null;nextTitle=null;
             error.setText("جاري تحميل الحلقة التالية...");
-            video.setVideoURI(Uri.parse(currentUrl));
-            video.requestFocus();
+            openStream(currentUrl);
         }catch(Exception ex){error.setText("تعذر تشغيل الحلقة التالية: "+ex.getClass().getSimpleName());}
+    }
+    /**
+     * Android KitKat MediaPlayer uses system TLS, not the safe TLS 1.2 adapter
+     * used for the catalog; for API 19 use the restricted loopback range
+     * bridge. Android 5+ keeps native HTTPS playback.
+     */
+    private void openStream(String url){
+        if(mediaProxy!=null){mediaProxy.close();mediaProxy=null;}
+        ready=false;
+        if(url==null || !url.startsWith("https://")){
+            error.setText("رابط الفيديو مفقود أو غير آمن (HTTPS مطلوب)");
+            return;
+        }
+        try{
+            String address=url;
+            if(Build.VERSION.SDK_INT<=19){
+                mediaProxy=new LegacyStreamProxy(url);
+                address=mediaProxy.start();
+                playerMode="TLS 1.2 via localhost";
+            }else{
+                playerMode="HTTPS native";
+            }
+            error.setText("جاري تحميل الفيديو... ("+playerMode+")");
+            video.setVideoURI(Uri.parse(address));
+            video.requestFocus();
+        }catch(Exception exception){
+            String message=exception.getClass().getSimpleName()+": "+exception.getMessage();
+            error.setText("تعذر فتح المشغل: "+message);
+            Log.e("AseelVideo","Unable to start secure media stream",exception);
+        }
     }
     private void savePosition(int position){
         if(position<1000 || currentUrl==null || !currentUrl.startsWith("https://"))return;
@@ -168,5 +203,5 @@ public final class PlayerActivity extends Activity {
     }
     private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
     @Override protected void onPause(){super.onPause();if(video!=null&&ready){video.pause();savePosition(video.getCurrentPosition());}}
-    @Override protected void onDestroy(){handler.removeCallbacks(tick);if(video!=null)video.stopPlayback();super.onDestroy();}
+    @Override protected void onDestroy(){handler.removeCallbacks(tick);if(video!=null)video.stopPlayback();if(mediaProxy!=null)mediaProxy.close();super.onDestroy();}
 }
