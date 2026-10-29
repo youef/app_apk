@@ -6,12 +6,12 @@ const tables={
  aseel_series:{label:"المسلسلات",fields:["title_ar","title_original","description","poster_url","backdrop_url","release_year","category_id","language_code","quality","status","rights_status","rights_holder","license_reference","rights_expires_at","featured"]},
  aseel_seasons:{label:"المواسم",fields:["series_id","number","title_ar"]},
  aseel_episodes:{label:"الحلقات",fields:["season_id","number","title_ar","description","poster_url","duration_minutes","stream_url","status","rights_status","license_reference","rights_expires_at"]},
- aseel_channels:{label:"القنوات",fields:["title_ar","description","poster_url","stream_url","category_id","status","rights_status","rights_holder","license_reference","rights_expires_at"]},
+ aseel_channels:{label:"القنوات",fields:["title_ar","description","poster_url","playback_mode","official_url","stream_url","category_id","status","rights_status","rights_holder","license_reference","rights_expires_at"]},
  aseel_categories:{label:"التصنيفات",fields:["name_ar","sort_order","published"]},
  aseel_content_sources:{label:"مصادر الحقوق",fields:["title","source_url","rights_contact","license_reference","verified"]},
  aseel_settings:{label:"إعدادات التطبيق",fields:["key","value","is_public"]}
 };
-const names={title_ar:"العنوان العربي",title_original:"العنوان الأصلي",description:"الوصف",poster_url:"رابط البوستر HTTPS",backdrop_url:"رابط الخلفية",release_year:"سنة الإنتاج",category_id:"التصنيف",duration_minutes:"المدة بالدقائق",language_code:"اللغة",quality:"الجودة",stream_url:"رابط تشغيل HTTPS",status:"النشر",rights_status:"حالة الترخيص",rights_holder:"صاحب الحقوق",license_reference:"رابط أو رقم وثيقة الترخيص",rights_expires_at:"نهاية صلاحية الترخيص",featured:"مميز",series_id:"المسلسل",season_id:"الموسم",number:"الترتيب",name_ar:"اسم التصنيف",sort_order:"الترتيب",published:"منشور",title:"العنوان",source_url:"رابط المصدر",rights_contact:"التواصل مع صاحب الحقوق",verified:"تم التحقق",key:"مفتاح الإعداد",value:"قيمة الإعداد بصيغة JSON",is_public:"إعداد عام"};
+const names={title_ar:"العنوان العربي",title_original:"العنوان الأصلي",description:"الوصف",poster_url:"رابط البوستر HTTPS",backdrop_url:"رابط الخلفية",release_year:"سنة الإنتاج",category_id:"التصنيف",duration_minutes:"المدة بالدقائق",language_code:"اللغة",quality:"الجودة",stream_url:"رابط تشغيل HTTPS",official_url:"رابط مشاهدة الجهة الرسمية HTTPS",playback_mode:"طريقة عرض القناة",status:"النشر",rights_status:"حالة الترخيص",rights_holder:"صاحب الحقوق",license_reference:"رابط أو رقم وثيقة الترخيص",rights_expires_at:"نهاية صلاحية الترخيص",featured:"مميز",series_id:"المسلسل",season_id:"الموسم",number:"الترتيب",name_ar:"اسم التصنيف",sort_order:"الترتيب",published:"منشور",title:"العنوان",source_url:"رابط المصدر",rights_contact:"التواصل مع صاحب الحقوق",verified:"تم التحقق",key:"مفتاح الإعداد",value:"قيمة الإعداد بصيغة JSON",is_public:"إعداد عام"};
 const $=id=>document.getElementById(id);
 let jwt="",userId="",table="aseel_movies",editing=null,rows=[],cats=[],shows=[],seasons=[];
 let timeout;
@@ -96,6 +96,7 @@ function renderRows(){
  }
 }
 function optionList(key){
+ if(key==="playback_mode")return [["stream","بث مباشر مرخص داخل التطبيق"],["official_link","رابط المصدر الرسمي (فتح موقع الجهة)"]];
  if(key==="status")return [["draft","مسودة"],["published","منشور"],["hidden","مخفي"]];
  if(key==="rights_status")return [["pending","قيد المراجعة"],["approved","تم التحقق من الحقوق"],["rejected","مرفوض"]];
  if(key==="quality")return [["SD","SD"],["HD","HD"],["FHD","FHD"],["4K","4K"]];
@@ -172,6 +173,8 @@ $("editorForm").addEventListener("submit",async ev=>{
    return show("اعتمد الحقوق أولًا قبل النشر",true);
  if(payload.status==="published"&&!payload.license_reference)
    return show("وثيقة الترخيص مطلوبة للنشر",true);
+ if(payload.playback_mode==="official_link" && (!payload.official_url||!payload.official_url.startsWith("https://")))
+   return show("القناة الرسمية تحتاج رابط مشاهدة HTTPS",true);
  if(payload.stream_url&&!payload.stream_url.startsWith("https://"))
    return show("رابط التشغيل يجب أن يكون HTTPS",true);
  try{
