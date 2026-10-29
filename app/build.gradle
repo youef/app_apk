@@ -20,6 +20,18 @@ android {
             v1SigningEnabled true
             v2SigningEnabled true
         }
+        aseelStable {
+            // Supplied ONLY by protected CI secrets; never checked into Git.
+            def storePath = project.findProperty("aseelStoreFile")
+            if (storePath) {
+                storeFile file(storePath)
+                storePassword project.property("aseelStorePassword").toString()
+                keyAlias project.property("aseelKeyAlias").toString()
+                keyPassword project.property("aseelKeyPassword").toString()
+            }
+            v1SigningEnabled true
+            v2SigningEnabled true
+        }
     }
     buildTypes {
         debug {
@@ -30,6 +42,7 @@ android {
         release {
             debuggable false
             minifyEnabled false
+            signingConfig signingConfigs.aseelStable
         }
     }
 }
