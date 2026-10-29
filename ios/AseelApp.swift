@@ -221,7 +221,67 @@ final class CatalogueViewController: UIViewController, UITableViewDataSource, UI
         tableView.deselectRow(at: indexPath, animated: true)
         if sections[1].contains(where: { $0.id == item.id }) {
             navigationController?.pushViewController(EpisodesViewController(show: item), animated: true)
-        } else { watch(item, in: self) }
+        } else {
+            navigationController?.pushViewController(ContentDetailViewController(item: item), animated: true)
+        }
+    }
+}
+
+final class ContentDetailViewController: UIViewController {
+    private let item: Item
+    init(item: Item) { self.item = item; super.init(nibName: nil, bundle: nil) }
+    required init?(coder: NSCoder) { fatalError("Storyboard not supported") }
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = item.name
+        view.backgroundColor = Config.navy
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 18
+        stack.alignment = .fill
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 22),
+            stack.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -22),
+            stack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 20)
+        ])
+        func label(_ value: String, size: CGFloat, color: UIColor) {
+            let text = UILabel()
+            text.text = value
+            text.textColor = color
+            text.numberOfLines = 0
+            text.textAlignment = .natural
+            text.font = .systemFont(ofSize: size)
+            stack.addArrangedSubview(text)
+        }
+        label(item.name, size: 25, color: Config.gold)
+        label(item.description ?? "عمل مرخّص ومتوفّر للمشاهدة", size: 17, color: .white)
+        label("حقوق العمل: " + (item.rights_holder ?? "مصدر مرخص"), size: 14, color: .lightGray)
+        let play = UIButton(type: .system)
+        play.configuration = .filled()
+        play.configuration?.baseBackgroundColor = Config.gold
+        play.configuration?.baseForegroundColor = Config.navy
+        play.configuration?.title = item.playback_mode == "official_link" ? "فتح الموقع الرسمي" : "▶ تشغيل الفيديو"
+        play.addTarget(self, action: #selector(startPlayback), for: .touchUpInside)
+        stack.addArrangedSubview(play)
+        if let reference = item.license_reference, !reference.isEmpty {
+            let license = UIButton(type: .system)
+            license.setTitle("عرض المصدر ووثيقة الحقوق", for: .normal)
+            license.tintColor = Config.gold
+            license.addTarget(self, action: #selector(openLicense), for: .touchUpInside)
+            stack.addArrangedSubview(license)
+        }
+        label("تحافظ منصة أسيل على حقوق أصحاب الأعمال. تُعرض بعض القنوات من موقع المصدر الرسمي.", size: 12, color: .lightGray)
+    }
+    @objc private func startPlayback() { watch(item, in: self) }
+    @objc private func openLicense() {
+        guard let raw = item.license_reference?.components(separatedBy: ";").first?.trimmingCharacters(in: .whitespacesAndNewlines),
+              let url = URL(string: raw), url.scheme == "https" else {
+            inform("المرجع ليس رابط HTTPS قابلًا للفتح", in: self)
+            return
+        }
+        present(SFSafariViewController(url: url), animated: true)
     }
 }
 
@@ -277,6 +337,6 @@ final class EpisodesViewController: UITableViewController {
     }
     override func tableView(_ tableView: UITableView, didSelectRowAt path: IndexPath) {
         tableView.deselectRow(at: path, animated: true)
-        watch(episodes[path.row], in: self)
+        navigationController?.pushViewController(ContentDetailViewController(item: episodes[path.row]), animated: true)
     }
 }
