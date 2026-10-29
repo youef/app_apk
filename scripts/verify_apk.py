@@ -32,7 +32,7 @@ def main():
         check("AndroidManifest.xml" in names, "AndroidManifest.xml exists")
         check("classes.dex" in names, "classes.dex exists")
         header = z.read("classes.dex")[:8]
-        check(header.startswith(b"dex\\n") and header[7] == 0,
+        check(header.startswith(bytes([100, 101, 120, 10])) and header[7] == 0,
               "DEX magic header")
         dex_version = int(header[4:7])
         check(dex_version <= 35, "DEX version " + str(dex_version) + " supports Android API 19")
@@ -57,7 +57,7 @@ def main():
     if "uses-permission: name='android.permission.INTERNET'" in badging:
         raise RuntimeError("Offline Phase 1 must not request INTERNET")
     check(True, "No INTERNET permission")
-    if re.search(r"uses-feature:\\s*name='android.hardware.touchscreen'", badging):
+    if any(line.startswith("uses-feature:") and "android.hardware.touchscreen" in line for line in badging.splitlines()):
         raise RuntimeError("Touchscreen must not be required")
     check(True, "Touchscreen not required")
 
