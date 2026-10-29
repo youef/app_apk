@@ -5,6 +5,7 @@ import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.media.MediaPlayer;
 import android.net.Uri;
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Build;
 import android.util.Log;
@@ -27,7 +28,7 @@ public final class PlayerActivity extends Activity {
     private TextView title,error,clock;
     private ProgressBar progress;
     private final Handler handler=new Handler();
-    private String id, nextUrl, nextId, nextTitle, currentUrl;
+    private String id, nextUrl, nextId, nextTitle, currentUrl, officialUrl;
     private boolean ready=false;
     private LegacyStreamProxy mediaProxy;
     private String playerMode="native";
@@ -51,6 +52,7 @@ public final class PlayerActivity extends Activity {
         if(id==null)id="unknown";
         final String url=getIntent().getStringExtra("stream_url");
         currentUrl=url;
+        officialUrl=getIntent().getStringExtra("official_url");
         nextUrl=getIntent().getStringExtra("next_url");
         nextId=getIntent().getStringExtra("next_item_id");
         nextTitle=getIntent().getStringExtra("next_title");
@@ -82,6 +84,23 @@ public final class PlayerActivity extends Activity {
         Button forward=action("+10 ثوانٍ",buttons);
         Button next=action("الحلقة التالية",buttons);
         Button exit=action("رجوع",buttons);
+        if(url!=null && url.toLowerCase(java.util.Locale.US).contains(".m3u8")){
+            Button external=action("مشغل خارجي",buttons);
+            external.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                try{
+                    Intent open=new Intent(Intent.ACTION_VIEW);
+                    open.setDataAndType(Uri.parse(currentUrl),"application/vnd.apple.mpegurl");
+                    startActivity(open);
+                }catch(Exception e){error.setText("يحتاج بث HLS على هذا الجهاز مشغلًا خارجيًا متوافقًا، مثل VLC إصدار يدعم Android 4.4.");}
+            }});
+        }
+        if(officialUrl!=null && officialUrl.startsWith("https://")){
+            Button official=action("الموقع الرسمي",buttons);
+            official.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(officialUrl)));}
+                catch(Exception e){error.setText("لا يوجد متصفح متوافق لعرض الموقع الرسمي للقناة");}
+            }});
+        }
         rewind.setOnClickListener(new View.OnClickListener(){public void onClick(View v){seek(-10000);}});
         forward.setOnClickListener(new View.OnClickListener(){public void onClick(View v){seek(10000);}});
         play.setOnClickListener(new View.OnClickListener(){public void onClick(View v){toggle();}});
@@ -160,12 +179,13 @@ public final class PlayerActivity extends Activity {
         }
         try{
             String address=url;
-            if(Build.VERSION.SDK_INT<=19){
+            boolean isHls=url.toLowerCase(java.util.Locale.US).contains(".m3u8");
+            if(Build.VERSION.SDK_INT<=19 && !isHls){
                 mediaProxy=new LegacyStreamProxy(url);
                 address=mediaProxy.start();
                 playerMode="TLS 1.2 via localhost";
             }else{
-                playerMode="HTTPS native";
+                playerMode=isHls?"HLS native (may require external player on KitKat)":"HTTPS native";
             }
             error.setText("جاري تحميل الفيديو... ("+playerMode+")");
             video.setVideoURI(Uri.parse(address));

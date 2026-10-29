@@ -331,6 +331,13 @@ public final class MainActivity extends Activity {
             Button play=button("▶ تشغيل");actions.addView(play,lp(dp(160),dp(54)));
             play.setText("channel".equals(t)&&"official_link".equals(str(item,"playback_mode"))?"فتح البث الرسمي":"▶ تشغيل");
             play.setOnClickListener(new View.OnClickListener(){public void onClick(View v){play(item,null,null,null);}});
+            if("channel".equals(t) && str(item,"official_url").startsWith("https://")){
+                Button official=button("موقع القناة");actions.addView(official,lp(dp(180),dp(54)));
+                official.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                    try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(str(item,"official_url"))));}
+                    catch(Exception e){showStatus("لا يوجد متصفح مناسب لعرض موقع القناة");}
+                }});
+            }
         }else{
             Button episodes=button("عرض الحلقات");actions.addView(episodes,lp(dp(180),dp(54)));
             episodes.setOnClickListener(new View.OnClickListener(){public void onClick(View v){loadEpisodes(item);}});
@@ -355,7 +362,8 @@ public final class MainActivity extends Activity {
         }
         if(!url.startsWith("https://")){showStatus("لا يمكن تشغيل رابط غير HTTPS");return;}
         Intent i=new Intent(this,PlayerActivity.class);
-        i.putExtra("stream_url",url);i.putExtra("title",str(item,"title_ar"));
+        i.putExtra("stream_url",url);i.putExtra("official_url",str(item,"official_url"));
+        i.putExtra("title",str(item,"title_ar"));
         i.putExtra("item_id",str(item,"id"));if(nextUrl!=null)i.putExtra("next_url",nextUrl);
         if(nextId!=null)i.putExtra("next_item_id",nextId);
         if(nextTitle!=null)i.putExtra("next_title",nextTitle);

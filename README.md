@@ -85,3 +85,12 @@ python3 scripts/verify_apk.py app/build/outputs/apk/debug/app-debug.apk
 - تعذر اختبار توافق فيديوهات 720p على جهاز Android 4.4.4 الفعلي؛ قد تحتاج بعض الفيديوهات صيغة أخف أو شهادات HTTPS أحدث.
 - نسخة iOS التجريبية صُممت **لمحاكي iPhone/Appetize** فقط: https://github.com/youef/app_apk/releases/tag/aseel-ios-simulator-preview
 - لربط Appetize بتحديثات GitHub تلقائياً أضف Secrets: APPETIZE_API_TOKEN وAPPETIZE_IOS_PUBLIC_KEY وAPPETIZE_ANDROID_PUBLIC_KEY. يرفع سير العمل نسخًا جديدة للتطبيق الموجود فقط عند وجود المفتاح والرمز؛ يظل البناء والنشر على GitHub يعملان دونها.
+
+## Verified media sources — 29 October 2026
+A scheduled GitHub Actions probe downloads a true MP4 byte range and checks the ISO BMFF ftyp signature; a separate check follows HLS master/variant playlists and downloads 4096 bytes of an actual TS/fMP4 media segment.
+- Older Blender webseed URLs had HTTP 404 or HTML rather than playable video; these items were hidden from the public Supabase catalog without deleting their database records.
+- Published 15 archive-sourced silent-film files (from original 1914–1929 works) after byte-range checks. Musical scores/new remasters may have separate copyright and require review.
+- Published nine HLS live-channel pointers whose media segment fetched successfully on the CI runner; streams can change or be geographically restricted.
+- Android 4.4: Native VideoView HLS depends on device support. The player exposes an explicit external HLS-player launch and an official broadcaster web fallback. Do not claim this is verified on an Android 4.4 TV.
+- iOS: AVPlayer uses the verified channel m3u8 URLs directly.
+- Run these audits under GitHub Actions for fresh reports: Aseel Media URL Health Audit and Aseel Real HLS Segment Audit.
