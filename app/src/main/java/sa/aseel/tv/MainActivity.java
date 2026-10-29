@@ -44,6 +44,7 @@ public final class MainActivity extends Activity {
     private String mode="home";
     private String lastMode="home";
     private boolean loading=false,hasLoaded=false;
+    private long lastUpdatedAt=0L;
     private JSONArray movies=new JSONArray(),series=new JSONArray(),channels=new JSONArray(),categories=new JSONArray();
     private CatalogApi api;
     private SharedPreferences prefs;
@@ -151,6 +152,7 @@ public final class MainActivity extends Activity {
             runOnUiThread(new Runnable(){public void run(){
                 movies=fm;series=fs;channels=fc;categories=fcat;
                 hasLoaded=true;loading=false;
+                lastUpdatedAt=System.currentTimeMillis();
                 showStatus(err.length()>0?"لا يمكن تحديث بعض البيانات؛ افحص الاتصال والشهادات. "+err:"");
                 render();
             }});
@@ -177,7 +179,9 @@ public final class MainActivity extends Activity {
         if(!hasLoaded){empty("جاري الاتصال بمكتبة أسيل...");return;}
         section("أحدث الأفلام",movies,"movie",8);
         section("المسلسلات",series,"series",8);
-        section("القنوات المباشرة",channels,"channel",8);
+        section("القنوات المتاحة",channels,"channel",8);
+        categoriesRow();
+        resumeRow();
         ArrayList<JSONObject> recent=new ArrayList<JSONObject>();
         addRecent(recent,movies,"movie");addRecent(recent,series,"series");
         if(!recent.isEmpty()){
@@ -186,6 +190,63 @@ public final class MainActivity extends Activity {
         }
         if(movies.length()+series.length()+channels.length()==0)
             empty("المكتبة خالية حاليًا. ستظهر الأعمال المعتمدة تلقائيًا بعد إضافتها من لوحة الإدارة.");
+    }
+    private void resumeRow(){
+        final String resumeId=prefs.getString("resume_id","");
+        final String resumeUrl=prefs.getString("resume_url","");
+        final int position=prefs.getInt("position_"+resumeId,0);
+        if(resumeId.length()==0 || !resumeUrl.startsWith("https://") || position<10000)return;
+        title("متابعة آخر مشاهدة","اضغط OK للاستكمال من موضعك السابق");
+        Button resume=button("▶ متابعة: "+prefs.getString("resume_title","آخر فيديو"));
+        stage.addView(resume,lp(-1,dp(60)));
+        resume.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            Intent intent=new Intent(MainActivity.this,PlayerActivity.class);
+            intent.putExtra("item_id",resumeId);
+            intent.putExtra("title",prefs.getString("resume_title","متابعة المشاهدة"));
+            intent.putExtra("stream_url",resumeUrl);
+            startActivity(intent);
+        }});
+    }
+    private void categoriesRow(){
+        if(categories.length()==0)return;
+        title("التصنيفات","اكتشف الأعمال المرخصة بحسب نوعها");
+        HorizontalScrollView wrap=new HorizontalScrollView(this);
+        wrap.setHorizontalScrollBarEnabled(false);
+        LinearLayout row=horizontal();wrap.addView(row);
+        stage.addView(wrap,gap(3,16));
+        for(int c=0;c<categories.length();c++){
+            JSONObject cat=categories.optJSONObject(c);if(cat==null)continue;
+            final String id=str(cat,"id");
+            Button b=button(str(cat,"name_ar"));b.setTextSize(13);
+            LinearLayout.LayoutParams p=lp(dp(156),dp(50));p.setMargins(dp(5),0,dp(5),0);
+            row.addView(b,p);
+            b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                stage.removeAllViews();
+                Button back=button("العودة للرئيسية");stage.addView(back,lp(dp(210),dp(48)));
+                back.setOnClickListener(new View.OnClickListener(){public void onClick(View w){mode="home";render();}});
+                ArrayList<JSONObject> items=new ArrayList<JSONObject>();
+                addCategoryItems(items,movies,"movie",id);
+                addCategoryItems(items,series,"series",id);
+                addCategoryItems(items,channels,"channel",id);
+                if(items.isEmpty())empty("لا يوجد محتوى منشور لهذا التصنيف.");
+                else cards(items,AppConfig.MAX_ITEMS);
+            }});
+        }
+    }
+    private void addCategoryItems(ArrayList<JSONObject> out,JSONArray source,String type,String categoryId){
+        for(int j=0;j<source.length();j++){
+            JSONObject item=source.optJSONObject(j);
+            if(item!=null && categoryId.equals(str(item,"category_id"))){
+                try{item.put("_type",type);}catch(Exception ignored){}
+                out.add(item);
+            }
+        }
+    }
+    @Override protected void onResume(){
+        super.onResume();
+        if(hasLoaded && !loading && System.currentTimeMillis()-lastUpdatedAt > 15L*60L*1000L){
+            loadCatalog();
+        }
     }
     private void section(String title,JSONArray list,String type,int max){
         if(list.length()==0)return;
@@ -252,7 +313,7 @@ public final class MainActivity extends Activity {
         final String t=type, id=str(item,"id"),url=str(item,"stream_url");
         if(!"series".equals(t)){
             Button play=button("▶ تشغيل");actions.addView(play,lp(dp(160),dp(54)));
-            play.setOnClickListener(new View.OnClickListener(){public void onClick(View v){play(item,null);}});
+            play.setOnClickListener(new View.OnClickListener(){public void onClick(View v){play(item,null,null,null);}});
         }else{
             Button episodes=button("عرض الحلقات");actions.addView(episodes,lp(dp(180),dp(54)));
             episodes.setOnClickListener(new View.OnClickListener(){public void onClick(View v){loadEpisodes(item);}});
@@ -264,12 +325,14 @@ public final class MainActivity extends Activity {
             toggleFavorite(t,id);favorite.setText(isFavorite(t,id)?"إزالة من المفضلة":"إضافة للمفضلة");
         }});
     }
-    private void play(JSONObject item,String nextUrl){
+    private void play(JSONObject item,String nextUrl,String nextId,String nextTitle){
         String url=str(item,"stream_url");
         if(!url.startsWith("https://")){showStatus("لا يمكن تشغيل رابط غير HTTPS");return;}
         Intent i=new Intent(this,PlayerActivity.class);
         i.putExtra("stream_url",url);i.putExtra("title",str(item,"title_ar"));
         i.putExtra("item_id",str(item,"id"));if(nextUrl!=null)i.putExtra("next_url",nextUrl);
+        if(nextId!=null)i.putExtra("next_item_id",nextId);
+        if(nextTitle!=null)i.putExtra("next_title",nextTitle);
         startActivity(i);
     }
     private void loadEpisodes(final JSONObject seriesItem){
@@ -300,9 +363,11 @@ public final class MainActivity extends Activity {
                 for(int k=0;k<entries.size();k++){
                     final JSONObject e=entries.get(k);
                     final String next=k+1<entries.size()?str(entries.get(k+1),"stream_url"):null;
+                    final String nextId=k+1<entries.size()?str(entries.get(k+1),"id"):null;
+                    final String nextTitle=k+1<entries.size()?str(entries.get(k+1),"title_ar"):null;
                     Button b=button("الموسم "+e.optInt("_season")+" | الحلقة "+e.optInt("number")+" — "+str(e,"title_ar"));
                     stage.addView(b,gap(3,3));
-                    b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){play(e,next);}});
+                    b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){play(e,next,nextId,nextTitle);}});
                 }
             }});
         }}).start();
@@ -351,7 +416,7 @@ public final class MainActivity extends Activity {
             String query=input.getText().toString().trim().toLowerCase();
             // Hide keyboard while retaining search query and results.
             ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(input.getWindowToken(),0);
-            while(stage.getChildCount()>4)stage.removeViewAt(4);
+            while(stage.getChildCount()>2)stage.removeViewAt(2);
             ArrayList<JSONObject> found=new ArrayList<JSONObject>();
             filter(found,movies,"movie",query);filter(found,series,"series",query);filter(found,channels,"channel",query);
             if(found.isEmpty())empty("لا توجد نتائج مطابقة.");else cards(found,AppConfig.MAX_ITEMS);
