@@ -22,8 +22,12 @@ jobs:
       - name: Install Android SDK API 33
         shell: bash
         run: |
-          echo "SDK at: ${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          sdkmanager 'platforms;android-33' 'build-tools;33.0.2'
+          SDK_ROOT=/usr/local/lib/android/sdk
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          SDKMGR=$(find "$SDK_ROOT/cmdline-tools" -name sdkmanager -type f | head -1)
+          test -n "$SDKMGR"
+          "$SDKMGR" --sdk_root="$SDK_ROOT" 'platforms;android-33' 'build-tools;33.0.2'
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '7.6.1'
