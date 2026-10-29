@@ -4,29 +4,23 @@ android {
     namespace 'sa.aseel.tv'
     compileSdkVersion 28
     buildToolsVersion '33.0.2'
-
     defaultConfig {
         applicationId 'sa.aseel.tv'
         minSdkVersion 19
         targetSdkVersion 28
-        versionCode 1
-        versionName '0.1.0-install-test'
+        versionCode 2
+        versionName '0.9.0-beta'
     }
-
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_7
         targetCompatibility JavaVersion.VERSION_1_7
     }
-
     signingConfigs {
         debug {
-            // Android 4.4.4 verifies JAR/V1 signatures.
-            // V2 is retained for newer devices.
             v1SigningEnabled true
             v2SigningEnabled true
         }
     }
-
     buildTypes {
         debug {
             debuggable true
@@ -34,12 +28,11 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            // Never publish an unsigned or temporary-key release build.
+            debuggable false
             minifyEnabled false
         }
     }
 }
-
 dependencies {
-    // No third-party libraries: the very first APK is an offline install test.
+    // Native framework only; compatible with low-memory Android 4.4.4 devices.
 }
