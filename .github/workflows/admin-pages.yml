@@ -1,33 +1,55 @@
-name: Aseel TV Admin - GitHub Pages
-# Run manually after Repository Settings > Pages > Source: GitHub Actions.
-# GitHub App token currently lacks permission to enable Pages automatically.
+name: Aseel TV Web and Admin - GitHub Pages
 on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "admin/**"
+      - ".github/workflows/admin-pages.yml"
   workflow_dispatch:
+
 permissions:
   contents: read
   pages: write
   id-token: write
+
 concurrency:
-  group: aseel-admin-pages
+  group: aseel-tv-pages
   cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: https://youef.github.io/app_apk/
     steps:
-      - uses: actions/checkout@v4
-      - name: Validate dashboard JavaScript
-        run: node --check admin/app.js
-      - name: Prepare static site
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify JavaScript syntax
         run: |
-          mkdir -p _site
-          cp admin/index.html admin/style.css admin/app.js admin/config.js _site/
+          node --check web/app.js
+          node --check web/config.js
+          node --check admin/app.js
+          node --check admin/config.js
+      - name: Assemble public viewer and admin dashboard
+        run: |
+          set -euo pipefail
+          mkdir -p _site/admin
+          cp web/index.html web/styles.css web/app.js web/config.js _site/
+          cp admin/index.html admin/style.css admin/app.js admin/config.js _site/admin/
           touch _site/.nojekyll
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+          test -s _site/index.html
+          test -s _site/app.js
+          test -s _site/admin/index.html
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: Upload Pages files
+        uses: actions/upload-pages-artifact@v3
         with:
           path: _site
-      - id: deployment
+      - name: Deploy to Pages
+        id: deployment
         uses: actions/deploy-pages@v4
