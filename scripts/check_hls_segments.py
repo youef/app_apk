@@ -44,6 +44,13 @@ def fetch(url):
 def main():
     with open("scripts/media-candidates.json",encoding="utf-8") as f:
         items=json.load(f)["candidates"]
+    try:
+        with open("scripts/free-tv-candidates.json",encoding="utf-8") as fd:
+            extra=json.load(fd).get("candidates",[])
+        existing={x["url"] for x in items}
+        items += [x for x in extra if x.get("url","").startswith("https://") and x["url"] not in existing]
+    except (OSError,ValueError,KeyError) as ex:
+        print("Free-TV candidates not loaded",str(ex),flush=True)
     streams=[x for x in items if ".m3u8" in x["url"]]
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
         checked=list(pool.map(lambda x: dict({"name":x["name"]},**fetch(x["url"])),streams))

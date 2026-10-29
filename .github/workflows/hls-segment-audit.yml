@@ -2,7 +2,7 @@ name: Aseel Real HLS Segment Audit
 on:
   push:
     branches: [main]
-    paths: ['scripts/check_hls_segments.py', '.github/workflows/hls-segment-audit.yml']
+    paths: ['scripts/check_hls_segments.py', 'scripts/free-tv-candidates.json', '.github/workflows/hls-segment-audit.yml']
   workflow_dispatch:
   schedule:
     - cron: '40 4 * * *'
