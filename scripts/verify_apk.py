@@ -30,7 +30,7 @@ try:
     signer=str(sdk/"build-tools/33.0.2/apksigner")
     check(Path(aapt).is_file() and Path(signer).is_file(),"aapt and apksigner available")
     badging=run([aapt,"dump","badging",str(apk)])
-    check("package: name='sa.aseel.tv'" in badging,"Expected application ID")
+    check("package: name='sa.aseel.tv.full'" in badging,"Expected application ID")
     check("sdkVersion:'19'" in badging,"minSdkVersion=19")
     check("targetSdkVersion:'28'" in badging,"targetSdkVersion=28")
     check("android.permission.INTERNET" in badging,"INTERNET permission present for dynamic catalog")

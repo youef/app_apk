@@ -46,7 +46,7 @@
 
 اسم ملف الإصدار: `aseel-tv-api19-full-beta.apk`، اختبار تجريبي لا إصدار إنتاج نهائي.
 
-**مهم جدًا:** GitHub Runner يوقّع Debug بمفتاح مؤقت مختلف بين بعض عمليات البناء، ولذلك قد يرفض الهاتف/التلفزيون ترقية النسخة السابقة فوقها بخطأ `INSTALL_FAILED_UPDATE_INCOMPATIBLE`. يلزم مفتاح توقيع ثابت محفوظ ضمن GitHub Actions Secrets للإصدارات النهائية. لا تحذف نسخة مثبتة أو بياناتها إلا بعد عمل نسخة احتياطية وموافقتك.
+**تثبيت الشاشة:** النسخة الكاملة تحمل الآن `sa.aseel.tv.full`، وتُثبت بجانب نسخة الاختبار `sa.aseel.tv` دون حذف النسخة التي نجحت على الشاشة. بيانات المشاهدة منفصلة. تحديث النسخة الكاملة لاحقًا يتطلب شهادة توقيع مستقرة محفوظة في GitHub Actions Secrets؛ توقيع Debug المؤقت لا يضمن تحديثًا بلا إزالة التطبيق.
 
 ## قاعدة البيانات وإدارة الحقوق
 جداول Supabase الجديدة:
@@ -94,3 +94,8 @@ A scheduled GitHub Actions probe downloads a true MP4 byte range and checks the 
 - Android 4.4: Native VideoView HLS depends on device support. The player exposes an explicit external HLS-player launch and an official broadcaster web fallback. Do not claim this is verified on an Android 4.4 TV.
 - iOS: AVPlayer uses the verified channel m3u8 URLs directly.
 - Run these audits under GitHub Actions for fresh reports: Aseel Media URL Health Audit and Aseel Real HLS Segment Audit.
+
+## APK Android 4.4.4 الخاص بالشاشة المثبتة
+- بدءًا من 1.3.0، التطبيق الكامل هو `sa.aseel.tv.full` حتى لا يصطدم بشهادة نسخة التثبيت الأولى `sa.aseel.tv` التي نجحت بالفعل على شاشة Huidi Android 4.4.4.
+- حد التوافق API 19، تشغيل بدون Google Play Services، لا حاجة لحذف التطبيق القديم.
+- اختبار مكتبة الأفلام/المسلسلات/القنوات والتحكم بالريموت وتشغيل فيديو MP4 يحتاج التحقق على الجهاز الحقيقي؛ CI لا يغطي أداء الفيديو المادي.
