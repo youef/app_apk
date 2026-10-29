@@ -34,7 +34,7 @@ try:
     run([zipalign,"-c","-v","4",str(apk)])
     check(True,"APK ZIP aligned for API 19 device")
     badging=run([aapt,"dump","badging",str(apk)])
-    check("package: name='sa.aseel.tv.kitkatfix'" in badging,"Expected application ID")
+    check("package: name='sa.aseel.tv.huidi'" in badging,"Expected application ID")
     check("sdkVersion:'19'" in badging,"minSdkVersion=19")
     check("targetSdkVersion:'28'" in badging,"targetSdkVersion=28")
     check("android.permission.INTERNET" in badging,"INTERNET permission present for dynamic catalog")

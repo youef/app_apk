@@ -5,12 +5,12 @@ android {
     compileSdkVersion 28
     buildToolsVersion '33.0.2'
     defaultConfig {
-        applicationId 'sa.aseel.tv.kitkatfix'
+        applicationId 'sa.aseel.tv.huidi'
         minSdkVersion 19
         targetSdkVersion 28
         ndk { abiFilters "armeabi-v7a" }
         versionCode 1
-        versionName '1.4.0-install-repair'
+        versionName '2.0.0-huidi-optimized'
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_7

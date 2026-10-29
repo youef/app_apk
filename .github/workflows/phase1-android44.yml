@@ -1,4 +1,4 @@
-name: Aseel TV - KitKat Install Repair
+name: Aseel TV - Huidi Optimized API19
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  android19-install-repair:
+  android19-huidi-optimized:
     env:
       APPETIZE_API_TOKEN: ${{ secrets.APPETIZE_API_TOKEN }}
       APPETIZE_ANDROID_PUBLIC_KEY: ${{ secrets.APPETIZE_ANDROID_PUBLIC_KEY }}
@@ -73,16 +73,16 @@ jobs:
 
       - name: Package validated installation test
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk dist/aseel-tv-kitkat-install-fix.apk
+          cp app/build/outputs/apk/debug/app-debug.apk dist/aseel-tv-huidi-optimized-api19.apk
           sha256sum dist/aseel-tv-kitkat-install-fix.apk | tee -a dist/build-report.txt
-          echo "Installer package: sa.aseel.tv.kitkatfix (does not replace sa.aseel.tv.full)" | tee -a dist/build-report.txt
-          echo "Certificate replacement collision eliminated with independent package id." | tee -a dist/build-report.txt
+          echo "Installer package: sa.aseel.tv.huidi (new independent TV package)" | tee -a dist/build-report.txt
+          echo "Distinct install ID for legacy releases; stable signing still required for subsequent upgrades." | tee -a dist/build-report.txt
           echo "Device installation and playback: NOT TESTED" | tee -a dist/build-report.txt
 
       - name: Upload APK and validation report
         uses: actions/upload-artifact@v4
         with:
-          name: aseel-tv-kitkat-fix-api19-${{ github.run_number }}
+          name: aseel-tv-huidi-api19-${{ github.run_number }}
           path: |
             dist/aseel-tv-kitkat-install-fix.apk
             dist/build-report.txt
@@ -94,11 +94,11 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: aseel-tv-kitkat-install-fix
-          name: Aseel TV - KitKat Install Repair 1.4.0
+          tag_name: aseel-tv-huidi-optimized-v2
+          name: Aseel TV - Huidi Optimized v2.0
           prerelease: true
           make_latest: false
-          body_path: docs/INSTALL_REPAIR.md
+          body_path: docs/HUIDI_OPTIMIZED.md
           files: dist/aseel-tv-kitkat-install-fix.apk
           fail_on_unmatched_files: true
 

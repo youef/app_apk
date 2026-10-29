@@ -30,6 +30,14 @@ public final class CatalogApi {
         cache=this.context.getSharedPreferences("aseel_catalog_cache_v1", Context.MODE_PRIVATE);
     }
 
+    /** Recent cached catalog only: rights may be revoked after 15 minutes. */
+    public JSONArray recentCache(String table,String query){
+        String key=table+query;
+        String json=cache.getString(key,null);
+        long age=System.currentTimeMillis()-cache.getLong(key+"_cached_at",0L);
+        if(json==null || age<0 || age>MAX_OFFLINE_CACHE_AGE_MS)return null;
+        try{return new JSONArray(json);}catch(Exception ignored){return null;}
+    }
     public JSONArray list(String table) throws Exception {
         return listQuery(table, "?select=*&order=created_at.desc&limit=" + AppConfig.MAX_ITEMS);
     }

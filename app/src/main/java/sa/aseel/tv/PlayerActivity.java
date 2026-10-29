@@ -25,9 +25,19 @@ import android.widget.VideoView;
 /** Native VideoView player: MP4/H.264/AAC preferred; HLS is device dependent. */
 public final class PlayerActivity extends Activity {
     private VideoView video;
+    private LinearLayout controlsPanel;
     private TextView title,error,clock;
     private ProgressBar progress;
     private final Handler handler=new Handler();
+    private final Runnable hideOverlay=new Runnable(){public void run(){
+        if(ready && video!=null && video.isPlaying() && controlsPanel!=null)
+            controlsPanel.setVisibility(View.INVISIBLE);
+    }};
+    private void revealControls(){
+        if(controlsPanel!=null)controlsPanel.setVisibility(View.VISIBLE);
+        handler.removeCallbacks(hideOverlay);
+        if(ready)handler.postDelayed(hideOverlay,9000);
+    }
     private String id, nextUrl, nextId, nextTitle, currentUrl, officialUrl;
     private boolean ready=false;
     private LegacyStreamProxy mediaProxy;
@@ -67,6 +77,7 @@ public final class PlayerActivity extends Activity {
         panel.setBackgroundColor(Color.argb(205,8,18,34));
         FrameLayout.LayoutParams pp=new FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM);
         root.addView(panel,pp);
+        controlsPanel=panel;
         title=new TextView(this);
         title.setText(getIntent().getStringExtra("title"));
         title.setTextSize(21);title.setTextColor(0xFFF2D6A0);
@@ -123,6 +134,7 @@ public final class PlayerActivity extends Activity {
                 if(saved>0 && saved < media.getDuration()-15000)video.seekTo(saved);
                 video.start();
                 error.setText("");
+                revealControls();
                 handler.post(tick);
             }
         });
@@ -140,6 +152,7 @@ public final class PlayerActivity extends Activity {
         video.setOnErrorListener(new MediaPlayer.OnErrorListener(){
             public boolean onError(MediaPlayer mp,int what,int extra){
                 ready=false;
+                revealControls();
                 String diagnostics=mediaProxy!=null?mediaProxy.getLastError():"";
                 String code="Android API "+Build.VERSION.SDK_INT+" | "+playerMode+" | MediaPlayer "+what+"/"+extra;
                 String details=diagnostics.length()>0?"\nالشبكة: "+diagnostics:"\nقد يكون السبب شهادة TLS أو تنسيق الفيديو أو قدرات المحاكي/الشاشة.";
@@ -208,11 +221,30 @@ public final class PlayerActivity extends Activity {
     private String format(int ms){int sec=Math.max(ms,0)/1000;return String.format(java.util.Locale.US,"%02d:%02d",sec/60,sec%60);}
     private void seek(int amount){if(!ready)return;int d=video.getDuration();
         video.seekTo(Math.max(0,Math.min(d,video.getCurrentPosition()+amount)));}
-    private void toggle(){if(!ready)return;if(video.isPlaying())video.pause();else video.start();}
+    private void toggle(){
+        if(!ready)return;
+        if(video.isPlaying())video.pause();else video.start();
+        revealControls();
+    }
     @Override public boolean onKeyDown(int code,KeyEvent event){
         if(code==KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE){toggle();return true;}
-        if(code==KeyEvent.KEYCODE_MEDIA_REWIND){seek(-10000);return true;}
-        if(code==KeyEvent.KEYCODE_MEDIA_FAST_FORWARD){seek(10000);return true;}
+        if(code==KeyEvent.KEYCODE_MEDIA_PLAY){if(ready&&!video.isPlaying())video.start();revealControls();return true;}
+        if(code==KeyEvent.KEYCODE_MEDIA_PAUSE){if(ready&&video.isPlaying())video.pause();revealControls();return true;}
+        if(code==KeyEvent.KEYCODE_MEDIA_REWIND){seek(-10000);revealControls();return true;}
+        if(code==KeyEvent.KEYCODE_MEDIA_FAST_FORWARD){seek(10000);revealControls();return true;}
+        if(code==KeyEvent.KEYCODE_MEDIA_STOP){finish();return true;}
+        if(controlsPanel!=null && controlsPanel.getVisibility()!=View.VISIBLE){
+            if(code==KeyEvent.KEYCODE_DPAD_LEFT){seek(-10000);revealControls();return true;}
+            if(code==KeyEvent.KEYCODE_DPAD_RIGHT){seek(10000);revealControls();return true;}
+            if(code==KeyEvent.KEYCODE_DPAD_UP || code==KeyEvent.KEYCODE_DPAD_DOWN ||
+               code==KeyEvent.KEYCODE_DPAD_CENTER || code==KeyEvent.KEYCODE_ENTER){
+                revealControls();return true;
+            }
+        }
+        if(code==KeyEvent.KEYCODE_DPAD_LEFT || code==KeyEvent.KEYCODE_DPAD_RIGHT ||
+           code==KeyEvent.KEYCODE_DPAD_UP || code==KeyEvent.KEYCODE_DPAD_DOWN ||
+           code==KeyEvent.KEYCODE_DPAD_CENTER || code==KeyEvent.KEYCODE_ENTER)
+            revealControls();
         return super.onKeyDown(code,event);
     }
     private Button action(String name,LinearLayout row){
@@ -223,5 +255,5 @@ public final class PlayerActivity extends Activity {
     }
     private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
     @Override protected void onPause(){super.onPause();if(video!=null&&ready){video.pause();savePosition(video.getCurrentPosition());}}
-    @Override protected void onDestroy(){handler.removeCallbacks(tick);if(video!=null)video.stopPlayback();if(mediaProxy!=null)mediaProxy.close();super.onDestroy();}
+    @Override protected void onDestroy(){handler.removeCallbacks(hideOverlay);handler.removeCallbacks(tick);if(video!=null)video.stopPlayback();if(mediaProxy!=null)mediaProxy.close();super.onDestroy();}
 }

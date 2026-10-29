@@ -30,6 +30,8 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Aseel TV — native light-weight Arabic TV catalog for API 19+.
@@ -64,6 +66,7 @@ public final class MainActivity extends Activity {
         prefs=getSharedPreferences("aseel_user_v2",MODE_PRIVATE);
         api=new CatalogApi(this);
         buildShell();
+        warmCache();
         render();
         loadCatalog();
     }
@@ -148,27 +151,54 @@ public final class MainActivity extends Activity {
         if("channel".equals(m))return channels;
         return new JSONArray();
     }
+    private void warmCache(){
+        JSONArray m=api.recentCache("aseel_movies","?select=*&order=created_at.desc&limit="+AppConfig.MAX_ITEMS);
+        JSONArray s=api.recentCache("aseel_series","?select=*&order=created_at.desc&limit="+AppConfig.MAX_ITEMS);
+        JSONArray c=api.recentCache("aseel_channels","?select=*&order=created_at.desc&limit="+AppConfig.MAX_ITEMS);
+        JSONArray cats=api.recentCache("aseel_categories","?select=*&order=sort_order.asc&limit=60");
+        if(m!=null){movies=m;hasLoaded=true;}
+        if(s!=null){series=s;hasLoaded=true;}
+        if(c!=null){channels=c;hasLoaded=true;}
+        if(cats!=null){categories=cats;hasLoaded=true;}
+    }
     private void loadCatalog(){
         if(loading)return;
-        loading=true;showStatus("جاري تحديث المحتوى...");
+        loading=true;showStatus(hasLoaded?"جاري تحديث المكتبة...":"جارٍ تحميل الأفلام والمسلسلات والقنوات...");
         new Thread(new Runnable(){public void run(){
-            JSONArray m=new JSONArray(),s=new JSONArray(),c=new JSONArray(),cat=new JSONArray();
-            String failure="";
-            try{m=api.list("aseel_movies");}catch(Exception e){failure+="الأفلام: "+CatalogApi.describe(e)+"\n";}
-            try{s=api.list("aseel_series");}catch(Exception e){failure+="المسلسلات: "+CatalogApi.describe(e)+"\n";}
-            try{c=api.list("aseel_channels");}catch(Exception e){failure+="القنوات: "+CatalogApi.describe(e)+"\n";}
-            try{cat=api.listQuery("aseel_categories","?select=*&order=sort_order.asc&limit=60");}catch(Exception ignored){}
-            final JSONArray fm=m,fs=s,fc=c,fcat=cat;
-            final String err=failure;
+            final String[] tables={"aseel_movies","aseel_series","aseel_channels","aseel_categories"};
+            final JSONArray[] fetched=new JSONArray[4];
+            final String[] errors=new String[4];
+            final CountDownLatch latch=new CountDownLatch(4);
+            for(int index=0;index<4;index++){
+                final int i=index;
+                Thread task=new Thread(new Runnable(){public void run(){
+                    try{
+                        fetched[i]=i==3?api.listQuery(tables[i],"?select=*&order=sort_order.asc&limit=60"):api.list(tables[i]);
+                    }catch(Exception e){errors[i]=CatalogApi.describe(e);}
+                    finally{latch.countDown();}
+                }},"Aseel-Catalog-"+i);
+                task.setDaemon(true);task.start();
+            }
+            try{latch.await(35,TimeUnit.SECONDS);}catch(InterruptedException ignored){}
             runOnUiThread(new Runnable(){public void run(){
-                movies=fm;series=fs;channels=fc;categories=fcat;
+                if(isFinishing())return;
+                if(fetched[0]!=null)movies=fetched[0];
+                if(fetched[1]!=null)series=fetched[1];
+                if(fetched[2]!=null)channels=fetched[2];
+                if(fetched[3]!=null)categories=fetched[3];
                 hasLoaded=true;loading=false;
                 lastUpdatedAt=System.currentTimeMillis();
-                networkErrors=err;
-                showStatus(err.length()>0?"فشل تحميل البيانات؛ افتح الإعدادات لعرض تفاصيل خطأ SSL.":"");
+                String[] names={"الأفلام","المسلسلات","القنوات","التصنيفات"};
+                StringBuilder report=new StringBuilder();
+                for(int i=0;i<4;i++){
+                    if(errors[i]!=null)report.append(names[i]).append(": ").append(errors[i]).append("\n");
+                    else if(fetched[i]==null)report.append(names[i]).append(": انتهت المهلة.\n");
+                }
+                networkErrors=report.toString();
+                showStatus(report.length()>0?"فشل تحديث بعض البيانات، الاحتفاظ بالمحتوى المخزن مؤقتًا. راجع الإعدادات.":"");
                 render();
             }});
-        }}).start();
+        }},"Aseel-Refresh").start();
     }
     private void render(){
         if(stage==null)return;
@@ -302,7 +332,7 @@ public final class MainActivity extends Activity {
             ImageView poster=new ImageView(this);poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
             poster.setBackgroundDrawable(background(0xFF29415B,8,0));
             card.addView(poster,lp(-1,dp(162)));
-            PosterLoader.load(poster,str(item,"poster_url"));
+            if(!prefs.getBoolean("lite_mode",false))PosterLoader.load(poster,str(item,"poster_url"));
             TextView name=text(str(item,"title_ar"),16,WHITE,true);name.setSingleLine(true);
             name.setEllipsize(android.text.TextUtils.TruncateAt.END);
             card.addView(name,gap(8,2));
@@ -504,6 +534,15 @@ public final class MainActivity extends Activity {
                 runOnUiThread(new Runnable(){public void run(){network.setText(message);diagnose.setEnabled(true);}});
             }}).start();
         }});
+        final boolean lite=prefs.getBoolean("lite_mode",false);
+        Button lowMemory=button(lite?"الوضع الخفيف: مفعّل (صور مخفية)":"الوضع الخفيف: إيقاف (الصور ظاهرة)");
+        stage.addView(lowMemory,gap(8,8));
+        lowMemory.setOnClickListener(new View.OnClickListener(){public void onClick(View view){
+            prefs.edit().putBoolean("lite_mode",!lite).apply();
+            PosterLoader.releaseMemory();
+            stage.removeAllViews();
+            settings();
+        }});
         Button refresh=button("تحديث مكتبة المحتوى");stage.addView(refresh,gap(10,0));
         refresh.setOnClickListener(new View.OnClickListener(){public void onClick(View v){loadCatalog();}});
         DisplayMetrics m=new DisplayMetrics();getWindowManager().getDefaultDisplay().getRealMetrics(m);
@@ -517,6 +556,7 @@ public final class MainActivity extends Activity {
             +"\nRAM: "+(memory.totalMem/(1024*1024))+" MB"
             +"\nالدقة: "+m.widthPixels+" × "+m.heightPixels
             +"\nDPI: "+m.densityDpi+"\nBuild: "+Build.DISPLAY
+            +"\nحد ذاكرة Java: "+(Runtime.getRuntime().maxMemory()/(1024*1024))+" MB"
             +"\nالمحتوى: "+movies.length()+" أفلام، "+series.length()+" مسلسلات، "+channels.length()+" قنوات"
             +"\nاتصال البيانات: HTTPS/TLS 1.2 مع التحقق من الشهادات"
             +"\nتنبيه: مشغل HLS وبعض خوارزميات الفيديو تعتمد على قدرات الجهاز.";
@@ -524,6 +564,19 @@ public final class MainActivity extends Activity {
         stats.setPadding(dp(15),dp(12),dp(15),dp(12));
         stats.setBackgroundDrawable(background(PANEL,12,0xFF3C5068));
         stage.addView(stats,gap(18,12));
+    }
+    @Override public void onLowMemory(){
+        PosterLoader.releaseMemory();
+        super.onLowMemory();
+    }
+    @Override public void onTrimMemory(int level){
+        if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW)
+            PosterLoader.releaseMemory();
+        super.onTrimMemory(level);
+    }
+    @Override protected void onDestroy(){
+        refreshHandler.removeCallbacks(refreshLoop);
+        super.onDestroy();
     }
     @Override public void onBackPressed(){
         if("home".equals(mode))super.onBackPressed();
