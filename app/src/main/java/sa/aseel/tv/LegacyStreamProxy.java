@@ -37,7 +37,9 @@ public final class LegacyStreamProxy {
     private volatile boolean closed;
     private volatile String lastError="";
 
-    public LegacyStreamProxy(String httpsUrl) {
+    private final android.content.Context context;
+    public LegacyStreamProxy(android.content.Context app,String httpsUrl) {
+        context=app.getApplicationContext();
         if(httpsUrl==null || !httpsUrl.startsWith("https://"))
             throw new IllegalArgumentException("HTTPS video source required");
         origin=httpsUrl;
@@ -96,11 +98,7 @@ public final class LegacyStreamProxy {
                 upstream.setRequestProperty("Accept-Encoding","identity");
                 upstream.setRequestProperty("User-Agent","AseelTV-LegacyVideo/1.1");
                 if(range!=null)upstream.setRequestProperty("Range",range);
-                if(Build.VERSION.SDK_INT<=19){
-                    SSLContext tls=SSLContext.getInstance("TLSv1.2");
-                    tls.init(null,null,new SecureRandom());
-                    upstream.setSSLSocketFactory(new CatalogApi.Tls12Factory(tls.getSocketFactory()));
-                }
+                upstream.setSSLSocketFactory(LegacyTls.factory(context));
                 int status=upstream.getResponseCode();
                 if(status==301 || status==302 || status==303 || status==307 || status==308){
                     String location=upstream.getHeaderField("Location");

@@ -22,9 +22,12 @@ public final class CatalogApi {
     private static final String TAG = "AseelCatalog";
     private static final long MAX_OFFLINE_CACHE_AGE_MS = 15L * 60L * 1000L;
     private final SharedPreferences cache;
+    private final Context context;
+    private volatile String lastError = "";
 
     public CatalogApi(Context context) {
-        cache = context.getApplicationContext().getSharedPreferences("aseel_catalog_cache_v1", Context.MODE_PRIVATE);
+        this.context=context.getApplicationContext();
+        cache=this.context.getSharedPreferences("aseel_catalog_cache_v1", Context.MODE_PRIVATE);
     }
 
     public JSONArray list(String table) throws Exception {
@@ -37,9 +40,11 @@ public final class CatalogApi {
             String json = request(AppConfig.API_ROOT + table + query);
             JSONArray array = new JSONArray(json);
             cache.edit().putString(key,json).putLong(key+"_cached_at",System.currentTimeMillis()).apply();
+            lastError="";
             return array;
         } catch (Exception error) {
-            Log.w(TAG,"Public catalog unavailable; checking cached data",error);
+            lastError=describe(error);
+            Log.w(TAG,"Catalog request failed: "+lastError,error);
             String local = cache.getString(key,null);
             long cachedAt=cache.getLong(key+"_cached_at",0L);
             long age=System.currentTimeMillis()-cachedAt;
@@ -54,11 +59,7 @@ public final class CatalogApi {
         if (!"https".equalsIgnoreCase(url.getProtocol()))
             throw new SecurityException("HTTPS is required");
         HttpsURLConnection connection = (HttpsURLConnection) url.openConnection();
-        if (Build.VERSION.SDK_INT <= 19) {
-            SSLContext tls = SSLContext.getInstance("TLSv1.2");
-            tls.init(null,null,new SecureRandom()); // Default trusted certificates; no trust-all.
-            connection.setSSLSocketFactory(new Tls12Factory(tls.getSocketFactory()));
-        }
+        connection.setSSLSocketFactory(LegacyTls.factory(context));
         connection.setConnectTimeout(12000);
         connection.setReadTimeout(18000);
         connection.setRequestProperty("apikey",AppConfig.PUBLISHABLE_KEY);
@@ -83,6 +84,18 @@ public final class CatalogApi {
         } finally {connection.disconnect();}
     }
 
+    public String lastError(){return lastError;}
+    public static String describe(Throwable error){
+        StringBuilder summary=new StringBuilder();
+        for(Throwable cause=error;cause!=null && summary.length()<400;cause=cause.getCause()){
+            if(summary.length()>0)summary.append(" -> ");
+            summary.append(cause.getClass().getSimpleName());
+            String message=cause.getMessage();
+            if(message!=null && message.length()>0)
+                summary.append(": ").append(message.length()>140?message.substring(0,140):message);
+        }
+        return summary.toString();
+    }
     static final class Tls12Factory extends SSLSocketFactory {
         private final SSLSocketFactory delegate;
         Tls12Factory(SSLSocketFactory delegate) {this.delegate=delegate;}

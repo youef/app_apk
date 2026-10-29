@@ -45,6 +45,7 @@ public final class MainActivity extends Activity {
     private TextView notice;
     private String mode="home";
     private String lastMode="home";
+    private String networkErrors="";
     private boolean loading=false,hasLoaded=false;
     private long lastUpdatedAt=0L;
     private final Handler refreshHandler=new Handler();
@@ -153,9 +154,9 @@ public final class MainActivity extends Activity {
         new Thread(new Runnable(){public void run(){
             JSONArray m=new JSONArray(),s=new JSONArray(),c=new JSONArray(),cat=new JSONArray();
             String failure="";
-            try{m=api.list("aseel_movies");}catch(Exception e){failure="تعذر تحميل الأفلام: "+e.getClass().getSimpleName();}
-            try{s=api.list("aseel_series");}catch(Exception e){failure="تعذر تحميل المسلسلات: "+e.getClass().getSimpleName();}
-            try{c=api.list("aseel_channels");}catch(Exception e){failure="تعذر تحميل القنوات: "+e.getClass().getSimpleName();}
+            try{m=api.list("aseel_movies");}catch(Exception e){failure+="الأفلام: "+CatalogApi.describe(e)+"\n";}
+            try{s=api.list("aseel_series");}catch(Exception e){failure+="المسلسلات: "+CatalogApi.describe(e)+"\n";}
+            try{c=api.list("aseel_channels");}catch(Exception e){failure+="القنوات: "+CatalogApi.describe(e)+"\n";}
             try{cat=api.listQuery("aseel_categories","?select=*&order=sort_order.asc&limit=60");}catch(Exception ignored){}
             final JSONArray fm=m,fs=s,fc=c,fcat=cat;
             final String err=failure;
@@ -163,7 +164,8 @@ public final class MainActivity extends Activity {
                 movies=fm;series=fs;channels=fc;categories=fcat;
                 hasLoaded=true;loading=false;
                 lastUpdatedAt=System.currentTimeMillis();
-                showStatus(err.length()>0?"لا يمكن تحديث بعض البيانات؛ افحص الاتصال والشهادات. "+err:"");
+                networkErrors=err;
+                showStatus(err.length()>0?"فشل تحميل البيانات؛ افتح الإعدادات لعرض تفاصيل خطأ SSL.":"");
                 render();
             }});
         }}).start();
@@ -475,6 +477,32 @@ public final class MainActivity extends Activity {
             intent.putExtra("title","مقطع اختبار — MDN CC0");
             intent.putExtra("stream_url","https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4");
             startActivity(intent);
+        }});
+        TextView network=text("خادم المحتوى: "+AppConfig.API_ROOT
+                +"\nمزود TLS: "+LegacyTls.provider()
+                +"\nتاريخ التلفزيون: "+new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm Z",java.util.Locale.US).format(new java.util.Date())
+                +"\nأخطاء الاتصال:\n"+(networkErrors.length()>0?networkErrors:"لم تُسجل أخطاء اتصال."),15,WHITE,false);
+        network.setPadding(dp(15),dp(14),dp(15),dp(14));
+        network.setBackgroundDrawable(background(PANEL,12,0xFF3C5068));
+        stage.addView(network,gap(11,9));
+        Button diagnose=button("فحص HTTPS والشهادات");
+        stage.addView(diagnose,gap(8,10));
+        diagnose.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            diagnose.setEnabled(false);
+            network.setText("جاري فحص TLS وواجهة Supabase...");
+            new Thread(new Runnable(){public void run(){
+                String result;
+                try{
+                    JSONArray json=api.listQuery("aseel_categories","?select=id&limit=1");
+                    result="نجح اتصال HTTPS بالخادم.\nTLS: "+LegacyTls.provider()+"\nاستجابة البيانات: "+json.length();
+                }catch(Exception e){
+                    result="فشل HTTPS/API:\n"+CatalogApi.describe(e)
+                       +"\nمزود TLS: "+LegacyTls.provider()
+                       +"\nتأكد من صحة ساعة التلفزيون والاتصال بالإنترنت.";
+                }
+                final String message=result;
+                runOnUiThread(new Runnable(){public void run(){network.setText(message);diagnose.setEnabled(true);}});
+            }}).start();
         }});
         Button refresh=button("تحديث مكتبة المحتوى");stage.addView(refresh,gap(10,0));
         refresh.setOnClickListener(new View.OnClickListener(){public void onClick(View v){loadCatalog();}});

@@ -34,11 +34,7 @@ public final class PosterLoader {
                 HttpsURLConnection conn=null;
                 try{
                     conn=(HttpsURLConnection)new URL(url).openConnection();
-                    if(Build.VERSION.SDK_INT<=19){
-                        SSLContext ctx=SSLContext.getInstance("TLSv1.2");
-                        ctx.init(null,null,new SecureRandom());
-                        conn.setSSLSocketFactory(new CatalogApi.Tls12Factory(ctx.getSocketFactory()));
-                    }
+                    conn.setSSLSocketFactory(LegacyTls.factory(target.getContext().getApplicationContext()));
                     conn.setConnectTimeout(7000);conn.setReadTimeout(9000);
                     if(conn.getResponseCode()!=200)return;
                     int size=conn.getContentLength();

@@ -10,3 +10,5 @@ local.properties
 *.apk
 *.aab
 .DS_Store
+
+app/src/main/assets/tls/

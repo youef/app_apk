@@ -24,7 +24,8 @@ try:
         h=z.read("classes.dex")[:8]
         check(h.startswith(bytes([100,101,120,10])) and h[7]==0,"Valid DEX header")
         check(int(h[4:7])<=35,"DEX version <=035 (Android 4.4)")
-        check(not any(x.startswith("lib/") and x.endswith(".so") for x in names),"No ABI-dependent native libraries")
+        check(any(x.startswith("lib/armeabi-v7a/") and "conscrypt" in x and x.endswith(".so") for x in names),"Conscrypt ARMv7 TLS library bundled")
+        check(not any(x.startswith("lib/arm64-v8a/") or x.startswith("lib/x86/") or x.startswith("lib/x86_64/") for x in names),"Only target 32-bit ARM library")
     sdk=Path(os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT") or "")
     aapt=str(sdk/"build-tools/33.0.2/aapt")
     signer=str(sdk/"build-tools/33.0.2/apksigner")

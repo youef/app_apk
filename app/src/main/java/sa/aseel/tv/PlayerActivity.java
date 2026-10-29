@@ -181,7 +181,7 @@ public final class PlayerActivity extends Activity {
             String address=url;
             boolean isHls=url.toLowerCase(java.util.Locale.US).contains(".m3u8");
             if(Build.VERSION.SDK_INT<=19 && !isHls){
-                mediaProxy=new LegacyStreamProxy(url);
+                mediaProxy=new LegacyStreamProxy(this,url);
                 address=mediaProxy.start();
                 playerMode="TLS 1.2 via localhost";
             }else{
