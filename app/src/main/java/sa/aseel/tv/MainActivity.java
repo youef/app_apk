@@ -257,7 +257,7 @@ public final class MainActivity extends Activity {
             Button episodes=button("عرض الحلقات");actions.addView(episodes,lp(dp(180),dp(54)));
             episodes.setOnClickListener(new View.OnClickListener(){public void onClick(View v){loadEpisodes(item);}});
         }
-        Button favorite=button(isFavorite(t,id)?"إزالة من المفضلة":"إضافة للمفضلة");
+        final Button favorite=button(isFavorite(t,id)?"إزالة من المفضلة":"إضافة للمفضلة");
         LinearLayout.LayoutParams fp=lp(dp(190),dp(54));fp.setMargins(dp(10),0,0,0);
         actions.addView(favorite,fp);
         favorite.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
