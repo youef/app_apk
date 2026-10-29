@@ -25,7 +25,7 @@ public final class PlayerActivity extends Activity {
     private TextView title,error,clock;
     private ProgressBar progress;
     private final Handler handler=new Handler();
-    private String id, nextUrl;
+    private String id, nextUrl, nextId, nextTitle, currentUrl;
     private boolean ready=false;
     private final Runnable tick=new Runnable(){
         public void run(){
@@ -34,7 +34,7 @@ public final class PlayerActivity extends Activity {
                     int dur=video.getDuration(),pos=video.getCurrentPosition();
                     if(dur>0){progress.setMax(dur);progress.setProgress(pos);}
                     clock.setText(format(pos)+" / "+format(dur));
-                    getSharedPreferences("aseel_user_v2",MODE_PRIVATE).edit().putInt("position_"+id,Math.max(0,pos)).apply();
+                    savePosition(pos);
                 }catch(Exception ignored){}
             }
             handler.postDelayed(this,1500);
@@ -46,7 +46,10 @@ public final class PlayerActivity extends Activity {
         id=getIntent().getStringExtra("item_id");
         if(id==null)id="unknown";
         final String url=getIntent().getStringExtra("stream_url");
+        currentUrl=url;
         nextUrl=getIntent().getStringExtra("next_url");
+        nextId=getIntent().getStringExtra("next_item_id");
+        nextTitle=getIntent().getStringExtra("next_title");
         FrameLayout root=new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
         video=new VideoView(this);
@@ -102,7 +105,12 @@ public final class PlayerActivity extends Activity {
         });
         video.setOnCompletionListener(new MediaPlayer.OnCompletionListener(){
             public void onCompletion(MediaPlayer media){
-                getSharedPreferences("aseel_user_v2",MODE_PRIVATE).edit().remove("position_"+id).apply();
+                android.content.SharedPreferences prefs=getSharedPreferences("aseel_user_v2",MODE_PRIVATE);
+                android.content.SharedPreferences.Editor edit=prefs.edit().remove("position_"+id);
+                if(id.equals(prefs.getString("resume_id",""))){
+                    edit.remove("resume_id").remove("resume_title").remove("resume_url");
+                }
+                edit.apply();
                 if(nextUrl!=null && nextUrl.startsWith("https://"))playNext();
             }
         });
@@ -119,9 +127,28 @@ public final class PlayerActivity extends Activity {
     }
     private void playNext(){
         if(nextUrl==null||!nextUrl.startsWith("https://"))return;
-        try{video.stopPlayback();ready=false;id=getIntent().getStringExtra("next_item_id");if(id==null)id="next_episode";nextUrl=null;
-            video.setVideoURI(Uri.parse(getIntent().getStringExtra("next_url"))); video.start();
-        }catch(Exception ex){error.setText("تعذر تشغيل الحلقة التالية");}
+        try{
+            handler.removeCallbacks(tick);
+            video.stopPlayback();
+            ready=false;
+            currentUrl=nextUrl;
+            nextUrl=null;
+            id=(nextId==null||nextId.length()==0)?"next_episode":nextId;
+            if(nextTitle!=null&&nextTitle.length()>0)title.setText(nextTitle);
+            nextId=null;nextTitle=null;
+            error.setText("جاري تحميل الحلقة التالية...");
+            video.setVideoURI(Uri.parse(currentUrl));
+            video.requestFocus();
+        }catch(Exception ex){error.setText("تعذر تشغيل الحلقة التالية: "+ex.getClass().getSimpleName());}
+    }
+    private void savePosition(int position){
+        if(position<1000 || currentUrl==null || !currentUrl.startsWith("https://"))return;
+        getSharedPreferences("aseel_user_v2",MODE_PRIVATE).edit()
+            .putInt("position_"+id,position)
+            .putString("resume_id",id)
+            .putString("resume_url",currentUrl)
+            .putString("resume_title",title.getText().toString())
+            .apply();
     }
     private String format(int ms){int sec=Math.max(ms,0)/1000;return String.format(java.util.Locale.US,"%02d:%02d",sec/60,sec%60);}
     private void seek(int amount){if(!ready)return;int d=video.getDuration();
@@ -140,6 +167,6 @@ public final class PlayerActivity extends Activity {
         row.addView(b,p);return b;
     }
     private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
-    @Override protected void onPause(){super.onPause();if(video!=null&&ready){video.pause();getSharedPreferences("aseel_user_v2",MODE_PRIVATE).edit().putInt("position_"+id,video.getCurrentPosition()).apply();}}
+    @Override protected void onPause(){super.onPause();if(video!=null&&ready){video.pause();savePosition(video.getCurrentPosition());}}
     @Override protected void onDestroy(){handler.removeCallbacks(tick);if(video!=null)video.stopPlayback();super.onDestroy();}
 }
