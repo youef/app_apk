@@ -9,7 +9,7 @@ private enum Config {
     static let navy = UIColor(red: 0.035, green: 0.085, blue: 0.15, alpha: 1)
     static let gold = UIColor(red: 0.92, green: 0.77, blue: 0.48, alpha: 1)
 }
-private struct Item: Decodable {
+struct Item: Decodable {
     var id: String
     var title_ar: String?
     var description: String?
