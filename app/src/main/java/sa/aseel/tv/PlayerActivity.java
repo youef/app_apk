@@ -34,7 +34,7 @@ public final class PlayerActivity extends Activity {
                     int dur=video.getDuration(),pos=video.getCurrentPosition();
                     if(dur>0){progress.setMax(dur);progress.setProgress(pos);}
                     clock.setText(format(pos)+" / "+format(dur));
-                    getPreferences(0).edit().putInt("position_"+id,Math.max(0,pos)).apply();
+                    getSharedPreferences("aseel_user_v2",MODE_PRIVATE).edit().putInt("position_"+id,Math.max(0,pos)).apply();
                 }catch(Exception ignored){}
             }
             handler.postDelayed(this,1500);
@@ -93,7 +93,7 @@ public final class PlayerActivity extends Activity {
         video.setOnPreparedListener(new MediaPlayer.OnPreparedListener(){
             public void onPrepared(MediaPlayer media){
                 ready=true;
-                int saved=getPreferences(0).getInt("position_"+id,0);
+                int saved=getSharedPreferences("aseel_user_v2",MODE_PRIVATE).getInt("position_"+id,0);
                 if(saved>0 && saved < media.getDuration()-15000)video.seekTo(saved);
                 video.start();
                 error.setText("");
@@ -102,7 +102,7 @@ public final class PlayerActivity extends Activity {
         });
         video.setOnCompletionListener(new MediaPlayer.OnCompletionListener(){
             public void onCompletion(MediaPlayer media){
-                getPreferences(0).edit().remove("position_"+id).apply();
+                getSharedPreferences("aseel_user_v2",MODE_PRIVATE).edit().remove("position_"+id).apply();
                 if(nextUrl!=null && nextUrl.startsWith("https://"))playNext();
             }
         });
@@ -119,7 +119,7 @@ public final class PlayerActivity extends Activity {
     }
     private void playNext(){
         if(nextUrl==null||!nextUrl.startsWith("https://"))return;
-        try{video.stopPlayback();ready=false;id=id+"_next";nextUrl=null;
+        try{video.stopPlayback();ready=false;id=getIntent().getStringExtra("next_item_id");if(id==null)id="next_episode";nextUrl=null;
             video.setVideoURI(Uri.parse(getIntent().getStringExtra("next_url"))); video.start();
         }catch(Exception ex){error.setText("تعذر تشغيل الحلقة التالية");}
     }
@@ -128,7 +128,7 @@ public final class PlayerActivity extends Activity {
         video.seekTo(Math.max(0,Math.min(d,video.getCurrentPosition()+amount)));}
     private void toggle(){if(!ready)return;if(video.isPlaying())video.pause();else video.start();}
     @Override public boolean onKeyDown(int code,KeyEvent event){
-        if(code==KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE || code==KeyEvent.KEYCODE_DPAD_CENTER){toggle();return true;}
+        if(code==KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE){toggle();return true;}
         if(code==KeyEvent.KEYCODE_MEDIA_REWIND){seek(-10000);return true;}
         if(code==KeyEvent.KEYCODE_MEDIA_FAST_FORWARD){seek(10000);return true;}
         return super.onKeyDown(code,event);
@@ -140,6 +140,6 @@ public final class PlayerActivity extends Activity {
         row.addView(b,p);return b;
     }
     private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
-    @Override protected void onPause(){super.onPause();if(video!=null&&ready){video.pause();getPreferences(0).edit().putInt("position_"+id,video.getCurrentPosition()).apply();}}
+    @Override protected void onPause(){super.onPause();if(video!=null&&ready){video.pause();getSharedPreferences("aseel_user_v2",MODE_PRIVATE).edit().putInt("position_"+id,video.getCurrentPosition()).apply();}}
     @Override protected void onDestroy(){handler.removeCallbacks(tick);if(video!=null)video.stopPlayback();super.onDestroy();}
 }

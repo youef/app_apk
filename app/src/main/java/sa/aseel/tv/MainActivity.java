@@ -351,7 +351,7 @@ public final class MainActivity extends Activity {
             String query=input.getText().toString().trim().toLowerCase();
             // Hide keyboard while retaining search query and results.
             ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(input.getWindowToken(),0);
-            while(stage.getChildCount()>3)stage.removeViewAt(3);
+            while(stage.getChildCount()>4)stage.removeViewAt(4);
             ArrayList<JSONObject> found=new ArrayList<JSONObject>();
             filter(found,movies,"movie",query);filter(found,series,"series",query);filter(found,channels,"channel",query);
             if(found.isEmpty())empty("لا توجد نتائج مطابقة.");else cards(found,AppConfig.MAX_ITEMS);
@@ -368,7 +368,16 @@ public final class MainActivity extends Activity {
     }
     private void settings(){
         title("الإعدادات والتشخيص","قياسات فعلية من التلفزيون للمساعدة في تحديد مشكلات التوافق");
-        Button refresh=button("تحديث مكتبة المحتوى");stage.addView(refresh,lp(dp(260),dp(52)));
+        Button sample=button("اختبار مشغل MP4 بمقطع CC0 مرخّص");
+        stage.addView(sample,lp(dp(320),dp(52)));
+        sample.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            Intent intent=new Intent(MainActivity.this,PlayerActivity.class);
+            intent.putExtra("item_id","cc0-mdn-test");
+            intent.putExtra("title","مقطع اختبار — MDN CC0");
+            intent.putExtra("stream_url","https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4");
+            startActivity(intent);
+        }});
+        Button refresh=button("تحديث مكتبة المحتوى");stage.addView(refresh,gap(10,0));
         refresh.setOnClickListener(new View.OnClickListener(){public void onClick(View v){loadCatalog();}});
         DisplayMetrics m=new DisplayMetrics();getWindowManager().getDefaultDisplay().getRealMetrics(m);
         ActivityManager am=(ActivityManager)getSystemService(Context.ACTIVITY_SERVICE);
