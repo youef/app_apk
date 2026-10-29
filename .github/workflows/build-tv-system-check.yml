@@ -19,9 +19,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
-      - name: Install Android 33 SDK tools
-        run: sdkmanager 'platforms;android-33' 'build-tools;33.0.2'
+      - name: Install Android SDK API 33
+        shell: bash
+        run: |
+          echo "SDK at: ${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          sdkmanager 'platforms;android-33' 'build-tools;33.0.2'
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '7.6.1'
