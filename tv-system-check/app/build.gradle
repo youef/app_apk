@@ -1,0 +1,19 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace 'sa.aseel.tv.systemcheck'
+    compileSdkVersion 33
+    defaultConfig {
+        applicationId 'sa.aseel.tv.systemcheck'
+        minSdkVersion 19
+        targetSdkVersion 19
+        versionCode 1
+        versionName '1.0.0'
+    }
+    buildTypes { release { minifyEnabled false } }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_7
+        targetCompatibility JavaVersion.VERSION_1_7
+    }
+    lintOptions { abortOnError false }
+}

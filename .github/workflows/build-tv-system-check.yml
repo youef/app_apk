@@ -1,0 +1,35 @@
+name: Build Aseel TV System Inspector (Android 4.4.4)
+
+on:
+  push:
+    paths:
+      - 'tv-system-check/**'
+      - '.github/workflows/build-tv-system-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android 33 SDK tools
+        run: sdkmanager 'platforms;android-33' 'build-tools;33.0.2'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '7.6.1'
+      - name: Build API 19-compatible APK
+        run: gradle -p tv-system-check --no-daemon --stacktrace :app:assembleDebug
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Aseel-TV-System-Inspector-Android-4.4.4
+          path: tv-system-check/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
