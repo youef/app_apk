@@ -41,6 +41,9 @@ def probe(item):
 def main():
     with open("scripts/free-tv-passed.json",encoding="utf-8") as f:
         channels=json.load(f)["candidates"]
+    with open("scripts/legacy-live-candidates.json",encoding="utf-8") as source:
+        seen={x["url"] for x in channels}
+        channels += [v for v in json.load(source)["candidates"] if v["url"] not in seen]
     with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
         results=list(pool.map(probe,channels))
     for r in results:print(("PASS " if r["advancing"] else "FAIL ")+json.dumps(r,ensure_ascii=False),flush=True)

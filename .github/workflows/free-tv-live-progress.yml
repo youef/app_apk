@@ -2,7 +2,7 @@ name: Aseel Free TV Live Progress Audit
 on:
   push:
     branches: [main]
-    paths: ['scripts/free-tv-passed.json', 'scripts/check_live_progress.py', '.github/workflows/free-tv-live-progress.yml']
+    paths: ['scripts/free-tv-passed.json', 'scripts/legacy-live-candidates.json', 'scripts/check_live_progress.py', '.github/workflows/free-tv-live-progress.yml']
   workflow_dispatch:
   schedule:
     - cron: '10 5 * * *'
