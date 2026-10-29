@@ -20,6 +20,7 @@ import javax.net.ssl.SSLSocketFactory;
 /** Network access with stock hostname verification and trusted CA chain. */
 public final class CatalogApi {
     private static final String TAG = "AseelCatalog";
+    private static final long MAX_OFFLINE_CACHE_AGE_MS = 15L * 60L * 1000L;
     private final SharedPreferences cache;
 
     public CatalogApi(Context context) {
@@ -35,12 +36,16 @@ public final class CatalogApi {
         try {
             String json = request(AppConfig.API_ROOT + table + query);
             JSONArray array = new JSONArray(json);
-            cache.edit().putString(key,json).apply();
+            cache.edit().putString(key,json).putLong(key+"_cached_at",System.currentTimeMillis()).apply();
             return array;
         } catch (Exception error) {
             Log.w(TAG,"Public catalog unavailable; checking cached data",error);
             String local = cache.getString(key,null);
-            if (local != null) return new JSONArray(local);
+            long cachedAt=cache.getLong(key+"_cached_at",0L);
+            long age=System.currentTimeMillis()-cachedAt;
+            // Never replay an old catalog indefinitely after content/rights are revoked.
+            if (local != null && age>=0 && age<=MAX_OFFLINE_CACHE_AGE_MS)
+                return new JSONArray(local);
             throw error;
         }
     }
@@ -62,6 +67,8 @@ public final class CatalogApi {
         connection.setUseCaches(false);
         try {
             int status=connection.getResponseCode();
+            if(!"https".equalsIgnoreCase(connection.getURL().getProtocol()))
+                throw new SecurityException("Redirected to an insecure endpoint");
             if(status<200 || status>=300) throw new java.io.IOException("HTTP "+status);
             InputStream stream=connection.getInputStream();
             try{
