@@ -396,6 +396,10 @@
    }catch(_){}
  }
  function openAuth() {
+   if (/(^|\.)githack\.com$/.test(location.hostname) || location.hostname === "htmlpreview.github.io") {
+     announce("تسجيل الدخول معطّل على نطاق المعاينة غير الرسمي. استخدم موقعك الرسمي بعد تفعيل الاستضافة.");
+     return;
+   }
    $("authMessage").textContent="";
    $("authEmail").value=state.account?.email||"";
    $("authPassword").value="";
