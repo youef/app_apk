@@ -51,9 +51,10 @@ def main():
     check("package: name='sa.aseel.tv'" in badging, "Stable package sa.aseel.tv")
     check("sdkVersion:'19'" in badging, "minSdkVersion 19")
     check("targetSdkVersion:'28'" in badging, "targetSdkVersion 28")
-    check("android.intent.category.LEANBACK_LAUNCHER" in badging
-          or "android.intent.category.LAUNCHER" in badging,
-          "App has a launcher intent")
+    manifest_tree = run([aapt, "dump", "xmltree", str(apk), "AndroidManifest.xml"])
+    check("android.intent.category.LAUNCHER" in manifest_tree
+          and "android.intent.category.LEANBACK_LAUNCHER" in manifest_tree,
+          "Both standard and Android TV launcher intents are declared")
     if "uses-permission: name='android.permission.INTERNET'" in badging:
         raise RuntimeError("Offline Phase 1 must not request INTERNET")
     check(True, "No INTERNET permission")
