@@ -20,3 +20,17 @@
 - مصدر Creative Commons المفتوح لا يعني أن الخادم يدعم دائمًا **hotlinking** أو أن رابط الملف متاح طوال الوقت.
 - رابط التشغيل HTTPS المنشور يحتاج فحصًا مباشرًا على شاشة Huidi Android 4.4.4 قبل اعتباره متوافقًا.
 - أضف تراخيص الأعمال الجديدة عبر لوحة الإدارة مع `rights_holder` و`license_reference` وأبقِ `rights_status=pending` حتى التحقق.
+
+## إضافات المحتوى الرسمية (أكتوبر 2026)
+- Elephants Dream — Blender Foundation — CC BY 2.5: https://orange.blender.org/background/
+- Agent 327: Operation Barbershop — Blender Studio: https://studio.blender.org/films/
+- Coffee Run — CC BY 4.0: https://studio.blender.org/projects/coffee-run/pages/licensing/
+- Sintel (Full Film) — CC BY 3.0، يلزم إبقاء تتر الحقوق: https://durian.blender.org/sharing/
+- Glass Half — CC BY 3.0: https://studio.blender.org/projects/glass-half/pages/licensing/
+- Tears of Steel — CC BY 3.0، يجب عرض تتر الحقوق: https://mango.blender.org/about/
+- Spring — CC BY 4.0: https://studio.blender.org/projects/spring/pages/about/
+- Sprite Fright — إسناد Blender Studio وفق ترخيص مشروع الفيلم: https://studio.blender.org/projects/sprite-fright/pages/about/
+- Caminandes (Gran Dillama + Llamigos): https://studio.blender.org/projects/caminandes-3/
+- Cosmos Laundromat — First Cycle (حلقة تجريبية فقط)، CC BY 3.0: https://gooseberry.blender.org/license/
+- معظم ملفات MP4 الجديدة مستضافة على video.blender.org؛ الوصول للفيديو/الترميزات ومعدل الإطارات والتحويلات لا تزال تحتاج اختبارًا على جهاز العرض، ولم تُفحص استجابة كل رابط من داخل تلفزيون المستخدم.
+- NASA Live وNASA+ روابط مشاهدة من المصدر الرسمي، وليسا تصريحًا لإعادة بث المحتوى داخل منصة أسيل: https://www.nasa.gov/live/ و https://www.nasa.gov/ways-to-watch/

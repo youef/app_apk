@@ -12,6 +12,9 @@ permissions:
 
 jobs:
   android19-offline-test:
+    env:
+      APPETIZE_API_TOKEN: ${{ secrets.APPETIZE_API_TOKEN }}
+      APPETIZE_ANDROID_PUBLIC_KEY: ${{ secrets.APPETIZE_ANDROID_PUBLIC_KEY }}
     runs-on: ubuntu-22.04
     timeout-minutes: 25
     steps:
@@ -96,3 +99,12 @@ jobs:
           body_path: docs/BETA_TEST.md
           files: dist/aseel-tv-api19-full-beta.apk
           fail_on_unmatched_files: true
+
+      - name: Upload Android APK to Appetize if connected
+        if: env.APPETIZE_API_TOKEN != '' && env.APPETIZE_ANDROID_PUBLIC_KEY != ''
+        uses: appetizeio/github-action-appetize@v1.1.0
+        with:
+          apiToken: ${{ secrets.APPETIZE_API_TOKEN }}
+          publicKey: ${{ secrets.APPETIZE_ANDROID_PUBLIC_KEY }}
+          appFile: dist/aseel-tv-api19-full-beta.apk
+          platform: android

@@ -10,6 +10,9 @@ permissions:
   contents: write
 jobs:
   ios-simulator:
+    env:
+      APPETIZE_API_TOKEN: ${{ secrets.APPETIZE_API_TOKEN }}
+      APPETIZE_IOS_PUBLIC_KEY: ${{ secrets.APPETIZE_IOS_PUBLIC_KEY }}
     runs-on: macos-15
     timeout-minutes: 25
     steps:
@@ -51,3 +54,12 @@ jobs:
             Simulator only: physical iPhone builds require Apple signing.
           files: dist/aseel-tv-ios-simulator.app.zip
           fail_on_unmatched_files: true
+
+      - name: Upload iOS simulator ZIP to Appetize if connected
+        if: env.APPETIZE_API_TOKEN != '' && env.APPETIZE_IOS_PUBLIC_KEY != ''
+        uses: appetizeio/github-action-appetize@v1.1.0
+        with:
+          apiToken: ${{ secrets.APPETIZE_API_TOKEN }}
+          publicKey: ${{ secrets.APPETIZE_IOS_PUBLIC_KEY }}
+          appFile: dist/aseel-tv-ios-simulator.app.zip
+          platform: ios
