@@ -478,14 +478,14 @@ public final class MainActivity extends Activity {
             intent.putExtra("stream_url","https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4");
             startActivity(intent);
         }});
-        TextView network=text("خادم المحتوى: "+AppConfig.API_ROOT
+        final TextView network=text("خادم المحتوى: "+AppConfig.API_ROOT
                 +"\nمزود TLS: "+LegacyTls.provider()
                 +"\nتاريخ التلفزيون: "+new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm Z",java.util.Locale.US).format(new java.util.Date())
                 +"\nأخطاء الاتصال:\n"+(networkErrors.length()>0?networkErrors:"لم تُسجل أخطاء اتصال."),15,WHITE,false);
         network.setPadding(dp(15),dp(14),dp(15),dp(14));
         network.setBackgroundDrawable(background(PANEL,12,0xFF3C5068));
         stage.addView(network,gap(11,9));
-        Button diagnose=button("فحص HTTPS والشهادات");
+        final Button diagnose=button("فحص HTTPS والشهادات");
         stage.addView(diagnose,gap(8,10));
         diagnose.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
             diagnose.setEnabled(false);
