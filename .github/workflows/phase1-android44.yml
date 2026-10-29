@@ -18,7 +18,23 @@ jobs:
       - name: Checkout new clean project
         uses: actions/checkout@v4
 
-      - name: Set up Java 11
+      # New Android SDK command-line tools require Java 17 to run sdkmanager.
+      # Switch back to Java 11 for AGP 7.4.2 and Gradle 7.6 afterward.
+      - name: Set up Java 17 for SDK manager
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android command line tools
+        uses: android-actions/setup-android@v3
+
+      - name: Install pinned Android SDK and Build Tools
+        run: |
+          sdkmanager "platforms;android-28" "build-tools;33.0.2"
+          sdkmanager --list_installed
+
+      - name: Switch to Java 11 for Android Gradle Plugin
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -28,14 +44,6 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '7.6'
-
-      - name: Set up Android command line tools
-        uses: android-actions/setup-android@v3
-
-      - name: Install pinned Android SDK and Build Tools
-        run: |
-          sdkmanager "platforms;android-28" "build-tools;33.0.2"
-          sdkmanager --list_installed
 
       - name: Build offline APK
         run: |
