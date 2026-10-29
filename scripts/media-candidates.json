@@ -1,0 +1,166 @@
+{
+  "sources": [
+    {
+      "name": "OnlineM3U/publicdomainm3u",
+      "repo": "https://github.com/OnlineM3U/publicdomainm3u"
+    },
+    {
+      "name": "freecasthub/public-iptv",
+      "repo": "https://github.com/freecasthub/public-iptv"
+    },
+    {
+      "name": "noknows08/free-stream",
+      "repo": "https://github.com/noknows08/free-stream"
+    }
+  ],
+  "candidates": [
+    {
+      "name": "The Thirteenth Chair (1929)",
+      "url": "https://archive.org/download/the-thirteenth-chair_1929/the-thirteenth-chair_1929.mp4"
+    },
+    {
+      "name": "4,380,562_.jpg\", Nosferatu (1922)",
+      "url": "https://archive.org/download/nosferatu-1922_202504/Nosferatu%20%281922%29.mp4"
+    },
+    {
+      "name": "Charlie Chaplin's 'The Vagabond' (1916)",
+      "url": "https://archive.org/download/CC_1916_07_10_TheVagabond/CC_1916_07_10_TheVagabond.mp4"
+    },
+    {
+      "name": "Charlie Chaplin's 'The Pawnshop' (1916)",
+      "url": "https://archive.org/download/CC_1916_10_02_ThePawnshop/CC_1916_10_02_ThePawnshop_512kb.mp4"
+    },
+    {
+      "name": "Charlie Chaplin's 'The Rink' (1916)",
+      "url": "https://archive.org/download/CC_1916_12_04_TheRink/CC_1916_12_04_TheRink_512kb.mp4"
+    },
+    {
+      "name": "Charlie Chaplin's 'The Floorwalker' (1916)",
+      "url": "https://archive.org/download/CC_1916_05_15_TheFloorwalker/CC_1916_05_15_TheFloorwalker_512kb.mp4"
+    },
+    {
+      "name": "Charlie Chaplin's 'The Cure' (1917)",
+      "url": "https://archive.org/download/CC_1917_04_16_TheCure/CC_1917_04_16_TheCure_512kb.mp4"
+    },
+    {
+      "name": "The Lost World (1925)",
+      "url": "https://archive.org/download/lost_world/lost_world_512kb.mp4"
+    },
+    {
+      "name": "Charlie Chaplin's 'Charlie Shanghaied' (1915)",
+      "url": "https://archive.org/download/CC_1915_10_04_CharlieShanghaied/CC_1915_10_04_CharlieShanghaied_512kb.mp4"
+    },
+    {
+      "name": "The Phantom of the Opera (1925)",
+      "url": "https://archive.org/download/ThePhantomoftheOpera/Phantom_of_the_Opera_512kb.mp4"
+    },
+    {
+      "name": "Charlie Chaplin's 'The Count' (1916)",
+      "url": "https://archive.org/download/CC_1916_09_04_TheCount/CC_1916_09_04_TheCount_512kb.mp4"
+    },
+    {
+      "name": "The Iron Mask (1929)",
+      "url": "https://archive.org/download/iron_mask/iron_mask_512kb.mp4"
+    },
+    {
+      "name": "Charlie Chaplin's 'One A.M.' (1916)",
+      "url": "https://archive.org/download/CC_1916_08_07_One_A_M/CC_1916_08_07_One_A_M_512kb.mp4"
+    },
+    {
+      "name": "Charlie Chaplin's 'Kids Auto Race At Venice' (1914)",
+      "url": "https://archive.org/download/CC_1914_02_07_KidsAutoRaceAtVenice/CC_1914_02_07_KidsAutoRaceAtVenice_512kb.mp4"
+    },
+    {
+      "name": "Battleship Potemkin (1925)",
+      "url": "https://archive.org/download/BattleshipPotemkin/Battleship_Potemkin_512kb.mp4"
+    },
+    {
+      "name": "The General (1926)",
+      "url": "https://archive.org/download/The_General_Buster_Keaton/The_General.mp4"
+    },
+    {
+      "name": "DW English",
+      "url": "https://dwamdstream102.akamaized.net/hls/live/2015525/dwstream102/master.m3u8"
+    },
+    {
+      "name": "DW Arabic",
+      "url": "https://dwamdstream103.akamaized.net/hls/live/2015526/dwstream103/master.m3u8"
+    },
+    {
+      "name": "DW Español",
+      "url": "https://dwamdstream104.akamaized.net/hls/live/2015530/dwstream104/master.m3u8"
+    },
+    {
+      "name": "France 24 English",
+      "url": "https://amg00106-france24-france24-samsunguk-qvpp8.amagi.tv/playlist/amg00106-france24-france24-samsunguk/playlist.m3u8"
+    },
+    {
+      "name": "France 24 Arabic",
+      "url": "https://live.france24.com/hls/live/2037222-b/F24_AR_HI_HLS/master_5000.m3u8"
+    },
+    {
+      "name": "France 24 Español",
+      "url": "https://live.france24.com/hls/live/2037220-b/F24_ES_HI_HLS/master_5000.m3u8"
+    },
+    {
+      "name": "ABC News Live",
+      "url": "https://abcnews-streams.akamaized.net/hls/live/2023560/abcnewshudson1/master_4000.m3u8"
+    },
+    {
+      "name": "VOA TV Africa",
+      "url": "https://voa-ingest.akamaized.net/hls/live/2033874/tvmc06/playlist.m3u8"
+    },
+    {
+      "name": "Alhurra",
+      "url": "https://mbn-ingest-worldsafe.akamaized.net/hls/live/2038900/MBN_Alhurra_Worldsafe_HLS/master.m3u8"
+    },
+    {
+      "name": "Al Jazeera English",
+      "url": "https://live-hls-web-aje.getaj.net/AJE/index.m3u8"
+    },
+    {
+      "name": "Al Jazeera Arabic",
+      "url": "https://live-hls-web-aja.getaj.net/AJA/index.m3u8"
+    },
+    {
+      "name": "CGTN",
+      "url": "https://amg00405-rakutentv-cgtn-rakuten-i9tar.amagi.tv/master.m3u8"
+    },
+    {
+      "name": "TRT World",
+      "url": "https://dash2.antik.sk/live/test_trt_world_atktv/playlist.m3u8"
+    },
+    {
+      "name": "NHK World-Japan",
+      "url": "https://nhk.lls.pbs.org/index.m3u8"
+    },
+    {
+      "name": "ABC News Australia",
+      "url": "https://abc-news-dmd-streams-1.akamaized.net/out/v1/701126012d044971b3fa89406a440133/index.m3u8"
+    },
+    {
+      "name": "CNA International",
+      "url": "https://mediacorp-videosbclive.akamaized.net/dd724cfb0e8e4cdc921bbc4ac94614bf/ap-southeast-1/6057994443001/playlist.m3u8"
+    },
+    {
+      "name": "Africanews French",
+      "url": "https://cdn-euronews.akamaized.net/live/eds/africanews-fr/25050/index.m3u8"
+    },
+    {
+      "name": "Archive public domain Night of the Living Dead",
+      "url": "https://archive.org/download/Night.Of.The.Living.Dead_1080p/NightOfTheLivingDead.mp4"
+    },
+    {
+      "name": "Archive series Beverly Hillbillies S1E1 (rights need review)",
+      "url": "https://archive.org/download/Beverly_Hillbillies_Ep01_The_Clampetts_Strike_Oil/BH01_The_Clampetts_Strike_Oil.mp4"
+    },
+    {
+      "name": "Big Bunny test 360p",
+      "url": "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4"
+    },
+    {
+      "name": "Sintel test 720p",
+      "url": "https://test-videos.co.uk/vids/sintel/mp4/h264/720/Sintel_720_10s_2MB.mp4"
+    }
+  ]
+}
