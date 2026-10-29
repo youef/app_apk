@@ -8,8 +8,8 @@ android {
         applicationId 'sa.aseel.tv'
         minSdkVersion 19
         targetSdkVersion 28
-        versionCode 4
-        versionName '1.0.1-video-fix'
+        versionCode 5
+        versionName '1.1.0-catalog'
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_7
