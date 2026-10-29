@@ -17,10 +17,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-      - name: Install SDK platform 33
-        run: sdkmanager "platforms;android-33" "build-tools;33.0.2"
+      - name: Use preinstalled Android SDK and install platform 33
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-33" "build-tools;33.0.2"
       - name: Install Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
