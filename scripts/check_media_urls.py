@@ -41,7 +41,7 @@ def check(entry):
             payload=response.read(16384)
             # At least MP4 boxes ftyp near header, or HLS EXTM3U.
             mp4=b"ftyp" in payload[:96] or b"moov" in payload[:96]
-            hls=payload.startswith(b"#EXTM3U")
+            hls=payload.startswith(b"#EXTM3U") and (b"#EXT-X-" in payload)
             is_file=mp4 or hls
             return {"name":name,"url":url,"http":code,"content_type":ctype,"content_range":cr,
                     "length":size,"bytes_read":len(payload),"mp4_signature":mp4,"hls_signature":hls,
@@ -51,7 +51,14 @@ def check(entry):
         return {"name":name,"url":url,"valid":False,"error":str(err)[:200],
                 "seconds":round(time.monotonic()-start,1)}
 def main():
-    with concurrent.futures.ThreadPoolExecutor(max_workers=7) as pool:
+    try:
+        with open("scripts/media-candidates.json",encoding="utf-8") as fd:
+            for candidate in json.load(fd).get("candidates",[]):
+                if candidate["url"].startswith("https://"):
+                    SOURCES["Candidate: "+candidate["name"]]=candidate["url"]
+    except (IOError,ValueError,KeyError) as e:
+        print("Candidate source list invalid:",e,flush=True)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
         results=list(pool.map(check,SOURCES.items()))
     for r in results:
         print(("PASS " if r["valid"] else "FAIL ")+json.dumps(r,ensure_ascii=False),flush=True)
