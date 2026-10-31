@@ -78,14 +78,18 @@ public final class MainActivity extends Activity {
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY|View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         prefs=getSharedPreferences("aseel_user_v2",MODE_PRIVATE);
         api=new CatalogApi(this);
-        lockScreen();
+        if(PinGate.isActivated(this))openActivatedApp();
+        else lockScreen();
+    }
+    private void openActivatedApp(){
+        unlocked=true;accessGate=null;
+        buildShell();warmCache();render();loadCatalog();
     }
     private void lockScreen(){
         unlocked=false;root=null;stage=null;menu=null;scrolling=null;navButtons=null;notice=null;
         accessGate=new PinGate(this,new Runnable(){public void run(){
             if(isFinishing())return;
-            unlocked=true;accessGate=null;
-            buildShell();warmCache();render();loadCatalog();
+            openActivatedApp();
         }});
         accessGate.show();
     }
@@ -685,7 +689,7 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onPause(){
         refreshHandler.removeCallbacks(refreshLoop);
-        if(unlocked&&!isFinishing())lockScreen();
+        // User enabled this TV once; do not re-lock on exit, background, or reboot.
         super.onPause();
     }
     private void section(String title,JSONArray list,String type,int max){

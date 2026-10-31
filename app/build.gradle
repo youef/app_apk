@@ -5,12 +5,12 @@ android {
     compileSdkVersion 28
     buildToolsVersion '33.0.2'
     defaultConfig {
-        applicationId 'sa.alezz.tv.youtube'
+        applicationId 'sa.alezz.tv.unified'
         minSdkVersion 19
         targetSdkVersion 28
         ndk { abiFilters "armeabi-v7a" }
-        versionCode 8
-        versionName '7.0.0-youtube-tv'
+        versionCode 9
+        versionName '8.0.0-one-time-activation'
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_7

@@ -29,6 +29,7 @@ final class PinGate {
     private static final String SALT="e42695223c465d0af575de49db015021";
     private static final String CHECK="385035d1e0dbbf3941728251aa080e9180a218aeeaf510dbe6922bb64fb0d19f";
     private static final int WORK=12000,LENGTH=6;
+    private static final String ACTIVATION_PREFS="alezz_activation_v1";
     private static final int BG=0xFF080A10,SURFACE=0xFF151924,RED=0xFFFF415D,WHITE=0xFFF8F8FC;
     private final Activity activity;
     private final Runnable onSuccess;
@@ -73,6 +74,15 @@ final class PinGate {
         }catch(Exception ignored){return false;}
         finally {spec.clearPassword();java.util.Arrays.fill(typed,'\0');}
     }
+    static boolean isActivated(Context context){
+        return context.getSharedPreferences(ACTIVATION_PREFS,Context.MODE_PRIVATE)
+            .getBoolean("activated",false);
+    }
+    private void rememberActivation(){
+        // Device-private durable activation; persists across process death and reboot.
+        activity.getSharedPreferences(ACTIVATION_PREFS,Context.MODE_PRIVATE)
+            .edit().putBoolean("activated",true).commit();
+    }
     private long remaining(){return Math.max(0,storage.getLong("until",0)-System.currentTimeMillis());}
     private void status(){
         if(dots!=null){
@@ -102,6 +112,7 @@ final class PinGate {
         boolean correct=matches(entered);
         entry.setLength(0);status();
         if(correct){
+            rememberActivation();
             storage.edit().remove("failures").remove("until").apply();
             onSuccess.run();return;
         }
