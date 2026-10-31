@@ -8,7 +8,7 @@
  const state = { page: "home", query: "", category: "", kidsType:"all", kidsCountry:"", kidsLanguage:"", movies: [], series: [], channels: [],
    categories: [], favorites: new Set(), loading: true, error: "", chosen: null,
    token: "", refreshToken: "", userId: "", account: null, authMode: "login",
-   playback: null, hls: null, progressTimer: 0, lastProgressAt: 0, heroIndex:0 };
+   playback: null, hls: null, progressTimer: 0, lastProgressAt: 0, heroIndex:0, homeCollections:[],homeCollectionItems:[] };
  const labels = { movie: "فيلم", series: "مسلسل", channel: "قناة", episode: "حلقة" };
  let toastTimer = null;
  const storageKey = "aseel-web-favorites-v1";
@@ -114,7 +114,9 @@
      api("aseel_movies", q),
      api("aseel_series", q),
      api("aseel_channels", q),
-     api("aseel_categories", "select=id,name_ar,sort_order&order=sort_order.asc&limit=100")
+     api("aseel_categories", "select=id,name_ar,sort_order&order=sort_order.asc&limit=100"),
+     api("aseel_home_collections","select=id,title_ar,description,display_order&is_active=eq.true&order=display_order.asc&limit=40"),
+     api("aseel_home_collection_items","select=collection_id,movie_id,series_id,channel_id,episode_id,display_order&order=display_order.asc&limit=400")
    ]);
    const errors = [];
    ["movies","series","channels","categories"].forEach((field, index) => {
@@ -125,6 +127,8 @@
      }
      else { state[field] = []; errors.push(field); }
    });
+   state.homeCollections=results[4].status==="fulfilled"?(results[4].value||[]):[];
+   state.homeCollectionItems=results[5].status==="fulfilled"?(results[5].value||[]):[];
    state.loading = false;
    state.error = errors.length ? "تعذّر الاتصال ببعض أقسام المكتبة. يمكنك إعادة المحاولة." : "";
    draw(); setHero();
@@ -259,6 +263,28 @@
      bar.append(button);
    });
  }
+ function drawCurated(){
+   const area=$("curatedArea");area.replaceChildren();area.hidden=state.page!=="home"||state.loading;
+   if(area.hidden)return;
+   for(const shelf of state.homeCollections){
+     const found=[];
+     for(const link of state.homeCollectionItems.filter(x=>x.collection_id===shelf.id)){
+       const type=link.movie_id?"movie":link.series_id?"series":link.channel_id?"channel":null;
+       if(!type)continue;
+       const item=collection(type).find(x=>x.id===(link.movie_id||link.series_id||link.channel_id));
+       if(item&&playable(item,type))found.push({item,type});
+     }
+     if(!found.length)continue;
+     const section=el("section","media-section curated-shelf");
+     const heading=el("div","section-heading"),title=el("div");
+     title.append(el("h3","",shelf.title_ar));
+     if(shelf.description)title.append(el("p","section-explainer",shelf.description));
+     heading.append(title);section.append(heading);
+     const row=el("div","cards-row curated-row");
+     found.slice(0,18).forEach(x=>row.append(makeCard(x.item,x.type)));
+     section.append(row);area.append(section);
+   }
+ }
  function drawContinue(){
    const section=$("continueSection"),box=$("continueGrid");
    section.hidden=state.page!=="home";box.replaceChildren();
@@ -279,6 +305,7 @@
    setHidden("heroSection",route!=="home");
    $("discoveryBar").hidden=route!=="home";
    drawContinue();
+   drawCurated();
    const items={home:["اكتشف عالم العز","مختارات سينمائية تستحق وقتك، كل يوم."],
      movies:["مكتبة الأفلام","اكتشف أفلامًا ومشاهد من مصادر موثّقة."],
      series:["عالم المسلسلات","تابع المواسم والحلقات، في مكان واحد."],
@@ -571,6 +598,17 @@
      draw();
    };
    $("accountButton").onclick=openAuth;
+   let tvMode=false;
+   try{tvMode=localStorage.getItem("alezz-tv-view-v1")==="yes"}catch(_){}
+   document.body.classList.toggle("tv-display-mode",tvMode);
+   $("tvModeButton").textContent=tvMode?"◉ وضع التلفزيون مفعّل":"▣ وضع التلفزيون";
+   $("tvModeButton").onclick=()=>{
+      tvMode=!tvMode;document.body.classList.toggle("tv-display-mode",tvMode);
+      $("tvModeButton").textContent=tvMode?"◉ وضع التلفزيون مفعّل":"▣ وضع التلفزيون";
+      try{localStorage.setItem("alezz-tv-view-v1",tvMode?"yes":"no")}catch(_){}
+      if(tvMode&&document.documentElement.requestFullscreen)document.documentElement.requestFullscreen().catch(()=>{});
+      else if(!tvMode&&document.fullscreenElement&&document.exitFullscreen)document.exitFullscreen().catch(()=>{});
+   };
    $("authClose").onclick=()=>modalClose("authModal");
    $("modalClose").onclick=()=>modalClose("modal");
    $("authSwitch").onclick=()=>{setAuthMode(state.authMode==="login"?"signup":"login");$("authMessage").textContent=""};
@@ -651,7 +689,8 @@
      $("catalogArea").textContent="إعداد الاتصال بمكتبة العز غير مكتمل.";
    });
  } else {
-   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);
-   else init();
+   const start=()=>window.AL_EZZ_ACCESS?.ready?window.AL_EZZ_ACCESS.ready.then(init).catch(()=>{}):init();
+   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",start);
+   else start();
  }
 })();

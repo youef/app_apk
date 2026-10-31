@@ -16,9 +16,10 @@
  <link rel="stylesheet" href="styles.css">
  <script defer src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
  <script defer src="config.js"></script>
+ <script defer src="access.js"></script>
  <script defer src="app.js"></script>
 </head>
-<body>
+<body class="viewer-locked"><section id="activationGate" class="activation-gate"><div class="activation-art"><div class="activation-brand">العز <span>TV</span></div><h1>شاشتك. عالمك. العز TV.</h1><p>مكتبة سينمائية للأفلام والمسلسلات والقنوات المباشرة.</p><div class="activation-trust">● مباشر &nbsp; ▶ أفلام &nbsp; ★ أطفال</div></div><form id="activationForm" class="activation-card" autocomplete="off"><div class="activation-lock">◈</div><h2>رمز الدخول لأول مرة</h2><p>فعّل هذا المتصفح مرة واحدة ثم انتقل مباشرة للمشاهدة دائمًا.</p><label for="activationPin">رمز التفعيل</label><input id="activationPin" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" placeholder="● ● ● ● ● ●" required><p id="activationMessage" role="status">أدخل ستة أرقام باستخدام لوحة المفاتيح أو الريموت.</p><button type="submit" class="activation-submit">تفعيل العز TV <span>◀</span></button><small>مسح بيانات المتصفح سيؤدي إلى طلب الرمز مرة أخرى.</small></form></section>
  <div class="ambient ambient-one" aria-hidden="true"></div>
  <div class="ambient ambient-two" aria-hidden="true"></div>
  <header class="topbar">
@@ -40,7 +41,7 @@
     <button type="button" id="searchToggle" class="icon-button" aria-label="البحث" title="ابحث في المكتبة">
      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="7.2"/><path d="m16 16 5 5"/></svg>
     </button>
-    <span class="top-divider"></span>
+    <span class="top-divider"></span><button type="button" id="tvModeButton" class="tv-mode-toggle">▣ وضع التلفزيون</button>
     <button type="button" id="accountButton" class="account-button"><span class="account-dot">◉</span><span id="accountLabel">حسابي</span></button>
    </div>
   </div>
@@ -56,7 +57,7 @@
   <div class="rail-divider"></div>
   <div class="rail-heading">مكتبتي</div>
   <button type="button" data-route="favorites" class="rail-item"><span class="rail-symbol">♡</span><span>قائمتي المفضلة</span></button>
-  <p class="rail-footer">شاهد مباشرة من المصادر المرخصة.<br>العز TV • نسخة 3.0</p>
+  <p class="rail-footer">شاهد مباشرة من المصادر المرخصة.<br>العز TV • النسخة الموحدة</p>
  </aside>
  <div id="searchPanel" class="search-panel" hidden>
   <div class="search-inner">
@@ -118,6 +119,7 @@
      <div class="section-heading"><div><span class="section-marker"></span><h3>أكمل المشاهدة</h3><p class="section-explainer">ارجع إلى ما بدأت مشاهدته</p></div></div>
      <div class="cards-row" id="continueGrid"></div>
    </section>
+   <div id="curatedArea" class="curated-area"></div>
    <div id="catalogArea" class="catalog-area">
     <section class="media-section" id="movieSection"><div class="section-heading"><div><span class="section-marker"></span><h3>أفلام تستحق المشاهدة</h3></div><button data-route="movies" class="section-more">عرض الكل <span>←</span></button></div><div class="cards-row skeleton-row" id="movieGrid"></div></section>
     <section class="media-section" id="seriesSection"><div class="section-heading"><div><span class="section-marker"></span><h3>مسلسلات وحكايات</h3></div><button data-route="series" class="section-more">عرض الكل <span>←</span></button></div><div class="cards-row skeleton-row" id="seriesGrid"></div></section>

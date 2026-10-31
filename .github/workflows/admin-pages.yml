@@ -29,6 +29,7 @@ jobs:
       - name: Verify JavaScript syntax
         run: |
           node --check web/app.js
+          node --check web/access.js
           node --check web/config.js
           node --check admin/app.js
           node --check admin/config.js
@@ -36,7 +37,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p _site/admin
-          cp web/index.html web/styles.css web/app.js web/config.js web/al-ezz-mark.svg web/youtube-player.html _site/
+          cp web/index.html web/styles.css web/app.js web/access.js web/config.js web/al-ezz-mark.svg web/youtube-player.html _site/
           cp admin/index.html admin/style.css admin/app.js admin/config.js _site/admin/
           touch _site/.nojekyll
           test -s _site/index.html
