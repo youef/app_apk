@@ -183,8 +183,16 @@ $("editorForm").addEventListener("submit",async ev=>{
  if(payload.status==="published"&&!payload.license_reference)
    return show("وثيقة الترخيص مطلوبة للنشر",true);
  if(table==="aseel_channels"){
-    payload.playback_mode=payload.youtube_url?"youtube_embed":"stream";
-    payload.official_url=null;
+    if(payload.playback_mode==="official_link"){
+      try { const u=new URL(payload.official_url||""); if(u.protocol!=="https:")throw Error(); }
+      catch(_) {return show("أدخل رابط مشاهدة رسمي HTTPS صالحًا",true);}
+      payload.stream_url=null;
+      payload.youtube_url=null;
+      payload.stream_variants=[];
+    } else {
+      payload.playback_mode=payload.youtube_url?"youtube_embed":"stream";
+      payload.official_url=null;
+    }
  }
  if(payload.country_code && !/^[a-zA-Z]{2}$/.test(payload.country_code))return show("رمز الدولة يجب أن يكون حرفين مثل US أو TR",true);
  if(payload.country_code)payload.country_code=payload.country_code.toUpperCase();
