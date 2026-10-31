@@ -32,6 +32,18 @@
     {
       "name": "أخبار أستراليا ABC — مباشر",
       "url": "https://abc-news-dmd-streams-1.akamaized.net/out/v1/701126012d044971b3fa89406a440133/index.m3u8"
+    },
+    {
+      "name": "TRT Diyanet Cocuk (official TRT kids)",
+      "url": "https://tv-trtdiyanetcocuk.medya.trt.com.tr/master.m3u8"
+    },
+    {
+      "name": "TRT Cocuk (official TRT kids - geo restrictions possible)",
+      "url": "https://tv-trtcocuk.medya.trt.com.tr/master.m3u8"
+    },
+    {
+      "name": "4 Fun Kids (open internet - test restrictions)",
+      "url": "https://stream.4fun.tv:8889/hls/4fk_high/index.m3u8"
     }
   ]
 }
