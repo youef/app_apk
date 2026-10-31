@@ -749,7 +749,12 @@ public final class MainActivity extends Activity {
             ImageView poster=new ImageView(this);
             poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
             artwork.addView(poster,new android.widget.FrameLayout.LayoutParams(-1,-1));
-            if(!prefs.getBoolean("lite_mode",false))PosterLoader.load(poster,str(item,"poster_url"));
+            if(!prefs.getBoolean("lite_mode",false)){
+                String posterUrl=str(item,"poster_url");
+                String yt=YouTubeLink.videoId(str(item,"youtube_url"));
+                if(posterUrl.length()==0&&yt!=null)posterUrl="https://i.ytimg.com/vi/"+yt+"/hqdefault.jpg";
+                PosterLoader.load(poster,posterUrl);
+            }
             TextView overlay=text("▶",25,WHITE,true);overlay.setGravity(Gravity.CENTER);
             overlay.setBackgroundDrawable(background(0xAA080B0F,12,0x66FFFFFF));
             android.widget.FrameLayout.LayoutParams pp=new android.widget.FrameLayout.LayoutParams(dp(50),dp(44),Gravity.CENTER);

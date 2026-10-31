@@ -141,14 +141,15 @@
    const fallback = el("div","poster-fallback");
    fallback.append(el("span","logo-ghost","عز"), el("span","poster-word", type === "channel" ? "AL EZZ LIVE" : "AL EZZ CINEMA"));
    frame.append(fallback);
-   const imgUrl = safeUrl(item.poster_url);
+   const yt=youtubeId(item.youtube_url);
+   const imgUrl = safeUrl(item.poster_url)||(yt?"https://i.ytimg.com/vi/"+yt+"/hqdefault.jpg":"");
    if (imgUrl) {
      const img = el("img");
      img.loading = "lazy"; img.decoding="async"; img.alt = "";
      img.src = imgUrl; img.onerror = () => img.remove();
      frame.append(img);
    }
-   const badge = el("span","poster-badge"+(type === "channel"?" live":""), type === "channel"?"● مباشر":item.quality || (type==="series"?"مسلسل":"فيلم"));
+   const badge = el("span","poster-badge"+(type === "channel"?" live":""), youtubeId(item.youtube_url)?"▶ YouTube":type === "channel"?"● مباشر":item.quality || (type==="series"?"مسلسل":"فيلم"));
    frame.append(badge);
    frame.append(el("span","poster-play","▶"));
    return frame;
@@ -591,10 +592,40 @@
    $("videoPlayer").addEventListener("timeupdate",()=>{writeProgress().catch(()=>{})});
    $("videoPlayer").addEventListener("pause",()=>{writeProgress().catch(()=>{})});
    document.addEventListener("keydown",e=>{
-     if(e.key!=="Escape")return;
-     if(!$("playerOverlay").hidden)stopPlayer();
-     else if(!$("authModal").hidden)modalClose("authModal");
-     else if(!$("modal").hidden)modalClose("modal");
+     if(e.key==="Escape"||e.key==="BrowserBack"){
+       if(!$("playerOverlay").hidden){e.preventDefault();stopPlayer();}
+       else if(!$("authModal").hidden){e.preventDefault();modalClose("authModal");}
+       else if(!$("modal").hidden){e.preventDefault();modalClose("modal");}
+       return;
+     }
+     if(!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(e.key))return;
+     if(e.target.matches("input,textarea,select,[contenteditable]"))return;
+     const buttons=[...document.querySelectorAll("button:not([disabled]),.media-card[tabindex],input")].filter(x=>{
+       if(x.closest("[hidden]"))return false;
+       const r=x.getBoundingClientRect();return r.width>0&&r.height>0;
+     });
+     const current=document.activeElement;
+     if(!current||!buttons.includes(current)){
+       const first=buttons.find(x=>x.dataset.route===state.page)||buttons[0];
+       if(first){e.preventDefault();first.focus();}
+       return;
+     }
+     const r=current.getBoundingClientRect(),ox=r.left+r.width/2,oy=r.top+r.height/2;
+     let winner=null,best=Infinity;
+     for(const element of buttons){
+       if(element===current)continue;
+       const n=element.getBoundingClientRect(),dx=n.left+n.width/2-ox,dy=n.top+n.height/2-oy;
+       if(e.key==="ArrowLeft"&&dx>=-8)continue;
+       if(e.key==="ArrowRight"&&dx<=8)continue;
+       if(e.key==="ArrowUp"&&dy>=-8)continue;
+       if(e.key==="ArrowDown"&&dy<=8)continue;
+       const horizontal=e.key==="ArrowLeft"||e.key==="ArrowRight";
+       const major=Math.abs(horizontal?dx:dy),minor=Math.abs(horizontal?dy:dx);
+       const overlap=horizontal?n.top<r.bottom&&n.bottom>r.top:n.left<r.right&&n.right>r.left;
+       const score=major+minor*(horizontal?3:1.5)+(overlap?0:240);
+       if(score<best){best=score;winner=element;}
+     }
+     if(winner){e.preventDefault();winner.focus();winner.scrollIntoView({behavior:"auto",block:"nearest",inline:"nearest"});}
    });
    window.addEventListener("pagehide",()=>{writeProgress().catch(()=>{})});
    window.addEventListener("popstate",()=>{

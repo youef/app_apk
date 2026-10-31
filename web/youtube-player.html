@@ -27,8 +27,8 @@ button:focus,button:hover{background:#dc2b48;outline:3px solid #ff8192}
 <script>
 (function(){
 "use strict";
-var params=new URLSearchParams(location.search);
-var id=params.get("v")||"";
+var match=location.search.match(/[?&]v=([A-Za-z0-9_-]{11})(?:&|$)/);
+var id=match?match[1]:"";
 var status=document.getElementById("status");
 if(!/^[A-Za-z0-9_-]{11}$/.test(id)){status.textContent="رابط الفيديو غير صالح";return;}
 var player=null,ready=false;
