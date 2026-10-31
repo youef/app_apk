@@ -129,6 +129,11 @@ public final class YouTubeActivity extends Activity {
         return super.onKeyDown(code,event);
     }
     @Override protected void onPause(){if(web!=null)web.onPause();super.onPause();}
+    @Override protected void onStop(){
+        super.onStop();
+        // A background/recents return must re-enter the PIN gate in MainActivity.
+        if(!isFinishing()&&!isChangingConfigurations())finish();
+    }
     @Override protected void onResume(){super.onResume();if(web!=null)web.onResume();}
     @Override protected void onDestroy(){
         hideFullScreen();

@@ -38,3 +38,11 @@
 ## الإصدار السينمائي v6 — قفل الدخول
 
 [نسخة العز TV v6](https://github.com/youef/app_apk/releases/tag/al-ezz-tv-cinema-pin-v6) لشاشات Android 4.4.4. الواجهة الجانبية للريموت وقفل PIN محلي قبل تحميل المحتوى، مع الحد من المحاولات. راجع [توثيق الحماية والتثبيت](docs/TV_CINEMA_PIN_V6.md). الإصدارات القديمة لا تطلب الرمز وقد تظل مثبتة، والموقع والـAPI العامة غير محميين بهذا القفل المحلي.
+
+## YouTube TV v7
+- إضافة خانة YouTube مستقلة في لوحة الإدارة، مع دعم الروابط الرسمية `youtube.com/watch` و`youtu.be` و`shorts` و`live`.
+- رابط YouTube يعمل داخل نافذة المشاهدة باستخدام YouTube IFrame API الرسمي، وليس عبر استخراج MP4.
+- في Android يوجد قسم «يوتيوب» للصق الرابط وتشغيله بمشغّل داخل التطبيق والتحكم بالريموت.
+- في الويب يوجد مسار [يوتيوب](https://youef.github.io/app_apk/?section=youtube) مع لصق الروابط والتصفح بالأسهم.
+- رابط إصدار [العز TV v7 APK](https://github.com/youef/app_apk/releases/tag/al-ezz-tv-youtube-api19-v7).
+- Android 4.4.4 قد لا يدعم مشغل YouTube HTML5 في WebView الافتراضي؛ دعم بنية APK لا يضمن تشغيل YouTube على الجهاز.
