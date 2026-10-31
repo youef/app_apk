@@ -147,3 +147,6 @@ body.viewer-locked{overflow:hidden!important}body.viewer-locked>:not(#activation
 
 /* Alizz TV brand mark */
 .brand-logo-image{display:block;width:48px;height:48px;object-fit:contain;flex-shrink:0;filter:drop-shadow(0 3px 10px rgba(226,0,34,.22))}.footer-brand .brand-logo-image{width:40px;height:40px}.auth-mark.brand-logo-image{width:70px;height:70px}
+
+/* Unified transparent Alizz TV PNG branding */
+.brand-logo-image{width:56px;height:56px;max-width:100%;object-fit:contain;object-position:center;filter:drop-shadow(0 4px 12px rgba(255,30,60,.25))}.footer-brand .brand-logo-image{width:54px;height:54px}.auth-mark.brand-logo-image{width:88px;height:88px}.activation-brand{display:flex;align-items:center;gap:16px}.activation-logo-image{display:block;width:clamp(70px,10vw,120px);height:clamp(70px,10vw,120px);object-fit:contain;filter:drop-shadow(0 9px 26px rgba(235,35,55,.3))}@media(max-width:600px){.brand-logo-image{width:44px;height:44px}.activation-brand{gap:8px}.activation-logo-image{width:76px;height:76px}}
