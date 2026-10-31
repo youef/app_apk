@@ -32,6 +32,7 @@
     <button data-route="movies" class="nav-item">الأفلام</button>
     <button data-route="series" class="nav-item">المسلسلات</button>
     <button data-route="channels" class="nav-item">البث المباشر</button>
+    <button data-route="kids" class="nav-item kids-nav">★ الأطفال</button>
     <button data-route="favorites" class="nav-item">قائمتي</button>
    </nav>
    <div class="top-actions">
@@ -70,6 +71,15 @@
     <div><span class="overline">EXPLORE THE COLLECTION</span><h2 id="pageTitle">اكتشف عالم أسيل</h2><p id="pageSubtitle">مختارات سينمائية تستحق وقتك، كل يوم.</p></div>
     <div class="live-pill"><span class="live-signal"></span> مصادر مرخصة ومعتمدة</div>
    </div>
+   <section id="kidsFilters" class="kids-filters" aria-label="خيارات مكتبة الأطفال" hidden>
+     <div class="kids-banner"><strong>★ عالم الأطفال</strong><p>قنوات وأفلام وحكايات عائلية من مصادر مجانية مرخّصة. لا نعرض الروابط التي تفتح متصفحًا خارجيًا.</p></div>
+     <div id="kidsTypeChips" class="category-bar" aria-label="أنواع محتوى الأطفال"></div>
+     <div class="kids-selects">
+       <label>الدولة<select id="kidsCountry" aria-label="دولة المحتوى"><option value="">كل الدول</option></select></label>
+       <label>اللغة<select id="kidsLanguage" aria-label="لغة المحتوى"><option value="">كل اللغات</option></select></label>
+     </div>
+     <p class="kids-caution">تضاف القنوات بعد فحص الملف والبث ومراجعة الحقوق. بعضها قد لا يعمل في دول معينة.</p>
+   </section>
    <div id="categoryBar" class="category-bar" aria-label="تصفية حسب النوع"></div>
    <div id="catalogArea" class="catalog-area">
     <section class="media-section" id="movieSection"><div class="section-heading"><div><span class="section-marker"></span><h3>أفلام تستحق المشاهدة</h3></div><button data-route="movies" class="section-more">عرض الكل <span>←</span></button></div><div class="cards-row skeleton-row" id="movieGrid"></div></section>
@@ -95,6 +105,7 @@
   <button class="tab-item" data-route="movies" aria-label="أفلام"><span class="tab-icon">▣</span><small>الأفلام</small></button>
   <button class="tab-item" data-route="series" aria-label="مسلسلات"><span class="tab-icon">▤</span><small>مسلسلات</small></button>
   <button class="tab-item" data-route="channels" aria-label="مباشر"><span class="tab-icon">◉</span><small>مباشر</small></button>
+  <button class="tab-item" data-route="kids" aria-label="الأطفال"><span class="tab-icon">★</span><small>الأطفال</small></button>
   <button class="tab-item" data-route="favorites" aria-label="قائمتي"><span class="tab-icon">♡</span><small>قائمتي</small></button>
  </nav>
 

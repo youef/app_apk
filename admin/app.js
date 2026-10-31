@@ -2,16 +2,16 @@
 const cfg=window.ASEEL_CONFIG;
 const api=cfg.url+"/rest/v1/";
 const tables={
- aseel_movies:{label:"الأفلام",fields:["title_ar","title_original","description","poster_url","backdrop_url","release_year","category_id","duration_minutes","language_code","quality","stream_url","stream_variants","status","rights_status","rights_holder","license_reference","rights_expires_at","featured"]},
- aseel_series:{label:"المسلسلات",fields:["title_ar","title_original","description","poster_url","backdrop_url","release_year","category_id","language_code","quality","status","rights_status","rights_holder","license_reference","rights_expires_at","featured"]},
+ aseel_movies:{label:"الأفلام",fields:["title_ar","title_original","description","poster_url","backdrop_url","release_year","category_id","duration_minutes","language_code","country_code","is_kids","quality","stream_url","stream_variants","status","rights_status","rights_holder","license_reference","rights_expires_at","featured"]},
+ aseel_series:{label:"المسلسلات",fields:["title_ar","title_original","description","poster_url","backdrop_url","release_year","category_id","language_code","country_code","is_kids","quality","status","rights_status","rights_holder","license_reference","rights_expires_at","featured"]},
  aseel_seasons:{label:"المواسم",fields:["series_id","number","title_ar"]},
  aseel_episodes:{label:"الحلقات",fields:["season_id","number","title_ar","description","poster_url","duration_minutes","stream_url","stream_variants","status","rights_status","license_reference","rights_expires_at"]},
- aseel_channels:{label:"القنوات",fields:["title_ar","description","poster_url","stream_url","stream_variants","category_id","status","rights_status","rights_holder","license_reference","rights_expires_at"]},
+ aseel_channels:{label:"القنوات",fields:["title_ar","description","poster_url","stream_url","stream_variants","category_id","language_code","country_code","is_kids","status","rights_status","rights_holder","license_reference","rights_expires_at"]},
  aseel_categories:{label:"التصنيفات",fields:["name_ar","sort_order","published"]},
  aseel_content_sources:{label:"مصادر الحقوق",fields:["title","source_url","rights_contact","license_reference","verified"]},
  aseel_settings:{label:"إعدادات التطبيق",fields:["key","value","is_public"]}
 };
-const names={title_ar:"العنوان العربي",title_original:"العنوان الأصلي",description:"الوصف",poster_url:"رابط البوستر HTTPS",backdrop_url:"رابط الخلفية",release_year:"سنة الإنتاج",category_id:"التصنيف",duration_minutes:"المدة بالدقائق",language_code:"اللغة",quality:"الجودة",stream_url:"رابط تشغيل HTTPS",stream_variants:"جودات إضافية (JSON: label + url)",official_url:"رابط مشاهدة الجهة الرسمية HTTPS",playback_mode:"طريقة عرض القناة",status:"النشر",rights_status:"حالة الترخيص",rights_holder:"صاحب الحقوق",license_reference:"رابط أو رقم وثيقة الترخيص",rights_expires_at:"نهاية صلاحية الترخيص",featured:"مميز",series_id:"المسلسل",season_id:"الموسم",number:"الترتيب",name_ar:"اسم التصنيف",sort_order:"الترتيب",published:"منشور",title:"العنوان",source_url:"رابط المصدر",rights_contact:"التواصل مع صاحب الحقوق",verified:"تم التحقق",key:"مفتاح الإعداد",value:"قيمة الإعداد بصيغة JSON",is_public:"إعداد عام"};
+const names={title_ar:"العنوان العربي",title_original:"العنوان الأصلي",description:"الوصف",poster_url:"رابط البوستر HTTPS",backdrop_url:"رابط الخلفية",release_year:"سنة الإنتاج",category_id:"التصنيف",duration_minutes:"المدة بالدقائق",language_code:"اللغة (ar/en/tr)",country_code:"الدولة (رمز مثل US/TR)",is_kids:"محتوى مخصص للأطفال",quality:"الجودة",stream_url:"رابط تشغيل HTTPS",stream_variants:"جودات إضافية (JSON: label + url)",official_url:"رابط مشاهدة الجهة الرسمية HTTPS",playback_mode:"طريقة عرض القناة",status:"النشر",rights_status:"حالة الترخيص",rights_holder:"صاحب الحقوق",license_reference:"رابط أو رقم وثيقة الترخيص",rights_expires_at:"نهاية صلاحية الترخيص",featured:"مميز",series_id:"المسلسل",season_id:"الموسم",number:"الترتيب",name_ar:"اسم التصنيف",sort_order:"الترتيب",published:"منشور",title:"العنوان",source_url:"رابط المصدر",rights_contact:"التواصل مع صاحب الحقوق",verified:"تم التحقق",key:"مفتاح الإعداد",value:"قيمة الإعداد بصيغة JSON",is_public:"إعداد عام"};
 const $=id=>document.getElementById(id);
 let jwt="",userId="",table="aseel_movies",editing=null,rows=[],cats=[],shows=[],seasons=[];
 let timeout;
@@ -116,7 +116,7 @@ function openEditor(row=null){
   const choices=optionList(key);
   if(choices){control=document.createElement("select");for(const [value,caption] of choices){const option=document.createElement("option");option.value=value;option.textContent=caption;control.append(option)}}
   else if(["description","value","stream_variants"].includes(key)){control=document.createElement("textarea");}
-  else {control=document.createElement("input");control.type=["featured","published","verified","is_public"].includes(key)?"checkbox":
+  else {control=document.createElement("input");control.type=["featured","published","verified","is_public","is_kids"].includes(key)?"checkbox":
            ["release_year","duration_minutes","number","sort_order"].includes(key)?"number":
            ["rights_expires_at"].includes(key)?"datetime-local":"text";}
   control.name=key;
@@ -183,6 +183,11 @@ $("editorForm").addEventListener("submit",async ev=>{
  if(payload.status==="published"&&!payload.license_reference)
    return show("وثيقة الترخيص مطلوبة للنشر",true);
  if(table==="aseel_channels"){payload.playback_mode="stream";payload.official_url=null;}
+ if(payload.country_code && !/^[a-zA-Z]{2}$/.test(payload.country_code))return show("رمز الدولة يجب أن يكون حرفين مثل US أو TR",true);
+ if(payload.country_code)payload.country_code=payload.country_code.toUpperCase();
+ if(payload.language_code && !/^[a-zA-Z]{2,3}$/.test(payload.language_code))return show("رمز اللغة غير صحيح",true);
+ if(payload.language_code)payload.language_code=payload.language_code.toLowerCase();
+ if(payload.is_kids && payload.rights_status!=="approved")return show("يتطلب نشر محتوى أطفال اعتماد الحقوق أولًا",true);
  const isDirect = value => {
    try { const u=new URL(String(value||"")); return u.protocol==="https:" && /\.(?:mp4|m3u8)$/i.test(u.pathname); }
    catch (_) {return false;}

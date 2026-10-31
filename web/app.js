@@ -5,7 +5,7 @@
  const cfg = window.ASEEL_WEB_CONFIG;
  const $ = id => document.getElementById(id);
  const MEDIA = ["movies","series","channels"];
- const state = { page: "home", query: "", category: "", movies: [], series: [], channels: [],
+ const state = { page: "home", query: "", category: "", kidsType:"all", kidsCountry:"", kidsLanguage:"", movies: [], series: [], channels: [],
    categories: [], favorites: new Set(), loading: true, error: "", chosen: null,
    token: "", refreshToken: "", userId: "", account: null, authMode: "login",
    playback: null, hls: null, progressTimer: 0, lastProgressAt: 0 };
@@ -179,10 +179,32 @@
      else await api("aseel_favorites","user_id=eq."+encodeURIComponent(state.userId)+"&item_type=eq."+type+"&item_id=eq."+encodeURIComponent(item.id),{method:"DELETE"});
    } catch (_) { announce("حُفظت القائمة على هذا الجهاز، لكن تعذّرت مزامنتها مع حسابك"); }
  }
+ function kidsMedia(){return [...state.movies,...state.series,...state.channels].filter(x=>x.is_kids===true)}
+ function kidsFilters(){
+   $("kidsFilters").hidden=state.page!=="kids";
+   if(state.page!=="kids")return;
+   const type=$("kidsTypeChips");type.replaceChildren();
+   for(const [v,n] of [["all","الكل"],["movie","أفلام"],["series","مسلسلات"],["channel","قنوات مباشرة"]]){
+     const b=el("button","chip"+(state.kidsType===v?" active":""),n);
+     b.type="button";b.onclick=()=>{state.kidsType=v;draw()};type.append(b);
+   }
+   const items=kidsMedia(),countries={US:"أمريكا",TR:"تركيا",SA:"السعودية",AR:"الأرجنتين",GB:"بريطانيا",FR:"فرنسا",DE:"ألمانيا",ES:"إسبانيا"},langs={ar:"العربية",en:"الإنجليزية",tr:"التركية",es:"الإسبانية",fr:"الفرنسية",de:"الألمانية",und:"بدون حوار"};
+   for(const [id,field,stateKey,defaultLabel,dictionary] of [["kidsCountry","country_code","kidsCountry","كل الدول",countries],["kidsLanguage","language_code","kidsLanguage","كل اللغات",langs]]){
+     const select=$(id),current=state[stateKey];select.replaceChildren();const all=el("option","",defaultLabel);all.value="";select.append(all);
+     const codes=[...new Set(items.map(x=>x[field]).filter(Boolean))].sort();
+     for(const c of codes){const o=el("option","",dictionary[c]||c);o.value=c;select.append(o)}
+     state[stateKey]=codes.includes(current)?current:"";select.value=state[stateKey];
+   }
+ }
  function filtered(type) {
    let data = collection(type).slice();
    const term = state.query.toLocaleLowerCase("ar").trim();
    if (term) data=data.filter(x => [x.title_ar,x.title_original,x.description,itemCategory(x)].some(v=>String(v||"").toLocaleLowerCase("ar").includes(term)));
+   if(state.page==="kids"){
+     data=data.filter(x=>x.is_kids===true);
+     if(state.kidsCountry)data=data.filter(x=>x.country_code===state.kidsCountry);
+     if(state.kidsLanguage)data=data.filter(x=>(x.language_code||"und")===state.kidsLanguage);
+   }
    if (state.category) data = data.filter(x => x.category_id===state.category);
    if (state.page==="favorites") data=data.filter(x=>state.favorites.has(key(type,x)));
    return data;
@@ -220,19 +242,26 @@
    const items={home:["اكتشف عالم أسيل","مختارات سينمائية تستحق وقتك، كل يوم."],
      movies:["مكتبة الأفلام","اكتشف أفلامًا ومشاهد من مصادر موثّقة."],
      series:["عالم المسلسلات","تابع المواسم والحلقات، في مكان واحد."],
-     channels:["البث المباشر","قنوات مرخصة وروابط مشاهدة رسمية."],
+     channels:["البث المباشر","قنوات مجانية تعمل من المشغل مباشرة."],
+     kids:["★ عالم الأطفال","أفلام كرتون ومسلسلات وقنوات أطفال مجانية ومباشرة؛ دون متصفح خارجي."],
      favorites:["قائمتي المفضلة","كل ما اخترته من الأفلام والمسلسلات والقنوات."],
      search:["نتائج البحث","ابحث في مكتبة أسيل عن المحتوى الذي تحبه."]};
    $("pageTitle").textContent=items[route][0];
    $("pageSubtitle").textContent=items[route][1];
    document.querySelectorAll("[data-route]").forEach(b=>b.classList.toggle("active",b.dataset.route===route));
-   categories();
-   const display={movie:route==="home"||route==="movies"||route==="favorites"||route==="search",
-     series:route==="home"||route==="series"||route==="favorites"||route==="search",
-     channel:route==="home"||route==="channels"||route==="favorites"||route==="search"};
+   $("categoryBar").hidden=route==="kids";
+   if(route!=="kids")categories();
+   kidsFilters();
+   const isKids=route==="kids",allKids=state.kidsType==="all";
+   const display={movie:route==="home"||route==="movies"||route==="favorites"||route==="search"||(isKids&&(allKids||state.kidsType==="movie")),
+     series:route==="home"||route==="series"||route==="favorites"||route==="search"||(isKids&&(allKids||state.kidsType==="series")),
+     channel:route==="home"||route==="channels"||route==="favorites"||route==="search"||(isKids&&(allKids||state.kidsType==="channel"))};
    setHidden("movieSection",!display.movie);
    setHidden("seriesSection",!display.series);
    setHidden("channelSection",!display.channel);
+   $("movieSection").querySelector("h3").textContent=isKids?"أفلام الأطفال والرسوم المتحركة":"أفلام تستحق المشاهدة";
+   $("seriesSection").querySelector("h3").textContent=isKids?"مسلسلات ومغامرات الأطفال":"مسلسلات وحكايات";
+   $("channelSection").querySelector("h3").textContent=isKids?"قنوات الأطفال المباشرة":"شاهد البث المباشر";
    renderGrid("movieGrid","movie",route!=="home");
    renderGrid("seriesGrid","series",route!=="home");
    renderGrid("channelGrid","channel",route!=="home");
@@ -252,7 +281,7 @@
    button.onclick=()=>details(featured,state.movies.some(x=>x.id===featured.id)?"movie":"series");
  }
  function navigate(section,push) {
-   state.page=["home","movies","series","channels","favorites","search"].includes(section)?section:"home";
+   state.page=["home","movies","series","channels","kids","favorites","search"].includes(section)?section:"home";
    if (state.page!=="search") {state.query="";$("searchInput").value="";}
    state.category="";
    if (push!==false) {
@@ -471,6 +500,8 @@
    $("authForm").onsubmit=handleAuth;
    $("authLogout").onclick=logout;
    $("playerBack").onclick=stopPlayer;
+   $("kidsCountry").onchange=e=>{state.kidsCountry=e.target.value;draw()};
+   $("kidsLanguage").onchange=e=>{state.kidsLanguage=e.target.value;draw()};
    $("videoPlayer").addEventListener("error",()=>{
      if(!state.playback)return;
      setPlayerError("تعذّر التشغيل: الرابط قد يكون غير متاح، أو هناك قيود ترميز أو حظر وصول من المتصفح.",safeUrl(state.playback.item.official_url)||state.playback.item.stream_url);
@@ -487,12 +518,12 @@
    window.addEventListener("popstate",()=>{
      const params=new URLSearchParams(location.search);
      state.page=params.get("section")||"home";
-     if(!["home","movies","series","channels","favorites","search"].includes(state.page))state.page="home";
+     if(!["home","movies","series","channels","kids","favorites","search"].includes(state.page))state.page="home";
      draw();
    });
    const params=new URLSearchParams(location.search);
    state.page=params.get("section")||"home";
-   if(!["home","movies","series","channels","favorites","search"].includes(state.page))state.page="home";
+   if(!["home","movies","series","channels","kids","favorites","search"].includes(state.page))state.page="home";
    draw();
    restoreSession().then(load).then(()=>{
      const t=params.get("type"),id=params.get("id");
