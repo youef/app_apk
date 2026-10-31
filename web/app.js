@@ -25,13 +25,24 @@
    try { const u = new URL(String(v || "")); return u.protocol === "https:" ? u.href : ""; }
    catch (_) { return ""; }
  }
+ function youtubeId(value){
+   try{
+    const u=new URL(String(value||""));
+    if(u.protocol!=="https:"||!["youtube.com","www.youtube.com","m.youtube.com","youtu.be"].includes(u.hostname)||(u.port&&u.port!=="443"))return "";
+    const parts=u.pathname.split("/").filter(Boolean);
+    const id=u.hostname==="youtu.be"?(parts.length===1?parts[0]:""):
+       u.pathname==="/watch"?u.searchParams.get("v"):
+       (["shorts","live","embed"].includes(parts[0])&&parts.length===2?parts[1]:"");
+    return /^[A-Za-z0-9_-]{11}$/.test(id||"")?id:"";
+   }catch(_){return "";}
+ }
  function directStream(v) {
    const url=safeUrl(v);
    return url && /\.(?:mp4|m3u8)(?:[?#]|$)/i.test(url) ? url : "";
  }
  function playable(item, type) {
-   if (!item || !directStream(item.stream_url)) return false;
-   if (type === "channel" && item.playback_mode !== "stream") return false;
+   if (!item || !(directStream(item.stream_url)||youtubeId(item.youtube_url)))return false;
+   if (type === "channel" && !["stream","youtube_embed"].includes(item.playback_mode||"stream"))return false;
    return item.status === "published" && item.rights_status === "approved";
  }
  function el(tag, className, text) {
@@ -210,6 +221,7 @@
    let data = collection(type).slice();
    const term = state.query.toLocaleLowerCase("ar").trim();
    if (term) data=data.filter(x => [x.title_ar,x.title_original,x.description,itemCategory(x)].some(v=>String(v||"").toLocaleLowerCase("ar").includes(term)));
+   if(state.page==="youtube")data=data.filter(x=>!!youtubeId(x.youtube_url));
    if(state.page==="kids"){
      data=data.filter(x=>x.is_kids===true);
      if(state.kidsCountry)data=data.filter(x=>x.country_code===state.kidsCountry);
@@ -271,24 +283,26 @@
      series:["عالم المسلسلات","تابع المواسم والحلقات، في مكان واحد."],
      channels:["البث المباشر","قنوات مجانية تعمل من المشغل مباشرة."],
      kids:["★ عالم الأطفال","أفلام كرتون ومسلسلات وقنوات أطفال مجانية ومباشرة؛ دون متصفح خارجي."],
+     youtube:["▶ يوتيوب داخل العز","الصق روابط يوتيوب الرسمية أو شاهد الفيديوهات المعتمدة داخل التطبيق."],
      favorites:["قائمتي المفضلة","كل ما اخترته من الأفلام والمسلسلات والقنوات."],
      search:["نتائج البحث","ابحث في مكتبة العز عن المحتوى الذي تحبه."]};
    $("pageTitle").textContent=items[route][0];
    $("pageSubtitle").textContent=items[route][1];
    document.querySelectorAll("[data-route]").forEach(b=>b.classList.toggle("active",b.dataset.route===route));
-   $("categoryBar").hidden=route==="kids";
+   $("categoryBar").hidden=route==="kids"||route==="youtube";
+   $("youtubeQuick").hidden=route!=="youtube";
    if(route!=="kids")categories();
    kidsFilters();
-   const isKids=route==="kids",allKids=state.kidsType==="all";
-   const display={movie:route==="home"||route==="movies"||route==="favorites"||route==="search"||(isKids&&(allKids||state.kidsType==="movie")),
+   const isKids=route==="kids",isYoutube=route==="youtube",allKids=state.kidsType==="all";
+   const display={movie:isYoutube||route==="home"||route==="movies"||route==="favorites"||route==="search"||(isKids&&(allKids||state.kidsType==="movie")),
      series:route==="home"||route==="series"||route==="favorites"||route==="search"||(isKids&&(allKids||state.kidsType==="series")),
-     channel:route==="home"||route==="channels"||route==="favorites"||route==="search"||(isKids&&(allKids||state.kidsType==="channel"))};
+     channel:isYoutube||route==="home"||route==="channels"||route==="favorites"||route==="search"||(isKids&&(allKids||state.kidsType==="channel"))};
    setHidden("movieSection",!display.movie);
    setHidden("seriesSection",!display.series);
    setHidden("channelSection",!display.channel);
-   $("movieSection").querySelector("h3").textContent=isKids?"أفلام الأطفال والرسوم المتحركة":"أفلام تستحق المشاهدة";
+   $("movieSection").querySelector("h3").textContent=isYoutube?"فيديوهات يوتيوب":isKids?"أفلام الأطفال والرسوم المتحركة":"أفلام تستحق المشاهدة";
    $("seriesSection").querySelector("h3").textContent=isKids?"مسلسلات ومغامرات الأطفال":"مسلسلات وحكايات";
-   $("channelSection").querySelector("h3").textContent=isKids?"قنوات الأطفال المباشرة":"شاهد البث المباشر";
+   $("channelSection").querySelector("h3").textContent=isYoutube?"يوتيوب ومحتوى القنوات":isKids?"قنوات الأطفال المباشرة":"شاهد البث المباشر";
    renderGrid("movieGrid","movie",route!=="home");
    renderGrid("seriesGrid","series",route!=="home");
    renderGrid("channelGrid","channel",route!=="home");
@@ -326,7 +340,7 @@
    $("heroNext").onclick=()=>{state.heroIndex++;setHero()};
  }
  function navigate(section,push) {
-   state.page=["home","movies","series","channels","kids","favorites","search"].includes(section)?section:"home";
+   state.page=["home","movies","series","channels","kids","youtube","favorites","search"].includes(section)?section:"home";
    if (state.page!=="search") {state.query="";$("searchInput").value="";$("headerSearchInput").value="";}
    state.category="";
    if (push!==false) {
@@ -405,14 +419,27 @@
  function stopPlayer() {
    if (state.hls) { try {state.hls.destroy()}catch(_){} state.hls=null; }
    const video=$("videoPlayer");
+   $("youtubeFrame").src="about:blank";$("youtubeFrame").hidden=true;
+   video.hidden=false;
    video.pause();video.removeAttribute("src");video.removeAttribute("poster");video.load();
    $("playerError").hidden=true;
    state.playback=null;
    modalClose("playerOverlay");
  }
  async function startPlayer(item,type) {
+   const yt=youtubeId(item.youtube_url);
+   if(yt){
+     modalClose("modal");if(state.playback)stopPlayer();
+     state.playback={item,type,youtube:true};
+     $("playerTitle").textContent=item.title_ar||"YouTube";
+     $("playerError").hidden=true;
+     $("videoPlayer").hidden=true;
+     $("youtubeFrame").hidden=false;
+     $("youtubeFrame").src="youtube-player.html?v="+encodeURIComponent(yt);
+     modalOpen("playerOverlay");return;
+   }
    const url=directStream(item.stream_url);
-   if (!url || (type==="channel" && item.playback_mode!=="stream")) {announce("لا يتوفر رابط تشغيل مباشر صالح لهذا المحتوى");return;}
+   if (!url || (type==="channel" && item.playback_mode!=="stream")) {announce("لا يتوفر رابط تشغيل صالح لهذا المحتوى");return;}
    modalClose("modal");
    if (state.playback) stopPlayer();
    state.playback={item,type};
@@ -462,7 +489,7 @@
  }
  async function writeProgress() {
    const p=state.playback,v=$("videoPlayer");
-   if(!p||p.type==="channel"||!Number.isFinite(v.currentTime)||v.currentTime<1)return;
+   if(!p||p.youtube||p.type==="channel"||!Number.isFinite(v.currentTime)||v.currentTime<1)return;
    try{localStorage.setItem(progressKey(p.type,p.item),String(Math.floor(v.currentTime)))}catch(_){}
    const now=Date.now();
    if(!state.token||!state.userId||now-state.lastProgressAt<20000)return;
@@ -549,6 +576,12 @@
    $("authForm").onsubmit=handleAuth;
    $("authLogout").onclick=logout;
    $("playerBack").onclick=stopPlayer;
+   $("youtubeQuickForm").onsubmit=e=>{
+     e.preventDefault();
+     const url=$("youtubeLinkInput").value.trim();
+     if(!youtubeId(url))return announce("رابط يوتيوب غير صالح؛ أدخل رابط فيديو رسمي وليس قائمة تشغيل.");
+     startPlayer({title_ar:"فيديو يوتيوب",youtube_url:url},"movie");
+   };
    $("kidsCountry").onchange=e=>{state.kidsCountry=e.target.value;draw()};
    $("kidsLanguage").onchange=e=>{state.kidsLanguage=e.target.value;draw()};
    $("videoPlayer").addEventListener("error",()=>{
@@ -567,12 +600,12 @@
    window.addEventListener("popstate",()=>{
      const params=new URLSearchParams(location.search);
      state.page=params.get("section")||"home";
-     if(!["home","movies","series","channels","kids","favorites","search"].includes(state.page))state.page="home";
+     if(!["home","movies","series","channels","kids","youtube","favorites","search"].includes(state.page))state.page="home";
      draw();
    });
    const params=new URLSearchParams(location.search);
    state.page=params.get("section")||"home";
-   if(!["home","movies","series","channels","kids","favorites","search"].includes(state.page))state.page="home";
+   if(!["home","movies","series","channels","kids","youtube","favorites","search"].includes(state.page))state.page="home";
    draw();
    restoreSession().then(load).then(()=>{
      const t=params.get("type"),id=params.get("id");

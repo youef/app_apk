@@ -51,6 +51,7 @@
   <button type="button" data-route="movies" class="rail-item"><span class="rail-symbol">▣</span><span>الأفلام</span></button>
   <button type="button" data-route="series" class="rail-item"><span class="rail-symbol">▤</span><span>المسلسلات</span></button>
   <button type="button" data-route="channels" class="rail-item"><span class="rail-symbol">◉</span><span>البث المباشر</span></button>
+  <button type="button" data-route="youtube" class="rail-item"><span class="rail-symbol">▶</span><span>يوتيوب</span></button>
   <button type="button" data-route="kids" class="rail-item rail-kids"><span class="rail-symbol">★</span><span>عالم الأطفال</span></button>
   <div class="rail-divider"></div>
   <div class="rail-heading">مكتبتي</div>
@@ -90,6 +91,7 @@
     <button type="button" data-route="movies" class="discovery-pill">الأفلام</button>
     <button type="button" data-route="series" class="discovery-pill">المسلسلات</button>
     <button type="button" data-route="channels" class="discovery-pill">● مباشر</button>
+    <button type="button" data-route="youtube" class="discovery-pill">▶ يوتيوب</button>
     <button type="button" data-route="kids" class="discovery-pill">★ العائلة والأطفال</button>
    </div>
    <div class="intro-strip">
@@ -105,6 +107,12 @@
      </div>
      <p class="kids-caution">تضاف القنوات بعد فحص الملف والبث ومراجعة الحقوق. بعضها قد لا يعمل في دول معينة.</p>
    </section>
+   <form class="youtube-quick" id="youtubeQuickForm"><div id="youtubeQuick" hidden>
+      <strong>▶ شغّل رابط YouTube داخل العز TV</strong>
+      <div class="youtube-quick-row"><input type="url" id="youtubeLinkInput" placeholder="https://www.youtube.com/watch?v=..." aria-label="رابط فيديو يوتيوب رسمي" required>
+      <button type="submit">▶ تشغيل الفيديو</button></div>
+      <small>روابط watch وyoutu.be وshorts وlive عند السماح بالتضمين، دون تنزيل الفيديو.</small>
+   </div></form>
    <div id="categoryBar" class="category-bar" aria-label="تصفية حسب النوع"></div>
    <section class="media-section continue-section" id="continueSection" hidden>
      <div class="section-heading"><div><span class="section-marker"></span><h3>أكمل المشاهدة</h3><p class="section-explainer">ارجع إلى ما بدأت مشاهدته</p></div></div>
@@ -144,7 +152,7 @@
  </div>
  <div id="playerOverlay" class="player-overlay" role="dialog" aria-modal="true" aria-label="مشغل الفيديو" hidden>
   <header class="player-head"><button id="playerBack" type="button" aria-label="العودة">←</button><div><strong id="playerTitle">المشاهدة</strong><span>العز TV</span></div><span class="player-status">مشغل متوافق مع الجوال</span></header>
-  <div class="player-wrap"><video id="videoPlayer" controls playsinline preload="metadata" controlslist="nodownload" aria-label="مشغل الفيديو"></video><div id="playerError" class="player-error" hidden><strong>تعذر تشغيل هذا المصدر</strong><p id="playerErrorText">قد لا يدعم المتصفح تنسيق الفيديو أو تعذر الاتصال بالمصدر.</p></div></div>
+  <div class="player-wrap"><iframe id="youtubeFrame" title="مشغل يوتيوب الرسمي" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen hidden></iframe><video id="videoPlayer" controls playsinline preload="metadata" controlslist="nodownload" aria-label="مشغل الفيديو"></video><div id="playerError" class="player-error" hidden><strong>تعذر تشغيل هذا المصدر</strong><p id="playerErrorText">قد لا يدعم المتصفح تنسيق الفيديو أو تعذر الاتصال بالمصدر.</p></div></div>
   <div class="player-details"><p>تعمل ملفات MP4 مباشرة، ويُستخدم HLS للبث المدعوم. بعض المصادر الخارجية قد تمنع التشغيل خارج موقعها.</p></div>
  </div>
  <div id="authModal" class="modal" role="dialog" aria-modal="true" aria-label="حساب العز" hidden>
