@@ -59,8 +59,8 @@ def main():
     tree=command([aapt,"dump","xmltree",str(apk),"AndroidManifest.xml"])
     check("android.intent.category.LAUNCHER" in tree and
           "android.intent.category.LEANBACK_LAUNCHER" in tree,"Standard and TV launcher")
-    check(".PlayerActivity" in tree or "sa.aseel.tv.PlayerActivity" in tree,
-          "Internal player activity registered")
+    check("sa.aseel.tv.MainActivity" in tree and "sa.aseel.tv.PlayerActivity" in tree,
+          "Both launcher and player fully qualified: no activity resolution conflict")
     signature=command([signer,"verify","--min-sdk-version","19","--verbose",
                        "--print-certs",str(apk)])
     check("Verified using v1 scheme (JAR signing): true" in signature,
