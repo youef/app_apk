@@ -327,7 +327,7 @@ public final class MainActivity extends Activity {
         if(event.getAction()==KeyEvent.ACTION_DOWN){
             if(directional&&moveRemoteFocus(code)){handledArrow=code;return true;}
             if(code==KeyEvent.KEYCODE_SEARCH&&event.getRepeatCount()==0){
-                mode="search";pendingFocusTag="nav:search";render();return true;
+                mode="search";pendingFocusTag="input:search";render();return true;
             }
             if(code==KeyEvent.KEYCODE_MENU&&event.getRepeatCount()==0){
                 mode="settings";pendingFocusTag="nav:settings";render();return true;
@@ -560,6 +560,7 @@ public final class MainActivity extends Activity {
             LinearLayout.LayoutParams p=lp(dp(156),dp(50));p.setMargins(dp(5),0,dp(5),0);
             row.addView(b,p);
             b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                subPage="category";lastMode="home";returnFocusTag=currentFocusTag();
                 stage.removeAllViews();
                 Button back=button("العودة للرئيسية");stage.addView(back,lp(dp(210),dp(48)));
                 back.setOnClickListener(new View.OnClickListener(){public void onClick(View w){mode="home";render();}});
@@ -568,7 +569,8 @@ public final class MainActivity extends Activity {
                 addCategoryItems(items,series,"series",id);
                 addCategoryItems(items,channels,"channel",id);
                 if(items.isEmpty())empty("لا يوجد محتوى منشور لهذا التصنيف.");
-                else cards(items,AppConfig.MAX_ITEMS);
+                else cards(items,TV_PAGE_SIZE);
+                focusWhenReady("btn:العودة للرئيسية");
             }});
         }
     }
@@ -804,18 +806,20 @@ public final class MainActivity extends Activity {
     }
     private void search(){
         title("البحث","اكتب اسم فيلم أو مسلسل أو قناة باستخدام لوحة المفاتيح");
-        final EditText input=new EditText(this);
+        final EditText input=new EditText(this);input.setTag("input:search");
         input.setTextSize(20);input.setTextColor(WHITE);input.setHintTextColor(MUTED);
         input.setHint("ابحث عن عنوان...");input.setSingleLine(true);
         input.setBackgroundDrawable(background(PANEL,10,0xFF54718A));
         input.setPadding(dp(18),dp(9),dp(18),dp(9));
         stage.addView(input,lp(-1,dp(55)));
         final Button submit=button("بحث");stage.addView(submit,gap(8,10));
+        final int searchControlsCount=stage.getChildCount();
         submit.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
             String query=input.getText().toString().trim().toLowerCase();
             // Hide keyboard while retaining search query and results.
             ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(input.getWindowToken(),0);
-            while(stage.getChildCount()>2)stage.removeViewAt(2);
+            while(stage.getChildCount()>searchControlsCount)
+                stage.removeViewAt(searchControlsCount);
             ArrayList<JSONObject> found=new ArrayList<JSONObject>();
             filter(found,movies,"movie",query);filter(found,series,"series",query);filter(found,channels,"channel",query);
             if(found.isEmpty())empty("لا توجد نتائج مطابقة.");else cards(found,AppConfig.MAX_ITEMS);
