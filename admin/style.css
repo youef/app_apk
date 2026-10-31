@@ -12,3 +12,6 @@
 
 /* Al Ezz TV control panel */
 :root{--bg:#0b0d12;--surface:#191b23;--surface2:#252733;--gold:#ff4a5d;--text:#fafafa;--muted:#a6a8b5;--line:#353743}body{background:radial-gradient(ellipse at 8% 0%,#361720,#0b0d12 55%)}.primary{background:linear-gradient(125deg,#ff586b,#ca263e);color:#fff;border:1px solid #ff7281}.masthead{background:#14151ddd}.logo{border-color:#fe566c;color:#fff;background:linear-gradient(120deg,#ee4459,#83162b)}.auth-card,.panelCard{box-shadow:0 14px 32px #0005}.tab.active{color:#fff;background:#a72038}.tag.ok{background:#214d3b}.ghost{color:#ff9bab}
+
+/* Unified Alizz TV PNG branding */
+.brand .brand-logo-image{width:58px;height:58px;object-fit:contain;border:0;border-radius:0;background:transparent;padding:0;box-shadow:none;filter:drop-shadow(0 5px 14px rgba(239,45,69,.25))}
