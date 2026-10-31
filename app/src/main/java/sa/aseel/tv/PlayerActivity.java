@@ -32,7 +32,7 @@ public final class PlayerActivity extends Activity {
     private VideoView video;
     private LinearLayout controlsPanel;
     private TextView title,error,clock,streamStatus;
-    private Button qualityButton;
+    private Button qualityButton,playButton;
     private ArrayList<StreamQuality.Source> sources=new ArrayList<StreamQuality.Source>();
     private int sourceIndex=0,pendingSeekMs=0,retries=0,lastTickPosition=-1,stallTicks=0;
     private long bufferingStarted=0L;
@@ -40,11 +40,17 @@ public final class PlayerActivity extends Activity {
     private ProgressBar progress;
     private final Handler handler=new Handler();
     private final Runnable hideOverlay=new Runnable(){public void run(){
-        if(ready && video!=null && video.isPlaying() && controlsPanel!=null)
+        if(ready&&video!=null&&video.isPlaying()&&controlsPanel!=null){
+            // Move focus away before hiding the control bar on TV.
+            video.setFocusableInTouchMode(true);
+            video.requestFocus();
             controlsPanel.setVisibility(View.INVISIBLE);
+        }
     }};
     private void revealControls(){
+        boolean wasHidden=controlsPanel!=null&&controlsPanel.getVisibility()!=View.VISIBLE;
         if(controlsPanel!=null)controlsPanel.setVisibility(View.VISIBLE);
+        if(wasHidden&&playButton!=null)playButton.requestFocus();
         handler.removeCallbacks(hideOverlay);
         if(ready)handler.postDelayed(hideOverlay,9000);
     }
@@ -120,7 +126,7 @@ public final class PlayerActivity extends Activity {
         LinearLayout buttons=new LinearLayout(this);buttons.setOrientation(LinearLayout.HORIZONTAL);buttons.setGravity(Gravity.CENTER);
         panel.addView(buttons);
         Button rewind=action("−10 ثوانٍ",buttons);
-        Button play=action("تشغيل / إيقاف",buttons);
+        Button play=action("تشغيل / إيقاف",buttons);playButton=play;
         Button forward=action("+10 ثوانٍ",buttons);
         Button next=action("الحلقة التالية",buttons);
         qualityButton=action("الجودة",buttons);
@@ -362,6 +368,8 @@ public final class PlayerActivity extends Activity {
         if(code==KeyEvent.KEYCODE_MEDIA_REWIND){seek(-10000);revealControls();return true;}
         if(code==KeyEvent.KEYCODE_MEDIA_FAST_FORWARD){seek(10000);revealControls();return true;}
         if(code==KeyEvent.KEYCODE_MEDIA_STOP){finish();return true;}
+        if(code==KeyEvent.KEYCODE_MENU){revealControls();showQualityMenu();return true;}
+        if(code==KeyEvent.KEYCODE_INFO){revealControls();return true;}
         if(controlsPanel!=null && controlsPanel.getVisibility()!=View.VISIBLE){
             if(code==KeyEvent.KEYCODE_DPAD_LEFT){seek(-10000);revealControls();return true;}
             if(code==KeyEvent.KEYCODE_DPAD_RIGHT){seek(10000);revealControls();return true;}
@@ -369,6 +377,10 @@ public final class PlayerActivity extends Activity {
                code==KeyEvent.KEYCODE_DPAD_CENTER || code==KeyEvent.KEYCODE_ENTER){
                 revealControls();return true;
             }
+        }
+        if((code==KeyEvent.KEYCODE_DPAD_CENTER||code==KeyEvent.KEYCODE_ENTER)&&
+           controlsPanel!=null&&controlsPanel.getVisibility()==View.VISIBLE&&getCurrentFocus()==video){
+            toggle();return true;
         }
         if(code==KeyEvent.KEYCODE_DPAD_LEFT || code==KeyEvent.KEYCODE_DPAD_RIGHT ||
            code==KeyEvent.KEYCODE_DPAD_UP || code==KeyEvent.KEYCODE_DPAD_DOWN ||
@@ -379,12 +391,13 @@ public final class PlayerActivity extends Activity {
     private Button action(String name,LinearLayout row){
         final Button b=new Button(this);b.setText(name);b.setTextSize(13);
         b.setTextColor(Color.WHITE);b.setAllCaps(false);
-        b.setBackgroundColor(0xFF193856);
+        b.setBackgroundColor(0xFF29222F);
         b.setFocusable(true);
         b.setOnFocusChangeListener(new View.OnFocusChangeListener(){
             public void onFocusChange(View v,boolean focused){
-                b.setBackgroundColor(focused?0xFFE5BF7D:0xFF193856);
-                b.setTextColor(focused?0xFF081526:Color.WHITE);
+                b.setBackgroundColor(focused?0xFFFF4450:0xFF29222F);
+                b.setTextColor(Color.WHITE);
+                if(focused)revealControls();
             }
         });
         LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(50),1);p.setMargins(dp(4),0,dp(4),0);
