@@ -17,3 +17,13 @@
 - Quality choices are only for real URLs stored in stream_variants; app defaults to low-bandwidth on API19.
 - Updated app ID sa.aseel.tv.cinema avoids conflicting debug signing certificate with previous Huidi builds.
 - Stable production signing key still needed for in-place updates.
+
+## Cinema Quality v2.2 — Android TV interface and playback
+- Native UI improvements: cinematic hero gradient, gold selection state in remote navigation, content counts, quality availability indicators, focus styling for player controls.
+- Support real publisher-provided `stream_variants`: up to 8 HTTPS URLs per movie, episode or channel. The default stream remains available. Unsupported/unlicensed qualities are NEVER synthesized or transcoded.
+- API 19 default selects the lowest known source to reduce stalls. Remote-friendly quality popup enables switching when multiple sources exist; per-item preference is saved locally. For a single source there is an honest explanation rather than artificial 720p/1080p options.
+- Recovery: playback buffering event instrumentation and up to 2 stream reconnect attempts with a lower quality if one exists; retry budget resets on a manual switch.
+- HLS live on KitKat remains hardware dependent: the external-player button remains available. No guarantee of automatic bitrate adaptation on stock Android 4.4 MediaPlayer.
+- MP4 720p/1080p compatibility depends on codec profile and decoder; 360p or 480p H.264/AAC recommended where authorized variants exist.
+- Build uses independent package `sa.aseel.tv.cinema` because previous GitHub debug certificates are not stable across builds. A permanent signing key is still required for a repeatable upgrade path.
+- This version does not claim to eliminate poor bandwidth, inaccessible upstream links, or missing hardware codecs.

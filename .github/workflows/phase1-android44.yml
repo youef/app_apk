@@ -1,4 +1,4 @@
-name: Aseel TV - Huidi Optimized API19
+name: Aseel TV - Cinema Quality API19
 
 on:
   push:
@@ -74,10 +74,10 @@ jobs:
       - name: Package validated installation test
         run: |
           set -euo pipefail
-          cp app/build/outputs/apk/debug/app-debug.apk dist/aseel-tv-huidi-optimized-api19.apk
+          cp app/build/outputs/apk/debug/app-debug.apk dist/aseel-tv-cinema-quality-api19.apk
           test -s dist/aseel-tv-huidi-optimized-api19.apk
           sha256sum dist/aseel-tv-huidi-optimized-api19.apk | tee -a dist/build-report.txt
-          echo "Installer package: sa.aseel.tv.huidi (new independent TV package)" | tee -a dist/build-report.txt
+          echo "Installer package: sa.aseel.tv.cinema (separate install ID for unsigned-debug update conflict)" | tee -a dist/build-report.txt
           echo "Distinct install ID for legacy releases; stable signing still required for subsequent upgrades." | tee -a dist/build-report.txt
           echo "Device installation and playback: NOT TESTED" | tee -a dist/build-report.txt
 
@@ -89,7 +89,7 @@ jobs:
       - name: Upload APK and validation report
         uses: actions/upload-artifact@v4
         with:
-          name: aseel-tv-huidi-api19-${{ github.run_number }}
+          name: aseel-tv-cinema-api19-${{ github.run_number }}
           path: |
             dist/aseel-tv-huidi-optimized-api19.apk
             dist/build-report.txt
@@ -101,8 +101,8 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: aseel-tv-huidi-optimized-v2
-          name: Aseel TV - Huidi Optimized v2.0
+          tag_name: aseel-tv-cinema-quality-v2-2
+          name: Aseel TV - Cinema Quality v2.2
           prerelease: true
           make_latest: false
           body_path: docs/HUIDI_OPTIMIZED.md
