@@ -63,7 +63,14 @@ jobs:
             echo "SIGNING_READY=false" >> "$GITHUB_ENV"
             echo "::warning::No permanent signing key configured. This build is a NEW-PACKAGE fresh-install test. Subsequent updates need GitHub signing secrets."
           fi
-      - name: Bundle official transparent brand artwork offline\n        run: |\n          set -euo pipefail\n          test -s web/alizz-tv-transparent.png\n          file web/alizz-tv-transparent.png | grep -q PNG\n          mkdir -p app/src/main/res/drawable-nodpi\n          cp web/alizz-tv-transparent.png app/src/main/res/drawable-nodpi/alizz_brand.png\n      - name: Build legacy-compatible APK
+      - name: Bundle official transparent brand artwork offline
+        run: |
+          set -euo pipefail
+          test -s web/alizz-tv-transparent.png
+          file web/alizz-tv-transparent.png | grep -q PNG
+          mkdir -p app/src/main/res/drawable-nodpi
+          cp web/alizz-tv-transparent.png app/src/main/res/drawable-nodpi/alizz_brand.png
+      - name: Build legacy-compatible APK
         shell: bash
         run: |
           set -euo pipefail
