@@ -290,6 +290,8 @@ public final class MainActivity extends Activity {
         if("SA".equals(code))return "السعودية";
         if("GB".equals(code))return "بريطانيا";
         if("AR".equals(code))return "الأرجنتين";
+        if("NL".equals(code))return "هولندا";
+        if("IT".equals(code))return "إيطاليا";
         if("DE".equals(code))return "ألمانيا";
         if("FR".equals(code))return "فرنسا";
         if("ES".equals(code))return "إسبانيا";
@@ -300,6 +302,8 @@ public final class MainActivity extends Activity {
         if("en".equals(code))return "الإنجليزية";
         if("tr".equals(code))return "التركية";
         if("es".equals(code))return "الإسبانية";
+        if("it".equals(code))return "الإيطالية";
+        if("ku".equals(code))return "الكردية";
         if("de".equals(code))return "الألمانية";
         if("fr".equals(code))return "الفرنسية";
         if("und".equals(code))return "بلا حوار";

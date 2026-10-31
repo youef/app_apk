@@ -188,7 +188,7 @@
      const b=el("button","chip"+(state.kidsType===v?" active":""),n);
      b.type="button";b.onclick=()=>{state.kidsType=v;draw()};type.append(b);
    }
-   const items=kidsMedia(),countries={US:"أمريكا",TR:"تركيا",SA:"السعودية",AR:"الأرجنتين",GB:"بريطانيا",FR:"فرنسا",DE:"ألمانيا",ES:"إسبانيا"},langs={ar:"العربية",en:"الإنجليزية",tr:"التركية",es:"الإسبانية",fr:"الفرنسية",de:"الألمانية",und:"بدون حوار"};
+   const items=kidsMedia(),countries={US:"أمريكا",TR:"تركيا",SA:"السعودية",AR:"الأرجنتين",GB:"بريطانيا",FR:"فرنسا",DE:"ألمانيا",ES:"إسبانيا",NL:"هولندا",IT:"إيطاليا"},langs={ar:"العربية",en:"الإنجليزية",tr:"التركية",es:"الإسبانية",fr:"الفرنسية",de:"الألمانية",und:"بدون حوار",ku:"الكردية",it:"الإيطالية"};
    for(const [id,field,stateKey,defaultLabel,dictionary] of [["kidsCountry","country_code","kidsCountry","كل الدول",countries],["kidsLanguage","language_code","kidsLanguage","كل اللغات",langs]]){
      const select=$(id),current=state[stateKey];select.replaceChildren();const all=el("option","",defaultLabel);all.value="";select.append(all);
      const codes=[...new Set(items.map(x=>x[field]).filter(Boolean))].sort();
