@@ -36,7 +36,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p _site/admin
-          cp web/index.html web/styles.css web/app.js web/config.js _site/
+          cp web/index.html web/styles.css web/app.js web/config.js web/al-ezz-mark.svg _site/
           cp admin/index.html admin/style.css admin/app.js admin/config.js _site/admin/
           touch _site/.nojekyll
           test -s _site/index.html
