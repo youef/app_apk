@@ -39,6 +39,10 @@ jobs:
           set -euo pipefail
           mkdir -p _site/admin
           cp web/index.html web/styles.css web/app.js web/access.js web/config.js web/al-ezz-mark.svg web/youtube-player.html _site/
+          # Serve the viewer from /app_apk/web/ too, regardless of which
+          # GitHub Pages publishing source (Actions or branch) finishes last.
+          mkdir -p _site/web
+          cp web/index.html web/styles.css web/app.js web/access.js web/config.js web/al-ezz-mark.svg web/youtube-player.html _site/web/
           cp admin/index.html admin/style.css admin/studio.css admin/app.js admin/studio.js admin/config.js _site/admin/
           touch _site/.nojekyll
           test -s _site/index.html
@@ -55,3 +59,25 @@ jobs:
       - name: Deploy to Pages
         id: deployment
         uses: actions/deploy-pages@v4
+      - name: Verify published viewer and admin via real public HTTPS
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="https://youef.github.io/app_apk/"
+          for attempt in $(seq 1 10); do
+            echo "Published website check $attempt"
+            if curl -fLsS --max-time 12 -o /tmp/alezz-home.html "$ROOT" &&
+               curl -fLsS --max-time 12 -o /tmp/alezz-web.html "${ROOT}web/" &&
+               curl -fLsS --max-time 12 -o /tmp/alezz-access.js "${ROOT}web/access.js" &&
+               curl -fLsS --max-time 12 -o /tmp/alezz-admin.html "${ROOT}admin/" &&
+               grep -Eq "activationGate|web/" /tmp/alezz-home.html &&
+               grep -q activationGate /tmp/alezz-web.html &&
+               grep -q AL_EZZ_ACCESS /tmp/alezz-access.js &&
+               grep -q adminGroups /tmp/alezz-admin.html; then
+              echo "PASS: Al Ezz TV is live at /app_apk/ and /app_apk/web/, with functional assets and admin."
+              exit 0
+            fi
+            if [[ "$attempt" -lt 10 ]]; then sleep 6; fi
+          done
+          echo "::error::GitHub Pages did not expose one or more required Al Ezz TV assets."
+          exit 1
