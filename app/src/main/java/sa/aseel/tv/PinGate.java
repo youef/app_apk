@@ -14,6 +14,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import javax.crypto.SecretKeyFactory;
@@ -155,9 +156,16 @@ final class PinGate {
         LinearLayout branding=vertical();branding.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(0,-1,1.15f);
         bp.setMargins(dp(15),0,dp(15),0);shell.addView(branding,bp);
-        TextView brand=text("العز",67,WHITE,true);
-        branding.addView(brand);
-        TextView tv=text("T V     ·     S T R E A M I N G",17,RED,true);
+        int logoId=activity.getResources().getIdentifier("alizz_brand","drawable",activity.getPackageName());
+        if(logoId!=0){
+            ImageView image=new ImageView(activity);image.setImageResource(logoId);
+            image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(-1,dp(215));
+            branding.addView(image,imageParams);
+        }else{
+            TextView brand=text("العز TV",56,WHITE,true);branding.addView(brand);
+        }
+        TextView tv=text("ALIZZ TV  ·  STREAMING",16,RED,true);
         branding.addView(tv);
         TextView line=text("كل عالم الترفيه. على شاشة واحدة.",20,0xFFBCC0CD,false);
         LinearLayout.LayoutParams lineP=new LinearLayout.LayoutParams(-1,-2);lineP.setMargins(0,dp(16),0,0);
@@ -167,7 +175,7 @@ final class PinGate {
 
         LinearLayout card=vertical();card.setPadding(dp(26),dp(17),dp(26),dp(16));
         card.setGravity(Gravity.CENTER);
-        card.setBackgroundDrawable(background(0xFF151720,0xFF363945,20));
+        card.setBackgroundDrawable(background(0xFF1D111B,0xFF643047,22));
         LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(0,-2,1f);
         cp.setMargins(dp(7),0,dp(8),0);shell.addView(card,cp);
         TextView lock=text("◈  الدخول إلى العز TV",23,WHITE,true);card.addView(lock);
