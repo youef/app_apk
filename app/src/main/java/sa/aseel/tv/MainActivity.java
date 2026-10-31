@@ -69,14 +69,25 @@ public final class MainActivity extends Activity {
     private JSONArray movies=new JSONArray(),series=new JSONArray(),channels=new JSONArray(),categories=new JSONArray();
     private CatalogApi api;
     private SharedPreferences prefs;
+    private PinGate accessGate;
+    private boolean unlocked=false;
     @Override public void onCreate(Bundle bundle){
         super.onCreate(bundle);
+        getWindow().getDecorView().setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY|View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         prefs=getSharedPreferences("aseel_user_v2",MODE_PRIVATE);
         api=new CatalogApi(this);
-        buildShell();
-        warmCache();
-        render();
-        loadCatalog();
+        lockScreen();
+    }
+    private void lockScreen(){
+        unlocked=false;root=null;stage=null;menu=null;scrolling=null;navButtons=null;notice=null;
+        accessGate=new PinGate(this,new Runnable(){public void run(){
+            if(isFinishing())return;
+            unlocked=true;accessGate=null;
+            buildShell();warmCache();render();loadCatalog();
+        }});
+        accessGate.show();
     }
     private int dp(int val){return Math.round(val*getResources().getDisplayMetrics().density);}
     private LinearLayout vertical(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;}
@@ -95,39 +106,62 @@ public final class MainActivity extends Activity {
         if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
         return t;
     }
+    /** Android KitKat cinema shell: native 10-foot layout, remote-first and RTL. */
     private void buildShell(){
         root=vertical();root.setBackgroundColor(NAVY);root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
-        LinearLayout top=horizontal();top.setBackgroundDrawable(new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,new int[]{0xFF11151D,0xFF080A0F}));
-        top.setPadding(dp(25),dp(10),dp(25),dp(10));
-        root.addView(top,lp(-1,-2));
-        TextView brand=text("العز",30,WHITE,true);
-        brand.setGravity(Gravity.CENTER_VERTICAL);
-        top.addView(brand,lp(dp(75),-2));
-        TextView tag=text("TV",18,GOLD,true);
-        top.addView(tag,lp(dp(42),-2));
-        HorizontalScrollView nav=new HorizontalScrollView(this);
-        nav.setHorizontalScrollBarEnabled(false);nav.setFillViewport(false);
-        top.addView(nav,new LinearLayout.LayoutParams(0,dp(48),1));
-        menu=horizontal();nav.addView(menu);
+        LinearLayout head=horizontal();
+        head.setPadding(dp(27),dp(8),dp(27),dp(8));
+        head.setBackgroundDrawable(new GradientDrawable(GradientDrawable.Orientation.RIGHT_LEFT,
+            new int[]{0xFF241521,0xFF10121A,0xFF101218}));
+        root.addView(head,lp(-1,dp(66)));
+        TextView brand=text("العز",30,WHITE,true);brand.setGravity(Gravity.CENTER_VERTICAL);
+        head.addView(brand,lp(dp(74),-1));
+        TextView tv=text("TV",19,GOLD,true);tv.setGravity(Gravity.CENTER_VERTICAL);
+        head.addView(tv,lp(dp(40),-1));
+        TextView intro=text("  |  عالمك على شاشة واحدة",13,0xFFAAADBA,false);
+        intro.setGravity(Gravity.CENTER_VERTICAL);head.addView(intro);
+        head.addView(new View(this),new LinearLayout.LayoutParams(0,1,1));
+        TextView live=text("●   بث مباشر",14,0xFFFF7988,true);
+        live.setGravity(Gravity.CENTER_VERTICAL);head.addView(live);
+        View line=new View(this);line.setBackgroundColor(0xFF33313E);root.addView(line,lp(-1,dp(1)));
+        LinearLayout theater=horizontal();theater.setGravity(Gravity.TOP);
+        root.addView(theater,new LinearLayout.LayoutParams(-1,0,1));
+        LinearLayout rail=vertical();
+        rail.setPadding(dp(12),dp(14),dp(12),dp(11));
+        rail.setBackgroundColor(0xFF11141D);
+        theater.addView(rail,lp(dp(190),-1));
+        TextView guide=text("دليل العز TV",13,0xFF959AAA,true);
+        guide.setGravity(Gravity.RIGHT);guide.setPadding(dp(8),dp(7),0,dp(12));rail.addView(guide);
+        ScrollView railScroll=new ScrollView(this);railScroll.setVerticalScrollBarEnabled(false);
+        railScroll.setSmoothScrollingEnabled(false);
+        rail.addView(railScroll,new LinearLayout.LayoutParams(-1,0,1));
+        menu=vertical();railScroll.addView(menu,new ScrollView.LayoutParams(-1,-2));
         navButtons=new Button[labels.length];
+        final String[] icons={"⌂","▣","▤","●","★","♡","⌕","⚙"};
         for(int i=0;i<labels.length;i++){
             final String target=modes[i];
-            Button b=button(labels[i]);b.setTextSize(14);b.setTag("nav:"+target);
-            LinearLayout.LayoutParams p=lp(dp(94),dp(44));p.setMargins(dp(3),0,dp(3),0);
-            menu.addView(b,p);
-            navButtons[i]=b;
-            b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            Button item=button("  "+icons[i]+"   "+labels[i]);
+            item.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);
+            item.setTextSize(16);item.setTag("nav:"+target);
+            LinearLayout.LayoutParams p=lp(-1,dp(50));p.setMargins(0,dp(3),0,dp(3));
+            menu.addView(item,p);navButtons[i]=item;
+            item.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
                 listingPage=0;pendingFocusTag="nav:"+target;mode=target;render();
             }});
         }
-        notice=text("",12,MUTED,false);
-        notice.setPadding(dp(24),dp(4),dp(24),dp(4));
-        notice.setVisibility(View.GONE);root.addView(notice,lp(-1,-2));
+        TextView foot=text("● العز TV  •  حرّك الأسهم ثم OK",11,0xFF8A91A1,false);
+        foot.setGravity(Gravity.RIGHT);foot.setPadding(dp(8),dp(10),0,0);rail.addView(foot);
+        View divider=new View(this);divider.setBackgroundColor(0xFF292A34);theater.addView(divider,lp(dp(1),-1));
+        LinearLayout page=vertical();theater.addView(page,new LinearLayout.LayoutParams(0,-1,1));
+        notice=text("",12,0xFFFFB6BF,false);
+        notice.setPadding(dp(23),dp(6),dp(23),dp(6));notice.setVisibility(View.GONE);
+        page.addView(notice,lp(-1,-2));
         scrolling=new ScrollView(this);scrolling.setFillViewport(true);
+        scrolling.setVerticalScrollBarEnabled(false);
         scrolling.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
         scrolling.setSmoothScrollingEnabled(false);
-        root.addView(scrolling,new LinearLayout.LayoutParams(-1,0,1));
-        stage=vertical();stage.setPadding(dp(27),dp(14),dp(27),dp(38));
+        page.addView(scrolling,new LinearLayout.LayoutParams(-1,0,1));
+        stage=vertical();stage.setPadding(dp(28),dp(16),dp(28),dp(40));
         scrolling.addView(stage,new ScrollView.LayoutParams(-1,-2));
         setContentView(root);
     }
@@ -159,6 +193,7 @@ public final class MainActivity extends Activity {
         stage.addView(e,gap(20,15));
     }
     private void showStatus(String value){
+        if(!unlocked||notice==null)return;
         notice.setText(value);notice.setVisibility(value.length()==0?View.GONE:View.VISIBLE);
     }
     private String str(JSONObject x,String key){return x.optString(key,"").equals("null")?"":x.optString(key,"");}
@@ -215,10 +250,10 @@ public final class MainActivity extends Activity {
                 showStatus(report.length()>0?"فشل تحديث بعض البيانات، الاحتفاظ بالمحتوى المخزن مؤقتًا. راجع الإعدادات.":"");
                 render();
             }});
-        }},"Aseel-Refresh").start();
+        }},"AlEzz-Refresh").start();
     }
     private void render(){
-        if(stage==null)return;
+        if(!unlocked||stage==null)return;
         final String previous=pendingFocusTag.length()>0?pendingFocusTag:currentFocusTag();
         pendingFocusTag="";
         subPage="";
@@ -227,7 +262,7 @@ public final class MainActivity extends Activity {
             boolean selected=modes[j].equals(mode);
             if(!navButtons[j].isFocused()){
                 navButtons[j].setTextColor(WHITE);
-                navButtons[j].setBackgroundDrawable(background(selected?0xFFAB2533:PANEL,10,selected?GOLD:0xFF343B49));
+                navButtons[j].setBackgroundDrawable(background(selected?0xFF43222F:0xFF191C26,12,selected?GOLD:0xFF353641));
             }
         }
         if("home".equals(mode))home();
@@ -318,6 +353,10 @@ public final class MainActivity extends Activity {
         best.requestFocus();ensureVisible(best);return true;
     }
     @Override public boolean dispatchKeyEvent(KeyEvent event){
+        if(!unlocked){
+            if(accessGate!=null&&accessGate.keyEvent(event))return true;
+            return super.dispatchKeyEvent(event);
+        }
         int code=event.getKeyCode();
         boolean directional=code==KeyEvent.KEYCODE_DPAD_LEFT||code==KeyEvent.KEYCODE_DPAD_RIGHT||
                             code==KeyEvent.KEYCODE_DPAD_UP||code==KeyEvent.KEYCODE_DPAD_DOWN;
@@ -341,7 +380,7 @@ public final class MainActivity extends Activity {
         GradientDrawable backdrop=new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
             new int[]{0xFF1E2332,0xFF0E111A,0xFF281520});
         backdrop.setCornerRadius(dp(18));spotlight.setBackgroundDrawable(backdrop);
-        stage.addView(spotlight,lp(-1,dp(265)));
+        stage.addView(spotlight,lp(-1,dp(290)));
         if(featured!=null && !prefs.getBoolean("lite_mode",false)){
             ImageView visual=new ImageView(this);
             visual.setScaleType(ImageView.ScaleType.CENTER_CROP);
@@ -357,9 +396,9 @@ public final class MainActivity extends Activity {
         android.widget.FrameLayout.LayoutParams contentParams=
             new android.widget.FrameLayout.LayoutParams(-1,-2,Gravity.CENTER_VERTICAL);
         spotlight.addView(content,contentParams);
-        TextView eyebrow=text("●  العز TV   /   اختيار اليوم",13,0xFFFFA8AC,true);
+        TextView eyebrow=text("●  العز TV ORIGINAL  |  اختيار اليوم",13,0xFFFFB8C1,true);
         content.addView(eyebrow);
-        TextView name=text(featured!=null?str(featured,"title_ar"):"أهلًا بك في العز TV",30,WHITE,true);
+        TextView name=text(featured!=null?str(featured,"title_ar"):"أهلًا بك في العز TV",34,WHITE,true);
         name.setMaxLines(2);content.addView(name,gap(8,6));
         TextView sub=text(featured!=null?str(featured,"description"):"أفلام ومسلسلات وبث مباشر في مكان واحد. استمتع بتجربة مشاهدة عربية.",
             14,0xFFCED4DD,false);sub.setMaxLines(2);content.addView(sub,gap(3,12));
@@ -585,6 +624,7 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onResume(){
         super.onResume();
+        if(!unlocked)return;
         if(hasLoaded && !loading && System.currentTimeMillis()-lastUpdatedAt > 5L*60L*1000L){
             loadCatalog();
         }
@@ -593,6 +633,7 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onPause(){
         refreshHandler.removeCallbacks(refreshLoop);
+        if(unlocked&&!isFinishing())lockScreen();
         super.onPause();
     }
     private void section(String title,JSONArray list,String type,int max){
@@ -644,15 +685,15 @@ public final class MainActivity extends Activity {
             final JSONObject item=all.get(i);
             final LinearLayout card=vertical();
             card.setPadding(dp(6),dp(6),dp(6),dp(9));
-            card.setBackgroundDrawable(background(0xFF171B25,14,0xFF353A47));
-            LinearLayout.LayoutParams cardLp=lp(dp(244),-2);
+            card.setBackgroundDrawable(background(0xFF191C27,14,0xFF353A47));
+            LinearLayout.LayoutParams cardLp=lp(dp(250),-2);
             cardLp.setMargins(dp(5),0,dp(5),0);holder.addView(card,cardLp);
             card.setFocusable(true);card.setClickable(true);
             card.setTag("card:"+str(item,"_type")+":"+str(item,"id"));
             card.setContentDescription("فتح تفاصيل "+str(item,"title_ar"));
             android.widget.FrameLayout artwork=new android.widget.FrameLayout(this);
             artwork.setBackgroundDrawable(background(0xFF2A2733,10,0));
-            card.addView(artwork,lp(-1,dp(136)));
+            card.addView(artwork,lp(-1,dp(144)));
             ImageView poster=new ImageView(this);
             poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
             artwork.addView(poster,new android.widget.FrameLayout.LayoutParams(-1,-1));
@@ -673,7 +714,7 @@ public final class MainActivity extends Activity {
             TextView meta=text(sub.length()>0?sub:"العز TV",12,MUTED,false);card.addView(meta,gap(3,2));
             card.setOnFocusChangeListener(new View.OnFocusChangeListener(){
                 public void onFocusChange(View view,boolean focused){
-                    card.setBackgroundDrawable(background(focused?0xFF35212B:0xFF171B25,14,focused?GOLD:0xFF353A47));
+                    card.setBackgroundDrawable(background(focused?0xFF452535:0xFF191C27,14,focused?GOLD:0xFF353A47));
                     card.setScaleX(focused?1.055f:1f);card.setScaleY(focused?1.055f:1f);
                     // Focus border and scale remain compatible with Android 4.4 (API 19).
                 }
@@ -936,6 +977,7 @@ public final class MainActivity extends Activity {
         super.onDestroy();
     }
     @Override public void onBackPressed(){
+        if(!unlocked){finish();return;}
         if("episodes".equals(subPage)&&activeSeries!=null){
             details(activeSeries);return;
         }
