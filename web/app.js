@@ -8,7 +8,7 @@
  const state = { page: "home", query: "", category: "", kidsType:"all", kidsCountry:"", kidsLanguage:"", movies: [], series: [], channels: [],
    categories: [], favorites: new Set(), loading: true, error: "", chosen: null,
    token: "", refreshToken: "", userId: "", account: null, authMode: "login",
-   playback: null, hls: null, progressTimer: 0, lastProgressAt: 0 };
+   playback: null, hls: null, progressTimer: 0, lastProgressAt: 0, heroIndex:0 };
  const labels = { movie: "فيلم", series: "مسلسل", channel: "قناة", episode: "حلقة" };
  let toastTimer = null;
  const storageKey = "aseel-web-favorites-v1";
@@ -128,7 +128,7 @@
  function makePoster(item, type) {
    const frame = el("div","poster-frame");
    const fallback = el("div","poster-fallback");
-   fallback.append(el("span","logo-ghost","أ"), el("span","poster-word", type === "channel" ? "ASEEL LIVE" : "ASEEL CINEMA"));
+   fallback.append(el("span","logo-ghost","عز"), el("span","poster-word", type === "channel" ? "AL EZZ LIVE" : "AL EZZ CINEMA"));
    frame.append(fallback);
    const imgUrl = safeUrl(item.poster_url);
    if (imgUrl) {
@@ -154,6 +154,16 @@
    });
    card.append(favorite);
    card.append(el("h4","media-title",item.title_ar));
+   if(item.description){const d=el("p","card-description",item.description);card.append(d)}
+   try {
+     if(type!=="channel"){
+       const progress=Number(localStorage.getItem(progressKey(type,item))||0);
+       if(Number.isFinite(progress)&&progress>10){
+         const line=el("div","watch-progress");line.setAttribute("aria-label","متابعة متاحة");
+         const fill=el("span","");fill.style.width=Math.min(88,Math.max(8,progress/(Math.max(1,Number(item.duration_minutes)||60)*60)*100))+"%";line.append(fill);card.append(line);
+       }
+     }
+   }catch(_){} 
    const meta = el("div","media-meta");
    meta.append(el("span","",item.release_year||itemCategory(item)||labels[type]));
    meta.append(el("span","meta-dot"));
@@ -169,7 +179,7 @@
    const k = key(type,item);
    const add = !state.favorites.has(k);
    if (add) state.favorites.add(k); else state.favorites.delete(k);
-   saveFavorites(); draw();
+   saveFavorites(); draw(); if(state.page==="home")setHero();
    announce(add ? "تمت الإضافة إلى قائمتي" : "تمت الإزالة من قائمتي");
    if (!state.token || !state.userId) return;
    try {
@@ -236,16 +246,33 @@
      bar.append(button);
    });
  }
+ function drawContinue(){
+   const section=$("continueSection"),box=$("continueGrid");
+   section.hidden=state.page!=="home";box.replaceChildren();
+   if(section.hidden)return;
+   const recent=[];
+   for(const [type,items] of [["movie",state.movies],["series",state.series]]){
+     for(const item of items){
+       try{
+         if(Number(localStorage.getItem(progressKey(type,item))||0)>10)recent.push({item,type});
+       }catch(_){}
+     }
+   }
+   if(!recent.length){section.hidden=true;return;}
+   recent.slice(0,12).forEach(x=>box.append(makeCard(x.item,x.type)));
+ }
  function draw() {
    const route=state.page;
    setHidden("heroSection",route!=="home");
-   const items={home:["اكتشف عالم أسيل","مختارات سينمائية تستحق وقتك، كل يوم."],
+   $("discoveryBar").hidden=route!=="home";
+   drawContinue();
+   const items={home:["اكتشف عالم العز","مختارات سينمائية تستحق وقتك، كل يوم."],
      movies:["مكتبة الأفلام","اكتشف أفلامًا ومشاهد من مصادر موثّقة."],
      series:["عالم المسلسلات","تابع المواسم والحلقات، في مكان واحد."],
      channels:["البث المباشر","قنوات مجانية تعمل من المشغل مباشرة."],
      kids:["★ عالم الأطفال","أفلام كرتون ومسلسلات وقنوات أطفال مجانية ومباشرة؛ دون متصفح خارجي."],
      favorites:["قائمتي المفضلة","كل ما اخترته من الأفلام والمسلسلات والقنوات."],
-     search:["نتائج البحث","ابحث في مكتبة أسيل عن المحتوى الذي تحبه."]};
+     search:["نتائج البحث","ابحث في مكتبة العز عن المحتوى الذي تحبه."]};
    $("pageTitle").textContent=items[route][0];
    $("pageSubtitle").textContent=items[route][1];
    document.querySelectorAll("[data-route]").forEach(b=>b.classList.toggle("active",b.dataset.route===route));
@@ -267,22 +294,40 @@
    renderGrid("channelGrid","channel",route!=="home");
    document.querySelectorAll(".section-more").forEach(b=>b.hidden=route!=="home");
  }
- function setHero() {
-   if (state.loading) return;
-   const featured=state.movies.find(x=>x.featured&&x.backdrop_url) || state.movies.find(x=>x.featured) || state.movies.find(x=>x.backdrop_url) || state.movies[0] || state.series[0];
-   if (!featured) return;
-   const url=safeUrl(featured.backdrop_url)||safeUrl(featured.poster_url);
-   if (url) $("heroBackdrop").style.backgroundImage='url("'+url.replace(/"/g,"%22")+'")';
-   $("heroContent").querySelector("h1").textContent=featured.title_ar;
-   $("heroContent").querySelector(".hero-kicker").textContent="اختيار أسيل اليوم";
-   $("heroContent").querySelector(".hero-description").textContent=featured.description||"شاهد هذا العمل الآن في مكتبة أسيل TV.";
-   const button=$("heroExplore");
-   button.textContent="▶  اكتشف العمل";
-   button.onclick=()=>details(featured,state.movies.some(x=>x.id===featured.id)?"movie":"series");
+ function heroCandidates(){
+   const all=[...state.movies.map(x=>({item:x,type:"movie"})),
+              ...state.series.map(x=>({item:x,type:"series"})),
+              ...state.channels.map(x=>({item:x,type:"channel"}))];
+   return [...all.filter(x=>x.item.featured),...all.filter(x=>!x.item.featured)].slice(0,15);
+ }
+ function setHero(){
+   if(state.loading)return;
+   const picks=heroCandidates();
+   if(!picks.length)return;
+   state.heroIndex=(state.heroIndex+picks.length)%picks.length;
+   const {item,type}=picks[state.heroIndex];
+   const imageUrl=safeUrl(item.backdrop_url)||safeUrl(item.poster_url);
+   $("heroBackdrop").style.backgroundImage=imageUrl?'url("'+imageUrl.replace(/"/g,"%22")+'")':"";
+   $("heroContent").querySelector("h1").textContent=item.title_ar;
+   $("heroContent").querySelector(".hero-description").textContent=
+     (item.description||"شاهد أعمالاً مجانية ومرخّصة، من أي جهاز.") .slice(0,260);
+   $("heroContent").querySelector(".hero-kicker-meta").textContent=
+     type==="channel"?"ON AIR • LIVE":type==="series"?"SERIES • COLLECTION":"MOVIE • FEATURED";
+   $("heroCount").textContent=(state.heroIndex+1)+" / "+picks.length;
+   $("heroWatch").textContent=type==="series"?"▶ استعرض الحلقات":"▶ تشغيل الآن";
+   $("heroWatch").onclick=()=>type==="series"?details(item,type):startPlayer(item,type);
+   $("heroExplore").onclick=()=>details(item,type);
+   const saved=state.favorites.has(key(type,item));
+   $("heroFavorite").textContent=saved?"♥ في قائمتي":"＋ أضف لقائمتي";
+   $("heroFavorite").onclick=()=>{toggleFavorite(item,type);setHero()};
+   $("heroPrev").disabled=picks.length<2;
+   $("heroNext").disabled=picks.length<2;
+   $("heroPrev").onclick=()=>{state.heroIndex--;setHero()};
+   $("heroNext").onclick=()=>{state.heroIndex++;setHero()};
  }
  function navigate(section,push) {
    state.page=["home","movies","series","channels","kids","favorites","search"].includes(section)?section:"home";
-   if (state.page!=="search") {state.query="";$("searchInput").value="";}
+   if (state.page!=="search") {state.query="";$("searchInput").value="";$("headerSearchInput").value="";}
    state.category="";
    if (push!==false) {
      const u=new URL(location.href);
@@ -303,7 +348,7 @@
    if (pic) { const i=el("img");i.src=pic;i.alt="";i.onerror=()=>i.remove();hero.append(i); }
    body.append(hero);
    const data=el("div","detail-body");
-   data.append(el("span","detail-sub",labels[type]+" • "+(item.release_year||item.quality||"مكتبة أسيل")));
+   data.append(el("span","detail-sub",labels[type]+" • "+(item.release_year||item.quality||"مكتبة العز")));
    data.append(el("h2","",item.title_ar));
    if (item.description) data.append(el("p","detail-desc",item.description));
    const buttons=el("div","detail-buttons");
@@ -444,7 +489,7 @@
  }
  function setAuthMode(mode) {
    state.authMode=mode;
-   $("authHeading").textContent=mode==="login"?"مرحبًا بك في أسيل":"أنشئ حسابك في أسيل";
+   $("authHeading").textContent=mode==="login"?"مرحبًا بك في العز":"أنشئ حسابك في العز";
    $("authSubmit").textContent=mode==="login"?"تسجيل الدخول":"إنشاء حساب";
    $("authSwitch").textContent=mode==="login"?"ليس لديك حساب؟ أنشئ حسابًا":"لديك حساب بالفعل؟ سجّل الدخول";
  }
@@ -465,7 +510,7 @@
      if(!data.access_token||!data.user?.id)throw Error("تعذر تأكيد تسجيل الدخول");
      if(data.expires_in&&!data.expires_at)data.expires_at=Math.floor(Date.now()/1000)+Number(data.expires_in);
      persistSession(data);await syncFavorites().catch(()=>{});
-     modalClose("authModal");announce("أهلًا بعودتك إلى أسيل");
+     modalClose("authModal");announce("أهلًا بعودتك إلى العز");
    }catch(error){$("authMessage").textContent=error.message||"تعذرت العملية";}
    finally{$("authSubmit").disabled=false;}
  }
@@ -487,9 +532,13 @@
      if(e.target.matches("[data-close-auth]")){modalClose("authModal");}
    });
    $("searchToggle").onclick=()=>{setHidden("searchPanel",false);$("searchInput").focus()};
+   $("headerSearchInput").oninput=e=>{
+     state.query=e.target.value.trim();$("searchInput").value=state.query;
+     state.page="search";state.category="";draw();
+   };
    $("searchClose").onclick=()=>{setHidden("searchPanel",true);$("searchInput").value="";state.query="";navigate("home")};
    $("searchInput").oninput=e=>{
-     state.query=e.target.value.trim();
+     state.query=e.target.value.trim();$("headerSearchInput").value=state.query;
      state.page="search";state.category="";
      draw();
    };
@@ -535,7 +584,7 @@
  }
  if(!cfg||!cfg.supabaseUrl||!cfg.publishableKey){
    document.addEventListener("DOMContentLoaded",()=>{
-     $("catalogArea").textContent="إعداد الاتصال بمكتبة أسيل غير مكتمل.";
+     $("catalogArea").textContent="إعداد الاتصال بمكتبة العز غير مكتمل.";
    });
  } else {
    if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);
