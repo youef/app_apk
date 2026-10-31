@@ -2,12 +2,12 @@ import UIKit
 import AVKit
 import SafariServices
 
-// Aseel TV iPhone Simulator: reads the public Supabase catalogue through RLS.
+// Al Ezz TV iPhone Simulator: reads the approved public Supabase catalogue via RLS.
 private enum Config {
     static let endpoint = "https://qyzmlwtvzzgooccqxglq.supabase.co/rest/v1/"
     static let publishableKey = "sb_publishable_Mcev7qFw9oLWgKO7GBT8Kg_nHvaQ3ES"
-    static let navy = UIColor(red: 0.035, green: 0.085, blue: 0.15, alpha: 1)
-    static let gold = UIColor(red: 0.92, green: 0.77, blue: 0.48, alpha: 1)
+    static let navy = UIColor(red: 0.045, green: 0.047, blue: 0.064, alpha: 1)
+    static let gold = UIColor(red: 0.99, green: 0.24, blue: 0.32, alpha: 1)
 }
 struct Item: Decodable {
     var id: String
@@ -19,6 +19,10 @@ struct Item: Decodable {
     var quality: String?
     var rights_holder: String?
     var license_reference: String?
+    var poster_url: String?
+    var is_kids: Bool?
+    var country_code: String?
+    var language_code: String?
     var number: Int?
     var release_year: Int?
     var name: String { title_ar ?? "بدون عنوان" }
@@ -65,14 +69,8 @@ final class AseelApp: UIResponder, UIApplicationDelegate {
     }
 }
 private func watch(_ item: Item, in controller: UIViewController) {
-    if item.playback_mode == "official_link" {
-        guard let target = item.official_url, let url = URL(string: target), url.scheme == "https" else {
-            inform("الرابط الرسمي غير متاح", in: controller); return
-        }
-        controller.present(SFSafariViewController(url: url), animated: true)
-        return
-    }
-    guard let source = item.stream_url, let url = URL(string: source), url.scheme == "https" else {
+    guard let source = item.stream_url, let url = URL(string: source), url.scheme == "https",
+          [".mp4", ".m3u8"].contains(where: { url.path.lowercased().hasSuffix($0) }) else {
         inform("لا يوجد فيديو HTTPS مصرح به", in: controller); return
     }
     let player = AVPlayerViewController()
@@ -80,13 +78,13 @@ private func watch(_ item: Item, in controller: UIViewController) {
     controller.present(player, animated: true) { player.player?.play() }
 }
 private func inform(_ message: String, in controller: UIViewController) {
-    let alert = UIAlertController(title: "أسيل TV", message: message, preferredStyle: .alert)
+    let alert = UIAlertController(title: "العز TV", message: message, preferredStyle: .alert)
     alert.addAction(UIAlertAction(title: "موافق", style: .default))
     controller.present(alert, animated: true)
 }
 
 final class CatalogueViewController: UIViewController, UITableViewDataSource, UITableViewDelegate, UISearchResultsUpdating {
-    private let tabs = UISegmentedControl(items: ["أفلام", "مسلسلات", "قنوات", "المفضلة"])
+    private let tabs = UISegmentedControl(items: ["أفلام", "مسلسلات", "قنوات", "الأطفال", "المفضلة"])
     private let table = UITableView()
     private let caption = UILabel()
     private let searchController = UISearchController(searchResultsController: nil)
@@ -104,7 +102,7 @@ final class CatalogueViewController: UIViewController, UITableViewDataSource, UI
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "أسيل | Aseel TV"
+        title = "العز | Al Ezz TV"
         view.backgroundColor = Config.navy
         navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .refresh, target: self, action: #selector(update))
         tabs.selectedSegmentIndex = 0
@@ -121,7 +119,8 @@ final class CatalogueViewController: UIViewController, UITableViewDataSource, UI
         table.separatorColor = .darkGray
         table.dataSource = self
         table.delegate = self
-        table.rowHeight = 95
+        table.rowHeight = 112
+        table.separatorStyle = .none
         let pull = UIRefreshControl()
         pull.tintColor = Config.gold
         pull.addTarget(self, action: #selector(update), for: .valueChanged)
@@ -153,7 +152,7 @@ final class CatalogueViewController: UIViewController, UITableViewDataSource, UI
     @objc private func update() {
         if refreshing { table.refreshControl?.endRefreshing(); return }
         refreshing = true
-        caption.text = "جاري تحديث مكتبة أسيل..."
+        caption.text = "جاري تحديث مكتبة العز..."
         let group = DispatchGroup()
         var values: [[Item]] = [[], [], []]
         var failures = 0
@@ -178,7 +177,10 @@ final class CatalogueViewController: UIViewController, UITableViewDataSource, UI
     @objc private func render() {
         let selected = tabs.selectedSegmentIndex
         let all = sections.flatMap { $0 }
-        let source = selected == 3 ? all.filter { starred.contains($0.id) } : sections[selected]
+        let source: [Item]
+        if selected == 4 { source = all.filter { starred.contains($0.id) } }
+        else if selected == 3 { source = all.filter { $0.is_kids == true } }
+        else { source = sections[min(max(selected,0),2)] }
         visible = keyword.isEmpty ? source : source.filter {
             $0.name.localizedCaseInsensitiveContains(keyword) ||
             ($0.description ?? "").localizedCaseInsensitiveContains(keyword)
@@ -192,25 +194,72 @@ final class CatalogueViewController: UIViewController, UITableViewDataSource, UI
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { visible.count }
     func tableView(_ tableView: UITableView, cellForRowAt path: IndexPath) -> UITableViewCell {
         let item = visible[path.row]
-        let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+        let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
         cell.backgroundColor = Config.navy
-        cell.textLabel?.text = item.name
-        cell.textLabel?.textColor = .white
-        cell.textLabel?.numberOfLines = 2
-        cell.detailTextLabel?.text = item.playback_mode == "official_link" ? "المصدر الرسمي • افتح البث" :
-            "\(item.release_year.map(String.init) ?? "") • \(item.quality ?? "HD") • \(item.rights_holder ?? "مرخص")"
-        cell.detailTextLabel?.textColor = .lightGray
-        cell.detailTextLabel?.numberOfLines = 2
+        cell.selectionStyle = .none
+        let panel = UIView()
+        panel.backgroundColor = UIColor(red: 0.095, green: 0.105, blue: 0.135, alpha: 1)
+        panel.layer.cornerRadius = 12
+        panel.layer.borderWidth = 1
+        panel.layer.borderColor = UIColor(white: 1, alpha: 0.08).cgColor
+        panel.translatesAutoresizingMaskIntoConstraints = false
+        cell.contentView.addSubview(panel)
+        let art = UIImageView()
+        art.backgroundColor = UIColor(red: 0.18, green: 0.14, blue: 0.19, alpha: 1)
+        art.layer.cornerRadius = 9
+        art.clipsToBounds = true
+        art.contentMode = .scaleAspectFill
+        art.translatesAutoresizingMaskIntoConstraints = false
+        panel.addSubview(art)
+        let t = UILabel()
+        t.text = item.name
+        t.textColor = .white
+        t.font = .boldSystemFont(ofSize: 16)
+        t.numberOfLines = 2
+        t.textAlignment = .right
+        t.translatesAutoresizingMaskIntoConstraints = false
+        panel.addSubview(t)
+        let meta = UILabel()
+        meta.text = (item.is_kids == true ? "★ أطفال  •  " : "") +
+            (item.release_year.map(String.init) ?? "") + "  •  " + (item.quality ?? "مباشر")
+        meta.textColor = UIColor(white: 0.72, alpha: 1)
+        meta.font = .systemFont(ofSize: 11)
+        meta.textAlignment = .right
+        meta.translatesAutoresizingMaskIntoConstraints = false
+        panel.addSubview(meta)
+        NSLayoutConstraint.activate([
+            panel.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor, constant: 12),
+            panel.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor, constant: -12),
+            panel.topAnchor.constraint(equalTo: cell.contentView.topAnchor, constant: 5),
+            panel.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor, constant: -5),
+            art.trailingAnchor.constraint(equalTo: panel.trailingAnchor, constant: -10),
+            art.centerYAnchor.constraint(equalTo: panel.centerYAnchor),
+            art.widthAnchor.constraint(equalToConstant: 124),
+            art.heightAnchor.constraint(equalToConstant: 80),
+            t.trailingAnchor.constraint(equalTo: art.leadingAnchor, constant: -13),
+            t.leadingAnchor.constraint(equalTo: panel.leadingAnchor, constant: 14),
+            t.topAnchor.constraint(equalTo: panel.topAnchor, constant: 20),
+            meta.trailingAnchor.constraint(equalTo: t.trailingAnchor),
+            meta.leadingAnchor.constraint(equalTo: t.leadingAnchor),
+            meta.topAnchor.constraint(equalTo: t.bottomAnchor, constant: 9)
+        ])
+        if let urlString = item.poster_url, let url = URL(string: urlString), url.scheme == "https" {
+            URLSession.shared.dataTask(with: url) { data, _, _ in
+                guard let bytes = data, bytes.count < 2_000_000, let image = UIImage(data: bytes) else { return }
+                DispatchQueue.main.async { art.image = image }
+            }.resume()
+        }
         let mark = UIButton(type: .system)
-        mark.frame = CGRect(x: 0, y: 0, width: 48, height: 48)
+        mark.frame = CGRect(x: 0, y: 0, width: 38, height: 45)
         mark.setTitle(starred.contains(item.id) ? "★" : "☆", for: .normal)
         mark.tintColor = Config.gold
-        mark.titleLabel?.font = .systemFont(ofSize: 28)
+        mark.titleLabel?.font = .systemFont(ofSize: 22)
         mark.addAction(UIAction { [weak self] _ in
             guard let self = self else { return }
-            var f = self.starred
-            if f.contains(item.id) { f.remove(item.id) } else { f.insert(item.id) }
-            self.starred = f
+            var favorites = self.starred
+            if favorites.contains(item.id) { favorites.remove(item.id) }
+            else { favorites.insert(item.id) }
+            self.starred = favorites
             self.render()
         }, for: .touchUpInside)
         cell.accessoryView = mark
@@ -255,14 +304,14 @@ final class ContentDetailViewController: UIViewController {
             text.font = .systemFont(ofSize: size)
             stack.addArrangedSubview(text)
         }
-        label(item.name, size: 25, color: Config.gold)
+        label(item.name, size: 27, color: .white)
         label(item.description ?? "عمل مرخّص ومتوفّر للمشاهدة", size: 17, color: .white)
         label("حقوق العمل: " + (item.rights_holder ?? "مصدر مرخص"), size: 14, color: .lightGray)
         let play = UIButton(type: .system)
         play.configuration = .filled()
         play.configuration?.baseBackgroundColor = Config.gold
-        play.configuration?.baseForegroundColor = Config.navy
-        play.configuration?.title = item.playback_mode == "official_link" ? "فتح الموقع الرسمي" : "▶ تشغيل الفيديو"
+        play.configuration?.baseForegroundColor = .white
+        play.configuration?.title = "▶ تشغيل الفيديو"
         play.addTarget(self, action: #selector(startPlayback), for: .touchUpInside)
         stack.addArrangedSubview(play)
         if let reference = item.license_reference, !reference.isEmpty {
@@ -272,7 +321,7 @@ final class ContentDetailViewController: UIViewController {
             license.addTarget(self, action: #selector(openLicense), for: .touchUpInside)
             stack.addArrangedSubview(license)
         }
-        label("تحافظ منصة أسيل على حقوق أصحاب الأعمال. تُعرض بعض القنوات من موقع المصدر الرسمي.", size: 12, color: .lightGray)
+        label("تحافظ منصة العز على حقوق أصحاب الأعمال. تُعرض بعض القنوات من موقع المصدر الرسمي.", size: 12, color: .lightGray)
     }
     @objc private func startPlayback() { watch(item, in: self) }
     @objc private func openLicense() {
