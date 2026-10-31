@@ -169,6 +169,30 @@
     {
       "name": "Beverly Hillbillies S1E2 Getting Settled (verified MP4)",
       "url": "https://archive.org/download/Beverly_Hillbillies_Ep02_Getting_Settled/BH02_Getting_Settled_512kb.mp4"
+    },
+    {
+      "name": "KIDS - Caminandes 1 Llama Drama CC BY 3.0",
+      "url": "https://archive.org/download/Caminandes1LlamaDrama/01_llama_drama_1080p.mp4"
+    },
+    {
+      "name": "KIDS - Caminandes 2 Gran Dillama CC BY 3.0",
+      "url": "https://archive.org/download/Caminandes2GranDillama/02_gran_dillama_1080p.mp4"
+    },
+    {
+      "name": "KIDS - Caminandes 3 Llamigos CC BY 3.0",
+      "url": "https://archive.org/download/CaminandesLlamigos/Caminandes_%20Llamigos-1080p.mp4"
+    },
+    {
+      "name": "KIDS - TRT EBA Ilkokul elementary",
+      "url": "https://tv-e-okul00.medya.trt.com.tr/master.m3u8"
+    },
+    {
+      "name": "KIDS - TRT Cocuk original direct",
+      "url": "https://tv-trtcocuk.medya.trt.com.tr/master.m3u8"
+    },
+    {
+      "name": "KIDS - Zarok TV Kurdish broadcast",
+      "url": "https://zindikurmanci.zaroktv.com.tr/hls/stream.m3u8"
     }
   ]
 }

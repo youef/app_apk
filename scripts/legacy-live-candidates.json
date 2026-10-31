@@ -36,6 +36,14 @@
     {
       "name": "TRT Cocuk (official TRT kids - geo restrictions possible)",
       "url": "https://tv-trtcocuk.medya.trt.com.tr/master.m3u8"
+    },
+    {
+      "name": "KIDS - TRT EBA Ilkokul elementary",
+      "url": "https://tv-e-okul00.medya.trt.com.tr/master.m3u8"
+    },
+    {
+      "name": "KIDS - Zarok TV Kurdish broadcast",
+      "url": "https://zindikurmanci.zaroktv.com.tr/hls/stream.m3u8"
     }
   ]
 }
