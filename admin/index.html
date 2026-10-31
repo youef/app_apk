@@ -3,10 +3,10 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#09192a">
 <title>العز | لوحة التحكم</title>
-<link rel="stylesheet" href="style.css">
-<script defer src="config.js"></script><script defer src="app.js"></script>
+<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="studio.css">
+<script defer src="config.js"></script><script defer src="app.js"></script><script defer src="studio.js"></script>
 </head><body>
-<header class="masthead"><div class="brand"><div class="logo">أ</div><div><strong>العز <span>TV</span></strong><small>إدارة الأفلام والمسلسلات والقنوات</small></div></div>
+<header class="masthead"><div class="brand"><div class="logo">عز</div><div><strong>العز <span>TV</span></strong><small>إدارة الأفلام والمسلسلات والقنوات</small></div></div>
 <div class="right"><span id="userLabel"></span><button type="button" id="logout" class="ghost hidden">تسجيل الخروج</button></div></header>
 <main class="shell">
 <section id="auth" class="auth-card">
@@ -16,9 +16,9 @@
 <button class="primary" type="submit">تسجيل الدخول</button></form>
 <p class="hint">يُنشأ حساب المسؤول أولًا من Supabase Auth، ثم تُضاف صلاحية الإدارة في جدول aseel_admins. لا يحصل أي حساب جديد على صلاحيات تلقائيًا.</p>
 </section>
-<section id="panel" class="hidden">
+<section id="panel" class="hidden"><div class="studio-layout"><aside class="studio-sidebar"><div class="sidebar-top"><strong>◈ إدارة العز TV</strong><small>AL EZZ STUDIO</small></div><div id="adminGroups"></div><div class="sidebar-footer">● البيانات مرتبطة بالمنصة</div></aside><div class="studio-main"><div class="dashboard-heading"><div><p class="eyebrow">OVERVIEW</p><h2>مركز التحكم بالمحتوى</h2><p>إدارة الأفلام والقنوات والمسلسلات والحقوق والصفوف الرئيسية.</p></div><button id="dashboardRefresh" class="ghost">تحديث المؤشرات</button></div><div id="dashboardKpis" class="dashboard-kpis"></div><div class="studio-shortcuts"><button type="button" data-jump="aseel_movies">＋ فيلم جديد</button><button type="button" data-jump="aseel_channels">● القنوات</button><button type="button" data-jump="aseel_home_collections">▣ الرئيسية</button><button type="button" data-jump="aseel_content_sources">◈ مصادر الحقوق</button></div>
 <div class="lead"><div><p class="eyebrow">CONTENT MANAGEMENT</p><h1>لوحة إدارة المكتبة</h1><p>لن يظهر أي محتوى للجمهور حتى اعتماد الحقوق ونشره.</p></div><button id="refresh" class="ghost">تحديث البيانات</button></div>
-<nav id="tabs" aria-label="أقسام الإدارة"></nav>
+<nav id="tabs" aria-label="أقسام الإدارة"></nav><div class="collection-tools"><label>بحث في القسم<input id="tableSearch" type="search" placeholder="العنوان أو حالة الترخيص"></label><label>حالة النشر<select id="tableStatus"><option value="">الكل</option><option value="published">منشور</option><option value="draft">مسودة</option><option value="hidden">مخفي</option></select></label><span id="tableCount"></span></div>
 <div class="workspace">
 <section class="panelCard"><div class="cardhead"><h2 id="collectionName">المحتوى</h2><button id="new" class="primary">إضافة جديد</button></div>
 <div class="tablewrap"><table><thead><tr><th>العنوان</th><th>الحالة</th><th>الترخيص</th><th>الإجراء</th></tr></thead><tbody id="rows"></tbody></table></div>
@@ -28,7 +28,7 @@
 <div class="actions"><button id="save" type="submit" class="primary">حفظ التغييرات</button><button id="testLink" type="button" class="ghost">فتح رابط التشغيل للتحقق</button></div></form>
 </section>
 </div>
-<p class="footer">العز TV — التراخيص والمسؤولية القانونية للمحتوى على ناشره. التحقق الآلي من الرابط لا يثبت ملكية الحقوق.</p>
+<p class="footer">العز TV — التراخيص والمسؤولية القانونية للمحتوى على ناشره. التحقق الآلي من الرابط لا يثبت ملكية الحقوق.</p></div></div>
 </section>
 <p id="status" role="status" aria-live="polite"></p></main>
 </body></html>

@@ -116,8 +116,8 @@ function openEditor(row=null){
   const choices=optionList(key);
   if(choices){control=document.createElement("select");for(const [value,caption] of choices){const option=document.createElement("option");option.value=value;option.textContent=caption;control.append(option)}}
   else if(["description","value","stream_variants"].includes(key)){control=document.createElement("textarea");}
-  else {control=document.createElement("input");control.type=["featured","published","verified","is_public","is_kids"].includes(key)?"checkbox":
-           ["release_year","duration_minutes","number","sort_order"].includes(key)?"number":
+  else {control=document.createElement("input");control.type=["featured","published","verified","is_public","is_kids","is_active"].includes(key)?"checkbox":
+           ["release_year","duration_minutes","number","sort_order","display_order"].includes(key)?"number":
            ["rights_expires_at"].includes(key)?"datetime-local":"text";}
   control.name=key;
   if(control.type==="checkbox")control.checked=Boolean(row?row[key]:false);
@@ -162,7 +162,7 @@ $("editorForm").addEventListener("submit",async ev=>{
   const element=$("editorForm").elements.namedItem(key);
   if(!element)continue;
   let val=element.type==="checkbox"?element.checked:element.value.trim();
-  if(["release_year","duration_minutes","number","sort_order"].includes(key))val=val===""?null:Number(val);
+  if(["release_year","duration_minutes","number","sort_order","display_order"].includes(key))val=val===""?null:Number(val);
   else if(["value","stream_variants"].includes(key)){
      try{val=JSON.parse(val || (key==="stream_variants"?"[]":"{}"))}
      catch(_){return show("JSON غير صالح في "+key,true)}
@@ -174,7 +174,7 @@ $("editorForm").addEventListener("submit",async ev=>{
      }
    }
   else if(key==="rights_expires_at")val=val?new Date(val).toISOString():null;
-  else if(["category_id","series_id","season_id"].includes(key))val=val||null;
+  else if(["category_id","series_id","season_id","source_id","collection_id","movie_id","channel_id","episode_id"].includes(key))val=val||null;
   else val=val||null;
   payload[key]=val;
  }
