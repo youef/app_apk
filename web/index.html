@@ -12,7 +12,7 @@
  <link rel="preconnect" href="https://fonts.googleapis.com">
  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
- <link rel="icon" type="image/svg+xml" href="al-ezz-mark.svg">
+ <link rel="icon" type="image/svg+xml" href="alizz-tv-logo.svg">
  <link rel="stylesheet" href="styles.css">
  <script defer src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
  <script defer src="config.js"></script>
@@ -25,7 +25,7 @@
  <header class="topbar">
   <div class="topbar-inner">
    <a href="index.html" class="brand" id="brand" aria-label="العز TV الرئيسية">
-    <span class="brand-mark" aria-hidden="true">عز<span class="brand-play">▶</span></span>
+    <img class="brand-logo-image" src="alizz-tv-logo.svg" alt="" width="48" height="48">
     <span class="brand-copy"><strong>العز<span>TV</span></strong><small>AL EZZ STREAMING</small></span>
    </a>
    <nav class="desktop-nav" aria-label="القائمة الرئيسية">
@@ -134,7 +134,7 @@
  </main>
  <footer class="footer">
   <div class="footer-inner">
-   <div class="footer-brand"><span class="brand-mark small">عز</span><div><strong>العز TV</strong><p>كل الحكايات تبدأ بمشهد</p></div></div>
+   <div class="footer-brand"><img class="brand-logo-image" src="alizz-tv-logo.svg" alt="" width="40" height="40"><div><strong>العز TV</strong><p>كل الحكايات تبدأ بمشهد</p></div></div>
    <p>العز منصة عرض محتوى مرخّص وروابط مصادر رسمية. توفر العناوين والمشغلات مرتبط بمصدر المحتوى وحقوقه.</p>
    <span>© <span id="year"></span> AL EZZ TV</span>
   </div>
@@ -160,7 +160,7 @@
  <div id="authModal" class="modal" role="dialog" aria-modal="true" aria-label="حساب العز" hidden>
   <div class="modal-scrim" data-close-auth></div><div class="auth-panel">
    <button id="authClose" class="modal-close" aria-label="إغلاق">✕</button>
-   <span class="brand-mark auth-mark">عز</span>
+   <img class="brand-logo-image auth-mark" src="alizz-tv-logo.svg" alt="" width="70" height="70">
    <h2 id="authHeading">مرحبًا بك في العز</h2><p id="authDescription">سجّل الدخول لحفظ قائمتك ومتابعة تقدم المشاهدة بين الأجهزة.</p>
    <form id="authForm"><label>البريد الإلكتروني<input type="email" id="authEmail" autocomplete="email" placeholder="name@example.com" required></label>
    <label>كلمة المرور<input id="authPassword" type="password" minlength="6" autocomplete="current-password" placeholder="••••••••" required></label>
