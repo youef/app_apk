@@ -1,109 +1,25 @@
-# أسيل | أفلام ومسلسلات (Aseel TV)
+# العز TV — AL EZZ TV
 
-تطبيق Native Android TV بالعربية، مُصمم للشاشات القديمة بما فيها Android 4.4.4 / API 19. المستودع يحتوي على **APK تجريبي قابل للبناء** ولوحة إدارة ويب مستقلة وبيانات Supabase فعلية.
+**الإصدار الحالي v3.0 (31 أكتوبر 2026)**
 
-## الحالة الفنية — 2026-10-29
-- كود Android: Java 7، دون Kotlin/AndroidX/Play Services، minSdk 19.
-- بنيته: Android Gradle Plugin 7.4.2 / Gradle 7.6 / JDK 11 / compileSdk 28.
-- GitHub Actions يبني APK ويفحص DEX 035 وV1 signature وManifest وZIP وABI.
-- ملاحظة: نجاح CI لا يثبت نجاح التثبيت الفعلي أو جميع الصيغ وSSL على شاشة المستخدم.
-- البنية الخلفية: Supabase project `smart-tv-plus` (`qyzmlwtvzzgooccqxglq`) **المستقل عن حيّنا**. جميع الجداول الجديدة تبدأ `aseel_`؛ الجداول القديمة لم تُحذف أو تُستخدم.
-- النشر والإدارة: `admin/` لوحة إدارة ويب عربية بنظام JWT+RLS؛ تحتاج أولًا إلى تفعيل حساب مسؤول ثم نشرها عبر GitHub Pages أو Vercel.
-- لا يضم المشروع محتوى مقرصنًا؛ توجد أعمال ومقاطع مفتوحة الترخيص ببيانات إسناد موثقة.
+العز TV واجهة تلفزيونية عربية بتصميم سينمائي أصلي، مع صفوف عرض أفقية وبحث وقنوات مباشرة ومحتوى الأطفال. تشغل مصادر MP4 أو HLS داخل التطبيق فقط وتستخدم كتالوج Supabase الحالي دون تغيير قاعدة البيانات أو حسابات المستخدمين.
 
-## تحديث المكتبة — 29 أكتوبر 2026
-- تمت إضافة أفلام/مقاطع CC0 وCC BY 3.0 مرخّصة: Big Buck Bunny، إعلان Sintel، ومقطع زهرة MDN.
-- تمت إضافة **مختارات سينمائية تجريبية** بموسم وحلقتين؛ ليست مسلسلًا تجاريًا ولا عملًا أصليًا من Blender.
-- تمت إضافة قناة **تجريبية غير مباشرة** لاختبار تبويب القنوات؛ ليست قناة بث تلفزيوني حي.
-- تم تعيين بوسترات رسمية مرخصة للفيلمين من Wikimedia Commons. مصادر الترخيص ونسب الحقوق: [docs/OPEN_CONTENT_LICENSES.md](docs/OPEN_CONTENT_LICENSES.md).
-- يتضمن التطبيق تصنيفات وتصفية وبحثًا ومفضلة محلية ومتابعة آخر فيديو وانتقالًا للحلقة التالية.
-- يمنع التخزين المؤقت للكتالوج إعادة استخدام البيانات لأكثر من 15 دقيقة عند انقطاع الاتصال.
-- تم تقليل أذونات دور `anon` إلى **SELECT** على جداول الكتالوج العامة فقط، وتقييد حلقات الأعمال المنتهية الحقوق في RLS.
-- **فحص ترخيص العمل لا يعني التحقق من قدرة شاشة Android 4.4 على فتح خادم الفيديو أو صورته.**
-- لوحة الإدارة مبنية لكنها غير منشورة حاليًا؛ Vercel رفض إنشاء المشروع بخطأ صلاحيات 403. الحساب الإداري المعتمد لم يُعين بعد.
+- **Android TV:** دعم API 19 / Android 4.4.4 وشاشات Huidi، تحكم بالريموت، وضع خفيف، متابعة المشاهدة وتبديل الجودة.
+- **الويب:** قائمة جانبية ونظام عرض سينمائي، بحث مباشر، مفضلة، متابعة المشاهدة ومحتوى متجدد.
+- **الأطفال:** قسم مستقل للمحتوى المراجع مع التصفية حسب الدولة واللغة والنوع.
+- **iOS:** تطبيق تجريبي لمحاكي iPhone؛ وليس IPA قابلاً للتثبيت على iPhone الفعلي.
+- **الإدارة:** لوحة إدارة للحقوق والمحتوى عبر GitHub Pages.
 
-## إصلاح تشغيل الفيديو — الإصدار 1.0.1 (29 أكتوبر 2026)
-- أجهزة Android 4.4/API 19: عند تشغيل MP4 HTTPS، يمرّر `LegacyStreamProxy` طلبات الفيديو عبر خادم محلي مقيد إلى `127.0.0.1` مع نقل TLS 1.2 إلى المصدر. يُحافظ على التحقق الحقيقي من شهادة HTTPS واسم المضيف دون تعطيل الأمان، ويدعم طلبات Range وHTTP 206 للاستكمال والتقدم.
-- Android 5+: يظل المسار الأصلي HTTPS عبر `VideoView`.
-- تظهر للمشاهد شفرة خطأ MediaPlayer، إصدار Android وطريقة التشغيل، وكذلك خطأ الشبكة في الـProxy عند حصوله.
-- لا تُفتح منافذ على الشبكة المحلية؛ يُستخدم منفذ عشوائي وToken خاص لكل جلسة، وتغلق الموارد عند خروج المشغل.
-- **تنبيه:** هذا يصلح مسار الاتصال المحتمل، لكنه لا يضيف Decoder مفقودًا ولا يضمن أن سيرفر المصدر متاح. نتائج Appetize لا تعوّض اختبار شاشة KitKat.
-- ملف البناء التجريبي قد يختلف توقيعه عن APK سابق. لا تحذف النسخة القديمة أو بياناتها دون نسخ احتياطي وموافقة.
+## روابط الإصدار
 
-## وظائف التطبيق
-- الرئيسية، الأفلام، المسلسلات، الحلقات، القنوات، المفضلة، البحث، والإعدادات.
-- تحكم الأسهم وOK، تمييز العناصر المحددة، واجهة عربية RTL، وضع أفقي مناسب لـ720p/1080p/4K.
-- كتالوج يتجدد دون إعادة تثبيت APK، مع Cache للبيانات عند انقطاع الشبكة.
-- صور HTTPS تُحمّل بالخلفية مع قيود على الحجم والذاكرة.
-- تشغيل فيديو Native باستخدام VideoView / MediaPlayer، MP4/H.264/AAC هو الخيار المفضل.
-- HLS متوقف على نظام العرض والـDecoder الفعلي؛ لا يمكن ضمانه على Android 4.4.4.
-- موضع المشاهدة والمفضلة يُحفظان محليًا على الجهاز، مع اختصار لاستكمال آخر مشاهدة. مزامنة حساب المشاهد إلى Supabase ليست مفعلة بعد.
-- TLS 1.2 يُفعّل لاتصالات الكتالوج والصور عندما يتوفر، مع التحقق الطبيعي من الشهادة واسم المضيف؛ MediaPlayer يتحكم باتصال الفيديو وفق النظام.
-- «الإعدادات» تعرض مواصفات الشاشة الفعلية ومقطع اختبار MP4 قصير CC0 مرخّص من MDN.
+- [المشاهدة على الويب](https://youef.github.io/app_apk/)
+- [لوحة الإدارة](https://youef.github.io/app_apk/admin/)
+- [APK Android 4.4.4](https://github.com/youef/app_apk/releases/tag/al-ezz-tv-v3-android44)
+- [iOS Simulator](https://github.com/youef/app_apk/releases/tag/al-ezz-ios-simulator-v3)
+- [المستودع](https://github.com/youef/app_apk)
 
-## تنزيل APK
-[GitHub Release — Aseel TV Full Beta Android 4.4](https://github.com/youef/app_apk/releases/tag/aseel-tv-full-beta-api19)
+## التوافق واستمرارية المستخدم
 
-اسم ملف الإصدار: `aseel-tv-api19-full-beta.apk`، اختبار تجريبي لا إصدار إنتاج نهائي.
+المعرّف التقني لتطبيق Android مستمر باسم sa.aseel.tv.cinema كما أن جداول aseel_* والذاكرة المحلية للمفضلة لم تتغير حفاظًا على التوافق. توقيع Debug المبني في GitHub Actions قد يختلف بين الإصدارات، لذا نجاح CI لا يضمن القدرة على تثبيت التحديث فوق نسخة بتوقيع مختلف. لا تحذف النسخة السابقة قبل نسخ بياناتك. تشغيل HLS الفعلي على Android 4.4.4 يحتاج اختبارًا على الشاشة لأن قدرة الجهاز على فك الترميز ليست مضمونة.
 
-**تثبيت الشاشة:** النسخة الكاملة تحمل الآن `sa.aseel.tv.full`، وتُثبت بجانب نسخة الاختبار `sa.aseel.tv` دون حذف النسخة التي نجحت على الشاشة. بيانات المشاهدة منفصلة. تحديث النسخة الكاملة لاحقًا يتطلب شهادة توقيع مستقرة محفوظة في GitHub Actions Secrets؛ توقيع Debug المؤقت لا يضمن تحديثًا بلا إزالة التطبيق.
-
-## قاعدة البيانات وإدارة الحقوق
-جداول Supabase الجديدة:
-`aseel_movies`, `aseel_series`, `aseel_seasons`, `aseel_episodes`,
-`aseel_channels`, `aseel_categories`, `aseel_favorites`,
-`aseel_watch_progress`, `aseel_settings`, `aseel_content_sources`, `aseel_admins`.
-
-المشاهد العام لا يرى سوى الأعمال ذات الحالة `published` والحقوق `approved` ووثيقة الترخيص وHTTPS فعال. الأعمال منتهية الترخيص مخفية. الإدارة تتطلب عضوية موثقة في `aseel_admins`. الصور داخل `aseel-posters` تُكتب من حساب إدارة فقط.
-
-**تفعيل الإدارة:** انظر [admin/README.md](admin/README.md).
-
-## البناء والتحقق
-```bash
-# Requires Android SDK platform 28 + build-tools 33.0.2, JDK 11, Gradle 7.6
-gradle clean assembleDebug
-python3 scripts/verify_apk.py app/build/outputs/apk/debug/app-debug.apk
-```
-التقارير الكاملة وملف APK موجودة داخل GitHub Actions.
-
-## قائمة اختبارات الجهاز
-انظر [docs/BETA_TEST.md](docs/BETA_TEST.md). لا يمكن اعتبار التطبيق مثبتًا أو مشغلًا بنجاح على Huidi Smart SMART_PC822 بدون نتيجة من التلفزيون نفسه.
-
-## الحدود التي تحتاج تحققًا قبل الإنتاج
-1. التثبيت على الشاشة الحقيقية واختبار الريموت وMP4 وTLS واستهلاك الذاكرة.
-2. اعتماد مفتاح توقيع إصدار مستقر بدل مفتاح Debug المؤقت.
-3. تعيين مسؤول موثوق ثم نشر لوحة الإدارة؛ نشر Vercel رُفض بالصلاحيات، وPages يحتاج تفعيلًا يدويًا.
-4. إدخال أعمال مرخصة ومُتحقق من روابطها. المقطع الحالي مجرد اختبار.
-5. لم تُفعّل مزامنة مستخدم المشاهدة عبر حساب، أو تبديل الجودة متعدد المصادر؛ لا تدّعِ أن هذه العناصر جاهزة.
-
-## المحتوى وتحديثه تلقائيًا — أكتوبر 2026
-- تمت إضافة أفلام Blender مفتوحة الترخيص: Elephants Dream، Agent 327، Coffee Run، فيلم Sintel الكامل، Glass Half، Tears of Steel، Spring، Sprite Fright، إلى جانب Big Buck Bunny ومقطع Sintel الدعائي واختبار MDN.
-- المسلسلات/المختارات تشمل Caminandes (حلقتان)، Cosmos Laundromat (حلقة تجريبية واحدة)، ومختارات اختبارية سابقة. لا تُنشأ حلقات غير موجودة.
-- القنوات: رابط NASA Live وNASA+ الرسميان، إلى جانب قناة اختبار مسجلة بوضوح. وصلات NASA تفتح موقع الجهة ولا تعيد بث القناة.
-- Android يجلب الكتالوج من Supabase دورياً كل 5 دقائق أثناء عرض التطبيق، ويحدّثه عند العودة إليه بعد الفترة نفسها. iOS يعيد جلب المحتوى كل 5 دقائق مع البحث والمفضلة والحلقات.
-- لا تُنشر أعمال جديدة تلقائيًا دون التأكد من الحقوق؛ الإدارة وحدها تتحكم بالحالة المنشورة.
-- تعذر اختبار توافق فيديوهات 720p على جهاز Android 4.4.4 الفعلي؛ قد تحتاج بعض الفيديوهات صيغة أخف أو شهادات HTTPS أحدث.
-- نسخة iOS التجريبية صُممت **لمحاكي iPhone/Appetize** فقط: https://github.com/youef/app_apk/releases/tag/aseel-ios-simulator-preview
-- لربط Appetize بتحديثات GitHub تلقائياً أضف Secrets: APPETIZE_API_TOKEN وAPPETIZE_IOS_PUBLIC_KEY وAPPETIZE_ANDROID_PUBLIC_KEY. يرفع سير العمل نسخًا جديدة للتطبيق الموجود فقط عند وجود المفتاح والرمز؛ يظل البناء والنشر على GitHub يعملان دونها.
-
-## Verified media sources — 29 October 2026
-A scheduled GitHub Actions probe downloads a true MP4 byte range and checks the ISO BMFF ftyp signature; a separate check follows HLS master/variant playlists and downloads 4096 bytes of an actual TS/fMP4 media segment.
-- Older Blender webseed URLs had HTTP 404 or HTML rather than playable video; these items were hidden from the public Supabase catalog without deleting their database records.
-- Published 15 archive-sourced silent-film files (from original 1914–1929 works) after byte-range checks. Musical scores/new remasters may have separate copyright and require review.
-- Published nine HLS live-channel pointers whose media segment fetched successfully on the CI runner; streams can change or be geographically restricted.
-- Android 4.4: Native VideoView HLS depends on device support. The player exposes an explicit external HLS-player launch and an official broadcaster web fallback. Do not claim this is verified on an Android 4.4 TV.
-- iOS: AVPlayer uses the verified channel m3u8 URLs directly.
-- Run these audits under GitHub Actions for fresh reports: Aseel Media URL Health Audit and Aseel Real HLS Segment Audit.
-
-## APK Android 4.4.4 الخاص بالشاشة المثبتة
-- بدءًا من 1.3.0، التطبيق الكامل هو `sa.aseel.tv.full` حتى لا يصطدم بشهادة نسخة التثبيت الأولى `sa.aseel.tv` التي نجحت بالفعل على شاشة Huidi Android 4.4.4.
-- حد التوافق API 19، تشغيل بدون Google Play Services، لا حاجة لحذف التطبيق القديم.
-- اختبار مكتبة الأفلام/المسلسلات/القنوات والتحكم بالريموت وتشغيل فيديو MP4 يحتاج التحقق على الجهاز الحقيقي؛ CI لا يغطي أداء الفيديو المادي.
-
-## النسخة المحسّنة لشاشة Huidi v2.0
-- تثبيت منفصل بالمعرّف `sa.aseel.tv.huidi` لمنع تعارض شهادات النسخ السابقة.
-- تحديث متزامن للأفلام والمسلسلات والقنوات والتصنيفات، مع Cache حديث لمدة تصل إلى 15 دقيقة.
-- تقليل ذاكرة الصور إلى 2MB وRGB565 والوضع الخفيف للتلفزيونات ضعيفة الذاكرة.
-- ريموت محسّن، مشغّل بخيارات 10 ثوان، وإخفاء شريط التحكم أثناء العرض.
-- استمرار حماية TLS وشهادات الثقة وعدم عرض المحتوى غير المرخص.
-- توقيع التحديثات المستقبلية يحتاج مفتاح توقيع دائم في GitHub Secrets؛ Debug غير ثابت.
+المشروع يتضمن: app/ و web/ و admin/ و ios/ و scripts/ و docs/. مصادر البث تتطلب توفر الحقوق والملف المباشر؛ قوائم IPTV لا تعني ترخيص إعادة البث.

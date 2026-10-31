@@ -1,4 +1,4 @@
-name: Aseel TV - Cinema Quality API19
+name: Al Ezz TV - Android TV API19
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: aseel-cinema-build-main
+  group: al-ezz-tv-android-main
   cancel-in-progress: true
 
 permissions:
@@ -60,7 +60,7 @@ jobs:
           set -o pipefail
           mkdir -p dist
           {
-            echo "ASEEL TV - FULL BETA ANDROID 4.4.4"
+            echo "AL EZZ TV v3 - ANDROID 4.4.4"
             echo "Commit: ${GITHUB_SHA}"
             echo "Workflow: ${GITHUB_RUN_ID}"
             echo "Java:"
@@ -78,24 +78,24 @@ jobs:
       - name: Package validated installation test
         run: |
           set -euo pipefail
-          cp app/build/outputs/apk/debug/app-debug.apk dist/aseel-tv-cinema-quality-api19.apk
-          test -s dist/aseel-tv-cinema-quality-api19.apk
-          sha256sum dist/aseel-tv-cinema-quality-api19.apk | tee -a dist/build-report.txt
-          echo "Installer package: sa.aseel.tv.cinema (separate install ID for unsigned-debug update conflict)" | tee -a dist/build-report.txt
+          cp app/build/outputs/apk/debug/app-debug.apk dist/al-ezz-tv-android44.apk
+          test -s dist/al-ezz-tv-android44.apk
+          sha256sum dist/al-ezz-tv-android44.apk | tee -a dist/build-report.txt
+          echo "Legacy package ID: sa.aseel.tv.cinema (branded Al Ezz TV)" | tee -a dist/build-report.txt
           echo "Distinct install ID for legacy releases; stable signing still required for subsequent upgrades." | tee -a dist/build-report.txt
           echo "Device installation and playback: NOT TESTED" | tee -a dist/build-report.txt
 
       - name: Enforce APK is present before artifact/release
         run: |
           set -euo pipefail
-          test -s dist/aseel-tv-cinema-quality-api19.apk
-          python3 -c "import os; p='dist/aseel-tv-cinema-quality-api19.apk'; assert os.path.getsize(p)>100000, 'Incomplete APK'"
+          test -s dist/al-ezz-tv-android44.apk
+          python3 -c "import os; p='dist/al-ezz-tv-android44.apk'; assert os.path.getsize(p)>100000, 'Incomplete APK'"
       - name: Upload APK and validation report
         uses: actions/upload-artifact@v4
         with:
-          name: aseel-tv-cinema-api19-${{ github.run_number }}
+          name: al-ezz-tv-android44-${{ github.run_number }}
           path: |
-            dist/aseel-tv-cinema-quality-api19.apk
+            dist/al-ezz-tv-android44.apk
             dist/build-report.txt
             dist/gradle-build.log
           if-no-files-found: error
@@ -105,12 +105,12 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: aseel-tv-cinema-quality-v2-2
-          name: Aseel TV - Cinema Quality v2.2
+          tag_name: al-ezz-tv-v3-android44
+          name: Al Ezz TV v3.0 - Android TV 4.4.4
           prerelease: true
           make_latest: false
-          body_path: docs/HUIDI_OPTIMIZED.md
-          files: dist/aseel-tv-cinema-quality-api19.apk
+          body_path: docs/AL_EZZ_TV_V3.md
+          files: dist/al-ezz-tv-android44.apk
           fail_on_unmatched_files: true
 
       - name: Upload Android APK to Appetize if connected
@@ -119,5 +119,5 @@ jobs:
         with:
           apiToken: ${{ secrets.APPETIZE_API_TOKEN }}
           publicKey: ${{ secrets.APPETIZE_ANDROID_PUBLIC_KEY }}
-          appFile: dist/aseel-tv-cinema-quality-api19.apk
+          appFile: dist/al-ezz-tv-android44.apk
           platform: android

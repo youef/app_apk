@@ -1,4 +1,4 @@
-name: Aseel TV - iOS Simulator for Appetize
+name: Al Ezz TV - iOS Simulator
 on:
   push:
     branches: [main]
@@ -32,27 +32,27 @@ jobs:
           lipo -archs dist/AseelTV.app/AseelTV | grep -q arm64
           codesign --force --sign - dist/AseelTV.app
           cd dist
-          zip -qr aseel-tv-ios-simulator.app.zip AseelTV.app
-          unzip -t aseel-tv-ios-simulator.app.zip
-          shasum -a 256 aseel-tv-ios-simulator.app.zip
+          zip -qr al-ezz-tv-ios-simulator.app.zip AseelTV.app
+          unzip -t al-ezz-tv-ios-simulator.app.zip
+          shasum -a 256 al-ezz-tv-ios-simulator.app.zip
       - name: Upload simulator ZIP artifact
         uses: actions/upload-artifact@v4
         with:
-          name: aseel-tv-ios-appetize
-          path: dist/aseel-tv-ios-simulator.app.zip
+          name: al-ezz-tv-ios-appetize
+          path: dist/al-ezz-tv-ios-simulator.app.zip
           if-no-files-found: error
           retention-days: 30
       - name: Release iPhone Simulator ZIP
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: aseel-ios-simulator-preview
-          name: Aseel TV - iPhone Simulator Appetize Preview
+          tag_name: al-ezz-ios-simulator-v3
+          name: Al Ezz TV - iPhone Simulator Preview
           prerelease: true
           make_latest: false
           body: |
             Native Swift UIKit app. Upload the included .app.zip to Appetize.
             Simulator only: physical iPhone builds require Apple signing.
-          files: dist/aseel-tv-ios-simulator.app.zip
+          files: dist/al-ezz-tv-ios-simulator.app.zip
           fail_on_unmatched_files: true
 
       - name: Upload iOS simulator ZIP to Appetize if connected
@@ -61,5 +61,5 @@ jobs:
         with:
           apiToken: ${{ secrets.APPETIZE_API_TOKEN }}
           publicKey: ${{ secrets.APPETIZE_IOS_PUBLIC_KEY }}
-          appFile: dist/aseel-tv-ios-simulator.app.zip
+          appFile: dist/al-ezz-tv-ios-simulator.app.zip
           platform: ios

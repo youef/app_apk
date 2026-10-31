@@ -1,13 +1,9 @@
-Aseel TV - iPhone Simulator
+Al Ezz TV — iPhone Simulator Preview
 
-Native Swift UIKit app, Arabic interface, movies, series, episodes, official-source channels, favorites, search and automatic refresh every 5 minutes.
+Native UIKit iOS 15+ application. New Al Ezz TV branding, dark interface, children filter, movies, series, authorized direct channels and favorites.
 
-GitHub Actions workflow: .github/workflows/ios-simulator.yml
-Deliverable: aseel-tv-ios-simulator.app.zip
-Upload: https://appetize.io/upload
+Workflow: .github/workflows/ios-simulator.yml
+Artifact: al-ezz-tv-ios-simulator.app.zip
 
-This archive contains a simulator .app, NOT an IPA for physical iPhones. Publishing and installation on a real iPhone requires an Apple Developer identity and proper signing.
-
-The app reads licensed public Supabase content through RLS. NASA streams are official links, not redistributed media.
-
-Automatic Appetize uploads: set three GitHub Actions secrets, APPETIZE_API_TOKEN and APPETIZE_IOS_PUBLIC_KEY for iOS, plus APPETIZE_ANDROID_PUBLIC_KEY for Android. Both workflows skip Appetize upload safely unless the token and appropriate publicKey are present. Obtain each publicKey from an initial manual upload in Appetize.
+This is only a simulator .app ZIP, NOT an IPA for a physical iPhone; Apple Developer code signing is necessary for iPhone distribution.
+The application uses the same Supabase RLS-approved public catalog. External website fallback is disabled for playback.

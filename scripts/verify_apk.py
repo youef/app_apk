@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Aseel TV full beta gate — static Android 4.4 package validations."""
+"""Al Ezz TV: static Android 4.4 APK/DEX/ZIP/signature validations."""
 import hashlib, os, re, subprocess, sys, zipfile
 from pathlib import Path
 
