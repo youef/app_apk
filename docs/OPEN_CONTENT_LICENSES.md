@@ -34,3 +34,11 @@
 - Cosmos Laundromat — First Cycle (حلقة تجريبية فقط)، CC BY 3.0: https://gooseberry.blender.org/license/
 - معظم ملفات MP4 الجديدة مستضافة على video.blender.org؛ الوصول للفيديو/الترميزات ومعدل الإطارات والتحويلات لا تزال تحتاج اختبارًا على جهاز العرض، ولم تُفحص استجابة كل رابط من داخل تلفزيون المستخدم.
 - NASA Live وNASA+ روابط مشاهدة من المصدر الرسمي، وليسا تصريحًا لإعادة بث المحتوى داخل منصة أسيل: https://www.nasa.gov/live/ و https://www.nasa.gov/ways-to-watch/
+
+## تحديث المحتوى بعد التحقق — 31 أكتوبر 2026
+- «الكرسي الثالث عشر» (The Thirteenth Chair, 1929): تأكد فحص GitHub Actions من استجابة ملف MP4 عبر HTTP 206 وبصمة ftyp. مصدر المصدر: https://archive.org/details/the-thirteenth-chair_1929 ؛ توثيق الملكية العامة الأمريكية: https://commons.wikimedia.org/wiki/File:The_Thirteenth_Chair_(1929).webm . لا يُصنف للأطفال.
+- «عائلة بيفرلي هيلبيليز» الحلقة الثانية «Getting Settled» (1962): المصدر https://archive.org/details/Beverly_Hillbillies_Ep02_Getting_Settled ؛ رابط ملف 512kb MP4 اجتاز اختبار نطاق البايتات وبصمة MP4 بتاريخ 2026-10-31؛ توثيق الترخيص الأمريكي: https://commons.wikimedia.org/wiki/File:Beverly_Hillbillies_Episode_02_Getting_Settled.ogv . قد يختلف وضع الحقوق خارج الولايات المتحدة؛ لا يعني الترخيص الأمريكي إذنًا عامًا في كل البلدان.
+- أُنشئ تصنيف «قنوات الأطفال والتعليم» لقناة TRT التعليمية للمرحلة المتوسطة؛ أُثبت وصول جزء فيديو MPEG-TS وتقدّم HLS في فحص GitHub بتاريخ 2026-10-31. ليست قناة رسوم متحركة.
+- TRT Çocuk: اجتاز فحص الشبكة من GitHub Actions، لكن الموقع الرسمي يصرح بقيد إقليمي لحقوق بعض البرامج؛ لذلك **لم تنشر** ضمن الكتالوج في السعودية دون تحقق من الوصول المحلي والترخيص: https://www.trtcocuk.net.tr/ .
+- TRT Diyanet Çocuk: تقدّم HLS نجح لكن فحص جزء الفيديو فشل؛ 4 Fun Kids: 404. كلاهما مستبعد من قائمة القنوات المنشورة إلى حين صلاحية التشغيل.
+- فحوص HTTP وMPEG-TS/MP4 لا تساوي نجاح فك الترميز على تلفزيون Android 4.4.4 نفسه.
