@@ -30,7 +30,7 @@ def main():
         check(not any(path.startswith("../") or path.startswith("/") for path in paths),
               "Archive paths safe")
         dex=archive.read("classes.dex")
-        check(dex[:4]==b"dex\\n" and dex[7]==0 and int(dex[4:7])<=35,
+        check(dex[:4]==b"dex\n" and dex[7]==0 and int(dex[4:7])<=35,
               "Android 4.4 compatible DEX 035 or below")
         native=[path for path in paths if path.startswith("lib/") and path.endswith(".so")]
         check(any(path.startswith("lib/armeabi-v7a/") and "conscrypt" in path for path in native),
@@ -49,7 +49,7 @@ def main():
           "Fresh package ID to bypass legacy signature conflicts")
     check(f"sdkVersion:'{MIN_SDK}'" in badging,"minSdkVersion API 19")
     check("targetSdkVersion:'28'" in badging,"Target SDK as declared")
-    version=re.search(r"versionCode='(\\d+)'",badging)
+    version=re.search(r"versionCode='(\d+)'",badging)
     check(version is not None and int(version.group(1))>=MIN_VERSION,"Version >=4")
     check("android.permission.INTERNET" in badging,"Internet access included")
     check(not any(line.startswith("uses-feature:") and "android.hardware.touchscreen" in line
@@ -65,7 +65,7 @@ def main():
                        "--print-certs",str(apk)])
     check("Verified using v1 scheme (JAR signing): true" in signature,
           "V1 signature supported by Android KitKat")
-    digest=re.search(r"Signer #1 certificate SHA-256 digest:\\s*([0-9a-f]{64})",signature)
+    digest=re.search(r"Signer #1 certificate SHA-256 digest:\s*([0-9a-f]{64})",signature)
     check(digest is not None,"Signing certificate fingerprint available")
     print("CERTIFICATE_SHA256="+digest.group(1))
     print("APK_SHA256="+hashlib.sha256(apk.read_bytes()).hexdigest())

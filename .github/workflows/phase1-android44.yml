@@ -81,7 +81,7 @@ jobs:
           echo "MIN_SDK=19" >>dist/install-metadata.txt
           echo "COMMIT=$GITHUB_SHA" >>dist/install-metadata.txt
           echo "Device installation still needs real hardware verification." >>dist/install-metadata.txt
-      - name: Verify installability: Android 4.4, manifest, 32-bit ABI, V1 signature
+      - name: "Verify installability: Android 4.4, manifest, 32-bit ABI, V1 signature"
         run: |
           set -euo pipefail
           python3 scripts/verify_apk.py dist/al-ezz-tv-kitkat-install-v4.apk | tee dist/build-report.txt
