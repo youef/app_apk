@@ -5,5 +5,5 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
-rootProject.name = 'AseelTV'
+rootProject.name = 'AlEzzTV'
 include ':app'

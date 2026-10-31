@@ -1,123 +1,122 @@
-name: Al Ezz TV - Android TV API19
-
+name: Al Ezz TV — Android 4.4.4 Install Fix (API 19)
 on:
   push:
     branches: [main]
     paths-ignore:
       - '**/*.md'
   workflow_dispatch:
-
 concurrency:
-  group: al-ezz-tv-android-main
+  group: al-ezz-kitkat-install-v4
   cancel-in-progress: true
-
 permissions:
   contents: write
-
 jobs:
-  android19-huidi-optimized:
+  kitkat-install:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
     env:
       APPETIZE_API_TOKEN: ${{ secrets.APPETIZE_API_TOKEN }}
       APPETIZE_ANDROID_PUBLIC_KEY: ${{ secrets.APPETIZE_ANDROID_PUBLIC_KEY }}
-    runs-on: ubuntu-22.04
-    timeout-minutes: 25
     steps:
-      - name: Checkout new clean project
-        uses: actions/checkout@v4
-
-      # New Android SDK command-line tools require Java 17 to run sdkmanager.
-      # Switch back to Java 11 for AGP 7.4.2 and Gradle 7.6 afterward.
-      - name: Set up Java 17 for SDK manager
+      - uses: actions/checkout@v4
+      - name: Java 17 for Android SDK CLI
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
-      - name: Set up Android command line tools
+      - name: Android SDK tools
         uses: android-actions/setup-android@v3
         with:
-          # The obsolete SDK package "tools" has been removed upstream.
           packages: platform-tools
-
-      - name: Install pinned Android SDK and Build Tools
+      - name: Install Android API 28 and Build Tools
         run: |
+          set -euo pipefail
           sdkmanager "platforms;android-28" "build-tools;33.0.2"
-          sdkmanager --list_installed
-
-      - name: Switch to Java 11 for Android Gradle Plugin
+      - name: JDK 11 for Android Gradle Plugin 7.4.2
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '11'
-
-      - name: Set up Gradle 7.6
+      - name: Install Gradle 7.6
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '7.6'
-
-      - name: Build offline APK
+      - name: Configure stable signing only when all protected secrets exist
+        env:
+          AL_EZZ_KEYSTORE_BASE64: ${{ secrets.AL_EZZ_KEYSTORE_BASE64 }}
+          AL_EZZ_STORE_PASSWORD: ${{ secrets.AL_EZZ_STORE_PASSWORD }}
+          AL_EZZ_KEY_ALIAS: ${{ secrets.AL_EZZ_KEY_ALIAS }}
+          AL_EZZ_KEY_PASSWORD: ${{ secrets.AL_EZZ_KEY_PASSWORD }}
         run: |
-          set -o pipefail
+          set -euo pipefail
+          if [[ -n "$AL_EZZ_KEYSTORE_BASE64" && -n "$AL_EZZ_STORE_PASSWORD" && -n "$AL_EZZ_KEY_ALIAS" && -n "$AL_EZZ_KEY_PASSWORD" ]]; then
+            umask 077
+            printf '%s' "$AL_EZZ_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/al-ezz-signing.jks"
+            test -s "$RUNNER_TEMP/al-ezz-signing.jks"
+            echo "ORG_GRADLE_PROJECT_ezzStoreFile=$RUNNER_TEMP/al-ezz-signing.jks" >> "$GITHUB_ENV"
+            echo "ORG_GRADLE_PROJECT_ezzStorePassword=$AL_EZZ_STORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "ORG_GRADLE_PROJECT_ezzKeyAlias=$AL_EZZ_KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "ORG_GRADLE_PROJECT_ezzKeyPassword=$AL_EZZ_KEY_PASSWORD" >> "$GITHUB_ENV"
+            echo "SIGNING_READY=true" >> "$GITHUB_ENV"
+            echo "Stable signing secrets configured. Building release."
+          else
+            echo "SIGNING_READY=false" >> "$GITHUB_ENV"
+            echo "::warning::No permanent signing key configured. This build is a NEW-PACKAGE fresh-install test. Subsequent updates need GitHub signing secrets."
+          fi
+      - name: Build legacy-compatible APK
+        shell: bash
+        run: |
+          set -euo pipefail
           mkdir -p dist
-          {
-            echo "AL EZZ TV v3 - ANDROID 4.4.4"
-            echo "Commit: ${GITHUB_SHA}"
-            echo "Workflow: ${GITHUB_RUN_ID}"
-            echo "Java:"
-            java -version 2>&1
-            echo "Gradle:"
-            gradle --version
-          } | tee dist/build-report.txt
-          gradle clean assembleDebug --no-daemon --stacktrace 2>&1 | tee dist/gradle-build.log
-
-      - name: Verify APK, Manifest, DEX, ZIP, ABI and V1 signing
-        run: |
-          set -o pipefail
-          python3 scripts/verify_apk.py app/build/outputs/apk/debug/app-debug.apk             2>&1 | tee -a dist/build-report.txt
-
-      - name: Package validated installation test
+          gradle clean assembleDebug --no-daemon --stacktrace >dist/gradle-build.log 2>&1 || { tail -100 dist/gradle-build.log; exit 1; }
+          if [[ "$SIGNING_READY" == "true" ]]; then
+            gradle assembleRelease --no-daemon --stacktrace >>dist/gradle-build.log 2>&1 || { tail -100 dist/gradle-build.log; exit 1; }
+            cp app/build/outputs/apk/release/app-release.apk dist/al-ezz-tv-kitkat-install-v4.apk
+            echo "SIGNING_MODE=protected_permanent_release" >dist/install-metadata.txt
+          else
+            cp app/build/outputs/apk/debug/app-debug.apk dist/al-ezz-tv-kitkat-install-v4.apk
+            echo "SIGNING_MODE=temporary_debug_fresh_install_only" >dist/install-metadata.txt
+          fi
+          echo "PACKAGE=sa.alezz.tv.kitkat" >>dist/install-metadata.txt
+          echo "MIN_SDK=19" >>dist/install-metadata.txt
+          echo "COMMIT=$GITHUB_SHA" >>dist/install-metadata.txt
+          echo "Device installation still needs real hardware verification." >>dist/install-metadata.txt
+      - name: Verify installability: Android 4.4, manifest, 32-bit ABI, V1 signature
         run: |
           set -euo pipefail
-          cp app/build/outputs/apk/debug/app-debug.apk dist/al-ezz-tv-android44.apk
-          test -s dist/al-ezz-tv-android44.apk
-          sha256sum dist/al-ezz-tv-android44.apk | tee -a dist/build-report.txt
-          echo "Legacy package ID: sa.aseel.tv.cinema (branded Al Ezz TV)" | tee -a dist/build-report.txt
-          echo "Distinct install ID for legacy releases; stable signing still required for subsequent upgrades." | tee -a dist/build-report.txt
-          echo "Device installation and playback: NOT TESTED" | tee -a dist/build-report.txt
-
-      - name: Enforce APK is present before artifact/release
-        run: |
-          set -euo pipefail
-          test -s dist/al-ezz-tv-android44.apk
-          python3 -c "import os; p='dist/al-ezz-tv-android44.apk'; assert os.path.getsize(p)>100000, 'Incomplete APK'"
-      - name: Upload APK and validation report
+          python3 scripts/verify_apk.py dist/al-ezz-tv-kitkat-install-v4.apk | tee dist/build-report.txt
+          sha256sum dist/al-ezz-tv-kitkat-install-v4.apk | tee -a dist/build-report.txt
+          test -s dist/al-ezz-tv-kitkat-install-v4.apk
+      - name: Upload signed installation candidate and diagnostic report
         uses: actions/upload-artifact@v4
         with:
-          name: al-ezz-tv-android44-${{ github.run_number }}
+          name: al-ezz-tv-kitkat-install-v4-${{ github.run_number }}
           path: |
-            dist/al-ezz-tv-android44.apk
+            dist/al-ezz-tv-kitkat-install-v4.apk
+            dist/install-metadata.txt
             dist/build-report.txt
             dist/gradle-build.log
           if-no-files-found: error
           retention-days: 30
-
-      - name: Publish pre-release only after validations pass
+      - name: Publish separate fresh-install APK (never overwrite v3)
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: al-ezz-tv-v3-android44
-          name: Al Ezz TV v3.0 - Android TV 4.4.4
+          tag_name: al-ezz-tv-kitkat-install-v4
+          name: Al Ezz TV v4 — Android 4.4.4 Clean Install
           prerelease: true
           make_latest: false
-          body_path: docs/AL_EZZ_TV_V3.md
-          files: dist/al-ezz-tv-android44.apk
+          body_path: docs/INSTALL_TROUBLESHOOTING_KITKAT.md
+          files: |
+            dist/al-ezz-tv-kitkat-install-v4.apk
+            dist/install-metadata.txt
+            dist/build-report.txt
           fail_on_unmatched_files: true
-
-      - name: Upload Android APK to Appetize if connected
+      - name: Upload to Appetize when linked
         if: env.APPETIZE_API_TOKEN != '' && env.APPETIZE_ANDROID_PUBLIC_KEY != ''
         uses: appetizeio/github-action-appetize@v1.1.0
         with:
           apiToken: ${{ secrets.APPETIZE_API_TOKEN }}
           publicKey: ${{ secrets.APPETIZE_ANDROID_PUBLIC_KEY }}
-          appFile: dist/al-ezz-tv-android44.apk
+          appFile: dist/al-ezz-tv-kitkat-install-v4.apk
           platform: android

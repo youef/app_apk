@@ -5,12 +5,12 @@ android {
     compileSdkVersion 28
     buildToolsVersion '33.0.2'
     defaultConfig {
-        applicationId 'sa.aseel.tv.cinema'
+        applicationId 'sa.alezz.tv.kitkat'
         minSdkVersion 19
         targetSdkVersion 28
         ndk { abiFilters "armeabi-v7a" }
-        versionCode 3
-        versionName '3.0.0-al-ezz'
+        versionCode 4
+        versionName '4.0.0-kitkat-fresh'
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_7
@@ -21,14 +21,15 @@ android {
             v1SigningEnabled true
             v2SigningEnabled true
         }
-        aseelStable {
-            // Supplied ONLY by protected CI secrets; never checked into Git.
-            def storePath = project.findProperty("aseelStoreFile")
-            if (storePath) {
-                storeFile file(storePath)
-                storePassword project.property("aseelStorePassword").toString()
-                keyAlias project.property("aseelKeyAlias").toString()
-                keyPassword project.property("aseelKeyPassword").toString()
+        ezzStable {
+            // Optional stable key supplied by GitHub Actions encrypted secrets.
+            // Never commit a private key, store password or build credentials.
+            def keyFile = project.findProperty("ezzStoreFile")
+            if (keyFile) {
+                storeFile file(keyFile)
+                storePassword project.findProperty("ezzStorePassword").toString()
+                keyAlias project.findProperty("ezzKeyAlias").toString()
+                keyPassword project.findProperty("ezzKeyPassword").toString()
             }
             v1SigningEnabled true
             v2SigningEnabled true
@@ -43,7 +44,7 @@ android {
         release {
             debuggable false
             minifyEnabled false
-            signingConfig signingConfigs.aseelStable
+            signingConfig signingConfigs.ezzStable
         }
     }
 }
