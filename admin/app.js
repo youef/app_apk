@@ -6,7 +6,7 @@ const tables={
  aseel_series:{label:"المسلسلات",fields:["title_ar","title_original","description","poster_url","backdrop_url","release_year","category_id","language_code","country_code","is_kids","quality","status","rights_status","rights_holder","license_reference","rights_expires_at","featured"]},
  aseel_seasons:{label:"المواسم",fields:["series_id","number","title_ar"]},
  aseel_episodes:{label:"الحلقات",fields:["season_id","number","title_ar","description","poster_url","duration_minutes","stream_url","youtube_url","stream_variants","status","rights_status","license_reference","rights_expires_at"]},
- aseel_channels:{label:"القنوات",fields:["title_ar","description","poster_url","stream_url","youtube_url","stream_variants","category_id","language_code","country_code","is_kids","status","rights_status","rights_holder","license_reference","rights_expires_at"]},
+ aseel_channels:{label:"القنوات",fields:["title_ar","description","poster_url","official_url","playback_mode","stream_url","youtube_url","stream_variants","category_id","language_code","country_code","is_kids","status","rights_status","rights_holder","license_reference","rights_expires_at"]},
  aseel_categories:{label:"التصنيفات",fields:["name_ar","sort_order","published"]},
  aseel_content_sources:{label:"مصادر الحقوق",fields:["title","source_url","rights_contact","license_reference","verified"]},
  aseel_settings:{label:"إعدادات التطبيق",fields:["key","value","is_public"]}
