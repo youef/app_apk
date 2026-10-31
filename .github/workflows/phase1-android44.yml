@@ -1,4 +1,4 @@
-name: Al Ezz TV — Android 4.4.4 Install Fix (API 19)
+name: Al Ezz TV — Android 4.4.4 Remote v5
 on:
   push:
     branches: [main]
@@ -6,7 +6,7 @@ on:
       - '**/*.md'
   workflow_dispatch:
 concurrency:
-  group: al-ezz-kitkat-install-v4
+  group: al-ezz-kitkat-remote-v5
   cancel-in-progress: true
 permissions:
   contents: write
@@ -71,13 +71,13 @@ jobs:
           gradle clean assembleDebug --no-daemon --stacktrace >dist/gradle-build.log 2>&1 || { tail -100 dist/gradle-build.log; exit 1; }
           if [[ "$SIGNING_READY" == "true" ]]; then
             gradle assembleRelease --no-daemon --stacktrace >>dist/gradle-build.log 2>&1 || { tail -100 dist/gradle-build.log; exit 1; }
-            cp app/build/outputs/apk/release/app-release.apk dist/al-ezz-tv-kitkat-install-v4.apk
+            cp app/build/outputs/apk/release/app-release.apk dist/al-ezz-tv-remote-api19-v5.apk
             echo "SIGNING_MODE=protected_permanent_release" >dist/install-metadata.txt
           else
             cp app/build/outputs/apk/debug/app-debug.apk dist/al-ezz-tv-kitkat-install-v4.apk
             echo "SIGNING_MODE=temporary_debug_fresh_install_only" >dist/install-metadata.txt
           fi
-          echo "PACKAGE=sa.alezz.tv.kitkat" >>dist/install-metadata.txt
+          echo "PACKAGE=sa.alezz.tv.remote" >>dist/install-metadata.txt
           echo "MIN_SDK=19" >>dist/install-metadata.txt
           echo "COMMIT=$GITHUB_SHA" >>dist/install-metadata.txt
           echo "Device installation still needs real hardware verification." >>dist/install-metadata.txt
@@ -90,7 +90,7 @@ jobs:
       - name: Upload signed installation candidate and diagnostic report
         uses: actions/upload-artifact@v4
         with:
-          name: al-ezz-tv-kitkat-install-v4-${{ github.run_number }}
+          name: al-ezz-tv-remote-api19-v5-${{ github.run_number }}
           path: |
             dist/al-ezz-tv-kitkat-install-v4.apk
             dist/install-metadata.txt
@@ -104,21 +104,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if gh release view al-ezz-tv-kitkat-install-v4 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          if gh release view al-ezz-tv-remote-api19-v5 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "PUBLISH_ALLOWED=false" >> "$GITHUB_ENV"
-            echo "::notice::Existing v4 APK preserved; never replace it with a differently signed CI build. The new build remains available as a workflow artifact."
+            echo "::notice::Existing v5 remote APK preserved; never replace it with a differently signed CI build. The new build remains available as a workflow artifact."
           else
             echo "PUBLISH_ALLOWED=true" >> "$GITHUB_ENV"
           fi
-      - name: Publish the first clean-install APK only, never replace its signature
+      - name: Publish only the first v5 remote APK to preserve its signing identity
         if: github.ref == 'refs/heads/main' && env.PUBLISH_ALLOWED == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: al-ezz-tv-kitkat-install-v4
-          name: Al Ezz TV v4 — Android 4.4.4 Clean Install
+          tag_name: al-ezz-tv-remote-api19-v5
+          name: Al Ezz TV v5 — Android 4.4.4 Remote Edition
           prerelease: true
           make_latest: false
-          body_path: docs/INSTALL_TROUBLESHOOTING_KITKAT.md
+          body_path: docs/REMOTE_CONTROL.md
           files: |
             dist/al-ezz-tv-kitkat-install-v4.apk
             dist/install-metadata.txt

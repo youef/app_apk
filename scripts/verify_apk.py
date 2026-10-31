@@ -3,9 +3,9 @@
 import hashlib, os, re, subprocess, sys, zipfile
 from pathlib import Path
 
-EXPECTED_PACKAGE="sa.alezz.tv.kitkat"
+EXPECTED_PACKAGE="sa.alezz.tv.remote"
 MIN_SDK=19
-MIN_VERSION=4
+MIN_VERSION=5
 
 def check(ok,msg):
     if not ok: raise RuntimeError(msg)
