@@ -1,4 +1,4 @@
-name: Al Ezz TV — Android 4.4.4 Remote v5.1
+name: Al Ezz TV — Cinema PIN Edition v6 (API19)
 on:
   push:
     branches: [main]
@@ -6,7 +6,7 @@ on:
       - '**/*.md'
   workflow_dispatch:
 concurrency:
-  group: al-ezz-kitkat-remote-v5-1
+  group: al-ezz-kitkat-pin-v6
   cancel-in-progress: true
 permissions:
   contents: write
@@ -71,28 +71,28 @@ jobs:
           gradle clean assembleDebug --no-daemon --stacktrace >dist/gradle-build.log 2>&1 || { tail -100 dist/gradle-build.log; exit 1; }
           if [[ "$SIGNING_READY" == "true" ]]; then
             gradle assembleRelease --no-daemon --stacktrace >>dist/gradle-build.log 2>&1 || { tail -100 dist/gradle-build.log; exit 1; }
-            cp app/build/outputs/apk/release/app-release.apk dist/al-ezz-tv-remote-v5-1.apk
+            cp app/build/outputs/apk/release/app-release.apk dist/al-ezz-tv-cinema-pin-v6.apk
             echo "SIGNING_MODE=protected_permanent_release" >dist/install-metadata.txt
           else
-            cp app/build/outputs/apk/debug/app-debug.apk dist/al-ezz-tv-remote-v5-1.apk
+            cp app/build/outputs/apk/debug/app-debug.apk dist/al-ezz-tv-cinema-pin-v6.apk
             echo "SIGNING_MODE=temporary_debug_fresh_install_only" >dist/install-metadata.txt
           fi
-          echo "PACKAGE=sa.alezz.tv.remote" >>dist/install-metadata.txt
+          echo "PACKAGE=sa.alezz.tv.locked" >>dist/install-metadata.txt
           echo "MIN_SDK=19" >>dist/install-metadata.txt
           echo "COMMIT=$GITHUB_SHA" >>dist/install-metadata.txt
           echo "Device installation still needs real hardware verification." >>dist/install-metadata.txt
       - name: "Verify installability: Android 4.4, manifest, 32-bit ABI, V1 signature"
         run: |
           set -euo pipefail
-          python3 scripts/verify_apk.py dist/al-ezz-tv-remote-v5-1.apk | tee dist/build-report.txt
-          sha256sum dist/al-ezz-tv-remote-v5-1.apk | tee -a dist/build-report.txt
-          test -s dist/al-ezz-tv-remote-v5-1.apk
+          python3 scripts/verify_apk.py dist/al-ezz-tv-cinema-pin-v6.apk | tee dist/build-report.txt
+          sha256sum dist/al-ezz-tv-cinema-pin-v6.apk | tee -a dist/build-report.txt
+          test -s dist/al-ezz-tv-cinema-pin-v6.apk
       - name: Upload signed installation candidate and diagnostic report
         uses: actions/upload-artifact@v4
         with:
-          name: al-ezz-tv-remote-api19-v5-1-${{ github.run_number }}
+          name: al-ezz-tv-cinema-pin-v6-${{ github.run_number }}
           path: |
-            dist/al-ezz-tv-remote-v5-1.apk
+            dist/al-ezz-tv-cinema-pin-v6.apk
             dist/install-metadata.txt
             dist/build-report.txt
             dist/gradle-build.log
@@ -104,23 +104,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if gh release view al-ezz-tv-remote-api19-v5-1 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          if gh release view al-ezz-tv-cinema-pin-v6 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "PUBLISH_ALLOWED=false" >> "$GITHUB_ENV"
-            echo "::notice::Existing v5.1 remote APK preserved; never replace it with a differently signed CI build. The new build remains available as a workflow artifact."
+            echo "::notice::Existing v6 PIN APK preserved, keeping its release checksum and certificate. The new build remains available as a workflow artifact."
           else
             echo "PUBLISH_ALLOWED=true" >> "$GITHUB_ENV"
           fi
-      - name: Publish only the first v5.1 remote APK to preserve its signing identity
+      - name: Publish first PIN-gated cinema APK only; preserve original signing identity
         if: github.ref == 'refs/heads/main' && env.PUBLISH_ALLOWED == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: al-ezz-tv-remote-api19-v5-1
-          name: Al Ezz TV v5.1 — Android 4.4.4 Remote Edition
+          tag_name: al-ezz-tv-cinema-pin-v6
+          name: Al Ezz TV v6 — Full Cinema + PIN (Android 4.4.4)
           prerelease: true
           make_latest: false
-          body_path: docs/REMOTE_CONTROL.md
+          body_path: docs/TV_CINEMA_PIN_V6.md
           files: |
-            dist/al-ezz-tv-remote-v5-1.apk
+            dist/al-ezz-tv-cinema-pin-v6.apk
             dist/install-metadata.txt
             dist/build-report.txt
           fail_on_unmatched_files: true
@@ -130,5 +130,5 @@ jobs:
         with:
           apiToken: ${{ secrets.APPETIZE_API_TOKEN }}
           publicKey: ${{ secrets.APPETIZE_ANDROID_PUBLIC_KEY }}
-          appFile: dist/al-ezz-tv-remote-v5-1.apk
+          appFile: dist/al-ezz-tv-cinema-pin-v6.apk
           platform: android

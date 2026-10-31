@@ -3,9 +3,9 @@
 import hashlib, os, re, subprocess, sys, zipfile
 from pathlib import Path
 
-EXPECTED_PACKAGE="sa.alezz.tv.remote"
+EXPECTED_PACKAGE="sa.alezz.tv.locked"
 MIN_SDK=19
-MIN_VERSION=6
+MIN_VERSION=7
 
 def check(ok,msg):
     if not ok: raise RuntimeError(msg)

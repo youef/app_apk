@@ -5,12 +5,12 @@ android {
     compileSdkVersion 28
     buildToolsVersion '33.0.2'
     defaultConfig {
-        applicationId 'sa.alezz.tv.remote'
+        applicationId 'sa.alezz.tv.locked'
         minSdkVersion 19
         targetSdkVersion 28
         ndk { abiFilters "armeabi-v7a" }
-        versionCode 6
-        versionName '5.1.0-tv-remote'
+        versionCode 7
+        versionName '6.0.0-cinema-pin'
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_7
