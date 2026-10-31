@@ -12,3 +12,8 @@
 **التثبيت:** نزّل `aseel-tv-huidi-optimized-api19.apk` وتأكد أن اسمه «أسيل TV | إصدار الشاشة» عند التثبيت.
 
 **التحديثات القادمة:** توقيع Debug في GitHub غير ثابت. يلزم إعداد مفتاح توقيع دائم ومحمي في Secrets حتى يمكن تحديث حزمة Huidi دون حذفها، ولا ينبغي رفع المفتاح إلى مستودع عام.
+
+## v2.2 Cinema Quality
+- Quality choices are only for real URLs stored in stream_variants; app defaults to low-bandwidth on API19.
+- Updated app ID sa.aseel.tv.cinema avoids conflicting debug signing certificate with previous Huidi builds.
+- Stable production signing key still needed for in-place updates.

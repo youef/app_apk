@@ -128,7 +128,7 @@ public final class LegacyStreamProxy {
                 if(head||status==416)return;
                 InputStream input=upstream.getInputStream();
                 try{
-                    byte[] buffer=new byte[16384];int read;
+                    byte[] buffer=new byte[32768];int read;
                     while(!closed && (read=input.read(buffer))!=-1){
                         output.write(buffer,0,read);
                     }

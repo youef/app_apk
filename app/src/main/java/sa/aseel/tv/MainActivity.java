@@ -43,6 +43,7 @@ public final class MainActivity extends Activity {
     private final String[] labels={"الرئيسية","الأفلام","المسلسلات","القنوات","المفضلة","البحث","الإعدادات"};
     private final String[] modes={"home","movie","series","channel","favorites","search","settings"};
     private LinearLayout stage,root,menu;
+    private Button[] navButtons;
     private ScrollView scrolling;
     private TextView notice;
     private String mode="home";
@@ -89,7 +90,7 @@ public final class MainActivity extends Activity {
     }
     private void buildShell(){
         root=vertical();root.setBackgroundColor(NAVY);root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
-        LinearLayout top=horizontal();top.setBackgroundColor(0xFF101D30);
+        LinearLayout top=horizontal();top.setBackgroundDrawable(new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,new int[]{0xFF142A45,0xFF081526}));
         top.setPadding(dp(20),dp(9),dp(20),dp(9));
         root.addView(top,lp(-1,-2));
         TextView brand=text("أسيل",31,GOLD,true);
@@ -100,11 +101,13 @@ public final class MainActivity extends Activity {
         nav.setHorizontalScrollBarEnabled(false);nav.setFillViewport(false);
         top.addView(nav,new LinearLayout.LayoutParams(0,dp(48),1));
         menu=horizontal();nav.addView(menu);
+        navButtons=new Button[labels.length];
         for(int i=0;i<labels.length;i++){
             final String target=modes[i];
             Button b=button(labels[i]);b.setTextSize(14);
             LinearLayout.LayoutParams p=lp(dp(102),dp(44));p.setMargins(dp(3),0,dp(3),0);
             menu.addView(b,p);
+            navButtons[i]=b;
             b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){mode=target;render();}});
         }
         notice=text("",12,MUTED,false);
@@ -203,6 +206,15 @@ public final class MainActivity extends Activity {
     private void render(){
         if(stage==null)return;
         stage.removeAllViews();scrolling.scrollTo(0,0);
+        if(navButtons!=null){
+            for(int j=0;j<navButtons.length;j++){
+                boolean selected=modes[j].equals(mode);
+                if(!navButtons[j].isFocused()){
+                    navButtons[j].setTextColor(selected?NAVY:WHITE);
+                    navButtons[j].setBackgroundDrawable(background(selected?GOLD:PANEL,9,selected?GOLD:0xFF3A536A));
+                }
+            }
+        }
         if("home".equals(mode)){home();return;}
         if("movie".equals(mode)||"series".equals(mode)||"channel".equals(mode)){listing(mode,false);return;}
         if("favorites".equals(mode)){favorites();return;}
@@ -211,14 +223,24 @@ public final class MainActivity extends Activity {
     }
     private void home(){
         LinearLayout hero=vertical();hero.setPadding(dp(25),dp(16),dp(25),dp(16));
-        hero.setBackgroundDrawable(background(0xFF1C324A,14,0xFF6C604E));
+        GradientDrawable heroBg=new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+          new int[]{0xFF283E5D,0xFF10243E,0xFF07182B});
+        heroBg.setCornerRadius(dp(16));heroBg.setStroke(dp(1),0xFF9E7D4A);
+        hero.setBackgroundDrawable(heroBg);
         stage.addView(hero,gap(2,12));
-        TextView heroTitle=text("أسيل | عالم السينما في بيتك",30,GOLD,true);hero.addView(heroTitle);
+        TextView heroTitle=text("أسيل | عالم السينما في بيتك",29,GOLD,true);hero.addView(heroTitle);
+        TextView heroBadge=text("● تجربة تلفزيون عربية  •  أفلام  •  مسلسلات  •  قنوات مباشرة",13,0xFFABD9D2,false);
+        hero.addView(heroBadge,gap(2,8));
         TextView heroSub=text("أفلام ومسلسلات وقنوات مرخصة — استمتع بالتصفح من الريموت",17,WHITE,false);
         hero.addView(heroSub,gap(2,14));
         Button go=button("استعرض الأفلام");hero.addView(go,lp(dp(200),dp(49)));
         go.setOnClickListener(new View.OnClickListener(){public void onClick(View v){mode="movie";render();}});
         if(!hasLoaded){empty("جاري الاتصال بمكتبة أسيل...");return;}
+        LinearLayout stats=horizontal();stats.setGravity(Gravity.CENTER);
+        stage.addView(stats,gap(3,8));
+        dashboardStat(stats,"الأفلام",movies.length());
+        dashboardStat(stats,"المسلسلات",series.length());
+        dashboardStat(stats,"القنوات",channels.length());
         section("أحدث الأفلام",movies,"movie",8);
         section("المسلسلات",series,"series",8);
         section("القنوات المتاحة",channels,"channel",8);
@@ -232,6 +254,14 @@ public final class MainActivity extends Activity {
         }
         if(movies.length()+series.length()+channels.length()==0)
             empty("المكتبة خالية حاليًا. ستظهر الأعمال المعتمدة تلقائيًا بعد إضافتها من لوحة الإدارة.");
+    }
+    private void dashboardStat(LinearLayout parent,String heading,int count){
+        TextView info=text(heading+"  "+count,15,WHITE,true);
+        info.setGravity(Gravity.CENTER);
+        info.setPadding(dp(8),dp(10),dp(8),dp(10));
+        info.setBackgroundDrawable(background(0xFF163349,11,0xFF295F64));
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(44),1);
+        p.setMargins(dp(5),0,dp(5),0);parent.addView(info,p);
     }
     private void resumeRow(){
         final String resumeId=prefs.getString("resume_id","");
@@ -326,7 +356,7 @@ public final class MainActivity extends Activity {
         for(int i=0;i<all.size()&&i<max;i++){
             final JSONObject item=all.get(i);
             LinearLayout card=vertical();card.setPadding(dp(5),dp(5),dp(5),dp(7));
-            card.setBackgroundDrawable(background(0xFF132740,12,0xFF2C4057));
+            card.setBackgroundDrawable(background(0xFF10253D,13,0xFF46607B));
             LinearLayout.LayoutParams cardLp=lp(dp(168),-2);cardLp.setMargins(dp(6),0,dp(6),0);
             holder.addView(card,cardLp);
             ImageView poster=new ImageView(this);poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
@@ -339,7 +369,13 @@ public final class MainActivity extends Activity {
             String year=str(item,"release_year");
             TextView meta=text(year.length()>0?year+"  •  "+str(item,"quality"):str(item,"quality"),12,MUTED,false);
             card.addView(meta);
-            Button detail=button("عرض التفاصيل");detail.setTextSize(13);card.addView(detail,gap(7,0));
+            String variants=item.optJSONArray("stream_variants")!=null && item.optJSONArray("stream_variants").length()>0
+                  ?" • جودات متعددة":"";
+            if(variants.length()>0){
+                TextView badge=text("اختيار الجودة متاح",12,0xFFBEE2D2,false);
+                card.addView(badge,gap(4,0));
+            }
+            Button detail=button("التفاصيل  ▶");detail.setTextSize(13);card.addView(detail,gap(7,0));
             detail.setOnClickListener(new View.OnClickListener(){
                 public void onClick(View v){lastMode=mode;details(item);}
             });
@@ -395,6 +431,9 @@ public final class MainActivity extends Activity {
         if(!url.startsWith("https://")){showStatus("لا يمكن تشغيل رابط غير HTTPS");return;}
         Intent i=new Intent(this,PlayerActivity.class);
         i.putExtra("stream_url",url);i.putExtra("official_url",str(item,"official_url"));
+        i.putExtra("quality",str(item,"quality"));
+        i.putExtra("stream_variants",item.optJSONArray("stream_variants")==null?"[]":item.optJSONArray("stream_variants").toString());
+        i.putExtra("is_live","channel".equals(str(item,"_type")));
         i.putExtra("title",str(item,"title_ar"));
         i.putExtra("item_id",str(item,"id"));if(nextUrl!=null)i.putExtra("next_url",nextUrl);
         if(nextId!=null)i.putExtra("next_item_id",nextId);
@@ -497,8 +536,28 @@ public final class MainActivity extends Activity {
             }
         }
     }
+    private String qualityLabel(String value){
+        if("lowest".equals(value))return "أقل جودة";
+        if("highest".equals(value))return "أعلى جودة";
+        if("default".equals(value))return "الأصلية";
+        return "تلقائي اقتصادي";
+    }
     private void settings(){
         title("الإعدادات والتشخيص","قياسات فعلية من التلفزيون للمساعدة في تحديد مشكلات التوافق");
+        title("جودة العرض","تؤثر في الأفلام والحلقات والقنوات إذا كانت مصادر متعددة متاحة.");
+        final String[] qualities={"تلقائي اقتصادي (مناسب للشاشة)","أقل جودة متاحة","أعلى جودة متاحة","الجودة الأصلية"};
+        final String[] qualityValues={"auto","lowest","highest","default"};
+        final Button quality=button("الجودة الافتراضية: "+qualityLabel(prefs.getString("quality_pref","auto")));
+        stage.addView(quality,lp(-1,dp(53)));
+        quality.setOnClickListener(new View.OnClickListener(){public void onClick(View view){
+            new android.app.AlertDialog.Builder(MainActivity.this).setTitle("اختيار الجودة الافتراضية")
+              .setItems(qualities,new android.content.DialogInterface.OnClickListener(){
+                public void onClick(android.content.DialogInterface dialog,int index){
+                    prefs.edit().putString("quality_pref",qualityValues[index]).apply();
+                    quality.setText("الجودة الافتراضية: "+qualities[index]);
+                }
+              }).show();
+        }});
         Button sample=button("اختبار مشغل MP4 بمقطع CC0 مرخّص");
         stage.addView(sample,lp(dp(320),dp(52)));
         sample.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
