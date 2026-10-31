@@ -40,13 +40,14 @@ import java.util.concurrent.TimeUnit;
  */
 public final class MainActivity extends Activity {
     private static final int NAVY=0xFF081526, PANEL=0xFF12263E, GOLD=0xFFE5BF7D, WHITE=0xFFF7F6F0, MUTED=0xFFBBC5D1;
-    private final String[] labels={"الرئيسية","الأفلام","المسلسلات","القنوات","المفضلة","البحث","الإعدادات"};
-    private final String[] modes={"home","movie","series","channel","favorites","search","settings"};
+    private final String[] labels={"الرئيسية","الأفلام","المسلسلات","القنوات","الأطفال","المفضلة","البحث","الإعدادات"};
+    private final String[] modes={"home","movie","series","channel","kids","favorites","search","settings"};
     private LinearLayout stage,root,menu;
     private Button[] navButtons;
     private ScrollView scrolling;
     private TextView notice;
     private String mode="home";
+    private String kidsKind="all",kidsCountry="",kidsLanguage="";
     private String lastMode="home";
     private String networkErrors="";
     private boolean loading=false,hasLoaded=false;
@@ -217,6 +218,7 @@ public final class MainActivity extends Activity {
         }
         if("home".equals(mode)){home();return;}
         if("movie".equals(mode)||"series".equals(mode)||"channel".equals(mode)){listing(mode,false);return;}
+        if("kids".equals(mode)){kids();return;}
         if("favorites".equals(mode)){favorites();return;}
         if("search".equals(mode)){search();return;}
         if("settings".equals(mode)){settings();return;}
@@ -244,6 +246,9 @@ public final class MainActivity extends Activity {
         section("أحدث الأفلام",movies,"movie",8);
         section("المسلسلات",series,"series",8);
         section("القنوات المتاحة",channels,"channel",8);
+        Button kidsShortcut=button("★ عالم الأطفال — قنوات وأفلام ومسلسلات");kidsShortcut.setTextSize(18);
+        stage.addView(kidsShortcut,lp(-1,dp(60)));
+        kidsShortcut.setOnClickListener(new View.OnClickListener(){public void onClick(View v){mode="kids";render();}});
         categoriesRow();
         resumeRow();
         ArrayList<JSONObject> recent=new ArrayList<JSONObject>();
@@ -278,6 +283,95 @@ public final class MainActivity extends Activity {
             intent.putExtra("stream_url",resumeUrl);
             startActivity(intent);
         }});
+    }
+    private String countryLabel(String code){
+        if("US".equals(code))return "الولايات المتحدة";
+        if("TR".equals(code))return "تركيا";
+        if("SA".equals(code))return "السعودية";
+        if("GB".equals(code))return "بريطانيا";
+        if("AR".equals(code))return "الأرجنتين";
+        if("DE".equals(code))return "ألمانيا";
+        if("FR".equals(code))return "فرنسا";
+        if("ES".equals(code))return "إسبانيا";
+        return code;
+    }
+    private String languageLabel(String code){
+        if("ar".equals(code))return "العربية";
+        if("en".equals(code))return "الإنجليزية";
+        if("tr".equals(code))return "التركية";
+        if("es".equals(code))return "الإسبانية";
+        if("de".equals(code))return "الألمانية";
+        if("fr".equals(code))return "الفرنسية";
+        if("und".equals(code))return "بلا حوار";
+        return code;
+    }
+    private ArrayList<JSONObject> kidsItems(String type){
+        ArrayList<JSONObject> all=new ArrayList<JSONObject>();
+        JSONArray src=data(type);
+        for(int i=0;i<src.length();i++){
+            JSONObject item=src.optJSONObject(i);if(item==null || !item.optBoolean("is_kids",false))continue;
+            if(!kidsCountry.isEmpty()&&!kidsCountry.equals(str(item,"country_code")))continue;
+            if(!kidsLanguage.isEmpty()&&!kidsLanguage.equals(str(item,"language_code")))continue;
+            try{item.put("_type",type);}catch(Exception ignored){}
+            all.add(item);
+        }
+        return all;
+    }
+    private void kids(){
+        title("★ عالم الأطفال","قنوات وأفلام ومسلسلات مناسبة للعائلة، بدون متصفح خارجي");
+        TextView note=text("تظهر المواد المرخّصة ذات الروابط المباشرة فقط. قد يختلف توفر القنوات بحسب البلد أو الجهاز.",14,MUTED,false);
+        stage.addView(note,gap(0,11));
+        LinearLayout typeRow=horizontal();stage.addView(typeRow,gap(5,10));
+        final String[] kinds={"all","movie","series","channel"},names={"الكل","أفلام","مسلسلات","قنوات"};
+        for(int i=0;i<kinds.length;i++){
+            final String selected=kinds[i];
+            Button b=button(names[i]+(selected.equals(kidsKind)?" ✓":""));b.setTextSize(12);
+            typeRow.addView(b,new LinearLayout.LayoutParams(0,dp(48),1));
+            b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){kidsKind=selected;render();}});
+        }
+        java.util.LinkedHashSet<String> countries=new java.util.LinkedHashSet<String>();
+        java.util.LinkedHashSet<String> languages=new java.util.LinkedHashSet<String>();
+        for(String type:new String[]{"movie","series","channel"}){
+            JSONArray input=data(type);
+            for(int i=0;i<input.length();i++){
+                JSONObject x=input.optJSONObject(i);if(x==null || !x.optBoolean("is_kids",false))continue;
+                String c=str(x,"country_code"),l=str(x,"language_code");
+                if(!c.isEmpty())countries.add(c);
+                if(!l.isEmpty())languages.add(l);
+            }
+        }
+        kidsFilterRow("الدولة",countries,true);
+        kidsFilterRow("اللغة",languages,false);
+        boolean visible=false;
+        for(String type:new String[]{"movie","series","channel"}){
+            if(!"all".equals(kidsKind)&&!type.equals(kidsKind))continue;
+            ArrayList<JSONObject> items=kidsItems(type);
+            if(!items.isEmpty()){
+                visible=true;
+                title("movie".equals(type)?"أفلام الأطفال":"series".equals(type)?"مسلسلات ومغامرات":"قنوات الأطفال المباشرة",items.size()+" متاح");
+                cards(items,AppConfig.MAX_ITEMS);
+            }
+        }
+        if(!visible)empty("لا تتوفر عناصر مناسبة لفلاترك. لن تُعرض روابط غير مفحوصة.");
+    }
+    private void kidsFilterRow(String heading,java.util.LinkedHashSet<String> options,final boolean country){
+        if(options.isEmpty())return;
+        TextView label=text(heading,14,MUTED,true);stage.addView(label,gap(10,2));
+        HorizontalScrollView scroll=new HorizontalScrollView(this);scroll.setHorizontalScrollBarEnabled(false);
+        LinearLayout buttons=horizontal();scroll.addView(buttons);stage.addView(scroll,gap(0,4));
+        String current=country?kidsCountry:kidsLanguage;
+        Button all=button("الكل"+(current.isEmpty()?" ✓":""));buttons.addView(all,lp(dp(88),dp(44)));
+        all.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            if(country)kidsCountry="";else kidsLanguage="";render();
+        }});
+        for(final String code:options){
+            String caption=country?countryLabel(code):languageLabel(code);
+            Button b=button(caption+(current.equals(code)?" ✓":""));b.setTextSize(12);
+            LinearLayout.LayoutParams p=lp(dp(156),dp(44));p.setMargins(dp(4),0,dp(4),0);buttons.addView(b,p);
+            b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                if(country)kidsCountry=code;else kidsLanguage=code;render();
+            }});
+        }
     }
     private void categoriesRow(){
         if(categories.length()==0)return;
