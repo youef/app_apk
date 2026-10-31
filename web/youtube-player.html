@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>YouTube · العز TV</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#06070b;color:#fff;font-family:Arial,sans-serif;overflow:hidden}
+.layout{display:flex;flex-direction:column;height:100%;width:100%}
+.stage{position:relative;flex:1;min-height:200px;display:flex;justify-content:center;background:#000}
+#player{width:100%;height:100%;min-width:200px;min-height:200px}
+.controls{display:flex;align-items:center;justify-content:center;gap:14px;background:#12151c;padding:9px 16px;min-height:58px}
+button{background:#262b35;color:#fff;border:1px solid #444d5e;font-size:16px;min-width:114px;min-height:43px;border-radius:8px;font-weight:bold}
+button:focus,button:hover{background:#dc2b48;outline:3px solid #ff8192}
+#status{font-size:12px;color:#c7cedc;text-align:center;padding:6px 10px;background:#14151c}
+@media(max-width:560px){button{min-width:70px;font-size:13px}.controls{gap:5px;padding:5px}}
+</style></head><body>
+<main class="layout">
+<div class="stage" id="player"></div>
+<div class="controls" aria-label="تحكم يوتيوب بالريموت">
+<button id="play" type="button">▶ تشغيل</button>
+<button id="pause" type="button">⏸ إيقاف مؤقت</button>
+<button id="back10" type="button">↶ 10 ثوانٍ</button>
+<button id="next10" type="button">10 ثوانٍ ↷</button>
+</div>
+<div id="status" role="status">يتم تشغيل الفيديو من يوتيوب الرسمي. استخدم الأسهم ثم OK.</div>
+</main>
+<script>
+(function(){
+"use strict";
+var params=new URLSearchParams(location.search);
+var id=params.get("v")||"";
+var status=document.getElementById("status");
+if(!/^[A-Za-z0-9_-]{11}$/.test(id)){status.textContent="رابط الفيديو غير صالح";return;}
+var player=null,ready=false;
+function note(v){status.textContent=v;}
+window.onYouTubeIframeAPIReady=function(){
+try{
+player=new YT.Player("player",{
+ videoId:id,width:"100%",height:"100%",
+ playerVars:{playsinline:1,controls:1,rel:0,origin:location.origin,enablejsapi:1},
+ events:{onReady:function(){ready=true;note("يوتيوب جاهز. اختر تشغيل بالريموت.");
+  document.getElementById("play").focus();},
+  onError:function(e){note("تعذر تشغيل الفيديو داخل YouTube (رمز "+e.data+"). ربما يمنع الناشر التضمين أو الجهاز قديم.");},
+  onAutoplayBlocked:function(){note("اضغط زر تشغيل لبدء الفيديو.");}
+ }
+});
+}catch(e){note("تعذر تهيئة المشغل. يحتاج جهازك متصفح فيديو أحدث.");}
+};
+function cmd(name,n){
+ if(!ready||!player||typeof player[name]!=="function"){note("المشغل غير متاح على هذا الجهاز أو لم يجهز بعد.");return;}
+ try{if(n===undefined)player[name]();else player[name](n,true);}
+ catch(e){note("الأمر غير مدعوم بهذا المتصفح.");}
+}
+window.alEzzPlayer={
+ playVideo:function(){cmd("playVideo");},
+ pauseVideo:function(){cmd("pauseVideo");},
+ toggleVideo:function(){if(!ready)return;try{
+  player.getPlayerState()===1?cmd("pauseVideo"):cmd("playVideo");
+ }catch(e){cmd("playVideo");}},
+ seek:function(s){if(!ready)return;try{cmd("seekTo",Math.max(0,player.getCurrentTime()+s));}catch(e){}}
+};
+document.getElementById("play").onclick=window.alEzzPlayer.playVideo;
+document.getElementById("pause").onclick=window.alEzzPlayer.pauseVideo;
+document.getElementById("back10").onclick=function(){window.alEzzPlayer.seek(-10);};
+document.getElementById("next10").onclick=function(){window.alEzzPlayer.seek(10);};
+document.addEventListener("keydown",function(e){
+ if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].indexOf(e.key)>=0){return;}
+ if(e.key==="MediaPlayPause"||e.key===" "){if(e.target.tagName!=="BUTTON"){
+   e.preventDefault();window.alEzzPlayer.toggleVideo();
+ }}
+});
+var script=document.createElement("script");
+script.src="https://www.youtube.com/iframe_api";script.async=true;
+script.onerror=function(){note("تعذر تحميل مكتبة يوتيوب. تحقق من المتصفح والإنترنت.");};
+document.head.appendChild(script);
+setTimeout(function(){if(!ready)note("التحميل بطيء أو WebView قديم؛ يوتيوب الحديث قد لا يعمل على Android 4.4.4.");},18000);
+})();
+</script></body></html>
