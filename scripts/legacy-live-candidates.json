@@ -44,6 +44,54 @@
     {
       "name": "KIDS - Zarok TV Kurdish broadcast",
       "url": "https://zindikurmanci.zaroktv.com.tr/hls/stream.m3u8"
+    },
+    {
+      "name": "GLOBAL KIDS US BabyFirst (720p)",
+      "url": "https://cdn.fast.jwp.services/v1/channel/1_jB6940Ei_TvhvIHDL/manifest.m3u8"
+    },
+    {
+      "name": "GLOBAL KIDS US PBS Kids (720p)",
+      "url": "https://livestream.pbskids.org/out/v1/14507d931bbe48a69287e4850e53443c/est.m3u8"
+    },
+    {
+      "name": "GLOBAL KIDS DE KiKA (1080p) [Not 24/7]",
+      "url": "https://kikahls.akamaized.net/hls/live/2022690/livetvkika_ww/master.m3u8"
+    },
+    {
+      "name": "GLOBAL KIDS ES Logos TV Kids (720p) [Not 24/7]",
+      "url": "https://streamer1.streamhost.org/salive/logoskidsH/playlist.m3u8"
+    },
+    {
+      "name": "GLOBAL KIDS IT BeJoy.kids (1080p)",
+      "url": "https://stream.paroledivita.org/bejoy.m3u8"
+    },
+    {
+      "name": "GLOBAL KIDS BR Kuriakos Kids (1080p)",
+      "url": "https://w2.manasat.com/kkids/smil:kkids.smil/playlist.m3u8"
+    },
+    {
+      "name": "GLOBAL KIDS BR Gospel Cartoon (360p)",
+      "url": "https://stmv1.srvif.com/gospelcartoon/gospelcartoon/playlist.m3u8"
+    },
+    {
+      "name": "GLOBAL KIDS TR Minika Cocuk (720p)",
+      "url": "https://rnttwmjcin.turknet.ercdn.net/lcpmvefbyo/minikago_cocuk/minikago_cocuk.m3u8"
+    },
+    {
+      "name": "GLOBAL KIDS KR EBS kids (400p) [Not 24/7]",
+      "url": "https://ebsonair.ebs.co.kr/ebsufamilypc/familypc1m/playlist.m3u8"
+    },
+    {
+      "name": "GLOBAL KIDS CA TVOKids (720p)",
+      "url": "https://fastly.live.brightcove.com/6369851620112/us-east-1/15364602001/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJob3N0IjoicGZncmlmLmVncmVzcy50N2M3emwiLCJhY2NvdW50X2lkIjoiMTUzNjQ2MDIwMDEiLCJlaG4iOiJmYXN0bHkubGl2ZS5icmlnaHRjb3ZlLmNvbSIsImlzcyI6ImJsaXZlLXBsYXliYWNrLXNvdXJjZS1hcGkiLCJzdWIiOiJwYXRobWFwdG9rZW4iLCJhdWQiOlsiMTUzNjQ2MDIwMDEiXSwianRpIjoiNjM2OTg1MTYyMDExMiJ9.zRE6fD9JwdbNLUIK5zgvlTAvXCQ3HeeE5p0yH0Pd3-Q/playlist-hls.m3u8"
+    },
+    {
+      "name": "GLOBAL KIDS CA TVOKids",
+      "url": "https://bcovlive-a.akamaihd.net/rf86f817779524249abf842af6d16f55f/us-east-1/15364602001/playlist.m3u8"
+    },
+    {
+      "name": "GLOBAL KIDS IN Epic Kids Digital (1080p)",
+      "url": "https://cc-t8lqe1o99pszu.akamaized.net/v1/master/3722c60a815c199d9c0ef36c5b73da68a62b09d1/cc-t8lqe1o99pszu/playlist.m3u8"
     }
   ]
 }
