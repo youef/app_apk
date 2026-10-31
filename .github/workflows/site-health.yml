@@ -1,0 +1,48 @@
+name: Al Ezz TV - Public Website Smoke Test
+on:
+  workflow_run:
+    workflows:
+      - "Al Ezz TV - Web and Admin"
+      - "pages build and deployment"
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: al-ezz-tv-public-smoke
+  cancel-in-progress: true
+
+jobs:
+  website-health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verify public viewer, root route, and administration
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="https://youef.github.io/app_apk/"
+          for attempt in $(seq 1 12); do
+            echo "Checking public website, attempt $attempt"
+            if curl -fLsS --max-time 12 -o /tmp/alezz-root.html "$ROOT" &&
+               curl -fLsS --max-time 12 -o /tmp/alezz-web.html "${ROOT}web/" &&
+               curl -fLsS --max-time 12 -o /tmp/alezz-access.js "${ROOT}web/access.js" &&
+               curl -fLsS --max-time 12 -o /tmp/alezz-admin.html "${ROOT}admin/" &&
+               grep -Eq 'activationGate|web/' /tmp/alezz-root.html &&
+               grep -q 'activationGate' /tmp/alezz-web.html &&
+               grep -q 'AL_EZZ_ACCESS' /tmp/alezz-access.js &&
+               grep -q 'adminGroups' /tmp/alezz-admin.html; then
+              echo "OK: Root site, full web viewer, activation module, and administration route are reachable."
+              echo "Viewer: ${ROOT}web/"
+              echo "Admin: ${ROOT}admin/"
+              exit 0
+            fi
+            if [[ "$attempt" -lt 12 ]]; then sleep 8; fi
+          done
+          echo "::error::Al Ezz TV is not publicly serving the correct files."
+          for file in /tmp/alezz-{root,web,admin}.html; do
+            if [[ -f "$file" ]]; then echo "$file"; head -c 250 "$file"; echo; fi
+          done
+          exit 1
