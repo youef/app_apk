@@ -36,8 +36,16 @@ public final class CatalogApi {
         JSONArray output=new JSONArray();
         for(int i=0;i<input.length();i++){
             JSONObject item=input.optJSONObject(i);
-            if(item==null || !StreamQuality.isDirectUrl(item.optString("stream_url","")))continue;
-            if("aseel_channels".equals(table) && !"stream".equals(item.optString("playback_mode","stream")))continue;
+            if(item==null)continue;
+            boolean youtube=YouTubeLink.usable(item.optString("youtube_url",""));
+            boolean direct=StreamQuality.isDirectUrl(item.optString("stream_url",""));
+            if(!youtube&&!direct)continue;
+            if("aseel_channels".equals(table)){
+                String mode=item.optString("playback_mode","stream");
+                if("youtube_embed".equals(mode) && !youtube)continue;
+                if("stream".equals(mode) && !direct && !youtube)continue;
+                if(!"stream".equals(mode)&&!"youtube_embed".equals(mode))continue;
+            }
             if(!"published".equals(item.optString("status","")) || !"approved".equals(item.optString("rights_status","")))continue;
             output.put(item);
         }

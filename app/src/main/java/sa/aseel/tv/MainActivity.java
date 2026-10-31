@@ -42,8 +42,8 @@ import java.util.concurrent.TimeUnit;
  */
 public final class MainActivity extends Activity {
     private static final int NAVY=0xFF090B10, PANEL=0xFF191D26, GOLD=0xFFFF4450, WHITE=0xFFF8F9FC, MUTED=0xFFACB3C1;
-    private final String[] labels={"الرئيسية","الأفلام","المسلسلات","القنوات","الأطفال","المفضلة","البحث","الإعدادات"};
-    private final String[] modes={"home","movie","series","channel","kids","favorites","search","settings"};
+    private final String[] labels={"الرئيسية","يوتيوب","الأفلام","المسلسلات","القنوات","الأطفال","المفضلة","البحث","الإعدادات"};
+    private final String[] modes={"home","youtube","movie","series","channel","kids","favorites","search","settings"};
     private LinearLayout stage,root,menu;
     private Button[] navButtons;
     private ScrollView scrolling;
@@ -137,7 +137,7 @@ public final class MainActivity extends Activity {
         rail.addView(railScroll,new LinearLayout.LayoutParams(-1,0,1));
         menu=vertical();railScroll.addView(menu,new ScrollView.LayoutParams(-1,-2));
         navButtons=new Button[labels.length];
-        final String[] icons={"⌂","▣","▤","●","★","♡","⌕","⚙"};
+        final String[] icons={"⌂","▶","▣","▤","●","★","♡","⌕","⚙"};
         for(int i=0;i<labels.length;i++){
             final String target=modes[i];
             Button item=button("  "+icons[i]+"   "+labels[i]);
@@ -268,6 +268,7 @@ public final class MainActivity extends Activity {
         if("home".equals(mode))home();
         else if("movie".equals(mode)||"series".equals(mode)||"channel".equals(mode))listing(mode,false);
         else if("kids".equals(mode))kids();
+        else if("youtube".equals(mode))youtube();
         else if("favorites".equals(mode))favorites();
         else if("search".equals(mode))search();
         else if("settings".equals(mode))settings();
@@ -445,6 +446,12 @@ public final class MainActivity extends Activity {
             }
         }
         if(!child.isEmpty()){title("★ ركن الأطفال","محتوى مختار للعائلة");cards(child,8);}
+        Button ytButton=button("▶   يوتيوب  |  شاهد روابط الفيديو داخل العز TV");
+        ytButton.setTextSize(18);
+        stage.addView(ytButton,gap(8,17));
+        ytButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            mode="youtube";pendingFocusTag="input:youtube";render();
+        }});
         categoriesRow();
         if(movies.length()+series.length()+channels.length()==0)
             empty("المكتبة خالية حاليًا. تظهر الأعمال المعتمدة تلقائيًا بعد إضافتها.");
@@ -528,6 +535,51 @@ public final class MainActivity extends Activity {
             all.add(item);
         }
         return all;
+    }
+    private void youtube(){
+        title("▶ يوتيوب على العز TV","الصق رابط فيديو YouTube رسمي، أو تصفح الفيديوهات المعتمدة");
+        TextView info=text("الروابط تُشغّل داخل التطبيق بمشغل يوتيوب الرسمي. بعض الفيديوهات أو شاشات Android 4.4.4 لا تدعم التضمين.",14,MUTED,false);
+        stage.addView(info,gap(3,12));
+        final EditText input=new EditText(this);
+        input.setTag("input:youtube");input.setSingleLine(true);
+        input.setTextColor(WHITE);input.setHintTextColor(0xFF8D94A5);
+        input.setTextSize(16);input.setHint("https://www.youtube.com/watch?v=...");
+        input.setBackgroundDrawable(background(0xFF1B1E2A,12,0xFF3E4354));
+        input.setPadding(dp(18),0,dp(18),0);
+        stage.addView(input,lp(-1,dp(54)));
+        Button open=button("▶  شغّل رابط يوتيوب");
+        open.setBackgroundDrawable(background(0xFFB5233D,12,GOLD));
+        stage.addView(open,gap(12,17));
+        open.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            String url=input.getText().toString().trim();
+            if(!YouTubeLink.usable(url)){
+                showStatus("الرابط غير صالح. استخدم رابط فيديو من youtube.com أو youtu.be، وليس قائمة تشغيل.");
+                return;
+            }
+            openYouTube(url,"فيديو يوتيوب");
+        }});
+        ArrayList<JSONObject> choices=new ArrayList<JSONObject>();
+        for(String type:new String[]{"movie","channel"}){
+            JSONArray list=data(type);
+            for(int i=0;i<list.length();i++){
+                JSONObject item=list.optJSONObject(i);
+                if(item==null||!YouTubeLink.usable(str(item,"youtube_url")))continue;
+                try{item.put("_type",type);}catch(Exception ignored){}
+                choices.add(item);
+            }
+        }
+        if(!choices.isEmpty()){
+            title("فيديوهات يوتيوب المعتمدة","اختر بالأسهم واضغط OK");
+            cards(choices,TV_PAGE_SIZE);
+        }else empty("لم تُضف روابط يوتيوب معتمدة إلى المكتبة بعد. يمكنك تشغيل رابطك مباشرة أعلاه.");
+    }
+    private void openYouTube(String url,String title){
+        if(!unlocked)return;
+        if(!YouTubeLink.usable(url)){showStatus("رابط يوتيوب غير صالح");return;}
+        Intent i=new Intent(this,YouTubeActivity.class);
+        i.putExtra("youtube_url",url);
+        i.putExtra("title",title);
+        startActivity(i);
     }
     private void kids(){
         title("★ عالم الأطفال","قنوات وأفلام ومسلسلات مناسبة للعائلة، بدون متصفح خارجي");
@@ -763,6 +815,10 @@ public final class MainActivity extends Activity {
         focusWhenReady("btn:رجوع إلى القائمة");
     }
     private void play(JSONObject item,String nextUrl,String nextId,String nextTitle){
+        String youtube=str(item,"youtube_url");
+        if(YouTubeLink.usable(youtube)){
+            openYouTube(youtube,str(item,"title_ar"));return;
+        }
         String url=str(item,"stream_url");
         if(!StreamQuality.isDirectUrl(url)){showStatus("هذا العنصر لا يحتوي على رابط MP4/HLS مباشر صالح");return;}
         Intent i=new Intent(this,PlayerActivity.class);
