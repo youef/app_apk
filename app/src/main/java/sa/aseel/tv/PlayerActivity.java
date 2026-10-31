@@ -405,5 +405,10 @@ public final class PlayerActivity extends Activity {
     }
     private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
     @Override protected void onPause(){super.onPause();if(video!=null&&ready){video.pause();if(!live)savePosition(video.getCurrentPosition());}}
+    @Override protected void onStop(){
+        // Do not leave a playable movie reachable from Android recent apps without PIN re-entry.
+        super.onStop();
+        if(!isFinishing()&&!isChangingConfigurations())finish();
+    }
     @Override protected void onDestroy(){handler.removeCallbacks(hideOverlay);handler.removeCallbacks(tick);if(video!=null)video.stopPlayback();if(mediaProxy!=null)mediaProxy.close();super.onDestroy();}
 }
