@@ -8,6 +8,7 @@ import android.net.Uri;
 import android.os.Handler;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
@@ -28,6 +29,7 @@ import android.widget.TextView;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -49,6 +51,10 @@ public final class MainActivity extends Activity {
     private String mode="home";
     private String kidsKind="all",kidsCountry="",kidsLanguage="";
     private String lastMode="home";
+    private String subPage="",returnFocusTag="",pendingFocusTag="";
+    private JSONObject activeDetail,activeSeries;
+    private int listingPage=0,handledArrow=-1;
+    private static final int TV_PAGE_SIZE=20;
     private String networkErrors="";
     private boolean loading=false,hasLoaded=false;
     private long lastUpdatedAt=0L;
@@ -106,16 +112,19 @@ public final class MainActivity extends Activity {
         navButtons=new Button[labels.length];
         for(int i=0;i<labels.length;i++){
             final String target=modes[i];
-            Button b=button(labels[i]);b.setTextSize(14);
+            Button b=button(labels[i]);b.setTextSize(14);b.setTag("nav:"+target);
             LinearLayout.LayoutParams p=lp(dp(94),dp(44));p.setMargins(dp(3),0,dp(3),0);
             menu.addView(b,p);
             navButtons[i]=b;
-            b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){mode=target;render();}});
+            b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                listingPage=0;pendingFocusTag="nav:"+target;mode=target;render();
+            }});
         }
         notice=text("",12,MUTED,false);
         notice.setPadding(dp(24),dp(4),dp(24),dp(4));
         notice.setVisibility(View.GONE);root.addView(notice,lp(-1,-2));
         scrolling=new ScrollView(this);scrolling.setFillViewport(true);
+        scrolling.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
         scrolling.setSmoothScrollingEnabled(false);
         root.addView(scrolling,new LinearLayout.LayoutParams(-1,0,1));
         stage=vertical();stage.setPadding(dp(27),dp(14),dp(27),dp(38));
@@ -124,7 +133,7 @@ public final class MainActivity extends Activity {
     }
     private Button button(String label){
         final Button b=new Button(this);
-        b.setText(label);b.setTextSize(15);b.setTextColor(WHITE);b.setAllCaps(false);
+        b.setText(label);b.setTag("btn:"+label);b.setTextSize(15);b.setTextColor(WHITE);b.setAllCaps(false);
         b.setPadding(dp(12),dp(5),dp(12),dp(5));
         b.setFocusable(true);
         b.setBackgroundDrawable(background(PANEL,10,0xFF343B49));
@@ -210,22 +219,121 @@ public final class MainActivity extends Activity {
     }
     private void render(){
         if(stage==null)return;
+        final String previous=pendingFocusTag.length()>0?pendingFocusTag:currentFocusTag();
+        pendingFocusTag="";
+        subPage="";
         stage.removeAllViews();scrolling.scrollTo(0,0);
-        if(navButtons!=null){
-            for(int j=0;j<navButtons.length;j++){
-                boolean selected=modes[j].equals(mode);
-                if(!navButtons[j].isFocused()){
-                    navButtons[j].setTextColor(selected?WHITE:WHITE);
-                    navButtons[j].setBackgroundDrawable(background(selected?0xFFAB2533:PANEL,10,selected?GOLD:0xFF343B49));
-                }
+        if(navButtons!=null)for(int j=0;j<navButtons.length;j++){
+            boolean selected=modes[j].equals(mode);
+            if(!navButtons[j].isFocused()){
+                navButtons[j].setTextColor(WHITE);
+                navButtons[j].setBackgroundDrawable(background(selected?0xFFAB2533:PANEL,10,selected?GOLD:0xFF343B49));
             }
         }
-        if("home".equals(mode)){home();return;}
-        if("movie".equals(mode)||"series".equals(mode)||"channel".equals(mode)){listing(mode,false);return;}
-        if("kids".equals(mode)){kids();return;}
-        if("favorites".equals(mode)){favorites();return;}
-        if("search".equals(mode)){search();return;}
-        if("settings".equals(mode)){settings();return;}
+        if("home".equals(mode))home();
+        else if("movie".equals(mode)||"series".equals(mode)||"channel".equals(mode))listing(mode,false);
+        else if("kids".equals(mode))kids();
+        else if("favorites".equals(mode))favorites();
+        else if("search".equals(mode))search();
+        else if("settings".equals(mode))settings();
+        focusWhenReady(previous.length()>0?previous:"nav:"+mode);
+    }
+    private String currentFocusTag(){
+        View focused=getCurrentFocus();
+        Object tag=focused==null?null:focused.getTag();
+        return tag instanceof String?(String)tag:"";
+    }
+    private View tagged(View node,String key){
+        if(node==null||key==null||key.length()==0)return null;
+        if(key.equals(node.getTag())&&node.isFocusable()&&node.isEnabled()&&node.getVisibility()==View.VISIBLE)return node;
+        if(node instanceof ViewGroup){
+            ViewGroup group=(ViewGroup)node;
+            for(int i=0;i<group.getChildCount();i++){
+                View found=tagged(group.getChildAt(i),key);
+                if(found!=null)return found;
+            }
+        }
+        return null;
+    }
+    private void focusWhenReady(final String key){
+        if(stage==null)return;
+        stage.post(new Runnable(){public void run(){
+            if(isFinishing()||root==null)return;
+            View target=tagged(root,key);
+            if(target==null)target=tagged(root,"nav:"+mode);
+            if(target==null&&navButtons!=null&&navButtons.length>0)target=navButtons[0];
+            if(target!=null){target.requestFocus();ensureVisible(target);}
+        }});
+    }
+    private void ensureVisible(View view){
+        if(view!=null&&view.getWidth()>0&&view.getHeight()>0)
+            view.requestRectangleOnScreen(new Rect(0,0,view.getWidth(),view.getHeight()),true);
+    }
+    private boolean remoteTarget(View view){
+        return view!=null&&view.isFocusable()&&view.isEnabled()&&view.getVisibility()==View.VISIBLE
+            &&view.getWidth()>0&&view.getHeight()>0
+            &&(view instanceof Button||view instanceof EditText
+              ||(view.getTag() instanceof String&&((String)view.getTag()).startsWith("card:")));
+    }
+    private void collectRemote(View node,List<View> out){
+        if(node==null||node.getVisibility()!=View.VISIBLE)return;
+        if(remoteTarget(node))out.add(node);
+        if(node instanceof ViewGroup){
+            ViewGroup group=(ViewGroup)node;
+            for(int i=0;i<group.getChildCount();i++)collectRemote(group.getChildAt(i),out);
+        }
+    }
+    /** Spatial remote navigation works without Android TV Leanback or touch support. */
+    private boolean moveRemoteFocus(int key){
+        ArrayList<View> all=new ArrayList<View>();collectRemote(root,all);
+        if(all.isEmpty())return false;
+        View current=getCurrentFocus();
+        if(!remoteTarget(current)){
+            View fallback=tagged(root,"nav:"+mode);
+            if(fallback==null)fallback=all.get(0);
+            fallback.requestFocus();ensureVisible(fallback);return true;
+        }
+        if(current instanceof EditText&&(key==KeyEvent.KEYCODE_DPAD_LEFT||key==KeyEvent.KEYCODE_DPAD_RIGHT))
+            return false;
+        int[] original=new int[2];current.getLocationOnScreen(original);
+        int curX=original[0]+current.getWidth()/2,curY=original[1]+current.getHeight()/2;
+        boolean sideways=key==KeyEvent.KEYCODE_DPAD_LEFT||key==KeyEvent.KEYCODE_DPAD_RIGHT;
+        View best=null;double bestScore=Double.MAX_VALUE;
+        for(View candidate:all){
+            if(candidate==current)continue;
+            int[] pos=new int[2];candidate.getLocationOnScreen(pos);
+            int dx=pos[0]+candidate.getWidth()/2-curX,dy=pos[1]+candidate.getHeight()/2-curY;
+            if(key==KeyEvent.KEYCODE_DPAD_LEFT&&dx>=-dp(8))continue;
+            if(key==KeyEvent.KEYCODE_DPAD_RIGHT&&dx<=dp(8))continue;
+            if(key==KeyEvent.KEYCODE_DPAD_UP&&dy>=-dp(8))continue;
+            if(key==KeyEvent.KEYCODE_DPAD_DOWN&&dy<=dp(8))continue;
+            boolean overlap=sideways?
+              pos[1]<original[1]+current.getHeight()&&pos[1]+candidate.getHeight()>original[1]:
+              pos[0]<original[0]+current.getWidth()&&pos[0]+candidate.getWidth()>original[0];
+            double score=Math.abs(sideways?dx:dy)+Math.abs(sideways?dy:dx)*(sideways?3.5:1.3)
+                +(overlap?0:dp(sideways?720:80));
+            if(score<bestScore){bestScore=score;best=candidate;}
+        }
+        if(best==null)return false;
+        best.requestFocus();ensureVisible(best);return true;
+    }
+    @Override public boolean dispatchKeyEvent(KeyEvent event){
+        int code=event.getKeyCode();
+        boolean directional=code==KeyEvent.KEYCODE_DPAD_LEFT||code==KeyEvent.KEYCODE_DPAD_RIGHT||
+                            code==KeyEvent.KEYCODE_DPAD_UP||code==KeyEvent.KEYCODE_DPAD_DOWN;
+        if(directional&&event.getAction()==KeyEvent.ACTION_UP&&code==handledArrow){
+            handledArrow=-1;return true;
+        }
+        if(event.getAction()==KeyEvent.ACTION_DOWN){
+            if(directional&&moveRemoteFocus(code)){handledArrow=code;return true;}
+            if(code==KeyEvent.KEYCODE_SEARCH&&event.getRepeatCount()==0){
+                mode="search";pendingFocusTag="nav:search";render();return true;
+            }
+            if(code==KeyEvent.KEYCODE_MENU&&event.getRepeatCount()==0){
+                mode="settings";pendingFocusTag="nav:settings";render();return true;
+            }
+        }
+        return super.dispatchKeyEvent(event);
     }
     private void home(){
         final JSONObject featured=firstFeature();
@@ -414,7 +522,7 @@ public final class MainActivity extends Activity {
             if(!items.isEmpty()){
                 visible=true;
                 title("movie".equals(type)?"أفلام الأطفال":"series".equals(type)?"مسلسلات ومغامرات":"قنوات الأطفال المباشرة",items.size()+" متاح");
-                cards(items,AppConfig.MAX_ITEMS);
+                cards(items,TV_PAGE_SIZE);
             }
         }
         if(!visible)empty("لا تتوفر عناصر مناسبة لفلاترك. لن تُعرض روابط غير مفحوصة.");
@@ -496,14 +604,32 @@ public final class MainActivity extends Activity {
     }
     private void listing(String type,boolean unused){
         String t="movie".equals(type)?"الأفلام":"series".equals(type)?"المسلسلات":"القنوات";
-        title(t,"جميع العناصر المنشورة والمصرح بحقوقها");
         final JSONArray list=data(type);
-        if(!hasLoaded){empty("جاري تحميل البيانات...");return;}
-        if(list.length()==0){empty("لا توجد أعمال متاحة في هذا القسم.");return;}
-        ArrayList<JSONObject> all=new ArrayList<JSONObject>();
-        for(int i=0;i<list.length();i++){JSONObject o=list.optJSONObject(i);
-            if(o!=null){try{o.put("_type",type);}catch(Exception ignored){}all.add(o);}}
-        cards(all,AppConfig.MAX_ITEMS);
+        if(!hasLoaded){title(t,"جاري تحميل البيانات...");return;}
+        if(list.length()==0){title(t,null);empty("لا توجد أعمال متاحة في هذا القسم.");return;}
+        int pages=Math.max(1,(list.length()+TV_PAGE_SIZE-1)/TV_PAGE_SIZE);
+        listingPage=Math.max(0,Math.min(listingPage,pages-1));
+        title(t,"أعمال منشورة ومرخصة  •  الصفحة "+(listingPage+1)+" من "+pages);
+        ArrayList<JSONObject> page=new ArrayList<JSONObject>();
+        for(int i=listingPage*TV_PAGE_SIZE;i<Math.min(list.length(),(listingPage+1)*TV_PAGE_SIZE);i++){
+            JSONObject item=list.optJSONObject(i);
+            if(item!=null){try{item.put("_type",type);}catch(Exception ignored){}page.add(item);}
+        }
+        cards(page,TV_PAGE_SIZE);
+        if(pages>1){
+            LinearLayout row=horizontal();stage.addView(row,gap(4,14));
+            Button back=button("السابق");back.setEnabled(listingPage>0);
+            row.addView(back,lp(dp(152),dp(54)));
+            Button next=button("التالي");next.setEnabled(listingPage<pages-1);
+            LinearLayout.LayoutParams np=lp(dp(152),dp(54));np.setMargins(dp(12),0,0,0);
+            row.addView(next,np);
+            back.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                listingPage--;pendingFocusTag="btn:السابق";render();
+            }});
+            next.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                listingPage++;pendingFocusTag="btn:التالي";render();
+            }});
+        }
     }
     private void cards(ArrayList<JSONObject> all,int max){
         if(all.isEmpty())return;
@@ -520,6 +646,7 @@ public final class MainActivity extends Activity {
             LinearLayout.LayoutParams cardLp=lp(dp(244),-2);
             cardLp.setMargins(dp(5),0,dp(5),0);holder.addView(card,cardLp);
             card.setFocusable(true);card.setClickable(true);
+            card.setTag("card:"+str(item,"_type")+":"+str(item,"id"));
             card.setContentDescription("فتح تفاصيل "+str(item,"title_ar"));
             android.widget.FrameLayout artwork=new android.widget.FrameLayout(this);
             artwork.setBackgroundDrawable(background(0xFF2A2733,10,0));
@@ -555,6 +682,8 @@ public final class MainActivity extends Activity {
         }
     }
     private void details(final JSONObject item){
+        if(!"episodes".equals(subPage))returnFocusTag=currentFocusTag();
+        activeDetail=item;subPage="details";
         stage.removeAllViews();scrolling.scrollTo(0,0);
         Button back=button("رجوع إلى القائمة");stage.addView(back,lp(dp(220),dp(48)));
         back.setOnClickListener(new View.OnClickListener(){public void onClick(View v){mode=lastMode;render();}});
@@ -588,6 +717,7 @@ public final class MainActivity extends Activity {
         favorite.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
             toggleFavorite(t,id);favorite.setText(isFavorite(t,id)?"إزالة من المفضلة":"إضافة للمفضلة");
         }});
+        focusWhenReady("btn:رجوع إلى القائمة");
     }
     private void play(JSONObject item,String nextUrl,String nextId,String nextTitle){
         String url=str(item,"stream_url");
@@ -604,6 +734,7 @@ public final class MainActivity extends Activity {
         startActivity(i);
     }
     private void loadEpisodes(final JSONObject seriesItem){
+        activeSeries=seriesItem;subPage="episodes";
         stage.removeAllViews();title("تحميل الحلقات...","يرجى الانتظار");
         new Thread(new Runnable(){public void run(){
             final ArrayList<JSONObject> entries=new ArrayList<JSONObject>();
@@ -801,7 +932,14 @@ public final class MainActivity extends Activity {
         super.onDestroy();
     }
     @Override public void onBackPressed(){
+        if("episodes".equals(subPage)&&activeSeries!=null){
+            details(activeSeries);return;
+        }
+        if("details".equals(subPage)||"category".equals(subPage)){
+            subPage="";pendingFocusTag=returnFocusTag;returnFocusTag="";
+            mode=lastMode;render();return;
+        }
         if("home".equals(mode))super.onBackPressed();
-        else{mode="home";render();}
+        else{listingPage=0;pendingFocusTag="nav:home";mode="home";render();}
     }
 }
