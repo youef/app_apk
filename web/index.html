@@ -12,20 +12,22 @@
  <link rel="preconnect" href="https://fonts.googleapis.com">
  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
- <link rel="icon" type="image/svg+xml" href="alizz-tv-logo.svg">
+ <link rel="icon" type="image/png" href="alizz-tv-transparent.png">
+ <link rel="apple-touch-icon" href="alizz-tv-transparent.png">
+ <meta property="og:image" content="https://youef.github.io/app_apk/web/alizz-tv-transparent.png">
  <link rel="stylesheet" href="styles.css">
  <script defer src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
  <script defer src="config.js"></script>
  <script defer src="access.js"></script>
  <script defer src="app.js"></script>
 </head>
-<body class="viewer-locked"><section id="activationGate" class="activation-gate"><div class="activation-art"><div class="activation-brand">العز <span>TV</span></div><h1>شاشتك. عالمك. العز TV.</h1><p>مكتبة سينمائية للأفلام والمسلسلات والقنوات المباشرة.</p><div class="activation-trust">● مباشر &nbsp; ▶ أفلام &nbsp; ★ أطفال</div></div><form id="activationForm" class="activation-card" autocomplete="off"><div class="activation-lock">◈</div><h2>رمز الدخول لأول مرة</h2><p>فعّل هذا المتصفح مرة واحدة ثم انتقل مباشرة للمشاهدة دائمًا.</p><label for="activationPin">رمز التفعيل</label><input id="activationPin" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" placeholder="● ● ● ● ● ●" required><p id="activationMessage" role="status">أدخل ستة أرقام باستخدام لوحة المفاتيح أو الريموت.</p><button type="submit" class="activation-submit">تفعيل العز TV <span>◀</span></button><small>مسح بيانات المتصفح سيؤدي إلى طلب الرمز مرة أخرى.</small></form></section>
+<body class="viewer-locked"><section id="activationGate" class="activation-gate"><div class="activation-art"><div class="activation-brand"><img class="activation-logo-image" src="alizz-tv-transparent.png" alt="العز TV"><span>العز <span>TV</span></span></div><h1>شاشتك. عالمك. العز TV.</h1><p>مكتبة سينمائية للأفلام والمسلسلات والقنوات المباشرة.</p><div class="activation-trust">● مباشر &nbsp; ▶ أفلام &nbsp; ★ أطفال</div></div><form id="activationForm" class="activation-card" autocomplete="off"><div class="activation-lock">◈</div><h2>رمز الدخول لأول مرة</h2><p>فعّل هذا المتصفح مرة واحدة ثم انتقل مباشرة للمشاهدة دائمًا.</p><label for="activationPin">رمز التفعيل</label><input id="activationPin" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" placeholder="● ● ● ● ● ●" required><p id="activationMessage" role="status">أدخل ستة أرقام باستخدام لوحة المفاتيح أو الريموت.</p><button type="submit" class="activation-submit">تفعيل العز TV <span>◀</span></button><small>مسح بيانات المتصفح سيؤدي إلى طلب الرمز مرة أخرى.</small></form></section>
  <div class="ambient ambient-one" aria-hidden="true"></div>
  <div class="ambient ambient-two" aria-hidden="true"></div>
  <header class="topbar">
   <div class="topbar-inner">
    <a href="index.html" class="brand" id="brand" aria-label="العز TV الرئيسية">
-    <img class="brand-logo-image" src="alizz-tv-logo.svg" alt="" width="48" height="48">
+    <img class="brand-logo-image" src="alizz-tv-transparent.png" alt="" width="48" height="48">
     <span class="brand-copy"><strong>العز<span>TV</span></strong><small>AL EZZ STREAMING</small></span>
    </a>
    <nav class="desktop-nav" aria-label="القائمة الرئيسية">
@@ -134,7 +136,7 @@
  </main>
  <footer class="footer">
   <div class="footer-inner">
-   <div class="footer-brand"><img class="brand-logo-image" src="alizz-tv-logo.svg" alt="" width="40" height="40"><div><strong>العز TV</strong><p>كل الحكايات تبدأ بمشهد</p></div></div>
+   <div class="footer-brand"><img class="brand-logo-image" src="alizz-tv-transparent.png" alt="" width="40" height="40"><div><strong>العز TV</strong><p>كل الحكايات تبدأ بمشهد</p></div></div>
    <p>العز منصة عرض محتوى مرخّص وروابط مصادر رسمية. توفر العناوين والمشغلات مرتبط بمصدر المحتوى وحقوقه.</p>
    <span>© <span id="year"></span> AL EZZ TV</span>
   </div>
@@ -160,7 +162,7 @@
  <div id="authModal" class="modal" role="dialog" aria-modal="true" aria-label="حساب العز" hidden>
   <div class="modal-scrim" data-close-auth></div><div class="auth-panel">
    <button id="authClose" class="modal-close" aria-label="إغلاق">✕</button>
-   <img class="brand-logo-image auth-mark" src="alizz-tv-logo.svg" alt="" width="70" height="70">
+   <img class="brand-logo-image auth-mark" src="alizz-tv-transparent.png" alt="" width="70" height="70">
    <h2 id="authHeading">مرحبًا بك في العز</h2><p id="authDescription">سجّل الدخول لحفظ قائمتك ومتابعة تقدم المشاهدة بين الأجهزة.</p>
    <form id="authForm"><label>البريد الإلكتروني<input type="email" id="authEmail" autocomplete="email" placeholder="name@example.com" required></label>
    <label>كلمة المرور<input id="authPassword" type="password" minlength="6" autocomplete="current-password" placeholder="••••••••" required></label>
