@@ -251,7 +251,17 @@
    n.classList.toggle("grid-view",!!all);n.classList.remove("skeleton-row");
    if (state.loading) { for (let i=0;i<(all?8:5);i++)n.append(el("div","skeleton"));return; }
    const data=filtered(type);
-   if (!data.length) { n.append(empty(type==="movie"?"أفلام":type==="series"?"مسلسلات":"قنوات",state.error));return; }
+   if (type === "channel" && !state.loading && !state.query && !state.category) {
+     for (const number of [1,2,3]) {
+       const link=el("a","media-card official-channel");
+       link.href="https://thmanyah.com"; link.target="_blank"; link.rel="noopener noreferrer";
+       link.setAttribute("aria-label","فتح مشاهدة ثمانية "+number+" عبر الموقع الرسمي");
+       link.style.cssText="display:flex;flex-direction:column;justify-content:center;min-height:170px;padding:24px;text-decoration:none;border:1px solid rgba(255,255,255,.17);border-radius:18px;background:linear-gradient(140deg,#261a1a,#101218);color:white";
+       link.append(el("span","","ثمانية الرياضية"),el("h3","", "ثمانية "+number),el("span","","↗ الانتقال للمشاهدة الرسمية"));
+       n.append(link);
+     }
+   }
+   if (!data.length && type !== "channel") { n.append(empty(type==="movie"?"أفلام":"مسلسلات",state.error));return; }
    data.slice(0,all?200:12).forEach(x => n.append(makeCard(x,type)));
  }
  function categories() {
