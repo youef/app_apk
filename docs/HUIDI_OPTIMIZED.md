@@ -27,3 +27,5 @@
 - MP4 720p/1080p compatibility depends on codec profile and decoder; 360p or 480p H.264/AAC recommended where authorized variants exist.
 - Build uses independent package `sa.aseel.tv.cinema` because previous GitHub debug certificates are not stable across builds. A permanent signing key is still required for a repeatable upgrade path.
 - This version does not claim to eliminate poor bandwidth, inaccessible upstream links, or missing hardware codecs.
+
+- When HLS master playlists expose safe HTTPS same-host rendition URLs, a bounded background check discovers actual resolution/bitrate choices on opening a channel. It never transcodes HLS or guarantees the old system MediaPlayer can decode it. External player remains an option.

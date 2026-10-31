@@ -5,6 +5,7 @@ import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.SharedPreferences;
 import java.util.ArrayList;
+import java.util.HashSet;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.media.MediaPlayer;
@@ -221,6 +222,34 @@ public final class PlayerActivity extends Activity {
             }
         });
         openStream(currentUrl);
+        if(live || currentUrl.toLowerCase(java.util.Locale.US).contains(".m3u8"))
+            discoverHlsRenditions(currentUrl);
+    }
+
+    private void discoverHlsRenditions(final String master){
+        new Thread(new Runnable(){public void run(){
+            final org.json.JSONArray variants=HlsQualityResolver.discover(PlayerActivity.this,master);
+            if(variants.length()<1)return;
+            runOnUiThread(new Runnable(){public void run(){
+                if(isFinishing())return;
+                HashSet<String> known=new HashSet<String>();
+                for(StreamQuality.Source item:sources)known.add(item.url);
+                int added=0;
+                for(int i=0;i<variants.length();i++){
+                    org.json.JSONObject entry=variants.optJSONObject(i);
+                    if(entry==null)continue;
+                    String url=entry.optString("url"),label=entry.optString("label");
+                    if(!known.contains(url) && url.startsWith("https://")){
+                        sources.add(new StreamQuality.Source(label,url));
+                        known.add(url);added++;
+                    }
+                }
+                if(added>0){
+                    updateQualityButton();
+                    streamStatus.setText("اكتشفنا "+added+" جودات من بث HLS • "+qualityName());
+                }
+            }});
+        }},"Aseel-HLS-Renditions").start();
     }
 
     private String qualityName(){
