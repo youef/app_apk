@@ -98,8 +98,20 @@ jobs:
             dist/gradle-build.log
           if-no-files-found: error
           retention-days: 30
-      - name: Publish separate fresh-install APK (never overwrite v3)
-        if: github.ref == 'refs/heads/main'
+      - name: Keep an existing release immutable across signing-key changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view al-ezz-tv-kitkat-install-v4 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "PUBLISH_ALLOWED=false" >> "$GITHUB_ENV"
+            echo "::notice::Existing v4 APK preserved; never replace it with a differently signed CI build. The new build remains available as a workflow artifact."
+          else
+            echo "PUBLISH_ALLOWED=true" >> "$GITHUB_ENV"
+          fi
+      - name: Publish the first clean-install APK only, never replace its signature
+        if: github.ref == 'refs/heads/main' && env.PUBLISH_ALLOWED == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: al-ezz-tv-kitkat-install-v4
