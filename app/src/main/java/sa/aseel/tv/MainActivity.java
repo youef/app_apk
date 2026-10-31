@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Handler;
+import android.widget.FrameLayout;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Rect;
@@ -71,6 +72,8 @@ public final class MainActivity extends Activity {
     private SharedPreferences prefs;
     private PinGate accessGate;
     private boolean unlocked=false;
+    private final Handler splashHandler=new Handler();
+    private boolean splashVisible=false;
     @Override public void onCreate(Bundle bundle){
         super.onCreate(bundle);
         getWindow().getDecorView().setSystemUiVisibility(
@@ -78,8 +81,46 @@ public final class MainActivity extends Activity {
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY|View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         prefs=getSharedPreferences("aseel_user_v2",MODE_PRIVATE);
         api=new CatalogApi(this);
-        if(PinGate.isActivated(this))openActivatedApp();
-        else lockScreen();
+        showWelcome();
+    }
+    /** Native launch experience, safe on API 19 and completely independent of network. */
+    private void showWelcome(){
+        splashVisible=true;
+        FrameLayout screen=new FrameLayout(this);
+        screen.setBackgroundDrawable(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+            new int[]{0xFF08070C,0xFF30101D,0xFF09070D}));
+        LinearLayout group=vertical();group.setGravity(Gravity.CENTER);
+        FrameLayout.LayoutParams center=new FrameLayout.LayoutParams(-1,-2,Gravity.CENTER);
+        group.setPadding(dp(24),dp(16),dp(24),dp(16));screen.addView(group,center);
+        int imageId=getResources().getIdentifier("alizz_brand","drawable",getPackageName());
+        if(imageId!=0){
+            ImageView logo=new ImageView(this);logo.setImageResource(imageId);
+            logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            LinearLayout.LayoutParams logoP=lp(dp(290),dp(250));logoP.gravity=Gravity.CENTER;
+            group.addView(logo,logoP);
+            logo.setAlpha(0f);logo.animate().alpha(1f).setDuration(650).start();
+        }else{
+            TextView logo=text("العز TV",48,WHITE,true);logo.setGravity(Gravity.CENTER);
+            group.addView(logo,lp(-1,dp(130)));
+        }
+        TextView label=text("ALIZZ TV  •  CINEMA EXPERIENCE",16,0xFFFFA9B9,true);
+        label.setGravity(Gravity.CENTER);group.addView(label,gap(14,8));
+        TextView sub=text("عالم من الحكايات على شاشتك",17,0xFFB9ADB8,false);
+        sub.setGravity(Gravity.CENTER);group.addView(sub,gap(0,22));
+        android.widget.ProgressBar progress=new android.widget.ProgressBar(this);
+        LinearLayout.LayoutParams pp=lp(dp(33),dp(33));pp.gravity=Gravity.CENTER;
+        group.addView(progress,pp);
+        TextView foot=text("✦  العز TV",13,0xFFAD6378,false);
+        foot.setGravity(Gravity.CENTER);
+        FrameLayout.LayoutParams fp=new FrameLayout.LayoutParams(-1,dp(40),Gravity.BOTTOM);
+        screen.addView(foot,fp);
+        setContentView(screen);
+        splashHandler.postDelayed(new Runnable(){public void run(){
+            if(isFinishing()||!splashVisible)return;
+            splashVisible=false;
+            if(PinGate.isActivated(MainActivity.this))openActivatedApp();
+            else lockScreen();
+        }},1700L);
     }
     private void openActivatedApp(){
         unlocked=true;accessGate=null;
