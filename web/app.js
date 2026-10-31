@@ -25,6 +25,15 @@
    try { const u = new URL(String(v || "")); return u.protocol === "https:" ? u.href : ""; }
    catch (_) { return ""; }
  }
+ function directStream(v) {
+   const url=safeUrl(v);
+   return url && /\.(?:mp4|m3u8)(?:[?#]|$)/i.test(url) ? url : "";
+ }
+ function playable(item, type) {
+   if (!item || !directStream(item.stream_url)) return false;
+   if (type === "channel" && item.playback_mode !== "stream") return false;
+   return item.status === "published" && item.rights_status === "approved";
+ }
  function el(tag, className, text) {
    const node = document.createElement(tag);
    if (className) node.className = className;
@@ -98,7 +107,11 @@
    ]);
    const errors = [];
    ["movies","series","channels","categories"].forEach((field, index) => {
-     if (results[index].status === "fulfilled") state[field] = results[index].value || [];
+     if (results[index].status === "fulfilled") {
+       const items = results[index].value || [];
+       state[field] = field === "movies" ? items.filter(x => playable(x,"movie")) :
+         field === "channels" ? items.filter(x => playable(x,"channel")) : items;
+     }
      else { state[field] = []; errors.push(field); }
    });
    state.loading = false;
@@ -144,7 +157,7 @@
    const meta = el("div","media-meta");
    meta.append(el("span","",item.release_year||itemCategory(item)||labels[type]));
    meta.append(el("span","meta-dot"));
-   meta.append(el("span","",type==="channel"?(item.playback_mode==="official_link"?"رابط رسمي":"بث مباشر"):(item.quality||"شاهد الآن")));
+   meta.append(el("span","",type==="channel"?"بث مباشر":(item.quality||"شاهد الآن")));
    card.append(meta);
    card.addEventListener("click",() => details(item,type));
    card.addEventListener("keydown",e => {
@@ -296,7 +309,7 @@
      holder.append(list);
      const display=async()=>{
        list.replaceChildren(el("p","detail-desc","جارٍ تحميل الحلقات..."));
-       const episodes=await api("aseel_episodes","select=*&season_id=eq."+encodeURIComponent(picker.value)+"&order=number.asc&limit=100");
+       const episodes=(await api("aseel_episodes","select=*&season_id=eq."+encodeURIComponent(picker.value)+"&order=number.asc&limit=100") || []).filter(x => playable(x,"episode"));
        list.replaceChildren();
        if (!episodes?.length) {list.append(el("p","detail-desc","لا توجد حلقات منشورة حاليًا."));return;}
        episodes.forEach(ep=>{
@@ -314,9 +327,6 @@
  function setPlayerError(message,href) {
    $("playerErrorText").textContent=message||"تحقق من اتصال الإنترنت أو جرّب مصدرًا آخر.";
    $("playerError").hidden=false;
-   const link=safeUrl(href);
-   $("playerSource").hidden=!link;
-   if (link) $("playerSource").href=link;
  }
  function stopPlayer() {
    if (state.hls) { try {state.hls.destroy()}catch(_){} state.hls=null; }
@@ -327,18 +337,12 @@
    modalClose("playerOverlay");
  }
  async function startPlayer(item,type) {
-   const url=safeUrl(item.stream_url);
-   const official=safeUrl(item.official_url);
-   if (item.playback_mode==="official_link") {
-     if (!official) {announce("الرابط الرسمي غير متوفر لهذا المصدر");return;}
-     window.open(official,"_blank","noopener,noreferrer");return;
-   }
-   if (!url) {announce("رابط تشغيل موثّق غير متوفر");return;}
+   const url=directStream(item.stream_url);
+   if (!url || (type==="channel" && item.playback_mode!=="stream")) {announce("لا يتوفر رابط تشغيل مباشر صالح لهذا المحتوى");return;}
    modalClose("modal");
    if (state.playback) stopPlayer();
    state.playback={item,type};
    $("playerTitle").textContent=item.title_ar;
-   $("playerSource").href=url;
    $("playerError").hidden=true;
    modalOpen("playerOverlay");
    const video=$("videoPlayer");
@@ -352,7 +356,7 @@
        resumePlayback(item,type,video).then(()=>video.play().catch(()=>{}));
      });
      state.hls.on(window.Hls.Events.ERROR,(_event, data)=>{
-       if (data.fatal) setPlayerError("البث غير متاح حاليًا. قد تكون هناك قيود على الشبكة أو تشغيل الفيديو.",safeUrl(item.official_url)||url);
+       if (data.fatal) setPlayerError("البث غير متاح حاليًا. قد تكون هناك قيود على الشبكة أو تشغيل الفيديو.",url);
      });
    } else if (isHls && video.canPlayType("application/vnd.apple.mpegurl")) {
      video.src=url;video.addEventListener("loadedmetadata",function onMeta(){

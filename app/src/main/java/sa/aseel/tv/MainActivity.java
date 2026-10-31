@@ -397,15 +397,8 @@ public final class MainActivity extends Activity {
         final String t=type, id=str(item,"id"),url=str(item,"stream_url");
         if(!"series".equals(t)){
             Button play=button("▶ تشغيل");actions.addView(play,lp(dp(160),dp(54)));
-            play.setText("channel".equals(t)&&"official_link".equals(str(item,"playback_mode"))?"فتح البث الرسمي":"▶ تشغيل");
+            play.setText("▶ تشغيل");
             play.setOnClickListener(new View.OnClickListener(){public void onClick(View v){play(item,null,null,null);}});
-            if("channel".equals(t) && str(item,"official_url").startsWith("https://")){
-                Button official=button("موقع القناة");actions.addView(official,lp(dp(180),dp(54)));
-                official.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-                    try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(str(item,"official_url"))));}
-                    catch(Exception e){showStatus("لا يوجد متصفح مناسب لعرض موقع القناة");}
-                }});
-            }
         }else{
             Button episodes=button("عرض الحلقات");actions.addView(episodes,lp(dp(180),dp(54)));
             episodes.setOnClickListener(new View.OnClickListener(){public void onClick(View v){loadEpisodes(item);}});
@@ -419,18 +412,9 @@ public final class MainActivity extends Activity {
     }
     private void play(JSONObject item,String nextUrl,String nextId,String nextTitle){
         String url=str(item,"stream_url");
-        if("official_link".equals(str(item,"playback_mode"))){
-            String official=str(item,"official_url");
-            if(!official.startsWith("https://")){showStatus("رابط الجهة الرسمية غير صالح");return;}
-            try{
-                Intent browser=new Intent(Intent.ACTION_VIEW,Uri.parse(official));
-                startActivity(browser);
-            }catch(Exception e){showStatus("لا يوجد متصفح متوافق لفتح البث الرسمي على التلفزيون");}
-            return;
-        }
-        if(!url.startsWith("https://")){showStatus("لا يمكن تشغيل رابط غير HTTPS");return;}
+        if(!StreamQuality.isDirectUrl(url)){showStatus("هذا العنصر لا يحتوي على رابط MP4/HLS مباشر صالح");return;}
         Intent i=new Intent(this,PlayerActivity.class);
-        i.putExtra("stream_url",url);i.putExtra("official_url",str(item,"official_url"));
+        i.putExtra("stream_url",url);
         i.putExtra("quality",str(item,"quality"));
         i.putExtra("stream_variants",item.optJSONArray("stream_variants")==null?"[]":item.optJSONArray("stream_variants").toString());
         i.putExtra("is_live","channel".equals(str(item,"_type")));

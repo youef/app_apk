@@ -48,7 +48,7 @@ public final class PlayerActivity extends Activity {
         handler.removeCallbacks(hideOverlay);
         if(ready)handler.postDelayed(hideOverlay,9000);
     }
-    private String id, nextUrl, nextId, nextTitle, currentUrl, officialUrl;
+    private String id, nextUrl, nextId, nextTitle, currentUrl;
     private boolean ready=false;
     private LegacyStreamProxy mediaProxy;
     private String playerMode="native";
@@ -85,7 +85,6 @@ public final class PlayerActivity extends Activity {
              getSharedPreferences("aseel_user_v2",MODE_PRIVATE).getString("quality_pref","auto"));
         int chosen=StreamQuality.choose(sources,preferred,Build.VERSION.SDK_INT);
         if(chosen>=0){sourceIndex=chosen;currentUrl=sources.get(chosen).url;}
-        officialUrl=getIntent().getStringExtra("official_url");
         nextUrl=getIntent().getStringExtra("next_url");
         nextId=getIntent().getStringExtra("next_item_id");
         nextTitle=getIntent().getStringExtra("next_title");
@@ -128,23 +127,6 @@ public final class PlayerActivity extends Activity {
         updateQualityButton();
         Button exit=action("رجوع",buttons);
         if(live){rewind.setEnabled(false);forward.setEnabled(false);}
-        if(url!=null && url.toLowerCase(java.util.Locale.US).contains(".m3u8")){
-            Button external=action("مشغل خارجي",buttons);
-            external.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-                try{
-                    Intent open=new Intent(Intent.ACTION_VIEW);
-                    open.setDataAndType(Uri.parse(currentUrl),"application/vnd.apple.mpegurl");
-                    startActivity(open);
-                }catch(Exception e){error.setText("يحتاج بث HLS على هذا الجهاز مشغلًا خارجيًا متوافقًا، مثل VLC إصدار يدعم Android 4.4.");}
-            }});
-        }
-        if(officialUrl!=null && officialUrl.startsWith("https://")){
-            Button official=action("الموقع الرسمي",buttons);
-            official.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-                try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(officialUrl)));}
-                catch(Exception e){error.setText("لا يوجد متصفح متوافق لعرض الموقع الرسمي للقناة");}
-            }});
-        }
         rewind.setOnClickListener(new View.OnClickListener(){public void onClick(View v){seek(-10000);}});
         forward.setOnClickListener(new View.OnClickListener(){public void onClick(View v){seek(10000);}});
         play.setOnClickListener(new View.OnClickListener(){public void onClick(View v){toggle();}});
@@ -157,7 +139,7 @@ public final class PlayerActivity extends Activity {
         root.addView(error,ep);
         setContentView(root);
         play.requestFocus();
-        if(currentUrl==null||!currentUrl.startsWith("https://")){
+        if(!StreamQuality.isDirectUrl(currentUrl)){
             error.setText("لا يوجد رابط تشغيل HTTPS مصرح به");return;
         }
         video.setOnPreparedListener(new MediaPlayer.OnPreparedListener(){

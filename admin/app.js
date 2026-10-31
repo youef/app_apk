@@ -6,7 +6,7 @@ const tables={
  aseel_series:{label:"المسلسلات",fields:["title_ar","title_original","description","poster_url","backdrop_url","release_year","category_id","language_code","quality","status","rights_status","rights_holder","license_reference","rights_expires_at","featured"]},
  aseel_seasons:{label:"المواسم",fields:["series_id","number","title_ar"]},
  aseel_episodes:{label:"الحلقات",fields:["season_id","number","title_ar","description","poster_url","duration_minutes","stream_url","stream_variants","status","rights_status","license_reference","rights_expires_at"]},
- aseel_channels:{label:"القنوات",fields:["title_ar","description","poster_url","playback_mode","official_url","stream_url","stream_variants","category_id","status","rights_status","rights_holder","license_reference","rights_expires_at"]},
+ aseel_channels:{label:"القنوات",fields:["title_ar","description","poster_url","stream_url","stream_variants","category_id","status","rights_status","rights_holder","license_reference","rights_expires_at"]},
  aseel_categories:{label:"التصنيفات",fields:["name_ar","sort_order","published"]},
  aseel_content_sources:{label:"مصادر الحقوق",fields:["title","source_url","rights_contact","license_reference","verified"]},
  aseel_settings:{label:"إعدادات التطبيق",fields:["key","value","is_public"]}
@@ -182,10 +182,17 @@ $("editorForm").addEventListener("submit",async ev=>{
    return show("اعتمد الحقوق أولًا قبل النشر",true);
  if(payload.status==="published"&&!payload.license_reference)
    return show("وثيقة الترخيص مطلوبة للنشر",true);
- if(payload.playback_mode==="official_link" && (!payload.official_url||!payload.official_url.startsWith("https://")))
-   return show("القناة الرسمية تحتاج رابط مشاهدة HTTPS",true);
- if(payload.stream_url&&!payload.stream_url.startsWith("https://"))
-   return show("رابط التشغيل يجب أن يكون HTTPS",true);
+ if(table==="aseel_channels"){payload.playback_mode="stream";payload.official_url=null;}
+ const isDirect = value => {
+   try { const u=new URL(String(value||"")); return u.protocol==="https:" && /\.(?:mp4|m3u8)$/i.test(u.pathname); }
+   catch (_) {return false;}
+ };
+ if(payload.stream_url && !isDirect(payload.stream_url))
+   return show("يسمح بروابط ملفات MP4 أو بث HLS m3u8 المباشرة فقط؛ روابط المواقع غير مقبولة",true);
+ if(["aseel_movies","aseel_episodes","aseel_channels"].includes(table) && payload.status==="published" && !isDirect(payload.stream_url))
+   return show("لا يمكن نشر محتوى بدون رابط تشغيل مباشر MP4 أو HLS",true);
+ if(Array.isArray(payload.stream_variants) && payload.stream_variants.some(v=>!isDirect(v.url)))
+   return show("جميع الجودات يجب أن تكون روابط MP4 أو HLS مباشرة",true);
  try{
   const id=editing?.id??editing?.key;
   const query=id?(table==="aseel_settings"?"key":"id")+"=eq."+encodeURIComponent(id):"";

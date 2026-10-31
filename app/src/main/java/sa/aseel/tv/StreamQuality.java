@@ -16,6 +16,12 @@ public final class StreamQuality {
         }
     }
     private StreamQuality(){}
+    /** Only HTTPS MP4 or HLS manifests can enter the player, never HTML pages. */
+    public static boolean isDirectUrl(String url) {
+        if(url==null || !url.startsWith("https://") || url.length()>2048)return false;
+        String path=url.split("[?#]",2)[0].toLowerCase(Locale.US);
+        return path.endsWith(".mp4") || path.endsWith(".m3u8");
+    }
     public static ArrayList<Source> parse(String mainUrl,String mainQuality,String rawJson) {
         ArrayList<Source> results=new ArrayList<Source>();
         HashSet<String> seen=new HashSet<String>();
@@ -30,7 +36,7 @@ public final class StreamQuality {
         return results;
     }
     private static void add(ArrayList<Source> out,HashSet<String> seen,String label,String url) {
-        if(url==null || !url.startsWith("https://") || url.length()>2048 || seen.contains(url))return;
+        if(!isDirectUrl(url) || seen.contains(url))return;
         if(label==null || label.length()>24)label="المصدر";
         label=label.trim();
         if(label.isEmpty())label="المصدر";

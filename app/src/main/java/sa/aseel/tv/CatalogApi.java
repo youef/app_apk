@@ -30,13 +30,27 @@ public final class CatalogApi {
         cache=this.context.getSharedPreferences("aseel_catalog_cache_v1", Context.MODE_PRIVATE);
     }
 
+    /** Reject obsolete website-only and broken-format catalog rows, including stale cache. */
+    private static JSONArray directMediaOnly(String table,JSONArray input) {
+        if(!("aseel_movies".equals(table)||"aseel_episodes".equals(table)||"aseel_channels".equals(table)))return input;
+        JSONArray output=new JSONArray();
+        for(int i=0;i<input.length();i++){
+            JSONObject item=input.optJSONObject(i);
+            if(item==null || !StreamQuality.isDirectUrl(item.optString("stream_url","")))continue;
+            if("aseel_channels".equals(table) && !"stream".equals(item.optString("playback_mode","stream")))continue;
+            if(!"published".equals(item.optString("status","")) || !"approved".equals(item.optString("rights_status","")))continue;
+            output.put(item);
+        }
+        return output;
+    }
+
     /** Recent cached catalog only: rights may be revoked after 15 minutes. */
     public JSONArray recentCache(String table,String query){
         String key=table+query;
         String json=cache.getString(key,null);
         long age=System.currentTimeMillis()-cache.getLong(key+"_cached_at",0L);
         if(json==null || age<0 || age>MAX_OFFLINE_CACHE_AGE_MS)return null;
-        try{return new JSONArray(json);}catch(Exception ignored){return null;}
+        try{return directMediaOnly(table,new JSONArray(json));}catch(Exception ignored){return null;}
     }
     public JSONArray list(String table) throws Exception {
         return listQuery(table, "?select=*&order=created_at.desc&limit=" + AppConfig.MAX_ITEMS);
@@ -46,8 +60,8 @@ public final class CatalogApi {
         String key = table + query;
         try {
             String json = request(AppConfig.API_ROOT + table + query);
-            JSONArray array = new JSONArray(json);
-            cache.edit().putString(key,json).putLong(key+"_cached_at",System.currentTimeMillis()).apply();
+            JSONArray array = directMediaOnly(table,new JSONArray(json));
+            cache.edit().putString(key,array.toString()).putLong(key+"_cached_at",System.currentTimeMillis()).apply();
             lastError="";
             return array;
         } catch (Exception error) {
@@ -58,7 +72,7 @@ public final class CatalogApi {
             long age=System.currentTimeMillis()-cachedAt;
             // Never replay an old catalog indefinitely after content/rights are revoked.
             if (local != null && age>=0 && age<=MAX_OFFLINE_CACHE_AGE_MS)
-                return new JSONArray(local);
+                return directMediaOnly(table,new JSONArray(local));
             throw error;
         }
     }
