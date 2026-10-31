@@ -101,14 +101,15 @@ public final class PlayerActivity extends Activity {
         LinearLayout panel=new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setGravity(Gravity.CENTER_VERTICAL);
-        panel.setPadding(dp(28),dp(12),dp(28),dp(12));
-        panel.setBackgroundColor(Color.argb(220,10,13,20));
+        panel.setPadding(dp(35),dp(18),dp(35),dp(18));
+        panel.setBackgroundDrawable(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{0xF21A101C,0xF609070D}));
         FrameLayout.LayoutParams pp=new FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM);
         root.addView(panel,pp);
         controlsPanel=panel;
         title=new TextView(this);
         title.setText(getIntent().getStringExtra("title"));
-        title.setTextSize(23);title.setTextColor(0xFFFFFFFF);
+        title.setTextSize(26);title.setTypeface(android.graphics.Typeface.DEFAULT,android.graphics.Typeface.BOLD);title.setTextColor(0xFFFFFFFF);
         panel.addView(title);
         streamStatus=new TextView(this);
         streamStatus.setTextColor(0xFFFFB1B6);
@@ -117,7 +118,7 @@ public final class PlayerActivity extends Activity {
         panel.addView(streamStatus);
         progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
         progress.setMax(100);
-        progress.getProgressDrawable().setColorFilter(0xFFFF4450,android.graphics.PorterDuff.Mode.SRC_IN);
+        progress.getProgressDrawable().setColorFilter(0xFFEF2950,android.graphics.PorterDuff.Mode.SRC_IN);
         panel.addView(progress,new LinearLayout.LayoutParams(-1,dp(5)));
         if(live)progress.setVisibility(View.GONE);
         clock=new TextView(this);clock.setText("00:00 / 00:00");
@@ -128,14 +129,21 @@ public final class PlayerActivity extends Activity {
         Button rewind=action("−10 ثوانٍ",buttons);
         Button play=action("تشغيل / إيقاف",buttons);playButton=play;
         Button forward=action("+10 ثوانٍ",buttons);
+        Button restart=action("من البداية",buttons);
         Button next=action("الحلقة التالية",buttons);
         qualityButton=action("الجودة",buttons);
         qualityButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showQualityMenu();}});
         updateQualityButton();
         Button exit=action("رجوع",buttons);
-        if(live){rewind.setEnabled(false);forward.setEnabled(false);}
+        if(live){rewind.setEnabled(false);forward.setEnabled(false);restart.setEnabled(false);}
         rewind.setOnClickListener(new View.OnClickListener(){public void onClick(View v){seek(-10000);}});
         forward.setOnClickListener(new View.OnClickListener(){public void onClick(View v){seek(10000);}});
+        restart.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            if(!ready||live)return;
+            video.seekTo(0);
+            getSharedPreferences("aseel_user_v2",MODE_PRIVATE).edit().remove("position_"+id).apply();
+            revealControls();
+        }});
         play.setOnClickListener(new View.OnClickListener(){public void onClick(View v){toggle();}});
         next.setEnabled(!live&&nextUrl!=null && nextUrl.startsWith("https://"));
         next.setOnClickListener(new View.OnClickListener(){public void onClick(View v){playNext();}});
@@ -391,17 +399,26 @@ public final class PlayerActivity extends Activity {
     private Button action(String name,LinearLayout row){
         final Button b=new Button(this);b.setText(name);b.setTextSize(13);
         b.setTextColor(Color.WHITE);b.setAllCaps(false);
-        b.setBackgroundColor(0xFF29222F);
+        b.setBackgroundDrawable(controlBackground(false));
         b.setFocusable(true);
         b.setOnFocusChangeListener(new View.OnFocusChangeListener(){
             public void onFocusChange(View v,boolean focused){
-                b.setBackgroundColor(focused?0xFFFF4450:0xFF29222F);
+                b.setBackgroundDrawable(controlBackground(focused));
                 b.setTextColor(Color.WHITE);
+                b.setScaleX(focused?1.035f:1f);
+                b.setScaleY(focused?1.035f:1f);
                 if(focused)revealControls();
             }
         });
         LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(50),1);p.setMargins(dp(4),0,dp(4),0);
         row.addView(b,p);return b;
+    }
+    private GradientDrawable controlBackground(boolean focused){
+        GradientDrawable shape=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            focused?new int[]{0xFFF14C67,0xFFB71B3E}:new int[]{0xFF322232,0xFF201823});
+        shape.setCornerRadius(dp(11));
+        shape.setStroke(dp(1),focused?0xFFFFA7BB:0xFF563749);
+        return shape;
     }
     private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
     @Override protected void onPause(){super.onPause();if(video!=null&&ready){video.pause();if(!live)savePosition(video.getCurrentPosition());}}

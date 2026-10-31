@@ -42,13 +42,13 @@ public final class PosterLoader {
                     conn.setConnectTimeout(7000);conn.setReadTimeout(9000);
                     if(conn.getResponseCode()!=200)return;
                     int size=conn.getContentLength();
-                    if(size>850000)return;
+                    if(size>1800000)return;
                     InputStream stream=conn.getInputStream();
                     ByteArrayOutputStream bytes=new ByteArrayOutputStream();
                     try {
                         byte[] data=new byte[4096];int r;
                         while((r=stream.read(data))!=-1){
-                            if(bytes.size()+r>850000)return;
+                            if(bytes.size()+r>1800000)return;
                             bytes.write(data,0,r);
                         }
                     } finally {stream.close();}
@@ -57,7 +57,7 @@ public final class PosterLoader {
                     opt.inJustDecodeBounds=true;BitmapFactory.decodeByteArray(data,0,data.length,opt);
                     opt.inJustDecodeBounds=false;
                     int sample=1;
-                    while(opt.outWidth/sample>260 || opt.outHeight/sample>390)sample*=2;
+                    while(opt.outWidth/sample>700 || opt.outHeight/sample>450)sample*=2;
                     opt.inPreferredConfig=Bitmap.Config.RGB_565;
                     opt.inSampleSize=sample;
                     final Bitmap img=BitmapFactory.decodeByteArray(data,0,data.length,opt);

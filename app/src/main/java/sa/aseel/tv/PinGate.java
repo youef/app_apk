@@ -31,7 +31,7 @@ final class PinGate {
     private static final String CHECK="385035d1e0dbbf3941728251aa080e9180a218aeeaf510dbe6922bb64fb0d19f";
     private static final int WORK=12000,LENGTH=6;
     private static final String ACTIVATION_PREFS="alezz_activation_v1";
-    private static final int BG=0xFF080A10,SURFACE=0xFF151924,RED=0xFFFF415D,WHITE=0xFFF8F8FC;
+    private static final int BG=0xFF09070D,SURFACE=0xFF231422,RED=0xFFF12850,WHITE=0xFFF8F8FC;
     private final Activity activity;
     private final Runnable onSuccess;
     private final SharedPreferences storage;
@@ -147,7 +147,9 @@ final class PinGate {
         return b;
     }
     void show(){
-        FrameLayout full=new FrameLayout(activity);full.setBackgroundColor(BG);
+        FrameLayout full=new FrameLayout(activity);
+        full.setBackgroundDrawable(new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+            new int[]{0xFF2A1020,0xFF110A11,0xFF09070D}));
         full.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
         LinearLayout shell=new LinearLayout(activity);shell.setOrientation(LinearLayout.HORIZONTAL);
         shell.setGravity(Gravity.CENTER);shell.setPadding(dp(20),dp(10),dp(20),dp(10));
@@ -175,11 +177,11 @@ final class PinGate {
 
         LinearLayout card=vertical();card.setPadding(dp(26),dp(17),dp(26),dp(16));
         card.setGravity(Gravity.CENTER);
-        card.setBackgroundDrawable(background(0xFF1D111B,0xFF643047,22));
+        card.setBackgroundDrawable(background(0xFF221421,0xFF643047,22));
         LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(0,-2,1f);
         cp.setMargins(dp(7),0,dp(8),0);shell.addView(card,cp);
-        TextView lock=text("◈  الدخول إلى العز TV",23,WHITE,true);card.addView(lock);
-        TextView sub=text("هذه الشاشة محمية برمز الدخول",13,0xFFC9CAD4,false);
+        TextView lock=text("◈  تفعيل جهاز العز TV",23,WHITE,true);card.addView(lock);
+        TextView sub=text("أدخل رمز التفعيل لمرة واحدة فقط. سيبقى الدخول محفوظًا على هذا الجهاز.",13,0xFFC9CAD4,false);
         card.addView(sub);
         dots=text("○  ○  ○  ○  ○  ○",26,0xFFFF788B,true);
         LinearLayout.LayoutParams dotsP=new LinearLayout.LayoutParams(-1,dp(45));dotsP.setMargins(0,dp(7),0,dp(4));card.addView(dots,dotsP);

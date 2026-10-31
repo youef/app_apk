@@ -9,8 +9,8 @@ android {
         minSdkVersion 19
         targetSdkVersion 28
         ndk { abiFilters "armeabi-v7a" }
-        versionCode 9
-        versionName '8.0.0-one-time-activation'
+        versionCode 10
+        versionName '9.0.0-cinema'
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_7
