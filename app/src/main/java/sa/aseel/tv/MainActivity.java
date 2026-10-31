@@ -546,7 +546,7 @@ public final class MainActivity extends Activity {
                 public void onFocusChange(View view,boolean focused){
                     card.setBackgroundDrawable(background(focused?0xFF35212B:0xFF171B25,14,focused?GOLD:0xFF353A47));
                     card.setScaleX(focused?1.055f:1f);card.setScaleY(focused?1.055f:1f);
-                    card.setElevation(focused?dp(6):0);
+                    // Focus border and scale remain compatible with Android 4.4 (API 19).
                 }
             });
             card.setOnClickListener(new View.OnClickListener(){

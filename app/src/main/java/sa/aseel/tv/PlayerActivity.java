@@ -111,7 +111,7 @@ public final class PlayerActivity extends Activity {
         panel.addView(streamStatus);
         progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
         progress.setMax(100);
-        progress.setProgressTintList(android.content.res.ColorStateList.valueOf(0xFFFF4450));
+        progress.getProgressDrawable().setColorFilter(0xFFFF4450,android.graphics.PorterDuff.Mode.SRC_IN);
         panel.addView(progress,new LinearLayout.LayoutParams(-1,dp(5)));
         if(live)progress.setVisibility(View.GONE);
         clock=new TextView(this);clock.setText("00:00 / 00:00");
