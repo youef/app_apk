@@ -5,7 +5,7 @@ from pathlib import Path
 
 EXPECTED_PACKAGE="sa.alezz.tv.remote"
 MIN_SDK=19
-MIN_VERSION=5
+MIN_VERSION=6
 
 def check(ok,msg):
     if not ok: raise RuntimeError(msg)

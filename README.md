@@ -33,4 +33,4 @@
 
 ## إصدار ريموت Android 4.4.4
 
-إصدار v5 تحت معرف sa.alezz.tv.remote مستقل، لتجنب تعارض توقيع النسخة v4 السابقة. يدعم التنقل الكامل بالريموت، الرجوع إلى البطاقة السابقة، التنقل بين الصفوف وتقسيم قوائم الأفلام إلى 20 بطاقة. [إصدار APK v5](https://github.com/youef/app_apk/releases/tag/al-ezz-tv-remote-api19-v5)؛ [تعليمات الريموت](docs/REMOTE_CONTROL.md).
+إصدار v5 تحت معرف sa.alezz.tv.remote مستقل، لتجنب تعارض توقيع النسخة v4 السابقة. يدعم التنقل الكامل بالريموت، الرجوع إلى البطاقة السابقة، التنقل بين الصفوف وتقسيم قوائم الأفلام إلى 20 بطاقة. [إصدار APK v5](https://github.com/youef/app_apk/releases/tag/al-ezz-tv-remote-api19-v5-1)؛ [تعليمات الريموت](docs/REMOTE_CONTROL.md).
