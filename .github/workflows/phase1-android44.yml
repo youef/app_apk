@@ -75,8 +75,8 @@ jobs:
         run: |
           set -euo pipefail
           cp app/build/outputs/apk/debug/app-debug.apk dist/aseel-tv-cinema-quality-api19.apk
-          test -s dist/aseel-tv-huidi-optimized-api19.apk
-          sha256sum dist/aseel-tv-huidi-optimized-api19.apk | tee -a dist/build-report.txt
+          test -s dist/aseel-tv-cinema-quality-api19.apk
+          sha256sum dist/aseel-tv-cinema-quality-api19.apk | tee -a dist/build-report.txt
           echo "Installer package: sa.aseel.tv.cinema (separate install ID for unsigned-debug update conflict)" | tee -a dist/build-report.txt
           echo "Distinct install ID for legacy releases; stable signing still required for subsequent upgrades." | tee -a dist/build-report.txt
           echo "Device installation and playback: NOT TESTED" | tee -a dist/build-report.txt
@@ -84,14 +84,14 @@ jobs:
       - name: Enforce APK is present before artifact/release
         run: |
           set -euo pipefail
-          test -s dist/aseel-tv-huidi-optimized-api19.apk
-          python3 -c "import os; p='dist/aseel-tv-huidi-optimized-api19.apk'; assert os.path.getsize(p)>100000, 'Incomplete APK'"
+          test -s dist/aseel-tv-cinema-quality-api19.apk
+          python3 -c "import os; p='dist/aseel-tv-cinema-quality-api19.apk'; assert os.path.getsize(p)>100000, 'Incomplete APK'"
       - name: Upload APK and validation report
         uses: actions/upload-artifact@v4
         with:
           name: aseel-tv-cinema-api19-${{ github.run_number }}
           path: |
-            dist/aseel-tv-huidi-optimized-api19.apk
+            dist/aseel-tv-cinema-quality-api19.apk
             dist/build-report.txt
             dist/gradle-build.log
           if-no-files-found: error
@@ -106,7 +106,7 @@ jobs:
           prerelease: true
           make_latest: false
           body_path: docs/HUIDI_OPTIMIZED.md
-          files: dist/aseel-tv-huidi-optimized-api19.apk
+          files: dist/aseel-tv-cinema-quality-api19.apk
           fail_on_unmatched_files: true
 
       - name: Upload Android APK to Appetize if connected
@@ -115,5 +115,5 @@ jobs:
         with:
           apiToken: ${{ secrets.APPETIZE_API_TOKEN }}
           publicKey: ${{ secrets.APPETIZE_ANDROID_PUBLIC_KEY }}
-          appFile: dist/aseel-tv-huidi-optimized-api19.apk
+          appFile: dist/aseel-tv-cinema-quality-api19.apk
           platform: android
