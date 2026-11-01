@@ -19,8 +19,8 @@ import android.os.Build;
 /** Two background workers and a small in-memory bitmap cache for low-RAM TVs. */
 public final class PosterLoader {
     private static final ExecutorService work=new java.util.concurrent.ThreadPoolExecutor(
-        1,1,30L,java.util.concurrent.TimeUnit.SECONDS,
-        new java.util.concurrent.LinkedBlockingDeque<Runnable>(12),
+        2,2,30L,java.util.concurrent.TimeUnit.SECONDS,
+        new java.util.concurrent.LinkedBlockingDeque<Runnable>(28),
         new java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy());
     private static final Handler ui=new Handler(Looper.getMainLooper());
     private static final LruCache<String,Bitmap> bitmaps=new LruCache<String,Bitmap>(2*1024*1024){
