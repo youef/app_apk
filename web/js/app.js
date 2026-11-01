@@ -337,8 +337,17 @@
   }
 
   function viewYoutube() {
-    return pageHead("يوتيوب العز", "فيديوهات رسمية تُعرض عبر مشغل YouTube الرسمي.", catalog.youtube.length) +
-      (catalog.youtube.length ? '<div class="grid grid--wide">' + catalog.youtube.map(function (v) { return cardHTML(v, { wide: true }); }).join("") + "</div>" : emptyHTML("لا فيديوهات منشورة."));
+    var head = pageHead("يوتيوب العز", "فيديوهات رسمية تُعرض عبر مشغل YouTube الرسمي.", catalog.youtube.length);
+    if (catalog.youtube.length) {
+      return head + '<div class="grid grid--wide">' +
+        catalog.youtube.map(function (v) { return cardHTML(v, { wide: true }); }).join("") + "</div>";
+    }
+    if (Api.failedTables && Api.failedTables.indexOf("youtube") !== -1) {
+      return head + '<div class="empty"><strong>تعذّر تحميل فيديوهات يوتيوب</strong>' +
+        '<p>تعذّر الاتصال بمكتبة المقاطع. تحقق من الإنترنت ثم أعد المحاولة.</p>' +
+        '<button class="btn btn--gold" type="button" onclick="location.reload()">تحديث المكتبة</button></div>';
+    }
+    return head + emptyHTML("لا فيديوهات منشورة حاليًا.");
   }
 
   function viewMyList() {
@@ -359,7 +368,8 @@
   /* ---------------------------------------------------------------- router */
 
   function parseHash() {
-    var raw = (location.hash || "#/home").replace(/^#\/?/, "");
+    var fallback = (location.search.match(/[?&]section=([a-z]+)/i) || [])[1] || "home";
+    var raw = (location.hash || "#/" + fallback).replace(/^#\/?/, "");
     var parts = raw.split("/").filter(Boolean);
     return { name: parts[0] || "home", arg: parts[1] ? decodeURIComponent(parts.slice(1).join("/")) : "" };
   }

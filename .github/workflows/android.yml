@@ -50,6 +50,7 @@ jobs:
           set -euo pipefail
           for js in web/js/*.js admin/*.js; do node --check "$js"; done
           node tests/studio-smoke.cjs
+          node tests/youtube-catalog-smoke.cjs
           node tests/importer-smoke.cjs
 
       - name: Validate signing configuration

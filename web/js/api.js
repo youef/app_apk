@@ -64,12 +64,27 @@
     return base;
   }
 
+  /* Logical catalogue names are not always identical to PostgreSQL table names. */
+  var TABLE_PATHS = {
+    categories: "aseel_categories",
+    movies: "aseel_movies",
+    series: "aseel_series",
+    seasons: "aseel_seasons",
+    episodes: "aseel_episodes",
+    channels: "aseel_channels",
+    youtube: "aseel_youtube_videos",
+    collections: "aseel_home_collections",
+    collection_items: "aseel_home_collection_items"
+  };
+  var failedTables = [];
+
   function loadLive() {
     var tables = ["categories", "movies", "series", "seasons", "episodes", "channels", "youtube", "collections", "collection_items"];
+    failedTables = [];
     return Promise.all(tables.map(function (t) {
-      return rest("aseel_" + t, publishedFilters(t)).then(function (rows) {
+      return rest(TABLE_PATHS[t], publishedFilters(t)).then(function (rows) {
         return Array.isArray(rows) ? rows : [];
-      }, function () { return []; });
+      }, function () { failedTables.push(t); return []; });
     })).then(function (results) {
       var out = {};
       tables.forEach(function (t, i) { out[t] = results[i]; });
@@ -275,17 +290,20 @@
     state: null,
     source: "live",
     loadedAt: null,
+    failedTables: [],
 
     /* returns {catalog, source} */
     load: function () {
       return loadLive().then(function (raw) {
         Catalog.source = "live";
+        Catalog.failedTables = failedTables.slice();
         Catalog.loadedAt = Date.now();
         Catalog.state = normalise(raw);
         return Catalog.state;
       }).catch(function () {
         return loadSnapshot().then(function (raw) {
           Catalog.source = "snapshot";
+        Catalog.failedTables = [];
           Catalog.loadedAt = Date.now();
           Catalog.state = normalise(raw);
           return Catalog.state;
