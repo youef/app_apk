@@ -1182,6 +1182,20 @@ public final class MainActivity extends Activity {
         focusWhenReady("btn:رجوع إلى القائمة");
     }
     private void play(JSONObject item,String nextUrl,String nextId,String nextTitle){
+        // Official-channel entries are navigation only; they are not playable HLS streams.
+        if("official_link".equals(str(item,"playback_mode")) &&
+           str(item,"stream_url").length()==0){
+            String official=str(item,"official_url");
+            if(!official.startsWith("https://")){
+                showStatus("رابط الناشر الرسمي غير متوفر");return;
+            }
+            try{
+                startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(official)));
+            }catch(android.content.ActivityNotFoundException error){
+                showStatus("لم يتم العثور على متصفح متوافق لفتح موقع الناشر");
+            }
+            return;
+        }
         String youtube=str(item,"youtube_url");
         if(YouTubeLink.usable(youtube)){
             openYouTube(youtube,str(item,"title_ar"));return;
