@@ -34,6 +34,7 @@ jobs:
           node --check admin/app.js
           node --check admin/studio.js
           node --check admin/importer.js
+          node tests/importer-smoke.cjs
           node --check admin/config.js
       - name: Assemble public viewer and admin dashboard
         run: |
