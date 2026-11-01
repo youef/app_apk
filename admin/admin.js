@@ -88,7 +88,9 @@
     table: null,
     rows: [],
     selectedChannels: {},
+    selectedMedia: {},
     filteredChannels: [],
+    filteredMedia: [],
     bulkBusy: false,
     healthOnly: false,
     scanBusy: false,
@@ -458,6 +460,7 @@
     state.query = '';
     state.statusFilter = '';
     state.selectedChannels = {};
+    state.selectedMedia = {};
 
     var globalSearch = $('#globalSearch');
     if (globalSearch) globalSearch.value = '';
@@ -633,9 +636,12 @@
     state.query = '';
     state.statusFilter = '';
     state.selectedChannels = {};
+    state.selectedMedia = {};
     if (state.els.bulkPanel) {
-      state.els.bulkPanel.hidden = tableCfg.table !== 'aseel_channels';
+      var bulkAvailable = tableCfg.table === 'aseel_channels' || isMediaBulkTable(tableCfg);
+      state.els.bulkPanel.hidden = !bulkAvailable;
       if (tableCfg.table === 'aseel_channels') buildChannelBulkPanel();
+      else if (isMediaBulkTable(tableCfg)) buildMediaBulkPanel(tableCfg);
       else state.els.bulkPanel.replaceChildren();
     }
     if (state.els.search) state.els.search.value = '';
@@ -661,10 +667,13 @@
   function renderHead(tableCfg) {
     var row = state.els.thead;
     row.replaceChildren();
-    if (tableCfg.table === 'aseel_channels') {
+    if (tableCfg.table === 'aseel_channels' || isMediaBulkTable(tableCfg)) {
       var cell = el('th', { scope: 'col', class: 'bulk-check-cell' });
       var box = el('input', { type: 'checkbox', 'aria-label': 'تحديد كل القنوات في نتائج البحث' });
-      box.addEventListener('change', function () { selectFilteredChannels(box.checked); });
+      box.addEventListener('change', function () {
+        if (tableCfg.table === 'aseel_channels') selectFilteredChannels(box.checked);
+        else selectFilteredMedia(box.checked);
+      });
       cell.append(box);
       row.append(cell);
     }
@@ -709,7 +718,7 @@
     tbody.replaceChildren();
     for (var i = 0; i < 6; i++) {
       var tr = el('tr', { class: 'skeleton-row' });
-      if (tableCfg.table === 'aseel_channels') tr.append(el('td', null, el('span', { class: 'skeleton skeleton-text' })));
+      if (tableCfg.table === 'aseel_channels' || isMediaBulkTable(tableCfg)) tr.append(el('td', null, el('span', { class: 'skeleton skeleton-text' })));
       tableCfg.columns.forEach(function (col) {
         var td = el('td');
         td.append(el('span', { class: 'skeleton skeleton-text' + (col.kind === 'poster' ? ' skeleton-poster' : '') }));
@@ -729,7 +738,8 @@
     showSkeleton(tableCfg);
 
     var query = 'select=*&order=' + tableCfg.order + '&limit=' + cfg.pageLimit;
-    var loadRows = tableCfg.table === 'aseel_channels' ? fetchAllChannels : function () {
+    var loadRows = tableCfg.table === 'aseel_channels' ? fetchAllChannels :
+      isMediaBulkTable(tableCfg) ? function () { return fetchAllMedia(tableCfg); } : function () {
       return restList(tableCfg.table, query).catch(function (err) {
         if (err.status === 400 && tableCfg.fallbackOrder) {
           return restList(tableCfg.table, 'select=*&order=' + tableCfg.fallbackOrder + '&limit=' + cfg.pageLimit);
@@ -741,6 +751,12 @@
       return optionsPromise.then(function () {
         if (token !== state.loadToken) return null;
         state.rows = Array.isArray(rows) ? rows : [];
+        if (isMediaBulkTable(tableCfg)) {
+          var kept = {};
+          state.rows.forEach(function (row) { if (state.selectedMedia[row.id]) kept[row.id] = true; });
+          state.selectedMedia = kept;
+          if (state.els.note) state.els.note.textContent = 'جميع السجلات المحمّلة متاحة للتحديد الجماعي، مع حفظ مؤكد في قاعدة البيانات.';
+        }
         if (tableCfg.table === 'aseel_channels') {
           var valid = {};
           state.rows.forEach(function (row) { if (state.selectedChannels[row.id]) valid[row.id] = true; });
@@ -763,7 +779,7 @@
     var tbody = state.els.tbody;
     tbody.replaceChildren();
     var tr = el('tr', { class: 'message-row' });
-    var td = el('td', { colspan: tableCfg.columns.length + (tableCfg.table === 'aseel_channels' ? 2 : 1) });
+    var td = el('td', { colspan: tableCfg.columns.length + (tableCfg.table === 'aseel_channels' || isMediaBulkTable(tableCfg) ? 2 : 1) });
     td.append(errorCard(describeError(err), function () { loadTable(state.table); }));
     tr.append(td);
     tbody.append(tr);
@@ -820,9 +836,11 @@
         ' · تم فحص: ' + checked + ' من ' + state.rows.length;
       if (state.healthOnly) rows = rows.filter(function (row) { return row.link_health_status === 'broken'; });
     }
+    if (isMediaBulkTable(tableCfg)) state.filteredMedia = rows;
     renderRows(tableCfg, rows);
     setCount(rows.length, state.rows.length);
     if (tableCfg.table === 'aseel_channels') syncChannelBulkPanel();
+    if (isMediaBulkTable(tableCfg)) syncMediaBulkPanel();
   }
 
   function renderRows(tableCfg, rows) {
@@ -830,7 +848,7 @@
     tbody.replaceChildren();
     if (!rows.length) {
       var tr = el('tr', { class: 'message-row' });
-      var td = el('td', { colspan: tableCfg.columns.length + (tableCfg.table === 'aseel_channels' ? 2 : 1) });
+      var td = el('td', { colspan: tableCfg.columns.length + (tableCfg.table === 'aseel_channels' || isMediaBulkTable(tableCfg) ? 2 : 1) });
       var empty = el('div', { class: 'empty' });
       empty.append(el('span', { class: 'empty-icon', html: icon('inbox', 30) }));
       empty.append(el('strong', null, state.rows.length ? 'لا يوجد سجل مطابق' : 'لا يوجد محتوى بعد'));
@@ -873,6 +891,19 @@
       });
       cell.append(checkbox);
       tr.append(cell);
+    }
+    if (isMediaBulkTable(tableCfg)) {
+      var mediaCell = el('td', { class: 'bulk-check-cell' });
+      var mediaCheck = el('input', { type: 'checkbox', 'aria-label': 'تحديد ' + (row.title_ar || '') });
+      mediaCheck.checked = Boolean(state.selectedMedia[row.id]);
+      mediaCheck.disabled = state.bulkBusy;
+      mediaCheck.addEventListener('change', function () {
+        if (mediaCheck.checked) state.selectedMedia[row.id] = true;
+        else delete state.selectedMedia[row.id];
+        syncMediaBulkPanel();
+      });
+      mediaCell.append(mediaCheck);
+      tr.append(mediaCell);
     }
     tableCfg.columns.forEach(function (col) { tr.append(buildCell(col, row)); });
     tr.append(buildActions(tableCfg, row));
