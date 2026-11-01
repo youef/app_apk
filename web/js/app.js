@@ -9,6 +9,7 @@
   var Store = window.AlezzStore;
   var Api = window.AlezzApi;
   var Player = window.AlezzPlayer;
+  var Live = window.AlezzLive;
 
   var $ = function (id) { return document.getElementById(id); };
   var view = $("view");
@@ -326,6 +327,7 @@
   }
 
   function viewLive(filterCat) {
+    if (Live) return Live.render(catalog, filterCat);
     var list = catalog.channels;
     var cats = catalog.categories.filter(function (c) { return list.some(function (x) { return x.categoryId === c.id; }); });
     var shown = filterCat ? list.filter(function (c) { return c.categoryId === filterCat; }) : list;
@@ -412,6 +414,7 @@
     var html = "";
 
     if (!catalog) { view.innerHTML = skeletonHTML(); return; }
+    if (Live) Live.destroy();
 
     switch (route.name) {
       case "movies": html = viewMovies(route.arg); break;
@@ -430,6 +433,7 @@
     if (preserveScroll) window.scrollTo(0, y); else window.scrollTo(0, 0);
     startHeroRotation();
     wireRails();
+    if (route.name === "live" && Live) Live.mount();
     if (route.name === "title" && route.arg) {
       setTimeout(function () { openDetail(route.arg); }, 50);
     }
@@ -841,6 +845,8 @@
     document.addEventListener("click", function (e) {
       var t = e.target;
 
+      // The live guide owns its own buttons and event handling.
+      if (t.closest("#livePage")) return;
       var playBtn = t.closest("[data-play]");
       if (playBtn) { playItem(findItem(playBtn.getAttribute("data-play"))); return; }
 
