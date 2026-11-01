@@ -54,3 +54,12 @@
 .imp-diagnostics{padding:11px 13px;margin:9px 0 12px;border:1px solid #405568;border-radius:10px;background:#112838;color:#c5e1ed;font-size:12px;line-height:1.8;overflow-wrap:anywhere}
 .imp-diagnostics.error{background:#3b222c;border-color:#9c465a;color:#ffd1d8}
 .imp-urlrow #impHealth{background:#19394a;color:#a8f2e6;border-color:#36697a}
+
+
+.imp-images{margin:12px 0 6px;padding:10px 0;font-size:12px;color:#d4e0ee}
+.imp-image-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:10px;margin-top:12px}
+.imp-image-option{border:1px solid #445466;border-radius:12px;overflow:hidden;background:#161c2a;min-width:0}
+.imp-image-option img{width:100%;height:100px;object-fit:cover;display:block;background:#101722}
+.imp-image-actions{display:flex;gap:5px;padding:6px}
+.imp-image-actions button{flex:1;padding:7px 4px;font-size:11px;border-radius:7px;background:#354252}
+.imp-image-option:has(img[alt="تعذر تحميل الصورة من المصدر"]){border-color:#b05c67}
