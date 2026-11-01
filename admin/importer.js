@@ -263,12 +263,13 @@
  function launch(){
    if(!jwt)return show("سجل الدخول بصلاحيات الإدارة أولًا",true);
    $("importStudio").hidden=false;$("impToggle").textContent="إخفاء الاستوديو";
+   if(location.hash!=="#studio-import")history.replaceState(null,"",location.pathname+location.search+"#studio-import");
    options().then(listSaved).catch(e=>msg("تعذر تحميل بعض خيارات قاعدة البيانات: "+e.message,true));
    $("importStudio").scrollIntoView({behavior:"smooth",block:"start"});
  }
  function init(){
    $("impToggle").addEventListener("click",()=>{$("importStudio").hidden?launch():$("impClose").click();});
-   $("impClose").onclick=()=>{$("importStudio").hidden=true;$("impToggle").textContent="فتح الاستوديو";clearPlayer();};
+   $("impClose").onclick=()=>{$("importStudio").hidden=true;$("impToggle").textContent="فتح الاستوديو";clearPlayer();if(location.hash==="#studio-import")history.replaceState(null,"",location.pathname+location.search);};
    $("impForm").addEventListener("submit",e=>e.preventDefault());
    $("impForm").addEventListener("input",updatePreview);
    $("impScan").onclick=scan;
@@ -304,6 +305,13 @@
    $("impOpenStream").onclick=()=>{const v=vals();const link=v.stream_url||v.youtube_url||v.source_page_url;if(!link||!urlOk(link))return msg("لا يوجد رابط HTTPS لفتحه",true);window.open(link,"_blank","noopener,noreferrer")};
    document.getElementById("logout")?.addEventListener("click",()=>{$("importStudio").hidden=true;clearPlayer();saved=[];found=[];currentId=null;});
    apply(null);
+   if(location.hash==="#studio-import"){
+     const panel=$("panel");
+     const maybeOpen=()=>{if(!panel.classList.contains("hidden")&&jwt){observer.disconnect();launch();}};
+     const observer=new MutationObserver(maybeOpen);
+     observer.observe(panel,{attributes:true,attributeFilter:["class"]});
+     maybeOpen();
+   }
  }
  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);else init();
 })();
