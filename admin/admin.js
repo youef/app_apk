@@ -87,6 +87,9 @@
     section: null,
     table: null,
     rows: [],
+    selectedChannels: {},
+    filteredChannels: [],
+    bulkBusy: false,
     query: '',
     statusFilter: '',
     options: {},
@@ -452,6 +455,7 @@
     state.section = section;
     state.query = '';
     state.statusFilter = '';
+    state.selectedChannels = {};
 
     var globalSearch = $('#globalSearch');
     if (globalSearch) globalSearch.value = '';
@@ -513,6 +517,9 @@
     var chips = el('div', { class: 'chips', role: 'group', 'aria-label': 'تصفية الحالة' });
     toolbar.append(searchWrap, chips);
     view.append(toolbar);
+    var bulkPanel = el('section', { class: 'channel-bulk', id: 'channelBulk' });
+    bulkPanel.hidden = true;
+    view.append(bulkPanel);
 
     var card = el('section', { class: 'card table-card' });
     var tableScroll = el('div', { class: 'table-scroll' });
@@ -533,6 +540,7 @@
       search: searchInput,
       count: count,
       chips: chips,
+      bulkPanel: bulkPanel,
       thead: headRow,
       tbody: tbody,
       note: note,
@@ -561,6 +569,12 @@
     state.rows = [];
     state.query = '';
     state.statusFilter = '';
+    state.selectedChannels = {};
+    if (state.els.bulkPanel) {
+      state.els.bulkPanel.hidden = tableCfg.table !== 'aseel_channels';
+      if (tableCfg.table === 'aseel_channels') buildChannelBulkPanel();
+      else state.els.bulkPanel.replaceChildren();
+    }
     if (state.els.search) state.els.search.value = '';
     if (state.els.tabs) {
       $$('.seg-btn', state.els.tabs).forEach(function (btn) {
@@ -584,6 +598,13 @@
   function renderHead(tableCfg) {
     var row = state.els.thead;
     row.replaceChildren();
+    if (tableCfg.table === 'aseel_channels') {
+      var cell = el('th', { scope: 'col', class: 'bulk-check-cell' });
+      var box = el('input', { type: 'checkbox', 'aria-label': 'تحديد كل القنوات في نتائج البحث' });
+      box.addEventListener('change', function () { selectFilteredChannels(box.checked); });
+      cell.append(box);
+      row.append(cell);
+    }
     tableCfg.columns.forEach(function (col) {
       row.append(el('th', { scope: 'col' }, col.label || ''));
     });
@@ -625,6 +646,7 @@
     tbody.replaceChildren();
     for (var i = 0; i < 6; i++) {
       var tr = el('tr', { class: 'skeleton-row' });
+      if (tableCfg.table === 'aseel_channels') tr.append(el('td', null, el('span', { class: 'skeleton skeleton-text' })));
       tableCfg.columns.forEach(function (col) {
         var td = el('td');
         td.append(el('span', { class: 'skeleton skeleton-text' + (col.kind === 'poster' ? ' skeleton-poster' : '') }));
@@ -644,15 +666,24 @@
     showSkeleton(tableCfg);
 
     var query = 'select=*&order=' + tableCfg.order + '&limit=' + cfg.pageLimit;
-    return restList(tableCfg.table, query).catch(function (err) {
-      if (err.status === 400 && tableCfg.fallbackOrder) {
-        return restList(tableCfg.table, 'select=*&order=' + tableCfg.fallbackOrder + '&limit=' + cfg.pageLimit);
-      }
-      throw err;
-    }).then(function (rows) {
+    var loadRows = tableCfg.table === 'aseel_channels' ? fetchAllChannels : function () {
+      return restList(tableCfg.table, query).catch(function (err) {
+        if (err.status === 400 && tableCfg.fallbackOrder) {
+          return restList(tableCfg.table, 'select=*&order=' + tableCfg.fallbackOrder + '&limit=' + cfg.pageLimit);
+        }
+        throw err;
+      });
+    };
+    return loadRows().then(function (rows) {
       return optionsPromise.then(function () {
         if (token !== state.loadToken) return null;
         state.rows = Array.isArray(rows) ? rows : [];
+        if (tableCfg.table === 'aseel_channels') {
+          var valid = {};
+          state.rows.forEach(function (row) { if (state.selectedChannels[row.id]) valid[row.id] = true; });
+          state.selectedChannels = valid;
+          if (state.els.note) state.els.note.textContent = 'تم تحميل القنوات على دفعات؛ البحث والتحديد يشملان كل القنوات المحمّلة.';
+        }
         setCount(state.rows.length, state.rows.length);
         applyFilter();
         return null;
@@ -669,7 +700,7 @@
     var tbody = state.els.tbody;
     tbody.replaceChildren();
     var tr = el('tr', { class: 'message-row' });
-    var td = el('td', { colspan: tableCfg.columns.length + 1 });
+    var td = el('td', { colspan: tableCfg.columns.length + (tableCfg.table === 'aseel_channels' ? 2 : 1) });
     td.append(errorCard(describeError(err), function () { loadTable(state.table); }));
     tr.append(td);
     tbody.append(tr);
@@ -716,8 +747,10 @@
         return String(value).toLowerCase().indexOf(query) !== -1;
       });
     });
+    if (tableCfg.table === 'aseel_channels') state.filteredChannels = rows;
     renderRows(tableCfg, rows);
     setCount(rows.length, state.rows.length);
+    if (tableCfg.table === 'aseel_channels') syncChannelBulkPanel();
   }
 
   function renderRows(tableCfg, rows) {
@@ -725,7 +758,7 @@
     tbody.replaceChildren();
     if (!rows.length) {
       var tr = el('tr', { class: 'message-row' });
-      var td = el('td', { colspan: tableCfg.columns.length + 1 });
+      var td = el('td', { colspan: tableCfg.columns.length + (tableCfg.table === 'aseel_channels' ? 2 : 1) });
       var empty = el('div', { class: 'empty' });
       empty.append(el('span', { class: 'empty-icon', html: icon('inbox', 30) }));
       empty.append(el('strong', null, state.rows.length ? 'لا يوجد سجل مطابق' : 'لا يوجد محتوى بعد'));
@@ -750,6 +783,19 @@
 
   function buildRow(tableCfg, row) {
     var tr = el('tr', { class: 'data-row' });
+    if (tableCfg.table === 'aseel_channels') {
+      var cell = el('td', { class: 'bulk-check-cell' });
+      var checkbox = el('input', { type: 'checkbox', 'aria-label': 'تحديد قناة ' + (row.title_ar || '') });
+      checkbox.checked = Boolean(state.selectedChannels[row.id]);
+      checkbox.disabled = state.bulkBusy;
+      checkbox.addEventListener('change', function () {
+        if (checkbox.checked) state.selectedChannels[row.id] = true;
+        else delete state.selectedChannels[row.id];
+        syncChannelBulkPanel();
+      });
+      cell.append(checkbox);
+      tr.append(cell);
+    }
     tableCfg.columns.forEach(function (col) { tr.append(buildCell(col, row)); });
     tr.append(buildActions(tableCfg, row));
     return tr;
@@ -895,6 +941,308 @@
 
     td.append(actionButton('trash', 'حذف', function () { openDelete(tableCfg, row); }, 'row-btn--danger'));
     return td;
+  }
+
+
+  /* ---------- bulk channel licensing and live shelf management ---------- */
+  function fetchAllChannels() {
+    var collected = [];
+    function page(offset) {
+      if (offset >= 10000) throw new Error('وصل عدد القنوات إلى حد التحميل الآمن 10000.');
+      return restList('aseel_channels', 'select=*&order=display_order.asc,id.asc&limit=500&offset=' + offset)
+        .then(function (rows) {
+          rows = Array.isArray(rows) ? rows : [];
+          collected = collected.concat(rows);
+          return rows.length === 500 ? page(offset + 500) : collected;
+        });
+    }
+    return page(0);
+  }
+
+  function canPublishChannel(row) {
+    if (!row || row.rights_status !== 'approved' || !String(row.license_reference || '').trim()) return false;
+    if (row.rights_expires_at && !(new Date(row.rights_expires_at).getTime() > Date.now())) return false;
+    if (row.playback_mode === 'stream') return isHttps(row.stream_url);
+    if (row.playback_mode === 'official_link') return isHttps(row.official_url);
+    if (row.playback_mode === 'youtube_embed') return isHttps(row.youtube_url);
+    return false;
+  }
+
+  function selectFilteredChannels(checked) {
+    if (state.bulkBusy) return;
+    state.filteredChannels.forEach(function (row) {
+      if (checked) state.selectedChannels[row.id] = true;
+      else delete state.selectedChannels[row.id];
+    });
+    applyFilter();
+  }
+
+  function buildChannelBulkPanel() {
+    var host = state.els.bulkPanel;
+    if (!host) return;
+    host.replaceChildren();
+    var header = el('div', { class: 'bulk-header' });
+    header.append(el('strong', null, 'العمليات الجماعية — قنوات البث المباشر'));
+    header.append(el('span', { id: 'bulkSelectionSummary', class: 'bulk-count', 'aria-live': 'polite' }, '0 قناة محددة'));
+    host.append(header);
+    var selection = el('div', { class: 'bulk-actions' });
+    [
+      ['تحديد نتائج البحث', function () { selectFilteredChannels(true); }],
+      ['تحديد جميع القنوات', function () {
+        state.rows.forEach(function (row) { state.selectedChannels[row.id] = true; });
+        applyFilter();
+      }],
+      ['إلغاء التحديد', function () { state.selectedChannels = {}; applyFilter(); }]
+    ].forEach(function (item) {
+      var button = el('button', { class: 'btn btn-ghost btn-sm bulk-control', type: 'button' }, item[0]);
+      button.addEventListener('click', item[1]);
+      selection.append(button);
+    });
+    host.append(selection);
+
+    var details = el('details', { class: 'bulk-license' });
+    details.append(el('summary', null, 'إعدادات الترخيص المشترك (اختياري)'));
+    details.append(el('p', { class: 'bulk-hint' },
+      'استخدم ترخيصًا واحدًا فقط إذا كان يغطي كل القنوات المحددة فعلاً؛ تسجيل المرجع لا يمنحك حقوق البث تلقائيًا.'));
+    var fields = el('div', { class: 'bulk-fields' });
+    [
+      ['صاحب الحقوق', 'bulkRightsHolder', 'اسم جهة الحقوق', 'text'],
+      ['مرجع الترخيص', 'bulkLicenseReference', 'رقم وثيقة أو رابط', 'text'],
+      ['تاريخ انتهاء الترخيص (اختياري)', 'bulkLicenseExpiry', '', 'date']
+    ].forEach(function (item) {
+      var field = el('label', { class: 'bulk-field' });
+      field.append(el('span', null, item[0]));
+      field.append(el('input', {
+        type: item[3], id: item[1], placeholder: item[2], autocomplete: 'off', dir: item[3] === 'date' ? 'ltr' : 'auto'
+      }));
+      fields.append(field);
+    });
+    details.append(fields);
+    var ack = el('label', { class: 'bulk-ack' });
+    ack.append(el('input', { type: 'checkbox', id: 'bulkLicenseAck' }));
+    ack.append(el('span', null, 'أؤكد وجود إذن إعادة بث صالح يشمل جميع القنوات المحددة.'));
+    details.append(ack);
+    host.append(details);
+
+    var buttons = el('div', { class: 'bulk-actions' });
+    [
+      ['اعتماد الترخيص للمحدد', 'license', 'btn-ghost'],
+      ['نشر القنوات المؤهلة', 'publish', 'btn-ghost'],
+      ['إضافة المؤهل إلى «على الهواء الآن»', 'live', 'btn-ghost'],
+      ['تنفيذ الكل دفعة واحدة', 'all', 'btn-gold']
+    ].forEach(function (item) {
+      var button = el('button', { class: 'btn btn-sm bulk-control ' + item[2], type: 'button' }, item[0]);
+      button.addEventListener('click', function () { runChannelBulk(item[1]); });
+      buttons.append(button);
+    });
+    host.append(buttons);
+    host.append(el('p', { class: 'bulk-status', id: 'bulkStatus', role: 'status', 'aria-live': 'polite' },
+      'التنفيذ الكامل: ترخيص مشترك عند إدخاله والتأكيد عليه، ثم نشر المستوفي، ثم إضافته لصف البث دون تكرار.'));
+    syncChannelBulkPanel();
+  }
+
+  function syncChannelBulkPanel() {
+    if (!state.els.bulkPanel || !state.table || state.table.table !== 'aseel_channels') return;
+    var count = Object.keys(state.selectedChannels).length;
+    var summary = $('#bulkSelectionSummary');
+    if (summary) summary.textContent = formatNumber(count) + ' محددة من ' + formatNumber(state.rows.length);
+    var master = $('.bulk-check-cell input', state.els.thead);
+    if (master) {
+      var total = state.filteredChannels.length;
+      var checked = state.filteredChannels.filter(function (row) { return state.selectedChannels[row.id]; }).length;
+      master.checked = total > 0 && total === checked;
+      master.indeterminate = checked > 0 && checked < total;
+      master.disabled = state.bulkBusy;
+    }
+    $$('.bulk-control', state.els.bulkPanel).forEach(function (button) { button.disabled = state.bulkBusy; });
+  }
+
+  function bulkStatus(message) {
+    var target = $('#bulkStatus');
+    if (target && state.table && state.table.table === 'aseel_channels') target.textContent = message;
+  }
+
+  function bulkParts(list, size) {
+    var result = [];
+    for (var i = 0; i < list.length; i += size) result.push(list.slice(i, i + size));
+    return result;
+  }
+
+  function patchChannelBatch(rows, payload) {
+    var report = { changed: 0, failures: 0, errors: [] };
+    return bulkParts(rows, 40).reduce(function (chain, batch) {
+      return chain.then(function () {
+        return api('aseel_channels?id=in.(' + batch.map(function (row) { return row.id; }).join(',') + ')', {
+          method: 'PATCH', body: payload, headers: { Prefer: 'return=representation' }
+        }).then(function (returned) {
+          returned = Array.isArray(returned) ? returned : [];
+          returned.forEach(function (row) {
+            var found = state.rows.filter(function (current) { return current.id === row.id; })[0];
+            if (found) Object.assign(found, row);
+          });
+          report.changed += returned.length;
+          report.failures += batch.length - returned.length;
+          if (returned.length !== batch.length) report.errors.push('رفضت صلاحيات قاعدة البيانات تعديل بعض القنوات');
+        }).catch(function (err) {
+          report.failures += batch.length;
+          report.errors.push(describeError(err));
+        });
+      });
+    }, Promise.resolve()).then(function () { return report; });
+  }
+
+  function fetchLiveLinks(collectionId) {
+    var all = [];
+    function page(offset) {
+      return restList('aseel_home_collection_items',
+        'select=channel_id,display_order&collection_id=eq.' + encodeURIComponent(collectionId) + '&limit=500&offset=' + offset)
+        .then(function (rows) {
+          rows = Array.isArray(rows) ? rows : [];
+          all = all.concat(rows);
+          return rows.length === 500 ? page(offset + 500) : all;
+        });
+    }
+    return page(0);
+  }
+
+  function addChannelsToLive(rows) {
+    if (!rows.length) return Promise.resolve({ added: 0, existing: 0, failures: 0, errors: [] });
+    return restList('aseel_home_collections', 'select=id&slug=eq.live-now&limit=1').then(function (collections) {
+      if (!collections || !collections[0]) throw new Error('لم يتم العثور على صف «على الهواء الآن».');
+      var collectionId = collections[0].id;
+      return fetchLiveLinks(collectionId).then(function (existing) {
+        var known = {}, lastOrder = 0;
+        existing.forEach(function (item) {
+          if (item.channel_id) known[item.channel_id] = true;
+          lastOrder = Math.max(lastOrder, Number(item.display_order) || 0);
+        });
+        var pending = rows.filter(function (row) { return !known[row.id]; });
+        var report = { added: 0, existing: rows.length - pending.length, failures: 0, errors: [] };
+        var payload = pending.map(function (row, i) {
+          return { collection_id: collectionId, channel_id: row.id, display_order: lastOrder + i + 1 };
+        });
+        return bulkParts(payload, 30).reduce(function (chain, batch) {
+          return chain.then(function () {
+            return restInsert('aseel_home_collection_items', batch).then(function (returned) {
+              var count = Array.isArray(returned) ? returned.length : 0;
+              report.added += count;
+              report.failures += batch.length - count;
+            }).catch(function (err) {
+              report.failures += batch.length;
+              report.errors.push(describeError(err));
+            });
+          });
+        }, Promise.resolve()).then(function () { return report; });
+      });
+    });
+  }
+
+  function runChannelBulk(action) {
+    if (state.bulkBusy || !state.adminVerified || !state.table || state.table.table !== 'aseel_channels') {
+      toast('يلزم تسجيل دخول مسؤول نشط لتنفيذ العمليات.', 'error');
+      return;
+    }
+    var selected = state.rows.filter(function (row) { return state.selectedChannels[row.id]; });
+    if (!selected.length) { toast('حدد قناة أو أكثر أولًا.', 'error'); return; }
+    var holder = ($('#bulkRightsHolder') || {}).value || '';
+    var reference = ($('#bulkLicenseReference') || {}).value || '';
+    var expires = ($('#bulkLicenseExpiry') || {}).value || '';
+    var ack = $('#bulkLicenseAck') && $('#bulkLicenseAck').checked;
+    holder = holder.trim();
+    reference = reference.trim();
+    var applyLicense = action === 'license' || (action === 'all' && (holder || reference || expires || ack));
+    if (applyLicense) {
+      if (!holder || !reference || !ack) {
+        toast('أدخل صاحب الحقوق والمرجع ثم أكد صلاحية الترخيص لجميع القنوات المحددة.', 'error');
+        return;
+      }
+      if (holder.length > 250 || reference.length > 500) {
+        toast('تجاوز حقل الحقوق الحد الأقصى للطول.', 'error');
+        return;
+      }
+      if (expires && !(new Date(expires + 'T23:59:59').getTime() > Date.now())) {
+        toast('تاريخ انتهاء الترخيص غير صالح أو منتهٍ.', 'error');
+        return;
+      }
+    }
+    var labels = {
+      license: 'اعتماد الترخيص', publish: 'النشر', live: 'إضافة القنوات للبث', all: 'الترخيص والنشر والإضافة'
+    };
+    if (!window.confirm('تأكيد ' + labels[action] + ' لـ ' + selected.length + ' قناة؟ ستتغير بيانات الإنتاج فعليًا.')) return;
+    state.bulkBusy = true;
+    syncChannelBulkPanel();
+    var results = [];
+    var flow = Promise.resolve();
+    if (applyLicense) {
+      flow = flow.then(function () {
+        bulkStatus('جارٍ تحديث مراجع الحقوق…');
+        var payload = { rights_status: 'approved', rights_holder: holder, license_reference: reference };
+        if (expires) payload.rights_expires_at = new Date(expires + 'T23:59:59').toISOString();
+        return patchChannelBatch(selected, payload).then(function (report) {
+          results.push('الترخيص: ' + report.changed + ' ناجح / ' + report.failures + ' فشل');
+          if (report.errors.length) results.push(report.errors[0]);
+        });
+      });
+    }
+    if (action === 'all' || action === 'publish') {
+      flow = flow.then(function () {
+        bulkStatus('جارٍ نشر القنوات المستوفية للحقوق والروابط…');
+        var allowed = selected.filter(canPublishChannel);
+        var draft = allowed.filter(function (row) { return row.status !== 'published'; });
+        return patchChannelBatch(draft, { status: 'published' }).then(function (report) {
+          results.push('النشر: ' + report.changed + ' جديد / ' + (selected.length - allowed.length) + ' غير مؤهل / ' + report.failures + ' فشل');
+          if (report.errors.length) results.push(report.errors[0]);
+        });
+      });
+    }
+    if (action === 'all' || action === 'live') {
+      flow = flow.then(function () {
+        bulkStatus('جارٍ إضافة القنوات إلى «على الهواء الآن» دون تكرار…');
+        var allowed = selected.filter(function (row) { return row.status === 'published' && canPublishChannel(row); });
+        return addChannelsToLive(allowed).then(function (report) {
+          results.push('البث: ' + report.added + ' مضافة / ' + report.existing + ' موجودة / ' +
+            (selected.length - allowed.length) + ' غير مؤهلة / ' + report.failures + ' فشل');
+          if (report.errors.length) results.push(report.errors[0]);
+        });
+      });
+    }
+    flow.then(function () {
+      bulkStatus(results.join(' | '));
+      toast('انتهى التنفيذ الجماعي. راجع ملخص النتائج.', 'success');
+    }).catch(function (err) {
+      bulkStatus('توقفت العملية: ' + results.concat([describeError(err)]).join(' | '));
+      toast('توقف التنفيذ: ' + describeError(err), 'error');
+    }).finally(function () {
+      state.bulkBusy = false;
+      if (state.table && state.table.table === 'aseel_channels') {
+        syncChannelBulkPanel();
+        loadTable(state.table);
+      }
+    });
+  }
+
+  function installChannelBulkStyles() {
+    var tag = document.createElement('style');
+    tag.textContent = [
+      '.channel-bulk{margin:14px 0;padding:18px;border-radius:14px;border:1px solid var(--line-strong);background:var(--surface-2)}',
+      '.channel-bulk[hidden]{display:none}',
+      '.bulk-header,.bulk-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px}',
+      '.bulk-header{justify-content:space-between;margin-bottom:12px}',
+      '.bulk-header strong{font-size:16px;color:var(--text)}',
+      '.bulk-count{font-size:12px;color:var(--gold)}',
+      '.bulk-actions{margin:12px 0}',
+      '.bulk-license{margin:16px 0;padding:12px;border:1px solid var(--line);border-radius:10px}',
+      '.bulk-license summary{cursor:pointer;font-weight:700}',
+      '.bulk-hint,.bulk-status{font-size:12px;line-height:1.8;color:var(--text-2)}',
+      '.bulk-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:12px;margin:12px 0}',
+      '.bulk-field{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--text-2)}',
+      '.bulk-field input{width:100%;background:var(--surface-2);border:1px solid var(--line-strong);border-radius:8px;padding:10px;color:var(--text)}',
+      '.bulk-ack{display:flex;gap:9px;align-items:flex-start;font-size:12px;line-height:1.6}',
+      '.bulk-ack input{margin-top:3px;flex:none}',
+      '.bulk-check-cell{width:35px;min-width:35px;text-align:center}',
+      '.bulk-check-cell input{width:17px;height:17px;accent-color:var(--gold);cursor:pointer}'
+    ].join('\n');
+    document.head.append(tag);
   }
 
   /* ---------- publish toggle ---------- */
@@ -1755,6 +2103,7 @@
   }
 
   function boot() {
+    installChannelBulkStyles();
     renderNav();
     bindEvents();
 
