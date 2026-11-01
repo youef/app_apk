@@ -47,7 +47,7 @@
       if (!res.ok) throw new Error(table + " HTTP " + res.status);
       return res.json();
     });
-    return withTimeout(req, CFG.requestTimeout);
+    return withTimeout(req, Math.max(Number(CFG.requestTimeout) || 0, 15000));
   }
 
   function publishedFilters(table) {
@@ -108,6 +108,13 @@
     })).then(function (results) {
       var out = {};
       tables.forEach(function (t, i) { out[t] = results[i]; });
+      // A partial connection failure must not erase the live TV section.
+      if (!out.channels.length && failedTables.indexOf("channels") !== -1) {
+        return loadSnapshot().then(function (saved) {
+          out.channels = saved.channels || [];
+          return out;
+        }, function () { return out; });
+      }
       if (!out.movies.length && !out.channels.length) throw new Error("empty catalogue");
       return out;
     });
