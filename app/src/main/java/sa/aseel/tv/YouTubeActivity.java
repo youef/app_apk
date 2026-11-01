@@ -37,7 +37,7 @@ public final class YouTubeActivity extends Activity {
         getWindow().getDecorView().setSystemUiVisibility(
             View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
-        String id=YouTubeLink.videoId(getIntent().getStringExtra("youtube_url"));
+        final String id=YouTubeLink.videoId(getIntent().getStringExtra("youtube_url"));
         if(id==null){finish();return;}
         // The stock Android 4.4 WebView cannot reliably run modern YouTube iframe JavaScript.
         // When a native YouTube TV/phone app is installed, prefer the official player.
