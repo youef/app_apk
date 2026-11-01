@@ -5,7 +5,10 @@ from pathlib import Path
 
 EXPECTED_PACKAGE="sa.alezz.tv.unified"
 MIN_SDK=19
-MIN_VERSION=9
+MIN_VERSION=11
+REQUIRED_ABIS=("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+ELF_MACHINE={"armeabi-v7a": 40, "arm64-v8a": 183, "x86": 3, "x86_64": 62}
+ELF_CLASS={"armeabi-v7a": 1, "arm64-v8a": 2, "x86": 1, "x86_64": 2}
 
 def check(ok,msg):
     if not ok: raise RuntimeError(msg)
@@ -33,10 +36,18 @@ def main():
         check(dex[:4]==b"dex\n" and dex[7]==0 and int(dex[4:7])<=35,
               "Android 4.4 compatible DEX 035 or below")
         native=[path for path in paths if path.startswith("lib/") and path.endswith(".so")]
-        check(any(path.startswith("lib/armeabi-v7a/") and "conscrypt" in path for path in native),
-              "ARMv7 Conscrypt TLS library bundled")
-        check(not any(path.startswith("lib/arm64-v8a/") for path in native),
-              "No 64-bit only native requirement")
+        native_arches=set(path.split("/")[1] for path in native)
+        check(native_arches==set(REQUIRED_ABIS),
+              "Universal APK includes ARMv7, ARM64, x86 and x86_64 native libraries")
+        for abi in REQUIRED_ABIS:
+            matches=[p for p in native if p.startswith("lib/"+abi+"/") and "conscrypt" in p]
+            check(bool(matches),abi+" Conscrypt TLS JNI bundled")
+            for entry in matches:
+                header=archive.read(entry)[:20]
+                check(len(header)>=20 and header[:4]==bytes([0x7f])+b"ELF"
+                      and header[4]==ELF_CLASS[abi]
+                      and int.from_bytes(header[18:20],"little")==ELF_MACHINE[abi],
+                      abi+" ELF architecture verified")
     sdk=Path(os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT") or "")
     tools=sdk/"build-tools"/"33.0.2"
     aapt=str(tools/"aapt");align=str(tools/"zipalign");signer=str(tools/"apksigner")
@@ -50,12 +61,13 @@ def main():
     check(f"sdkVersion:'{MIN_SDK}'" in badging,"minSdkVersion API 19")
     check("targetSdkVersion:'28'" in badging,"Target SDK as declared")
     version=re.search(r"versionCode='(\d+)'",badging)
-    check(version is not None and int(version.group(1))>=MIN_VERSION,"Version >=4")
+    check(version is not None and int(version.group(1))>=MIN_VERSION,"Minimum updated versionCode")
     check("android.permission.INTERNET" in badging,"Internet access included")
     check(not any(line.startswith("uses-feature:") and "android.hardware.touchscreen" in line
                   for line in badging.splitlines()),"No touchscreen requirement")
     if "native-code:" in badging:
-        check("armeabi-v7a" in badging,"ARMv7 runtime architecture declared")
+        check(all(abi in badging for abi in REQUIRED_ABIS),
+              "Android manifest declares all four native ABIs")
     tree=command([aapt,"dump","xmltree",str(apk),"AndroidManifest.xml"])
     check("android.intent.category.LAUNCHER" in tree and
           "android.intent.category.LEANBACK_LAUNCHER" in tree,"Standard and TV launcher")
@@ -70,6 +82,8 @@ def main():
     print("CERTIFICATE_SHA256="+digest.group(1))
     print("APK_SHA256="+hashlib.sha256(apk.read_bytes()).hexdigest())
     print("PACKAGE="+EXPECTED_PACKAGE)
+    print("SUPPORTED_ABIS="+",".join(REQUIRED_ABIS))
+    print("UNIVERSAL_APK=true")
     print("RESULT: STATIC INSTALL CHECKS PASSED — real-device installation not proven")
 
 try:
