@@ -19,9 +19,6 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.os.Build;
-import android.util.Log;
-import java.io.InputStream;
-import java.io.ByteArrayOutputStream;
 
 /**
  * First-party HTTPS hosted YouTube iframe page. Remains inside the application;
@@ -127,8 +124,8 @@ public final class YouTubeActivity extends Activity {
         status.setText("مشغل YouTube الرسمي. إذا كانت الشاشة قديمة ولم يعمل الفيديو، استخدم زر «YouTube الرسمي».");
         body.addView(status,new LinearLayout.LayoutParams(-1,dp(43)));
         setContentView(root);
-        // Bundle the YouTube iframe page inside the APK: no GitHub Pages 404 or site dependency.
-        // Use an HTTPS origin so the official YouTube IFrame API has a proper embed origin.
+        // Generate a small player locally: no GitHub Pages 404 or missing HTML asset.
+        // Use an HTTPS origin so YouTube's official IFrame API can resolve correctly.
         loadBundledPlayer(id);
         back.requestFocus();
     }
@@ -153,31 +150,45 @@ public final class YouTubeActivity extends Activity {
         }catch(Exception ignored){}
         return false;
     }
+    /** In-memory first-party player: never fetch a missing GitHub Pages HTML route. */
     private void loadBundledPlayer(String id){
-        InputStream stream=null;
-        try{
-            stream=getAssets().open("youtube-player.html");
-            ByteArrayOutputStream bytes=new ByteArrayOutputStream();
-            byte[] buffer=new byte[4096];
-            int count;
-            while((count=stream.read(buffer))!=-1){
-                if(bytes.size()+count>128*1024)throw new java.io.IOException("Bundled player too large");
-                bytes.write(buffer,0,count);
-            }
-            String html=new String(bytes.toByteArray(),"UTF-8");
-            if(html.indexOf("<script>")<0)throw new java.io.IOException("Player script missing");
-            // The ID was validated as exactly eleven safe YouTube identifier characters.
-            html=html.replace("<script>","<script>window.AL_EZZ_VIDEO_ID='"+id+"';</script><script>");
-            web.loadDataWithBaseURL("https://youef.github.io/app_apk/web/youtube-player.html?v="+id,
-                html,"text/html","UTF-8",null);
-        }catch(Exception error){
-            Log.e("AlEzzYouTube","Bundled player missing",error);
-            status.setText("تعذر تجهيز المشغل الداخلي. استخدم زر YouTube الرسمي بالأعلى.");
-            status.setVisibility(View.VISIBLE);
-            // No fallback to the old 404 GitHub Pages path.
-        }finally{
-            if(stream!=null)try{stream.close();}catch(Exception ignored){}
-        }
+        // id is validated by YouTubeLink.videoId() before reaching this method.
+        StringBuilder html=new StringBuilder(3700);
+        html.append("<!doctype html><html lang='ar' dir='rtl'><head><meta charset='UTF-8'>");
+        html.append("<meta name='viewport' content='width=device-width,initial-scale=1'>");
+        html.append("<style>html,body{margin:0;height:100%;background:#09090c;color:white;font-family:Arial,sans-serif}");
+        html.append("main{height:100%;display:flex;flex-direction:column}#player{flex:1;min-height:200px}");
+        html.append("nav{display:flex;gap:12px;justify-content:center;background:#16161a;padding:10px}");
+        html.append("button{color:#fff;background:#29292e;border:1px solid #555;padding:12px 19px;font-size:16px}");
+        html.append("button:focus{background:#bb163b;outline:2px solid #fff}");
+        html.append("#state{background:#16161a;color:#ccc;padding:7px;text-align:center;font-size:12px}</style></head>");
+        html.append("<body><main><div id='player'></div><nav>");
+        html.append("<button id='play'>▶ تشغيل</button><button id='pause'>⏸ إيقاف</button>");
+        html.append("<button id='back'>−10 ثوانٍ</button><button id='forward'>+10 ثوانٍ</button></nav>");
+        html.append("<div id='state'>يتم تحميل مشغّل YouTube الرسمي. استخدم الريموت.</div></main>");
+        html.append("<script>(function(){var p=null,ready=false;");
+        html.append("var note=function(t){document.getElementById('state').textContent=t;};");
+        html.append("window.alEzzPlayer={playVideo:function(){if(ready)p.playVideo();},");
+        html.append("pauseVideo:function(){if(ready)p.pauseVideo();},");
+        html.append("toggleVideo:function(){if(ready){if(p.getPlayerState()==1)p.pauseVideo();else p.playVideo();}},");
+        html.append("seek:function(s){if(ready)p.seekTo(Math.max(0,p.getCurrentTime()+s),true);}};");
+        html.append("document.getElementById('play').onclick=window.alEzzPlayer.playVideo;");
+        html.append("document.getElementById('pause').onclick=window.alEzzPlayer.pauseVideo;");
+        html.append("document.getElementById('back').onclick=function(){window.alEzzPlayer.seek(-10);};");
+        html.append("document.getElementById('forward').onclick=function(){window.alEzzPlayer.seek(10);};");
+        html.append("window.onYouTubeIframeAPIReady=function(){try{p=new YT.Player('player',{");
+        html.append("videoId:'").append(id).append("',width:'100%',height:'100%',");
+        html.append("playerVars:{controls:1,playsinline:1,enablejsapi:1,origin:'https://youef.github.io'},");
+        html.append("events:{onReady:function(){ready=true;note('المشغل جاهز. اضغط تشغيل.');},");
+        html.append("onError:function(e){note('تعذر التضمين أو توافق الجهاز (رمز '+e.data+'). افتح YouTube الرسمي من الأعلى.');}}");
+        html.append("});}catch(e){note('متصفح التلفزيون لا يدعم YouTube الحديث. استخدم التطبيق الرسمي.');}};");
+        html.append("var script=document.createElement('script');script.src='https://www.youtube.com/iframe_api';");
+        html.append("script.onerror=function(){note('تعذر الاتصال بواجهة YouTube. استخدم التطبيق الرسمي.');};");
+        html.append("document.head.appendChild(script);");
+        html.append("setTimeout(function(){if(!ready)note('المشغل غير جاهز. قد يحتاج Android القديم تطبيق YouTube الرسمي.');},18000);");
+        html.append("})();</script></body></html>");
+        web.loadDataWithBaseURL("https://youef.github.io/app_apk/web/youtube-player.html?v="+id,
+            html.toString(),"text/html","UTF-8",null);
     }
     private void hideFullScreen(){
         if(fullScreenView!=null){
