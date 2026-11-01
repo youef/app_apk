@@ -55,7 +55,16 @@ public final class CatalogApi {
                 if("stream".equals(mode) && !direct && !youtube)continue;
                 if(!"stream".equals(mode)&&!"youtube_embed".equals(mode))continue;
             }
-            if(!"published".equals(item.optString("status","")) || !"approved".equals(item.optString("rights_status","")))continue;
+            // Kids stream catalogue: public manifest-checked HTTPS HLS, with rights
+            // status explicitly pending (never mislabel unverified rights as approved).
+            boolean kidsManifestChecked="aseel_channels".equals(table)
+                && item.optBoolean("is_kids",false)
+                && "50da3604-2454-436e-88c9-e2df99e6349f".equals(item.optString("source_id",""))
+                && "pending".equals(item.optString("rights_status",""))
+                && "stream".equals(item.optString("playback_mode",""))
+                && direct;
+            if(!"published".equals(item.optString("status","")) ||
+                (!"approved".equals(item.optString("rights_status","")) && !kidsManifestChecked))continue;
             output.put(item);
         }
         return output;
