@@ -39,6 +39,16 @@ public final class PlayerActivity extends Activity {
     private boolean live=false,manualPause=false,changingSource=false;
     private ProgressBar progress;
     private final Handler handler=new Handler();
+    private final Runnable startupTimeout=new Runnable(){public void run(){
+        if(isFinishing()||ready)return;
+        if(retries<2)recover("لم يبدأ الفيديو خلال 20 ثانية");
+        else{
+            error.setText("فشل تشغيل المصدر على Android "+Build.VERSION.SDK_INT+
+                ". تحقق من الترميز H.264/AAC أو جرّب مصدر MP4 آخر أو المشغل البديل.");
+            streamStatus.setText("المصدر لا يعمل على هذه الشاشة");
+            revealControls();
+        }
+    }};
     private final Runnable hideOverlay=new Runnable(){public void run(){
         if(ready&&video!=null&&video.isPlaying()&&controlsPanel!=null){
             // Move focus away before hiding the control bar on TV.
@@ -134,6 +144,10 @@ public final class PlayerActivity extends Activity {
         qualityButton=action("الجودة",buttons);
         qualityButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showQualityMenu();}});
         updateQualityButton();
+        Button alternative=action("مشغل بديل",buttons);
+        alternative.setOnClickListener(new View.OnClickListener(){
+            public void onClick(View v){openAlternativePlayer();}
+        });
         Button exit=action("رجوع",buttons);
         if(live){rewind.setEnabled(false);forward.setEnabled(false);restart.setEnabled(false);}
         rewind.setOnClickListener(new View.OnClickListener(){public void onClick(View v){seek(-10000);}});
@@ -160,6 +174,7 @@ public final class PlayerActivity extends Activity {
         video.setOnPreparedListener(new MediaPlayer.OnPreparedListener(){
             public void onPrepared(MediaPlayer media){
                 ready=true;
+                handler.removeCallbacks(startupTimeout);
                 int saved=pendingSeekMs>0?pendingSeekMs:
                     getSharedPreferences("aseel_user_v2",MODE_PRIVATE).getInt("position_"+id,0);
                 pendingSeekMs=0;
@@ -205,6 +220,7 @@ public final class PlayerActivity extends Activity {
         video.setOnErrorListener(new MediaPlayer.OnErrorListener(){
             public boolean onError(MediaPlayer mp,int what,int extra){
                 ready=false;
+                handler.removeCallbacks(startupTimeout);
                 revealControls();
                 if(retries<2 && !changingSource){
                     recover("MediaPlayer "+what+"/"+extra);
@@ -288,6 +304,7 @@ public final class PlayerActivity extends Activity {
         changingSource=true;
         if(!live && ready){try{pendingSeekMs=video.getCurrentPosition();}catch(Exception ignored){}}
         handler.removeCallbacks(tick);
+        handler.removeCallbacks(startupTimeout);
         ready=false;bufferingStarted=0L;stallTicks=0;lastTickPosition=-1;
         try{video.stopPlayback();}catch(Exception ignored){}
         sourceIndex=next;currentUrl=sources.get(next).url;
@@ -328,6 +345,7 @@ public final class PlayerActivity extends Activity {
     private void openStream(String url){
         if(mediaProxy!=null){mediaProxy.close();mediaProxy=null;}
         ready=false;bufferingStarted=0L;
+        handler.removeCallbacks(startupTimeout);
         if(url==null || !url.startsWith("https://")){
             error.setText("رابط الفيديو مفقود أو غير آمن (HTTPS مطلوب)");
             return;
@@ -345,10 +363,27 @@ public final class PlayerActivity extends Activity {
             error.setText("جاري تحميل الفيديو... ("+playerMode+")");
             video.setVideoURI(Uri.parse(address));
             video.requestFocus();
+            handler.postDelayed(startupTimeout,20000);
         }catch(Exception exception){
             String message=exception.getClass().getSimpleName()+": "+exception.getMessage();
             error.setText("تعذر فتح المشغل: "+message);
             Log.e("AseelVideo","Unable to start secure media stream",exception);
+        }
+    }
+    private void openAlternativePlayer(){
+        if(!StreamQuality.isDirectUrl(currentUrl)){
+            error.setText("لا يوجد رابط MP4/HLS صالح للمشغل البديل.");return;
+        }
+        try{
+            Intent intent=new Intent(Intent.ACTION_VIEW);
+            intent.setDataAndType(Uri.parse(currentUrl),
+                currentUrl.toLowerCase(java.util.Locale.US).contains(".m3u8")
+                ? "application/vnd.apple.mpegurl":"video/mp4");
+            intent.addCategory(Intent.CATEGORY_DEFAULT);
+            startActivity(intent);
+        }catch(Exception e){
+            error.setText("لا يوجد مشغل فيديو بديل متوافق. جرّب ملف MP4 بترميز H.264/AAC.");
+            Log.w("AseelVideo","No external video player",e);
         }
     }
     private void savePosition(int position){
@@ -427,5 +462,5 @@ public final class PlayerActivity extends Activity {
         super.onStop();
         if(!isFinishing()&&!isChangingConfigurations())finish();
     }
-    @Override protected void onDestroy(){handler.removeCallbacks(hideOverlay);handler.removeCallbacks(tick);if(video!=null)video.stopPlayback();if(mediaProxy!=null)mediaProxy.close();super.onDestroy();}
+    @Override protected void onDestroy(){handler.removeCallbacks(startupTimeout);handler.removeCallbacks(hideOverlay);handler.removeCallbacks(tick);if(video!=null)video.stopPlayback();if(mediaProxy!=null)mediaProxy.close();super.onDestroy();}
 }

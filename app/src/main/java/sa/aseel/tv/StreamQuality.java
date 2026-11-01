@@ -44,6 +44,14 @@ public final class StreamQuality {
     }
     public static int choose(ArrayList<Source> items,String preference,int api){
         if(items.isEmpty())return -1;
+        if(("auto".equals(preference)||preference==null) && api<=19){
+            int mp4=-1;
+            for(int i=0;i<items.size();i++){
+                if(items.get(i).url.toLowerCase(Locale.US).split("[?#]",2)[0].endsWith(".mp4")
+                   && (mp4<0||items.get(i).rank<items.get(mp4).rank))mp4=i;
+            }
+            if(mp4>=0)return mp4;
+        }
         if("default".equals(preference))return 0;
         if("highest".equals(preference)||"lowest".equals(preference)||"auto".equals(preference)){
             boolean low="lowest".equals(preference)||("auto".equals(preference)&&api<=19);

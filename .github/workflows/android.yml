@@ -1,4 +1,4 @@
-name: Al Ezz TV — Red Classic Fresh Install (Android API19+)
+name: Al Ezz TV — Red Classic Playback & Unique APK (API19+)
 on:
   push:
     branches: [main]
@@ -70,6 +70,21 @@ jobs:
             echo "SIGNING_READY=false" >> "$GITHUB_ENV"
             echo "::warning::No permanent signing key configured. No stable signing key. This debug APK may require removing an installed APK signed by a different key; back up user data first."
           fi
+      - name: Generate unique Android package for every build
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACKAGE="sa.alezz.tv.redclassic.b${GITHUB_RUN_ID}a${GITHUB_RUN_ATTEMPT}"
+          VERSION_CODE=$(( 10000 + GITHUB_RUN_NUMBER ))
+          VERSION_NAME="9.3.3-redclassic-${GITHUB_RUN_ID}a${GITHUB_RUN_ATTEMPT}"
+          echo "ORG_GRADLE_PROJECT_ezzApplicationId=$PACKAGE" >> "$GITHUB_ENV"
+          echo "ORG_GRADLE_PROJECT_ezzVersionCode=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "ORG_GRADLE_PROJECT_ezzVersionName=$VERSION_NAME" >> "$GITHUB_ENV"
+          echo "AL_EZZ_EXPECTED_PACKAGE=$PACKAGE" >> "$GITHUB_ENV"
+          echo "AL_EZZ_MIN_VERSION=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "AL_EZZ_RELEASE_TAG=al-ezz-playback-${GITHUB_RUN_ID}-a${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+          echo "Unique install package: $PACKAGE"
+
       - name: Bundle official transparent brand artwork offline
         run: |
           set -euo pipefail
@@ -91,7 +106,7 @@ jobs:
             cp app/build/outputs/apk/debug/app-debug.apk dist/al-ezz-tv-redclassic-api19-test.apk
             echo "SIGNING_MODE=temporary_debug_fresh_install_only" >dist/install-metadata.txt
           fi
-          echo "PACKAGE=sa.alezz.tv.redclassic" >>dist/install-metadata.txt
+          echo "PACKAGE=$AL_EZZ_EXPECTED_PACKAGE" >>dist/install-metadata.txt
           echo "MIN_SDK=19" >>dist/install-metadata.txt
           echo "ABIS=armeabi-v7a,arm64-v8a,x86,x86_64" >>dist/install-metadata.txt
           echo "BUILD_VARIANT=UNIVERSAL" >>dist/install-metadata.txt
@@ -114,28 +129,23 @@ jobs:
             dist/gradle-build.log
           if-no-files-found: error
           retention-days: 30
-      - name: Publish one immutable side-by-side installation test APK
+      - name: Publish independent playback test APK
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          TAG="al-ezz-tv-redclassic-install-test-v1"
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "::notice::Test release already exists: keeping prior APK unchanged."
-          else
-            gh release create "$TAG" \
-              "dist/al-ezz-tv-redclassic-api19-test.apk" \
-              "dist/install-metadata.txt" \
-              "dist/build-report.txt" \
-              --repo "$GITHUB_REPOSITORY" \
-              --target "$GITHUB_SHA" \
-              --title "Al Ezz TV - Red Classic - Android 4.4 Fresh Install Test" \
-              --notes "TEST ONLY: unique package sa.alezz.tv.redclassic installs alongside older Al Ezz TV without uninstalling it. Android API19+, universal ARMv7/ARM64/x86/x86_64, V1 signature checked. A temporary debug signature cannot upgrade a future separately signed build. Verify on your physical television." \
-              --prerelease \
-              --latest=false
-          fi
+          gh release create "$AL_EZZ_RELEASE_TAG" \
+            dist/al-ezz-tv-redclassic-api19-test.apk \
+            dist/install-metadata.txt \
+            dist/build-report.txt \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Al Ezz TV red classic playback fix - $AL_EZZ_EXPECTED_PACKAGE" \
+            --notes "Android 4.4/API19+ MP4 preference, playback diagnostics, and official YouTube fallback. New package per build installs beside older versions. TEST BUILD ONLY. Playback depends on old-device codecs, TLS and YouTube support." \
+            --prerelease \
+            --latest=false
       - name: Upload to Appetize when linked
         if: env.APPETIZE_API_TOKEN != '' && env.APPETIZE_ANDROID_PUBLIC_KEY != ''
         uses: appetizeio/github-action-appetize@v1.1.0

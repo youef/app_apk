@@ -1,13 +1,11 @@
-# Android TV — Red Classic fresh-install fix (November 2026)
+# العز TV — إصلاح الشاشة السوداء والتحديث بمعرّف مستقل
 
-Android native red/black v9.3 design, original Al Ezz logo and D-pad navigation restored from commit `8d1dd27816af760e147e0b4c603b4eee9a15a4b1`.
+تم الحفاظ على التصميم الأحمر الأصلي المبني بـ Android Java مع الريموت والشعار.
 
-**For "App not installed":** independent Android application ID `sa.alezz.tv.redclassic` bypasses same-package signature mismatch. Do not uninstall the older app. New version `9.3.2-redclassic-fresh-install`, versionCode 18, minSdk 19, Android 4.4.4 compatible DEX and V1 signature validated by CI.
-
-- Java source package `sa.aseel.tv` and fully qualified Activities stay intact.
-- Gradle 7.6, AGP 7.4.2, Java 7 source compatibility, Conscrypt, native UI.
-- CI validates package, manifest, signing, ABI, ZIP, DEX. Rejected builds cannot publish.
-- One immutable GitHub prerelease `al-ezz-tv-redclassic-install-test-v1` hosts the test APK for direct download.
-- If no protected signing secrets are configured the APK is *debug signed* and future builds may use a different key. Do not treat as production/update-stable.
-- Existing `web/`, `admin/`, `supabase/`, and iOS remain unchanged.
-- Physical TV compatibility, media playback, and D-pad responsiveness still require on-device verification.
+- **كل تشغيل GitHub Actions** ينشئ معرّف حزمة فريدًا: `sa.alezz.tv.redclassic.b<RUN_ID>a<ATTEMPT>`. هذا يمنع تعارض توقيع تطبيق مثبت سابقًا، لكن يتطلب تفعيلًا وبيانات منفصلة لكل نسخة.
+- يتم نشر **APK تجريبي مستقل في GitHub Releases** في كل بناء ناجح، برقم إصدار جديد.
+- مشغل الأفلام: مهلة تشخيص 20 ثانية، محاولة إعادة التشغيل، رسائل سبب الفشل، زر اختياري لتشغيل المصدر في تطبيق فيديو آخر. تفضيل MP4 على HLS في Android 4.4 إذا توفرت جودة فعلية.
+- يوتيوب: تضمين المشغل الرسمي أولًا، إضافة مهلة تشخيص 15 ثانية، زر لإعادة المحاولة وخيار فتح المقطع في تطبيق/متصفح YouTube الرسمي عندما تعجز WebView القديمة عن التشغيل.
+- لا ضمان لتشغيل ترميزات غير مدعومة على عتاد Android 4.4؛ لا يوجد تجاوز DRM أو استخراج غير رسمي من YouTube.
+- الفحوص الآلية تثبت صلاحية APK وminSdk19/DEX/signature/ABI، لكن **اختبار المشاهدة النهائي يجب أن يكون على التلفزيون الفعلي**.
+- النسخ التجريبية قد تُوقع بمفتاح Debug مؤقت. لا تستخدمها كترقية إنتاجية دون مفتاح دائم.

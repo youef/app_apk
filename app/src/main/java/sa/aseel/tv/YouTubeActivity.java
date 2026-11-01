@@ -8,6 +8,8 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.os.Build;
+import android.os.Handler;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.Gravity;
@@ -40,7 +42,14 @@ public final class YouTubeActivity extends Activity {
     private FrameLayout videoArea,root;
     private LinearLayout recommendations,body;
     private TextView title,status,queueStatus;
-    private Button recommendButton,backButton;
+    private Button recommendButton,backButton,officialButton;
+    private final Handler readinessHandler=new Handler();
+    private final Runnable readinessTimeout=new Runnable(){public void run(){
+        if(!isFinishing()&&!playerReady){
+            status.setText("تعذّر تشغيل YouTube داخل متصفح الشاشة القديم. جرّب المشغل الرسمي أو أعد المحاولة.");
+            if(officialButton!=null)officialButton.requestFocus();
+        }
+    }};
     private View fullScreenView;
     private WebChromeClient.CustomViewCallback fullScreenCallback;
     private int current=0;
@@ -167,6 +176,12 @@ public final class YouTubeActivity extends Activity {
         web.setWebViewClient(new WebViewClient(){
             @Override public boolean shouldOverrideUrlLoading(WebView view,String url){
                 if(url==null)return false;
+                if(url.startsWith("alezzvideo://ready")){
+                    playerReady=true;
+                    readinessHandler.removeCallbacks(readinessTimeout);
+                    status.setText("المشغل جاهز. إذا بقيت الشاشة سوداء جرّب زر المشغل الرسمي.");
+                    return true;
+                }
                 if(url.startsWith("alezzvideo://ended")){
                     runOnUiThread(new Runnable(){public void run(){nextVideo();}});
                     return true;
@@ -176,7 +191,8 @@ public final class YouTubeActivity extends Activity {
                     return true;
                 }
                 if(url.startsWith("alezzvideo://error")){
-                    status.setText("تعذر تشغيل هذا الفيديو داخل الجهاز. قد يكون التضمين مقيدًا أو WebView قديمًا.");
+                    readinessHandler.removeCallbacks(readinessTimeout);
+                    status.setText("فشل تضمين هذا الفيديو. جرّب زر المشغل الرسمي.");
                     return true;
                 }
                 if(url.startsWith("https://www.youtube.com/embed/")||
@@ -193,7 +209,8 @@ public final class YouTubeActivity extends Activity {
                 return true;
             }
             @Override public void onReceivedError(WebView view,int errorCode,String description,String url){
-                status.setText("تعذر تحميل الفيديو، تحقق من الشبكة ووقت الجهاز وتوافق المتصفح.");
+                readinessHandler.removeCallbacks(readinessTimeout);
+                status.setText("فشل تحميل YouTube. تأكد من وقت الجهاز والاتصال، أو استخدم المشغل الرسمي.");
             }
         });
         web.setWebChromeClient(new WebChromeClient(){
@@ -223,6 +240,16 @@ public final class YouTubeActivity extends Activity {
         queueStatus=text("",13,MUTED,false);queueStatus.setGravity(Gravity.CENTER_VERTICAL);
         queueStatus.setPadding(dp(12),0,0,0);
         controlBar.addView(queueStatus,new LinearLayout.LayoutParams(0,-1,1));
+        officialButton=action("▶ المشغل الرسمي");
+        controlBar.addView(officialButton,new LinearLayout.LayoutParams(dp(165),dp(49)));
+        officialButton.setOnClickListener(new View.OnClickListener(){
+            public void onClick(View v){openOfficialPlayer();}
+        });
+        Button retry=action("↻ إعادة");
+        controlBar.addView(retry,new LinearLayout.LayoutParams(dp(100),dp(49)));
+        retry.setOnClickListener(new View.OnClickListener(){
+            public void onClick(View v){loadInternalPlayer(currentId());}
+        });
 
         recommendations=new LinearLayout(this);
         recommendations.setOrientation(LinearLayout.VERTICAL);
@@ -233,7 +260,7 @@ public final class YouTubeActivity extends Activity {
         status.setGravity(Gravity.CENTER);
         status.setBackgroundColor(0xFF251B25);
         status.setSingleLine(false);
-        body.addView(status,new LinearLayout.LayoutParams(-1,dp(27)));
+        body.addView(status,new LinearLayout.LayoutParams(-1,dp(56)));
         setContentView(root);
         updateCurrentUi();
         loadInternalPlayer(currentId());
@@ -244,7 +271,7 @@ public final class YouTubeActivity extends Activity {
         String label=field(item,"title");
         title.setText(label.length()>0?label:"مقطع من العز TV");
         queueStatus.setText((current+1)+" / "+queue.size()+"   •   التالي تلقائيًا");
-        status.setText("تشغيل داخل العز TV • اسحب للأعلى للمقترحات");
+        status.setText("جاري تحميل YouTube. إذا بقيت الشاشة سوداء استخدم زر المشغل الرسمي.");
     }
     private void playAt(int index){
         if(queue.isEmpty())return;
@@ -256,6 +283,19 @@ public final class YouTubeActivity extends Activity {
             web.loadUrl("javascript:window.alEzzPlayer&&window.alEzzPlayer.loadVideo('"+id+"')");
         }else{
             loadInternalPlayer(id);
+        }
+    }
+    private void openOfficialPlayer(){
+        String id=currentId();
+        if(!id.matches("[A-Za-z0-9_-]{11}"))return;
+        try{
+            Intent intent=new Intent(Intent.ACTION_VIEW,Uri.parse("https://www.youtube.com/watch?v="+id));
+            intent.addCategory(Intent.CATEGORY_BROWSABLE);
+            startActivity(intent);
+            status.setText("سيتم عرض الفيديو عبر التطبيق أو المتصفح الرسمي، ثم العودة إلى العز TV.");
+        }catch(Exception e){
+            status.setText("تعذر العثور على مشغل YouTube متوافق. قد لا يدعم الجهاز هذا الفيديو.");
+            Log.w("AlezzYT","Official player unavailable",e);
         }
     }
     private void nextVideo(){
@@ -320,6 +360,11 @@ public final class YouTubeActivity extends Activity {
       * It does not proxy, extract, restream or hide official playback controls. */
     private void loadInternalPlayer(String id){
         playerReady=false;
+        readinessHandler.removeCallbacks(readinessTimeout);
+        readinessHandler.postDelayed(readinessTimeout,15000);
+        if(status!=null)status.setText(Build.VERSION.SDK_INT<=19
+            ? "Android 4.4: قد يتعذّر عرض YouTube داخل WebView. زر المشغل الرسمي متاح."
+            : "جاري تهيئة مشغل YouTube داخل العز TV...");
         StringBuilder h=new StringBuilder(3000);
         h.append("<!doctype html><html><head><meta charset='utf-8'>");
         h.append("<meta name='viewport' content='width=device-width,initial-scale=1'>");
@@ -332,7 +377,7 @@ public final class YouTubeActivity extends Activity {
         h.append("window.onYouTubeIframeAPIReady=function(){try{p=new YT.Player('player',{width:'100%',height:'100%',");
         h.append("videoId:'").append(id).append("',playerVars:{autoplay:1,controls:1,playsinline:1,");
         h.append("enablejsapi:1,origin:'https://youef.github.io'},events:{");
-        h.append("onReady:function(e){if(requestedId)e.target.loadVideoById(requestedId);else e.target.playVideo();},");
+        h.append("onReady:function(e){location.href=\'alezzvideo://ready\';if(requestedId)e.target.loadVideoById(requestedId);else e.target.playVideo();},");
         h.append("onStateChange:function(e){if(e.data===0)location.href='alezzvideo://ended';},");
         h.append("onError:function(e){location.href='alezzvideo://error/'+e.data;},");
         h.append("onAutoplayBlocked:function(){location.href='alezzvideo://blocked';}");
@@ -342,7 +387,6 @@ public final class YouTubeActivity extends Activity {
         h.append("document.head.appendChild(j);})();</script></body></html>");
         web.loadDataWithBaseURL("https://youef.github.io/app_apk/web/youtube-player.html",
             h.toString(),"text/html","UTF-8",null);
-        playerReady=true;
     }
     private void hideFullScreen(){
         if(fullScreenView!=null){
@@ -381,6 +425,7 @@ public final class YouTubeActivity extends Activity {
     }
     @Override protected void onResume(){super.onResume();if(web!=null)web.onResume();}
     @Override protected void onDestroy(){
+        readinessHandler.removeCallbacks(readinessTimeout);
         hideFullScreen();
         if(web!=null){web.loadUrl("about:blank");web.stopLoading();videoArea.removeView(web);web.destroy();web=null;}
         super.onDestroy();
