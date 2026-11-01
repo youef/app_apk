@@ -42,7 +42,10 @@ public final class YouTubeActivity extends Activity {
     private FrameLayout videoArea,root;
     private LinearLayout recommendations,body;
     private TextView title,status,queueStatus;
-    private Button recommendButton,backButton,officialButton;
+    private Button recommendButton,backButton,officialButton,browserButton;
+    private ImageView legacyPoster;
+    private TextView legacyTitle;
+    private final boolean isKitKat=Build.VERSION.SDK_INT<=19;
     private final Handler readinessHandler=new Handler();
     private final Runnable readinessTimeout=new Runnable(){public void run(){
         if(!isFinishing()&&!playerReady){
@@ -146,6 +149,7 @@ public final class YouTubeActivity extends Activity {
 
         videoArea=new FrameLayout(this);
         body.addView(videoArea,new LinearLayout.LayoutParams(-1,0,1));
+        if(!isKitKat){
         web=new WebView(this);web.setBackgroundColor(Color.BLACK);
         web.setFocusable(true);web.setFocusableInTouchMode(true);
         videoArea.addView(web,new FrameLayout.LayoutParams(-1,-1));
@@ -223,6 +227,28 @@ public final class YouTubeActivity extends Activity {
             }
             @Override public void onHideCustomView(){hideFullScreen();}
         });
+        }else{
+            LinearLayout preview=new LinearLayout(this);
+            preview.setOrientation(LinearLayout.VERTICAL);
+            preview.setGravity(Gravity.CENTER);
+            preview.setPadding(dp(15),dp(12),dp(15),dp(12));
+            preview.setBackgroundColor(0xFF251525);
+            videoArea.addView(preview,new FrameLayout.LayoutParams(-1,-1));
+            legacyPoster=new ImageView(this);
+            legacyPoster.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            preview.addView(legacyPoster,new LinearLayout.LayoutParams(dp(256),dp(143)));
+            legacyTitle=text("مشاهدة يوتيوب للأطفال",18,WHITE,true);
+            legacyTitle.setSingleLine(false);legacyTitle.setGravity(Gravity.CENTER);
+            preview.addView(legacyTitle,new LinearLayout.LayoutParams(-1,dp(65)));
+            TextView hint=text("Android 4.4.4: اضغط تشغيل في تطبيق يوتيوب أو المتصفح. لا يتم استخدام مشغّل WebView الذي يظهر شاشة سوداء.",14,MUTED,false);
+            hint.setSingleLine(false);hint.setGravity(Gravity.CENTER);
+            preview.addView(hint,new LinearLayout.LayoutParams(-1,dp(68)));
+            Button playOfficial=action("▶ شاهد عبر يوتيوب");
+            preview.addView(playOfficial,new LinearLayout.LayoutParams(dp(260),dp(53)));
+            playOfficial.setOnClickListener(new View.OnClickListener(){
+                public void onClick(View v){openOfficialPlayer();}
+            });
+        }
         LinearLayout controlBar=new LinearLayout(this);
         controlBar.setGravity(Gravity.CENTER_VERTICAL);
         controlBar.setPadding(dp(16),dp(4),dp(16),dp(4));
@@ -240,10 +266,15 @@ public final class YouTubeActivity extends Activity {
         queueStatus=text("",13,MUTED,false);queueStatus.setGravity(Gravity.CENTER_VERTICAL);
         queueStatus.setPadding(dp(12),0,0,0);
         controlBar.addView(queueStatus,new LinearLayout.LayoutParams(0,-1,1));
-        officialButton=action("▶ المشغل الرسمي");
+        officialButton=action(isKitKat?"▶ تطبيق يوتيوب":"▶ المشغل الرسمي");
         controlBar.addView(officialButton,new LinearLayout.LayoutParams(dp(165),dp(49)));
         officialButton.setOnClickListener(new View.OnClickListener(){
             public void onClick(View v){openOfficialPlayer();}
+        });
+        browserButton=action("🌐 متصفح");
+        controlBar.addView(browserButton,new LinearLayout.LayoutParams(dp(125),dp(49)));
+        browserButton.setOnClickListener(new View.OnClickListener(){
+            public void onClick(View v){openBrowserPlayer();}
         });
         Button retry=action("↻ إعادة");
         controlBar.addView(retry,new LinearLayout.LayoutParams(dp(100),dp(49)));
@@ -285,18 +316,17 @@ public final class YouTubeActivity extends Activity {
             loadInternalPlayer(id);
         }
     }
+    private void showLaunchResult(String result){
+        if(status==null)return;
+        if("app".equals(result))status.setText("فُتح تطبيق يوتيوب الرسمي. اضغط رجوع للعودة إلى قائمة الأطفال.");
+        else if("browser".equals(result))status.setText("فُتح المتصفح لتشغيل الفيديو. اضغط رجوع للعودة إلى العز TV.");
+        else status.setText("لم يُعثر على تطبيق أو متصفح متوافق مع يوتيوب على هذا النظام. قد يلزم جهاز أو نظام أحدث.");
+    }
     private void openOfficialPlayer(){
-        String id=currentId();
-        if(!id.matches("[A-Za-z0-9_-]{11}"))return;
-        try{
-            Intent intent=new Intent(Intent.ACTION_VIEW,Uri.parse("https://www.youtube.com/watch?v="+id));
-            intent.addCategory(Intent.CATEGORY_BROWSABLE);
-            startActivity(intent);
-            status.setText("سيتم عرض الفيديو عبر التطبيق أو المتصفح الرسمي، ثم العودة إلى العز TV.");
-        }catch(Exception e){
-            status.setText("تعذر العثور على مشغل YouTube متوافق. قد لا يدعم الجهاز هذا الفيديو.");
-            Log.w("AlezzYT","Official player unavailable",e);
-        }
+        showLaunchResult(LegacyYoutubeBridge.open(this,currentId(),false));
+    }
+    private void openBrowserPlayer(){
+        showLaunchResult(LegacyYoutubeBridge.open(this,currentId(),true));
     }
     private void nextVideo(){
         if(queue.size()>1)playAt((current+1)%queue.size());
@@ -359,6 +389,17 @@ public final class YouTubeActivity extends Activity {
     /** First-party wrapper around the *official* YouTube IFrame Player API.
       * It does not proxy, extract, restream or hide official playback controls. */
     private void loadInternalPlayer(String id){
+        if(isKitKat){
+            // Do not load modern YouTube IFrame JavaScript inside Android 4.4 WebView.
+            // Only official app/browser playback is attempted; unsupported devices show a real message.
+            if(legacyPoster!=null){
+                legacyPoster.setImageDrawable(null);
+                PosterLoader.load(legacyPoster,"https://i.ytimg.com/vi/"+id+"/hqdefault.jpg");
+            }
+            if(legacyTitle!=null)legacyTitle.setText(field(queue.get(current),"title"));
+            showLaunchResult(LegacyYoutubeBridge.open(this,id,false));
+            return;
+        }
         playerReady=false;
         readinessHandler.removeCallbacks(readinessTimeout);
         readinessHandler.postDelayed(readinessTimeout,15000);

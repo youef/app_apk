@@ -1,4 +1,4 @@
-name: Al Ezz TV v11.1 — Playback Validation & YouTube Kids (API19+)
+name: Al Ezz TV v11.2 — KitKat YouTube Official Playback (API19+)
 on:
   push:
     branches: [main]
@@ -76,13 +76,13 @@ jobs:
           set -euo pipefail
           PACKAGE="sa.alezz.tv.redclassic.b${GITHUB_RUN_ID}a${GITHUB_RUN_ATTEMPT}"
           VERSION_CODE=$(( 10000 + GITHUB_RUN_NUMBER ))
-          VERSION_NAME="11.1.0-native-${GITHUB_RUN_ID}a${GITHUB_RUN_ATTEMPT}"
+          VERSION_NAME="11.2.0-native-${GITHUB_RUN_ID}a${GITHUB_RUN_ATTEMPT}"
           echo "ORG_GRADLE_PROJECT_ezzApplicationId=$PACKAGE" >> "$GITHUB_ENV"
           echo "ORG_GRADLE_PROJECT_ezzVersionCode=$VERSION_CODE" >> "$GITHUB_ENV"
           echo "ORG_GRADLE_PROJECT_ezzVersionName=$VERSION_NAME" >> "$GITHUB_ENV"
           echo "AL_EZZ_EXPECTED_PACKAGE=$PACKAGE" >> "$GITHUB_ENV"
           echo "AL_EZZ_MIN_VERSION=$VERSION_CODE" >> "$GITHUB_ENV"
-          echo "AL_EZZ_RELEASE_TAG=al-ezz-v111-${GITHUB_RUN_ID}-a${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+          echo "AL_EZZ_RELEASE_TAG=al-ezz-v112-${GITHUB_RUN_ID}-a${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
           echo "Unique install package: $PACKAGE"
 
       - name: Bundle official transparent brand artwork offline
@@ -161,8 +161,8 @@ jobs:
             dist/build-report.txt \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Al Ezz TV v11.1 - Kids YouTube and video playback diagnostics - $AL_EZZ_EXPECTED_PACKAGE" \
-            --notes "v11.1 test: restores all published official kids YouTube videos from aseel_youtube_videos in Kids + YouTube tabs, uses approved official YouTube player with external option for old WebView. Source probe detects HTML/JSON/HTTP403/404 masquerading as media, probes HLS/MP4 headers and tries actual alternative sources in ExoPlayer. Android 4.4.4+ unique-package APK, V1-signature tested. On-device playback and remote source availability remain unverified." \
+            --title "Al Ezz TV v11.2 - Official YouTube playback for old Android TV - $AL_EZZ_EXPECTED_PACKAGE" \
+            --notes "v11.2 test: on Android 4.4.4, children clips launch the installed official YouTube TV/mobile app or compatible browser instead of obsolete black WebView. Does not guarantee YouTube supports the device. All approved kids clips retained in Kids and YouTube tabs. Source probe detects HTML/JSON/HTTP403/404 masquerading as media, probes HLS/MP4 headers and tries actual alternative sources in ExoPlayer. Android 4.4.4+ unique-package APK, V1-signature tested. On-device playback and remote source availability remain unverified." \
             --prerelease \
             --latest=false
       - name: Upload to Appetize when linked
