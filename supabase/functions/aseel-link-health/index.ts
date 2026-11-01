@@ -49,7 +49,7 @@ async function verifyAdmin(token:string):Promise<boolean> {
   }catch{return false;}
 }
 const tables=[
-  {name:"aseel_channels",fields:"id,title_ar,stream_url,stream_variants,youtube_url,official_url,playback_mode,link_health_status,link_health_failures,link_health_checked_at,link_health_url",max:18},
+  {name:"aseel_channels",fields:"id,title_ar,stream_url,stream_variants,youtube_url,official_url,playback_mode,link_health_status,link_health_failures,link_health_checked_at,link_health_url",max:24},
   {name:"aseel_movies",fields:"id,title_ar,stream_url,stream_variants,youtube_url,link_health_status,link_health_failures,link_health_checked_at,link_health_url",max:8},
   {name:"aseel_episodes",fields:"id,title_ar,stream_url,stream_variants,youtube_url,link_health_status,link_health_failures,link_health_checked_at,link_health_url",max:8},
   {name:"aseel_youtube_videos",fields:"id,title_ar,youtube_url,link_health_status,link_health_failures,link_health_checked_at,link_health_url",max:8}
@@ -200,7 +200,7 @@ Deno.serve(async(req:Request)=>{
   const admin=!github && await verifyAdmin(authorization);
   if(!github&&!admin)return reply({error:"غير مصرح: يتطلب تشغيل GitHub الموثق أو تسجيل مسؤول"},403);
   const body=await req.json().catch(()=>({}));
-  const requested=Math.max(1,Math.min(12,Number(body.per_table)||10));
+  const requested=Math.max(1,Math.min(24,Number(body.per_table)||24));
   const summary:Record<string,unknown>={authenticated:github?"github_oidc":"admin",scanned:0,healthy:0,suspect:0,broken:0,skipped:0,errors:[]};
   for(const tab of tables) {
     try {
