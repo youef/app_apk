@@ -260,6 +260,16 @@
    $("impForm").addEventListener("submit",e=>e.preventDefault());
    $("impForm").addEventListener("input",updatePreview);
    $("impScan").onclick=scan;
+   $("impDemo").onclick=()=>{
+     reset();
+     apply({title_ar:"زهرة — نموذج فيديو تجريبي",title_original:"Flower (CC0 Sample)",
+       description:"فيديو قصير للتجربة والمعاينة قبل النشر. لا تتم إضافته إلى القاعدة تلقائيًا.",
+       stream_url:"https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+       language_code:"und",quality:"HD",rights_status:"pending",
+       featured:false,is_kids:false,stream_variants:[],display_order:0
+     });
+     msg("نموذج تجريبي جاهز. اضغط اختبار التشغيل، ثم راجع المعاينة. لن ينشر أي شيء تلقائيًا.");
+   };
    $("impParseHtml").onclick=()=>{const html=$("impHtml").value.trim();if(!html)return msg("ألصق مصدر HTML أولًا.",true);
      const url=$("impUrl").value.trim();applyScan(mediaCandidates(html,urlOk(url)?url:""));msg("استُخرجت البيانات من HTML الملصق. يجب مراجعتها يدويًا.");
    };
