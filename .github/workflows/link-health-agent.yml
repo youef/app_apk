@@ -2,6 +2,10 @@ name: Al Ezz TV — Link Health Agent
 on:
   schedule:
     - cron: '23 * * * *'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/link-health-agent.yml'
   workflow_dispatch:
 
 # No long-lived credentials: authenticate using signed GitHub OIDC.
