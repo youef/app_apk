@@ -174,7 +174,7 @@ public final class TVHomeActivity extends Activity {
         }});
         background.execute(new Runnable(){public void run(){
             JSONArray data=null;String error="";
-            try{data=catalog.listQuery("aseel_channels","?select=*&status=eq.published&rights_status=eq.approved&order=created_at.desc&limit=80");}
+            try{data=catalog.listQuery("aseel_channels","?select=*&status=eq.published&order=created_at.desc&limit=80");}
             catch(Exception e){error="قنوات: "+CatalogApi.describe(e);}
             final JSONArray rows=data;final String issue=error;
             ui.post(new Runnable(){public void run(){if(token!=generation||!unlocked)return;
@@ -308,7 +308,7 @@ public final class TVHomeActivity extends Activity {
         if(poster.startsWith("https://"))PosterLoader.load(image,poster);
         TextView title=text(label(item),15,WHITE,true);title.setMaxLines(2);
         title.setEllipsize(TextUtils.TruncateAt.END);outer.addView(title,space(-1,dp(47),3));
-        String desc="channel".equals(kind(item))?"● مباشر":"series".equals(kind(item))?"▤ مسلسل":"youtube".equals(kind(item))?"▶ يوتيوب":"▶ فيلم";
+        String desc="channel".equals(kind(item))?("official_link".equals(value(item,"playback_mode"))?"↗ موقع رسمي":"● مباشر"):"series".equals(kind(item))?"▤ مسلسل":"youtube".equals(kind(item))?"▶ يوتيوب":"▶ فيلم";
         outer.addView(text(desc,12,0xFFFF8DA6,false));
         outer.setOnFocusChangeListener(new View.OnFocusChangeListener(){public void onFocusChange(View v,boolean focused){
             outer.setBackgroundDrawable(bg(focused?0xFF79203A:0xFF201C25,focused?0xFFFFB0C6:0xFF342B38,13));
@@ -321,14 +321,14 @@ public final class TVHomeActivity extends Activity {
         if("series".equals(kind(item))){episodes(item);return;}
         if("youtube".equals(kind(item))){openYouTube(item);return;}
         content.removeAllViews();
-        heading(label(item),"channel".equals(kind(item))?"● قناة مباشرة":"فيلم • مشاهدة مباشرة");
+        heading(label(item),"channel".equals(kind(item))?("official_link".equals(value(item,"playback_mode"))?"↗ مشاهدة في الموقع الرسمي":"● قناة مباشرة"):"فيلم • مشاهدة مباشرة");
         LinearLayout hero=row();content.addView(hero,space(-1,dp(240),7));
         ImageView poster=new ImageView(this);poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
         hero.addView(poster,new LinearLayout.LayoutParams(dp(190),dp(235)));
         String image=value(item,"poster_url");if(image.startsWith("https://"))PosterLoader.load(poster,image);
         LinearLayout info=column();hero.addView(info,new LinearLayout.LayoutParams(0,-1,1));
         info.addView(text(value(item,"description"),16,MUTED,false),space(-1,-2,9));
-        Button play=button("▶ ابدأ المشاهدة");
+        Button play=button("official_link".equals(value(item,"playback_mode"))?"↗ فتح الموقع الرسمي":"▶ ابدأ المشاهدة");
         info.addView(play,space(dp(260),dp(56),7));
         play.setOnClickListener(new View.OnClickListener(){public void onClick(View v){play(item);}});
         Button favorite=button(isFavorite(item)?"♥ إزالة من قائمتي":"♡ أضف إلى قائمتي");
@@ -387,6 +387,19 @@ public final class TVHomeActivity extends Activity {
         }});
     }
     private void play(JSONObject item){
+        if("channel".equals(kind(item)) && "official_link".equals(value(item,"playback_mode"))){
+            String official=value(item,"official_url");
+            if(!official.startsWith("https://")){
+                heading("تعذر فتح القناة","رابط الموقع الرسمي غير صالح.");return;
+            }
+            try {
+                Intent link=new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(official));
+                startActivity(link);
+            } catch(android.content.ActivityNotFoundException error){
+                heading("لا يوجد متصفح متوافق","يتطلب فتح موقع القناة متصفحًا على جهاز التلفزيون.");
+            }
+            return;
+        }
         String youtube=value(item,"youtube_url");
         if(YouTubeLink.usable(youtube)){openYouTube(item);return;}
         String url=value(item,"stream_url");
