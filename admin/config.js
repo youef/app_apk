@@ -210,6 +210,7 @@
       { key: 'title_ar', kind: 'title', sub: 'description', label: 'القناة' },
       { key: 'category_id', kind: 'lookup', source: 'categories', label: 'التصنيف' },
       { key: 'playback_mode', kind: 'map', map: { stream: 'بث مباشر', youtube_embed: 'يوتيوب', official_link: 'رابط رسمي' }, label: 'طريقة العرض' },
+      { key: 'rights_status', kind: 'map', map: { approved: 'حقوق معتمدة', pending: 'قيد المراجعة', rejected: 'مرفوض' }, label: 'الترخيص' },
       { key: 'status', kind: 'status', label: 'الحالة' }
     ]
   };
