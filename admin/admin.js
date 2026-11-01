@@ -90,6 +90,8 @@
     selectedChannels: {},
     filteredChannels: [],
     bulkBusy: false,
+    healthOnly: false,
+    scanBusy: false,
     query: '',
     statusFilter: '',
     options: {},
@@ -476,6 +478,47 @@
     else renderSection(section);
   }
 
+  /* ---------- media health monitor ---------- */
+  function hasLinkHealth(tableCfg) {
+    return !!tableCfg && ['aseel_channels', 'aseel_movies', 'aseel_episodes', 'aseel_series'].indexOf(tableCfg.table) !== -1;
+  }
+  function runLinkHealthScan() {
+    if (state.scanBusy || !state.adminVerified || !state.session) {
+      toast('يلزم تسجيل دخول مسؤول لإجراء الفحص.', 'error');
+      return;
+    }
+    var button = $('#healthScanNow'), message = $('#healthMessage');
+    state.scanBusy = true;
+    if (button) { button.disabled = true; button.textContent = 'جارٍ فحص الروابط…'; }
+    if (message) message.textContent = 'فحص فعلي للمصادر المنشورة وحفظ النتائج في Supabase…';
+    fetch(cfg.supabaseUrl + '/functions/v1/aseel-link-health', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + state.session.access_token,
+        apikey: cfg.publishableKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ per_table: 10 }),
+      cache: 'no-store'
+    }).then(function (response) {
+      return response.json().then(function (data) {
+        if (!response.ok && response.status !== 207) throw new Error((data && data.error) || 'فشل فحص الروابط HTTP ' + response.status);
+        return data;
+      });
+    }).then(function (data) {
+      var summary = 'تم فحص ' + Number(data.scanned || 0) + ' عنصر؛ صالح: ' + Number(data.healthy || 0) +
+        '، قيد التحقق: ' + Number(data.suspect || 0) + '، معطوب: ' + Number(data.broken || 0) + '.';
+      if (data.errors && data.errors.length) summary += ' توجد أخطاء: ' + String(data.errors[0]).slice(0, 160);
+      if (message) message.textContent = summary;
+      toast(summary, data.errors && data.errors.length ? 'error' : 'success');
+      if (hasLinkHealth(state.table)) loadTable(state.table);
+    }).catch(function (err) {
+      var text = 'فشل الفحص: ' + describeError(err);
+      if (message) message.textContent = text;
+      toast(text, 'error');
+    }).finally(function () {
+      state.scanBusy = false;
+      if (button) { button.disabled = false; button.textContent = 'فحص الروابط الآن'; }
+    });
+  }
+
   /* ---------- section + table rendering ---------- */
   function renderSection(section) {
     var view = $('#view');
@@ -517,6 +560,21 @@
     var chips = el('div', { class: 'chips', role: 'group', 'aria-label': 'تصفية الحالة' });
     toolbar.append(searchWrap, chips);
     view.append(toolbar);
+    var healthPanel = el('section', { class: 'health-panel', id: 'healthPanel' });
+    var healthSummary = el('span', { class: 'health-panel__text', id: 'healthSummary' }, 'جارٍ قراءة حالة الروابط…');
+    var healthOnly = el('button', { class: 'btn btn-ghost btn-sm', type: 'button', id: 'healthOnly' }, 'عرض المعطوبة فقط');
+    var scanNow = el('button', { class: 'btn btn-gold btn-sm', type: 'button', id: 'healthScanNow' }, 'فحص الروابط الآن');
+    var healthMessage = el('small', { class: 'health-panel__message', id: 'healthMessage', role: 'status' }, '');
+    healthPanel.append(healthSummary, healthOnly, scanNow, healthMessage);
+    healthPanel.hidden = true;
+    view.append(healthPanel);
+    healthOnly.addEventListener('click', function () {
+      state.healthOnly = !state.healthOnly;
+      healthOnly.textContent = state.healthOnly ? 'عرض جميع الحالات' : 'عرض المعطوبة فقط';
+      healthOnly.classList.toggle('is-active', state.healthOnly);
+      applyFilter();
+    });
+    scanNow.addEventListener('click', runLinkHealthScan);
     var bulkPanel = el('section', { class: 'channel-bulk', id: 'channelBulk' });
     bulkPanel.hidden = true;
     view.append(bulkPanel);
@@ -540,6 +598,7 @@
       search: searchInput,
       count: count,
       chips: chips,
+      healthPanel: healthPanel,
       bulkPanel: bulkPanel,
       thead: headRow,
       tbody: tbody,
@@ -566,6 +625,10 @@
 
   function selectTable(tableCfg) {
     state.table = tableCfg;
+    state.healthOnly = false;
+    if (state.els.healthPanel) state.els.healthPanel.hidden = !hasLinkHealth(tableCfg);
+    var healthButton = $('#healthOnly');
+    if (healthButton) { healthButton.textContent = 'عرض المعطوبة فقط'; healthButton.classList.remove('is-active'); }
     state.rows = [];
     state.query = '';
     state.statusFilter = '';
@@ -748,6 +811,15 @@
       });
     });
     if (tableCfg.table === 'aseel_channels') state.filteredChannels = rows;
+    if (hasLinkHealth(tableCfg)) {
+      var broken = state.rows.filter(function (row) { return row.link_health_status === 'broken'; }).length;
+      var suspect = state.rows.filter(function (row) { return row.link_health_status === 'suspect'; }).length;
+      var checked = state.rows.filter(function (row) { return row.link_health_checked_at; }).length;
+      var summary = $('#healthSummary');
+      if (summary) summary.textContent = '🔴 معطوب: ' + broken + ' · 🟠 قيد التحقق: ' + suspect +
+        ' · تم فحص: ' + checked + ' من ' + state.rows.length;
+      if (state.healthOnly) rows = rows.filter(function (row) { return row.link_health_status === 'broken'; });
+    }
     renderRows(tableCfg, rows);
     setCount(rows.length, state.rows.length);
     if (tableCfg.table === 'aseel_channels') syncChannelBulkPanel();
@@ -783,6 +855,12 @@
 
   function buildRow(tableCfg, row) {
     var tr = el('tr', { class: 'data-row' });
+    if (hasLinkHealth(tableCfg) && row.link_health_status === 'broken') {
+      tr.classList.add('health-row--broken');
+      tr.title = 'مخفي عن المشاهدين: ' + (row.link_health_reason || 'تعطل الرابط بعد فحوص متكررة');
+    } else if (hasLinkHealth(tableCfg) && row.link_health_status === 'suspect') {
+      tr.classList.add('health-row--suspect');
+    }
     if (tableCfg.table === 'aseel_channels') {
       var cell = el('td', { class: 'bulk-check-cell' });
       var checkbox = el('input', { type: 'checkbox', 'aria-label': 'تحديد قناة ' + (row.title_ar || '') });
@@ -826,6 +904,16 @@
       td.append(el('strong', null, String(title)));
       var sub = col.sub ? row[col.sub] : null;
       if (sub) td.append(el('small', null, String(sub)));
+      if (row.link_health_status === 'broken') {
+        td.append(el('span', { class: 'health-label health-label--broken' }, '● الرابط غير فعال — مخفي عن المشاهدين'));
+        td.append(el('small', { class: 'health-reason' }, row.link_health_reason || 'تأكد فشل مصدر التشغيل'));
+        if (row.link_health_checked_at) td.append(el('small', { class: 'health-date' }, 'آخر فحص: ' + fmtDate(row.link_health_checked_at)));
+      } else if (row.link_health_status === 'suspect') {
+        td.append(el('span', { class: 'health-label health-label--suspect' }, '● رابط يحتاج مراجعة'));
+        if (row.link_health_reason) td.append(el('small', { class: 'health-reason' }, String(row.link_health_reason)));
+      } else if (row.link_health_status === 'healthy') {
+        td.append(el('span', { class: 'health-label health-label--healthy' }, '● استجاب للفحص'));
+      }
       return td;
     }
 
