@@ -343,7 +343,7 @@ public final class TVHomeActivity extends Activity {
                 }
                 Button back=button("↩ رجوع إلى المسلسلات");content.addView(back,space(dp(260),dp(54),5));
                 back.setOnClickListener(new View.OnClickListener(){public void onClick(View v){section="series";render();}});
-                if(!episodes.isEmpty())content.getChildAt(1).requestFocus();else back.requestFocus();
+                if(!episodes.isEmpty() && content.getChildCount()>2)content.getChildAt(2).requestFocus();else back.requestFocus();
             }});
         }});
     }

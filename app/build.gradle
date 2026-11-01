@@ -15,8 +15,8 @@ android {
         versionName (project.findProperty('ezzVersionName') ?: '11.0.0-tv-local')
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_7
-        targetCompatibility JavaVersion.VERSION_1_7
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
     }
     signingConfigs {
         debug {
