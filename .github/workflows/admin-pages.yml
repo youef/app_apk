@@ -31,6 +31,9 @@ jobs:
       - name: Verify JavaScript syntax
         run: |
           node --check web/app.js
+          grep -q 'poster-cover' web/app.js
+          grep -q 'detail-brand-logo' web/app.js
+          grep -q 'aspect-ratio:2/3' web/styles.css
           node --check web/access.js
           node --check web/config.js
           node --check admin/app.js
