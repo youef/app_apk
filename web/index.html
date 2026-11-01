@@ -12,6 +12,17 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap">
 <link rel="preload" href="css/app.css" as="style">
 <link rel="stylesheet" href="css/app.css">
+<script>
+(function () {
+  try {
+    if (window.CSS && CSS.supports && CSS.supports('color', 'var(--alezz-probe)')) return;
+  } catch (e) {}
+  var link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = 'css/app-legacy.css';
+  document.head.appendChild(link);
+})();
+</script>
 </head>
 <body data-boot="loading">
 
@@ -195,6 +206,7 @@
 
 <noscript><p style="padding:2rem;color:#eee;text-align:center">يتطلب العز TV تشغيل JavaScript.</p></noscript>
 
+<script src="js/legacy-polyfills.js"></script>
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
 <script src="js/store.js"></script>

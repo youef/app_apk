@@ -36,6 +36,38 @@ jobs:
         with:
           gradle-version: "8.7"
 
+
+      - name: Install Android SDK platform tools
+        uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+
+      - name: Install API 34 and Build Tools 34.0.0
+        run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Validate web and administration scripts
+        run: |
+          set -euo pipefail
+          for js in web/js/*.js admin/*.js; do node --check "$js"; done
+          node tests/studio-smoke.cjs
+          node tests/importer-smoke.cjs
+
+      - name: Validate signing configuration
+        shell: bash
+        env:
+          KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}
+        run: |
+          if [[ -n "$KEYSTORE_FILE" && ! -f "$KEYSTORE_FILE" ]]; then
+            echo "::error::KEYSTORE_FILE must refer to an actual keystore on this runner."
+            exit 1
+          fi
+          if [[ -n "$KEYSTORE_FILE" ]]; then
+            echo "STABLE_SIGNING=true" >> "$GITHUB_ENV"
+          else
+            echo "STABLE_SIGNING=false" >> "$GITHUB_ENV"
+            echo "::warning::No stable key configured. Test-only debug-signed APK; no production release."
+          fi
+
       - name: Build release APK
         env:
           # Empty values keep the debug-signing fallback enabled for forks.
@@ -45,15 +77,26 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: gradle assembleRelease --no-daemon --stacktrace
 
+
+      - name: Verify APK is compatible with Android API 19
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/release/app-release.apk"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | tee /tmp/al-ezz-badging.txt
+          grep -q "sdkVersion:'19'" /tmp/al-ezz-badging.txt
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --min-sdk-version 19 --verbose "$APK"
+
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: al-ezz-tv-apk
+          name: al-ezz-tv-v10-api19-${{ github.run_number }}
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
       - name: Publish tagged GitHub release
-        if: startsWith(github.ref, "refs/tags/v")
+        if: ${{ startsWith(github.ref, 'refs/tags/v') && env.STABLE_SIGNING == 'true' }}
         uses: softprops/action-gh-release@v2
         with:
           files: app/build/outputs/apk/release/*.apk

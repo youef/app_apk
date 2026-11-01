@@ -38,6 +38,7 @@ jobs:
           node --check admin/importer.js
           node --check admin/config.js
           node tests/importer-smoke.cjs
+          node tests/studio-smoke.cjs
       - name: Verify branch-published website assets
         run: |
           set -euo pipefail
@@ -53,9 +54,9 @@ jobs:
           test -s admin/app.js
           test -s admin/importer.js
           test -s admin/importer.css
-          grep -q 'poster-cover' web/app.js
-          grep -q 'detail-brand-logo' web/app.js
-          grep -q 'aspect-ratio:2/3' web/styles.css
+          test -s web/js/legacy-polyfills.js
+          test -s web/css/app-legacy.css
+          test -s admin/import-studio.html
           echo "PASS: branch files are ready; native GitHub Pages will publish main:/."
       - name: Explain publishing responsibility
         run: |

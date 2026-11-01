@@ -5,7 +5,7 @@ const vm=require("node:vm");
 const path=require("node:path");
 const root=path.resolve(__dirname,"..");
 const importer=fs.readFileSync(path.join(root,"admin/importer.js"),"utf8");
-const html=fs.readFileSync(path.join(root,"admin/index.html"),"utf8");
+const html=fs.readFileSync(path.join(root,"admin/import-studio.html"),"utf8");
 const service=fs.readFileSync(path.join(root,"supabase/functions/aseel-inspect-media/index.ts"),"utf8");
 new vm.Script(importer,{filename:"admin/importer.js"});
 const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(x=>x[1]);

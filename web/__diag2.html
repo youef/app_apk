@@ -1,8 +1,0 @@
-﻿<!doctype html><meta charset="utf-8"><body style="background:#111;color:#0f0;font:15px monospace;padding:24px"><pre id="o">…</pre>
-<script src="js/config.js"></script>
-<script>
-var u=ALEZZ_CONFIG.supabaseUrl+"/rest/v1/aseel_movies?select=id&limit=1";
-fetch(u,{headers:{apikey:ALEZZ_CONFIG.publishableKey,Accept:"application/json"},cache:"no-store",credentials:"omit"})
-.then(function(r){return r.text().then(function(t){document.getElementById("o").textContent="OK "+r.status+" "+t.slice(0,80)})})
-.catch(function(e){document.getElementById("o").textContent="FAIL "+e.name+": "+e.message});
-</script>

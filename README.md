@@ -1,3 +1,19 @@
+# العز TV — ملف تحديث v10 (نوفمبر 2026)
+
+- **الويب:** واجهة حديثة موحدة داخل `web/` مع صفحة استقبال وتحميل `index.html`.
+- **Android TV:** تُحزّم ملفات الويب داخل APK، ويُستخدم مشغل Android الأصلي لمصادر الوسائط المدعومة. مسار البناء الموحد هو `.github/workflows/android.yml` مع فحص `minSdk=19`.
+- **التوافق:** ملف `web/js/legacy-polyfills.js` وCSS ثابت `web/css/app-legacy.css` لتقليل مشكلات WebView القديم. نجاح الاختبارات لا يثبت التشغيل على شاشة Android 4.4.4 حقيقية.
+- **الإدارة:** لوحة جديدة `admin/index.html`، واستوديو استيراد متقدم محفوظ بصفحة مستقلة `admin/import-studio.html`. يتطلب تعديل البيانات Supabase Auth وصلاحية مسؤول ضمن RLS.
+- **الاختبارات:** `node tests/studio-smoke.cjs` و`node tests/importer-smoke.cjs`.
+- **النشر:** GitHub Pages ينشر تلقائيًا من الفرع `main`، ومسار `pages.yml` اليدوي للاستعادة فقط.
+- **التوقيع:** لا يُنشر ملف APK إنتاجي من مفتاح Debug مؤقت. يلزم إعداد شهادة توقيع دائمة ومحميّة، ثم اختبار التحديث الفعلي.
+
+المشاهدة: https://youef.github.io/app_apk/web/ — الإدارة: https://youef.github.io/app_apk/admin/ — التنزيل/الحالة: https://youef.github.io/app_apk/ — CI: https://github.com/youef/app_apk/actions
+
+**حقوق المحتوى:** الروابط التقنية لا تمنح حق إعادة البث أو تجاوز DRM.
+
+---
+
 # العز TV — AL EZZ TV
 
 **الإصدار التجريبي v4.0 (إصلاح التثبيت على Android 4.4.4)**
