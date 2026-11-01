@@ -204,7 +204,7 @@ $("editorForm").addEventListener("submit",async ev=>{
  if(payload.country_code)payload.country_code=payload.country_code.toUpperCase();
  if(payload.language_code && !/^[a-zA-Z]{2,3}$/.test(payload.language_code))return show("رمز اللغة غير صحيح",true);
  if(payload.language_code)payload.language_code=payload.language_code.toLowerCase();
- if(payload.is_kids && payload.rights_status!=="approved")return show("يتطلب نشر محتوى أطفال اعتماد الحقوق أولًا",true);
+ if(payload.is_kids && payload.status==="published" && payload.rights_status!=="approved")return show("يتطلب نشر محتوى أطفال اعتماد الحقوق أولًا",true);
  const youtubeId = value => {
   try{
    const u=new URL(String(value||""));
