@@ -55,7 +55,9 @@ public final class MainActivity extends Activity {
     private String subPage="",returnFocusTag="",pendingFocusTag="";
     private JSONObject activeDetail,activeSeries;
     private int listingPage=0,handledArrow=-1;
-    private static final int TV_PAGE_SIZE=20;
+    private static final int TV_PAGE_SIZE=20, YOUTUBE_PAGE_SIZE=12;
+    private int youtubePage=0;
+    private String youtubeTopic="all",youtubeLanguage="all";
     private String networkErrors="";
     private boolean loading=false,hasLoaded=false;
     private long lastUpdatedAt=0L,lastRefreshAttempt=0L;
@@ -67,7 +69,7 @@ public final class MainActivity extends Activity {
             refreshHandler.postDelayed(this,60L*1000L);
         }
     };
-    private JSONArray movies=new JSONArray(),series=new JSONArray(),channels=new JSONArray(),categories=new JSONArray();
+    private JSONArray movies=new JSONArray(),series=new JSONArray(),channels=new JSONArray(),categories=new JSONArray(),youtubeVideos=new JSONArray();
     private CatalogApi api;
     private SharedPreferences prefs;
     private PinGate accessGate;
@@ -275,10 +277,16 @@ public final class MainActivity extends Activity {
         JSONArray s=api.recentCache("aseel_series","?select=*&order=created_at.desc&limit="+AppConfig.MAX_ITEMS);
         JSONArray c=api.recentCache("aseel_channels","?select=*&order=created_at.desc&limit="+AppConfig.MAX_ITEMS);
         JSONArray cats=api.recentCache("aseel_categories","?select=*&order=sort_order.asc&limit=60");
+        JSONArray yt=api.recentCache("aseel_youtube_videos",youtubeCatalogQuery());
         if(m!=null){movies=m;hasLoaded=true;}
         if(s!=null){series=s;hasLoaded=true;}
         if(c!=null){channels=c;hasLoaded=true;}
         if(cats!=null){categories=cats;hasLoaded=true;}
+        if(yt!=null){youtubeVideos=yt;hasLoaded=true;}
+    }
+    /** Use exactly the same published, kids-only Supabase feed as /web/?section=youtube. */
+    private String youtubeCatalogQuery(){
+        return "?select=id,title_ar,youtube_url,channel_name,language_code,topic,sort_order,source_page_url,is_kids,status&status=eq.published&is_kids=eq.true&order=sort_order.asc&limit=200";
     }
     private void loadCatalog(){
         if(loading)return;
@@ -286,15 +294,16 @@ public final class MainActivity extends Activity {
         if(headerUpdate!=null)headerUpdate.setText("◌  جارٍ التحديث...");
         showStatus(hasLoaded?"جاري تحديث المكتبة...":"جارٍ تحميل الأفلام والمسلسلات والقنوات...");
         new Thread(new Runnable(){public void run(){
-            final String[] tables={"aseel_movies","aseel_series","aseel_channels","aseel_categories"};
-            final JSONArray[] fetched=new JSONArray[4];
-            final String[] errors=new String[4];
-            final CountDownLatch latch=new CountDownLatch(4);
-            for(int index=0;index<4;index++){
+            final String[] tables={"aseel_movies","aseel_series","aseel_channels","aseel_categories","aseel_youtube_videos"};
+            final JSONArray[] fetched=new JSONArray[tables.length];
+            final String[] errors=new String[tables.length];
+            final CountDownLatch latch=new CountDownLatch(tables.length);
+            for(int index=0;index<tables.length;index++){
                 final int i=index;
                 Thread task=new Thread(new Runnable(){public void run(){
                     try{
-                        fetched[i]=i==3?api.listQuery(tables[i],"?select=*&order=sort_order.asc&limit=60"):api.list(tables[i]);
+                        fetched[i]=i==3?api.listQuery(tables[i],"?select=*&order=sort_order.asc&limit=60"):
+                            i==4?api.listQuery(tables[i],youtubeCatalogQuery()):api.list(tables[i]);
                     }catch(Exception e){errors[i]=CatalogApi.describe(e);}
                     finally{latch.countDown();}
                 }},"Aseel-Catalog-"+i);
@@ -307,27 +316,45 @@ public final class MainActivity extends Activity {
                     (fetched[0]!=null&&!movies.toString().equals(fetched[0].toString())) ||
                     (fetched[1]!=null&&!series.toString().equals(fetched[1].toString())) ||
                     (fetched[2]!=null&&!channels.toString().equals(fetched[2].toString())) ||
-                    (fetched[3]!=null&&!categories.toString().equals(fetched[3].toString()));
+                    (fetched[3]!=null&&!categories.toString().equals(fetched[3].toString())) ||
+                    (fetched[4]!=null&&!youtubeVideos.toString().equals(fetched[4].toString()));
                 if(fetched[0]!=null)movies=fetched[0];
                 if(fetched[1]!=null)series=fetched[1];
                 if(fetched[2]!=null)channels=fetched[2];
                 if(fetched[3]!=null)categories=fetched[3];
+                if(fetched[4]!=null)youtubeVideos=fetched[4];
                 hasLoaded=true;loading=false;
                 lastUpdatedAt=System.currentTimeMillis();
-                String[] names={"الأفلام","المسلسلات","القنوات","التصنيفات"};
+                String[] names={"الأفلام","المسلسلات","القنوات","التصنيفات","فيديوهات يوتيوب"};
                 StringBuilder report=new StringBuilder();
-                for(int i=0;i<4;i++){
+                for(int i=0;i<tables.length;i++){
                     if(errors[i]!=null)report.append(names[i]).append(": ").append(errors[i]).append("\n");
                     else if(fetched[i]==null)report.append(names[i]).append(": انتهت المهلة.\n");
                 }
                 networkErrors=report.toString();
                 if(headerUpdate!=null)headerUpdate.setText(report.length()>0?"●  مشكلة اتصال":"✓  محدث الآن");
                 showStatus(report.length()>0?"فشل تحديث بعض البيانات. تعرض العناصر المتاحة؛ راجع الإعدادات.":"");
-                // Do not destroy text inputs or close a movie while a refresh runs.
-                if(changed && subPage.length()==0 && !"search".equals(mode)
-                    && !"youtube".equals(mode) && !"settings".equals(mode)){
+                // Refresh visible content without discarding a typed YouTube query or movie details.
+                if(changed && subPage.length()==0 && !"search".equals(mode) && !"settings".equals(mode)){
                     final int oldScroll=scrolling==null?0:scrolling.getScrollY();
+                    String draft="";
+                    boolean restoreYoutubeFocus=false;
+                    if("youtube".equals(mode)){
+                        View queryField=tagged(root,"input:youtube");
+                        if(queryField instanceof EditText){
+                            draft=((EditText)queryField).getText().toString();
+                            restoreYoutubeFocus=queryField.isFocused();
+                        }
+                    }
                     render();
+                    if("youtube".equals(mode)){
+                        View updatedField=tagged(root,"input:youtube");
+                        if(updatedField instanceof EditText){
+                            ((EditText)updatedField).setText(draft);
+                            ((EditText)updatedField).setSelection(draft.length());
+                            if(restoreYoutubeFocus)updatedField.requestFocus();
+                        }
+                    }
                     if(oldScroll>0 && scrolling!=null)scrolling.post(new Runnable(){
                         public void run(){if(scrolling!=null)scrolling.scrollTo(0,oldScroll);}
                     });
@@ -689,21 +716,77 @@ public final class MainActivity extends Activity {
             title("◉  شاهدت مؤخرًا","محفوظ على هذا التلفزيون فقط");
             cards(saved,12);
         }
+        // Identical source and approval scope as the working public website.
+        if(loading && youtubeVideos.length()==0)
+            empty("جاري تحميل فيديوهات YouTube من مكتبة العز...");
+        final String[] topics={"all","letters","numbers","animals","colors","stories","songs","science"};
+        final String[] topicLabels={"الكل","الحروف","الأرقام","الحيوانات","الألوان","القصص","الأناشيد","العلوم"};
+        title("▶  فيديوهات YouTube للأطفال","فيديوهات منشورة من القنوات الرسمية • تحديث تلقائي");
+        HorizontalScrollView filters=new HorizontalScrollView(this);
+        filters.setHorizontalScrollBarEnabled(false);
+        LinearLayout chips=horizontal();filters.addView(chips);
+        stage.addView(filters,gap(3,10));
+        for(int i=0;i<topics.length;i++){
+            final String key=topics[i];
+            Button chip=button(topicLabels[i]+(key.equals(youtubeTopic)?" ✓":""));
+            chip.setTextSize(12);
+            LinearLayout.LayoutParams chipP=lp(dp(126),dp(46));
+            chipP.setMargins(dp(4),0,dp(4),0);chips.addView(chip,chipP);
+            chip.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                youtubeTopic=key;youtubePage=0;render();
+            }});
+        }
+        LinearLayout languageRow=horizontal();stage.addView(languageRow,gap(2,6));
+        for(final String lang:new String[]{"all","ar","en"}){
+            Button chip=button(("all".equals(lang)?"كل اللغات":languageLabel(lang))+
+                (lang.equals(youtubeLanguage)?" ✓":""));
+            LinearLayout.LayoutParams p=lp(dp(148),dp(43));
+            p.setMargins(dp(4),0,dp(4),0);languageRow.addView(chip,p);
+            chip.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                youtubeLanguage=lang;youtubePage=0;render();
+            }});
+        }
         ArrayList<JSONObject> approved=new ArrayList<JSONObject>();
-        for(String kind:new String[]{"movie","channel"}){
-            JSONArray source=data(kind);
-            for(int i=0;i<source.length();i++){
-                JSONObject item=source.optJSONObject(i);
-                if(item==null||!YouTubeLink.usable(str(item,"youtube_url")))continue;
-                try{item.put("_type",kind);}catch(Exception ignored){}
-                approved.add(item);
-            }
+        for(int i=0;i<youtubeVideos.length();i++){
+            JSONObject item=youtubeVideos.optJSONObject(i);
+            if(item==null || !"published".equals(str(item,"status")) ||
+                !item.optBoolean("is_kids",false) ||
+                !YouTubeLink.usable(str(item,"youtube_url")))continue;
+            if(!"all".equals(youtubeTopic) && !youtubeTopic.equals(str(item,"topic")))continue;
+            if(!"all".equals(youtubeLanguage) && !youtubeLanguage.equals(str(item,"language_code")))continue;
+            try{item.put("_type","youtube");}catch(Exception ignored){}
+            approved.add(item);
         }
         if(!approved.isEmpty()){
-            title("▶  فيديوهات YouTube المعتمدة","من مكتبة العز");
-            cardsGrid(approved,TV_PAGE_SIZE);
-        }else{
-            TextView warning=text("لا توجد روابط YouTube منشورة في المكتبة حاليًا. يمكنك البحث في YouTube الرسمي، أو إضافة فيديوهات مسموح بتضمينها عبر لوحة الإدارة.",15,MUTED,false);
+            int pages=Math.max(1,(approved.size()+YOUTUBE_PAGE_SIZE-1)/YOUTUBE_PAGE_SIZE);
+            youtubePage=Math.max(0,Math.min(youtubePage,pages-1));
+            TextView count=text(approved.size()+" مقطع   •   صفحة "+(youtubePage+1)+" من "+pages,13,MUTED,false);
+            stage.addView(count,gap(0,8));
+            ArrayList<JSONObject> visible=new ArrayList<JSONObject>();
+            int start=youtubePage*YOUTUBE_PAGE_SIZE;
+            for(int i=start;i<Math.min(approved.size(),start+YOUTUBE_PAGE_SIZE);i++)
+                visible.add(approved.get(i));
+            cardsGrid(visible,YOUTUBE_PAGE_SIZE);
+            if(pages>1){
+                LinearLayout pageNav=horizontal();stage.addView(pageNav,gap(2,16));
+                Button next=button("الصفحة التالية");
+                Button previous=button("الصفحة السابقة");
+                next.setEnabled(youtubePage<pages-1);
+                previous.setEnabled(youtubePage>0);
+                pageNav.addView(next,lp(dp(178),dp(50)));
+                LinearLayout.LayoutParams previousP=lp(dp(178),dp(50));
+                previousP.setMargins(dp(12),0,0,0);pageNav.addView(previous,previousP);
+                next.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                    youtubePage++;render();
+                }});
+                previous.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                    youtubePage--;render();
+                }});
+            }
+        }else if(!loading || youtubeVideos.length()>0){
+            TextView warning=text(youtubeVideos.length()>0?
+                "لا توجد مقاطع مطابقة للتصنيف المحدد. جرّب «الكل».":
+                "لم تصل مقاطع YouTube من قاعدة البيانات. اضغط «تحديث» بالأعلى أو راجع الاتصال.",15,MUTED,false);
             warning.setPadding(dp(18),dp(19),dp(18),dp(19));
             warning.setBackgroundDrawable(background(0xFF232329,13,0xFF404049));
             stage.addView(warning,gap(13,16));
@@ -766,7 +849,7 @@ public final class MainActivity extends Activity {
         TextView note=text("تظهر المواد المرخّصة ذات الروابط المباشرة فقط. قد يختلف توفر القنوات بحسب البلد أو الجهاز.",14,MUTED,false);
         stage.addView(note,gap(0,11));
         LinearLayout typeRow=horizontal();stage.addView(typeRow,gap(5,10));
-        final String[] kinds={"all","movie","series","channel"},names={"الكل","أفلام","مسلسلات","قنوات"};
+        final String[] kinds={"all","movie","series","channel","youtube"},names={"الكل","أفلام","مسلسلات","قنوات","يوتيوب"};
         for(int i=0;i<kinds.length;i++){
             final String selected=kinds[i];
             Button b=button(names[i]+(selected.equals(kidsKind)?" ✓":""));b.setTextSize(12);
@@ -794,6 +877,26 @@ public final class MainActivity extends Activity {
                 visible=true;
                 title("movie".equals(type)?"أفلام الأطفال":"series".equals(type)?"مسلسلات ومغامرات":"قنوات الأطفال المباشرة",items.size()+" متاح");
                 cards(items,TV_PAGE_SIZE);
+            }
+        }
+        if(("all".equals(kidsKind)||"youtube".equals(kidsKind))&&youtubeVideos.length()>0){
+            ArrayList<JSONObject> videos=new ArrayList<JSONObject>();
+            for(int i=0;i<youtubeVideos.length()&&videos.size()<12;i++){
+                JSONObject video=youtubeVideos.optJSONObject(i);
+                if(video==null || !"published".equals(str(video,"status")) ||
+                    !video.optBoolean("is_kids",false) || !YouTubeLink.usable(str(video,"youtube_url")))continue;
+                try{video.put("_type","youtube");}catch(Exception ignored){}
+                videos.add(video);
+            }
+            if(!videos.isEmpty()){
+                visible=true;
+                title("▶  يوتيوب للأطفال",youtubeVideos.length()+" مقطع متاح • انتقل إلى يوتيوب لعرض الكل");
+                cards(videos,12);
+                Button seeAll=button("عرض كل فيديوهات يوتيوب");
+                stage.addView(seeAll,gap(0,12));
+                seeAll.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                    mode="youtube";youtubePage=0;render();
+                }});
             }
         }
         if(!visible)empty("لا تتوفر عناصر مناسبة لفلاترك. لن تُعرض روابط غير مفحوصة.");
@@ -977,6 +1080,11 @@ public final class MainActivity extends Activity {
             String sub=str(item,"release_year");
             if(sub.length()==0)sub=str(item,"quality");
             else if(str(item,"quality").length()>0)sub+="  •  "+str(item,"quality");
+            if("youtube".equals(type)){
+                sub=str(item,"channel_name");
+                String lang=str(item,"language_code");
+                if(lang.length()>0)sub+=(sub.length()>0?"  •  ":"")+languageLabel(lang);
+            }
             TextView meta=text(sub.length()>0?sub:"العز TV",12,MUTED,false);card.addView(meta,gap(3,2));
             card.setOnFocusChangeListener(new View.OnFocusChangeListener(){
                 public void onFocusChange(View view,boolean focused){
@@ -1182,7 +1290,7 @@ public final class MainActivity extends Activity {
             while(stage.getChildCount()>searchControlsCount)
                 stage.removeViewAt(searchControlsCount);
             ArrayList<JSONObject> found=new ArrayList<JSONObject>();
-            filter(found,movies,"movie",query);filter(found,series,"series",query);filter(found,channels,"channel",query);
+            filter(found,movies,"movie",query);filter(found,series,"series",query);filter(found,channels,"channel",query);filter(found,youtubeVideos,"youtube",query);
             if(found.isEmpty())empty("لا توجد نتائج مطابقة.");else cardsGrid(found,AppConfig.MAX_ITEMS);
         }});
     }
@@ -1190,7 +1298,7 @@ public final class MainActivity extends Activity {
         if(query.length()==0)return;
         for(int i=0;i<list.length();i++){
             JSONObject j=list.optJSONObject(i);
-            if(j!=null&&(str(j,"title_ar").toLowerCase().contains(query)||str(j,"title_original").toLowerCase().contains(query))){
+            if(j!=null&&(str(j,"title_ar").toLowerCase().contains(query)||str(j,"title_original").toLowerCase().contains(query)||str(j,"channel_name").toLowerCase().contains(query))){
                 try{j.put("_type",type);}catch(Exception ignored){}found.add(j);
             }
         }
