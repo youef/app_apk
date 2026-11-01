@@ -8,7 +8,7 @@ on:
       - '.github/workflows/link-health-agent.yml'
   workflow_dispatch:
 
-# No long-lived credentials: authenticate using signed GitHub OIDC (v3 bootstrap).
+# No long-lived credentials: authenticate using signed GitHub OIDC (v4 youtube coverage).
 permissions:
   contents: read
   id-token: write
