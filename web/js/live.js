@@ -326,8 +326,19 @@
       if (!state.mounted || !state.current || !document.getElementById("livePage")) return;
       var target = event.target;
       if (target && /input|textarea|select/i.test(target.tagName)) return;
+      var rowButton = target && target.closest && target.closest("#liveGuideItems [data-live-key]");
+      if (rowButton && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+        event.preventDefault();
+        var guideRows = Array.prototype.slice.call($("liveGuideItems").querySelectorAll("[data-live-key]"));
+        var rowIndex = guideRows.indexOf(rowButton);
+        var next = guideRows[rowIndex + (event.key === "ArrowDown" ? 1 : -1)];
+        if (next) { next.focus(); next.scrollIntoView({ block: "nearest" }); }
+        return;
+      }
       if (event.altKey && event.key === "ArrowUp") { event.preventDefault(); navigate(-1); }
       if (event.altKey && event.key === "ArrowDown") { event.preventDefault(); navigate(1); }
+      if (event.key === "PageUp" || event.key === "ChannelUp") { event.preventDefault(); navigate(-1); }
+      if (event.key === "PageDown" || event.key === "ChannelDown") { event.preventDefault(); navigate(1); }
     };
     document.addEventListener("keydown", state.keydown);
   }
