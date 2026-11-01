@@ -1,9 +1,10 @@
-name: Al Ezz TV v11.3 — In-App Kids Playback (API19+)
+name: Al Ezz TV v12 — Native Living Room & Remote Guide (API19+)
 on:
   push:
     branches: [main]
     paths:
       - 'app/**'
+      - 'tests/**'
       - 'scripts/**'
       - 'build.gradle'
       - 'settings.gradle'
@@ -76,13 +77,13 @@ jobs:
           set -euo pipefail
           PACKAGE="sa.alezz.tv.redclassic.b${GITHUB_RUN_ID}a${GITHUB_RUN_ATTEMPT}"
           VERSION_CODE=$(( 10000 + GITHUB_RUN_NUMBER ))
-          VERSION_NAME="11.3.0-native-${GITHUB_RUN_ID}a${GITHUB_RUN_ATTEMPT}"
+          VERSION_NAME="12.0.0-native-${GITHUB_RUN_ID}a${GITHUB_RUN_ATTEMPT}"
           echo "ORG_GRADLE_PROJECT_ezzApplicationId=$PACKAGE" >> "$GITHUB_ENV"
           echo "ORG_GRADLE_PROJECT_ezzVersionCode=$VERSION_CODE" >> "$GITHUB_ENV"
           echo "ORG_GRADLE_PROJECT_ezzVersionName=$VERSION_NAME" >> "$GITHUB_ENV"
           echo "AL_EZZ_EXPECTED_PACKAGE=$PACKAGE" >> "$GITHUB_ENV"
           echo "AL_EZZ_MIN_VERSION=$VERSION_CODE" >> "$GITHUB_ENV"
-          echo "AL_EZZ_RELEASE_TAG=al-ezz-v113-${GITHUB_RUN_ID}-a${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+          echo "AL_EZZ_RELEASE_TAG=al-ezz-v12-${GITHUB_RUN_ID}-a${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
           echo "Unique install package: $PACKAGE"
 
       - name: Bundle official transparent brand artwork offline
@@ -106,6 +107,7 @@ jobs:
       - name: Test kids YouTube listing and playback errors
         run: |
           node tests/tv-kids-playback-smoke.cjs
+          node tests/tv-remote-guide-smoke.cjs
       - name: Build legacy-compatible APK
         shell: bash
         run: |
@@ -161,8 +163,8 @@ jobs:
             dist/build-report.txt \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Al Ezz TV v11.3 - In-app YouTube/approved native playback - $AL_EZZ_EXPECTED_PACKAGE" \
-            --notes "Android 4.4+ v11.3 test: YouTube kids playback remains strictly inside Al Ezz TV via official embedded IFrame; does not launch external apps. When independently licensed direct MP4/HLS is provided, native ExoPlayer is used. The legacy WebView on Android 4.4 may still be incompatible with modern YouTube and cannot be fixed by a wrapper library; error overlay explains the issue. No extracted YouTube video links or DRM bypass. Unique package per APK and V1 signatures checked." \
+            --title "Al Ezz TV v12 - Native Remote, Channel Guide, DASH and Tracks - $AL_EZZ_EXPECTED_PACKAGE" \
+            --notes "Al Ezz TV v12 experimental native Android TV: immersive player, live channels guide and remote CH+/CH-/digits, automatic HLS and DASH variants, MP4/WebM/MKV/TS best effort, audio/subtitle track selection, screen aspect and VOD speed. Children YouTube use official in-app embed where OS supports it, direct licensed video through ExoPlayer. Unique package per release. Android 4.4.4 install checks passed, physical decoding and stream rights/availability NOT guaranteed." \
             --prerelease \
             --latest=false
       - name: Upload to Appetize when linked

@@ -19,16 +19,24 @@ import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import javax.net.ssl.HttpsURLConnection;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import com.google.android.exoplayer2.ExoPlayer;
+import com.google.android.exoplayer2.C;
+import com.google.android.exoplayer2.Tracks;
+import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.ui.AspectRatioFrameLayout;
 import com.google.android.exoplayer2.MediaItem;
 import com.google.android.exoplayer2.PlaybackException;
 import com.google.android.exoplayer2.Player;
@@ -73,6 +81,17 @@ public final class CinemaPlayerActivity extends Activity {
     private ArrayList<StreamQuality.Source> sources;
     private int index=-1,tries=0;
     private String itemId="",currentUrl="",itemTitle="";
+    private final ArrayList<JSONObject> tvChannels=new ArrayList<JSONObject>();
+    private int tvChannelIndex=-1,aspectMode=0;
+    private String remoteNumber="";
+    private final Runnable commitRemoteNumber=new Runnable(){public void run(){
+        try{
+            int requested=Integer.parseInt(remoteNumber);
+            if(requested>=1 && requested<=tvChannels.size())switchChannel(requested-1);
+            else showControls(true);
+        }catch(Exception ignored){}
+        remoteNumber="";
+    }};
     private boolean live=false,started=false;
     private final Runnable watchdog=new Runnable(){public void run(){
         if(isFinishing() || started || engine==null)return;
@@ -120,6 +139,21 @@ public final class CinemaPlayerActivity extends Activity {
         itemId=intent.getStringExtra("item_id");if(itemId==null)itemId="";
         itemTitle=intent.getStringExtra("title");if(itemTitle==null)itemTitle="العز TV";
         live=intent.getBooleanExtra("is_live",false);
+        if(live){
+            try{
+                JSONArray list=new JSONArray(intent.getStringExtra("channel_playlist")==null
+                    ? "[]" : intent.getStringExtra("channel_playlist"));
+                for(int i=0;i<list.length() && i<160;i++){
+                    JSONObject channel=list.optJSONObject(i);
+                    if(channel!=null && !StreamQuality.parse(channel.optString("url"),
+                        channel.optString("quality"),channel.optJSONArray("variants")==null
+                            ? "[]" : channel.optJSONArray("variants").toString()).isEmpty())
+                        tvChannels.add(channel);
+                }
+                tvChannelIndex=Math.max(0,Math.min(tvChannels.size()-1,
+                    intent.getIntExtra("channel_start",0)));
+            }catch(Exception error){Log.w("AlEzzTV","TV guide unavailable",error);}
+        }
         String url=intent.getStringExtra("stream_url");
         sources=StreamQuality.parse(url,intent.getStringExtra("quality"),intent.getStringExtra("stream_variants"));
         FrameLayout root=new FrameLayout(this);root.setBackgroundColor(Color.BLACK);
@@ -147,29 +181,46 @@ public final class CinemaPlayerActivity extends Activity {
         status=txt("جاري تجهيز مشغّل الفيديو...",13,0xFFFFBCC6,false);
         LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(-1,-2);
         sp.topMargin=dp(7);panel.addView(status,sp);
+        HorizontalScrollView controlsScroll=new HorizontalScrollView(this);
+        controlsScroll.setHorizontalScrollBarEnabled(false);
+        controlsScroll.setFillViewport(true);
         footer=new LinearLayout(this);footer.setGravity(Gravity.CENTER_VERTICAL);
+        controlsScroll.addView(footer,new HorizontalScrollView.LayoutParams(-2,-1));
         LinearLayout.LayoutParams fp=new LinearLayout.LayoutParams(-1,dp(55));
-        fp.topMargin=dp(8);panel.addView(footer,fp);
+        fp.topMargin=dp(8);panel.addView(controlsScroll,fp);
         playButton=button("▶ تشغيل / إيقاف");
-        footer.addView(playButton,new LinearLayout.LayoutParams(0,-1,1));
+        footer.addView(playButton,new LinearLayout.LayoutParams(dp(138),-1));
         playButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
             if(engine==null)return;
             if(engine.getPlaybackState()==Player.STATE_IDLE){attempted.clear();tries=0;playSource(index);}
             else if(engine.isPlaying())engine.pause();else engine.play();
         }});
         Button retryButton=button("↻ إعادة");
-        footer.addView(retryButton,new LinearLayout.LayoutParams(0,-1,1));
+        footer.addView(retryButton,new LinearLayout.LayoutParams(dp(138),-1));
         retryButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
             attempted.clear();tries=0;playSource(index);
         }});
         qualityButton=button("الجودة");
-        footer.addView(qualityButton,new LinearLayout.LayoutParams(0,-1,1));
+        footer.addView(qualityButton,new LinearLayout.LayoutParams(dp(138),-1));
         qualityButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showQualityMenu();}});
         externalButton=button("مشغل بديل");
-        footer.addView(externalButton,new LinearLayout.LayoutParams(0,-1,1));
+        footer.addView(externalButton,new LinearLayout.LayoutParams(dp(138),-1));
         externalButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){external();}});
+        Button guideButton=button("☷ القنوات");
+        footer.addView(guideButton,new LinearLayout.LayoutParams(dp(140),-1));
+        guideButton.setEnabled(live && tvChannels.size()>0);
+        guideButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showChannelGuide();}});
+        Button audioButton=button("♫ صوت / ترجمة");
+        footer.addView(audioButton,new LinearLayout.LayoutParams(dp(146),-1));
+        audioButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showTrackMenu();}});
+        Button screenButton=button("▣ الشاشة");
+        footer.addView(screenButton,new LinearLayout.LayoutParams(dp(135),-1));
+        screenButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){cycleAspectRatio();}});
+        Button speedButton=button("⏩ السرعة");
+        footer.addView(speedButton,new LinearLayout.LayoutParams(dp(135),-1));
+        speedButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showSpeedMenu();}});
         backButton=button("رجوع");
-        footer.addView(backButton,new LinearLayout.LayoutParams(0,-1,1));
+        footer.addView(backButton,new LinearLayout.LayoutParams(dp(138),-1));
         backButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){finish();}});
         if(sources.isEmpty()){
             status.setText("لا يوجد رابط MP4/HLS صالح لهذا العنوان. يرجى تحديثه في لوحة الإدارة.");
@@ -209,7 +260,8 @@ public final class CinemaPlayerActivity extends Activity {
                     status.setText(live?"● البث المباشر يعمل":"▶ الفيديو جاهز • OK أو اللمس لعرض القوائم");
                     handler.removeCallbacks(autoHide);
                     handler.postDelayed(autoHide,1200L);
-                    details.setText((live?"مباشر":"MP4 / HLS")+"  |  "+sources.get(index).label);
+                    details.setText((live ? "● القناة "+(tvChannelIndex+1)+" / "+tvChannels.size()
+                        : "سينما العز • جودة تلقائية")+"   |  "+sources.get(index).label);
                 }else if(state==Player.STATE_ENDED){
                     status.setText("انتهى الفيديو. اختر رجوع أو جودة أخرى.");
                     showControls(true);
@@ -282,6 +334,107 @@ public final class CinemaPlayerActivity extends Activity {
             }});
         }});
     }
+    private void showChannelGuide(){
+        if(tvChannels.isEmpty()){status.setText("دليل القنوات غير متاح لهذا البث.");showControls(true);return;}
+        String[] labels=new String[tvChannels.size()];
+        for(int i=0;i<labels.length;i++)
+            labels[i]=String.format(Locale.US,"%03d  •  %s",i+1,
+                tvChannels.get(i).optString("title","قناة"));
+        new android.app.AlertDialog.Builder(this).setTitle("دليل قنوات العز TV")
+            .setSingleChoiceItems(labels,tvChannelIndex,new android.content.DialogInterface.OnClickListener(){
+                public void onClick(android.content.DialogInterface dialog,int which){
+                    dialog.dismiss();switchChannel(which);
+                }
+            }).setNegativeButton("رجوع",null).show();
+    }
+    private void switchChannel(int position){
+        if(tvChannels.isEmpty())return;
+        tvChannelIndex=(position+tvChannels.size())%tvChannels.size();
+        JSONObject selected=tvChannels.get(tvChannelIndex);
+        ArrayList<StreamQuality.Source> next=StreamQuality.parse(selected.optString("url"),
+            selected.optString("quality"),selected.optJSONArray("variants")==null?
+                "[]" : selected.optJSONArray("variants").toString());
+        if(next.isEmpty()){
+            status.setText("القناة المختارة لا تملك رابط بث صالحًا.");showControls(true);return;
+        }
+        itemId=selected.optString("id","");
+        itemTitle=selected.optString("title","قناة تلفزيونية");
+        sources=next;index=StreamQuality.choose(sources,"auto",Build.VERSION.SDK_INT);
+        if(index<0)index=0;
+        attempted.clear();tries=0;requestToken++;
+        title.setText(String.format(Locale.US,"● CH %03d  •  %s",tvChannelIndex+1,itemTitle));
+        details.setText("بث مباشر • CH± للتنقل • اضغط MENU للدليل");
+        playSource(index);
+    }
+    private void cycleAspectRatio(){
+        if(surface==null)return;
+        aspectMode=(aspectMode+1)%3;
+        int mode=aspectMode==0?AspectRatioFrameLayout.RESIZE_MODE_FIT:
+            aspectMode==1?AspectRatioFrameLayout.RESIZE_MODE_ZOOM:
+                AspectRatioFrameLayout.RESIZE_MODE_FILL;
+        surface.setResizeMode(mode);
+        status.setText(aspectMode==0?"قياس الصورة: ملائم":aspectMode==1?
+            "قياس الصورة: تكبير":"قياس الصورة: ملء الشاشة");
+        showControls(true);
+    }
+    private ArrayList<String> trackLanguages(int type){
+        LinkedHashSet<String> found=new LinkedHashSet<String>();
+        if(engine==null)return new ArrayList<String>();
+        Tracks tracks=engine.getCurrentTracks();
+        for(Tracks.Group group:tracks.getGroups()){
+            if(group.getType()!=type)continue;
+            for(int i=0;i<group.length;i++){
+                Format format=group.getTrackFormat(i);
+                if(format.language!=null&&format.language.length()>0&&
+                    !"und".equals(format.language))found.add(format.language);
+            }
+        }
+        return new ArrayList<String>(found);
+    }
+    private void showTrackMenu(){
+        if(engine==null)return;
+        final ArrayList<String> audio=trackLanguages(C.TRACK_TYPE_AUDIO);
+        final ArrayList<String> text=trackLanguages(C.TRACK_TYPE_TEXT);
+        ArrayList<String> entries=new ArrayList<String>();
+        entries.add("الصوت: تلقائي");
+        for(String language:audio)entries.add("الصوت: "+language);
+        entries.add("الترجمة: إيقاف");
+        entries.add("الترجمة: تلقائي");
+        for(String language:text)entries.add("الترجمة: "+language);
+        final String[] labels=entries.toArray(new String[0]);
+        final int audioCount=audio.size();
+        new android.app.AlertDialog.Builder(this).setTitle("الصوت والترجمة • المسارات المتوفرة")
+            .setItems(labels,new android.content.DialogInterface.OnClickListener(){
+                public void onClick(android.content.DialogInterface dialog,int which){
+                    com.google.android.exoplayer2.trackselection.TrackSelectionParameters.Builder options=
+                        engine.getTrackSelectionParameters().buildUpon();
+                    if(which==0)options.setPreferredAudioLanguage(null);
+                    else if(which<=audioCount)options.setPreferredAudioLanguage(audio.get(which-1));
+                    else if(which==audioCount+1)options.setTrackTypeDisabled(C.TRACK_TYPE_TEXT,true);
+                    else if(which==audioCount+2)
+                        options.setTrackTypeDisabled(C.TRACK_TYPE_TEXT,false)
+                            .setPreferredTextLanguage(null);
+                    else options.setTrackTypeDisabled(C.TRACK_TYPE_TEXT,false)
+                            .setPreferredTextLanguage(text.get(which-audioCount-3));
+                    engine.setTrackSelectionParameters(options.build());
+                    status.setText("تم تطبيق اختيار الصوت أو الترجمة إذا كان المصدر يوفّره.");
+                    showControls(false);
+                }
+            }).setNegativeButton("إلغاء",null).show();
+    }
+    private void showSpeedMenu(){
+        if(engine==null||live){status.setText("سرعة التشغيل متاحة للأفلام والحلقات فقط.");return;}
+        final float[] rates={0.75f,1f,1.25f,1.5f,2f};
+        String[] labels={"0.75×","1× عادي","1.25×","1.5×","2×"};
+        new android.app.AlertDialog.Builder(this).setTitle("سرعة المشاهدة")
+            .setItems(labels,new android.content.DialogInterface.OnClickListener(){
+                public void onClick(android.content.DialogInterface dialog,int which){
+                    engine.setPlaybackSpeed(rates[which]);
+                    status.setText("السرعة "+rates[which]+"×");
+                    showControls(false);
+                }
+            }).show();
+    }
     private void showQualityMenu(){
         if(sources==null||sources.size()<2){
             status.setText("المصدر متاح بجودة واحدة. في HLS يختار المشغل الدقة تلقائيًا.");return;
@@ -310,6 +463,32 @@ public final class CinemaPlayerActivity extends Activity {
         }
     }
     @Override public boolean onKeyDown(int code,KeyEvent event){
+        if(live && !tvChannels.isEmpty()){
+            if(code==KeyEvent.KEYCODE_CHANNEL_UP||code==KeyEvent.KEYCODE_MEDIA_NEXT){
+                switchChannel(tvChannelIndex+1);return true;
+            }
+            if(code==KeyEvent.KEYCODE_CHANNEL_DOWN||code==KeyEvent.KEYCODE_MEDIA_PREVIOUS){
+                switchChannel(tvChannelIndex-1);return true;
+            }
+            if(code==KeyEvent.KEYCODE_MENU||code==KeyEvent.KEYCODE_GUIDE){
+                showChannelGuide();return true;
+            }
+            int digit=code-KeyEvent.KEYCODE_0;
+            if(digit>=0 && digit<=9){
+                remoteNumber+=digit;
+                if(remoteNumber.length()>3)remoteNumber=remoteNumber.substring(remoteNumber.length()-3);
+                handler.removeCallbacks(commitRemoteNumber);
+                status.setText("اختيار القناة "+remoteNumber+"...");
+                showControls(false);
+                handler.postDelayed(commitRemoteNumber,1250L);
+                return true;
+            }
+            if((code==KeyEvent.KEYCODE_DPAD_CENTER||code==KeyEvent.KEYCODE_ENTER)
+                &&remoteNumber.length()>0){
+                handler.removeCallbacks(commitRemoteNumber);commitRemoteNumber.run();return true;
+            }
+        }
+        if(code==KeyEvent.KEYCODE_CAPTIONS){showTrackMenu();return true;}
         if(code==KeyEvent.KEYCODE_BACK&&controlPanel!=null
            &&controlPanel.getVisibility()==View.VISIBLE){hideControls();return true;}
         if(code==KeyEvent.KEYCODE_DPAD_CENTER||code==KeyEvent.KEYCODE_ENTER||
@@ -335,6 +514,7 @@ public final class CinemaPlayerActivity extends Activity {
     }
     @Override protected void onPause(){
         handler.removeCallbacks(autoHide);
+        handler.removeCallbacks(commitRemoteNumber);
         if(engine!=null){
             if(!live && itemId.length()>0){
                 getSharedPreferences("alezz_v11_player",MODE_PRIVATE).edit()

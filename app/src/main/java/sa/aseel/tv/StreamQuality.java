@@ -16,11 +16,13 @@ public final class StreamQuality {
         }
     }
     private StreamQuality(){}
-    /** Only HTTPS MP4 or HLS manifests can enter the player, never HTML pages. */
+    /** Allow known HTTPS media containers; never accept web pages, insecure links or YouTube watch URLs. */
     public static boolean isDirectUrl(String url) {
         if(url==null || !url.startsWith("https://") || url.length()>2048)return false;
         String path=url.split("[?#]",2)[0].toLowerCase(Locale.US);
-        return path.endsWith(".mp4") || path.endsWith(".m3u8");
+        return path.endsWith(".mp4") || path.endsWith(".m3u8") || path.endsWith(".mpd") ||
+            path.endsWith(".mkv") || path.endsWith(".webm") || path.endsWith(".ts") ||
+            path.endsWith(".m4v") || path.endsWith(".mov");
     }
     public static ArrayList<Source> parse(String mainUrl,String mainQuality,String rawJson) {
         ArrayList<Source> results=new ArrayList<Source>();

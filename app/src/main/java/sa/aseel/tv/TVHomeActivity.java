@@ -48,6 +48,14 @@ public final class TVHomeActivity extends Activity {
     private String lastLoadError="";
     private boolean loading=false,unlocked=false;
     private int generation=0,episodeGeneration=0,pendingRequests=0;
+    private String remoteChannelDigits="";
+    private final Runnable remoteChannelCommit=new Runnable(){public void run(){
+        try{
+            int number=Integer.parseInt(remoteChannelDigits);
+            if(number>0 && number<=channels.size())play(channels.get(number-1));
+        }catch(Exception ignored){}
+        remoteChannelDigits="";
+    }};
 
     private int dp(int val){return Math.round(getResources().getDisplayMetrics().density*val);}
     private LinearLayout column(){LinearLayout x=new LinearLayout(this);x.setOrientation(LinearLayout.VERTICAL);return x;}
@@ -227,11 +235,11 @@ public final class TVHomeActivity extends Activity {
             hero();
             shelf("الأفلام","اكتشف أحدث الأعمال المتاحة",movies,14);
             shelf("مسلسلات","مواسم وحلقات مرتبة",series,12);
-            shelf("قنوات مباشرة","بث حي من المصادر المعتمدة",channels,14);
+            if(!channels.isEmpty())livePreview();
             shelf("يوتيوب الأطفال","مقاطع يوتيوب الرسمية المنشورة",youtubeVideos,14);
         }else if("movies".equals(section))grid("الأفلام",movies);
         else if("series".equals(section))grid("المسلسلات",series);
-        else if("live".equals(section))grid("البث المباشر",channels);
+        else if("live".equals(section))liveGuide();
         else if("youtube".equals(section))grid("مقاطع يوتيوب للأطفال",youtubeVideos);
         else if("kids".equals(section)){
             ArrayList<JSONObject> kids=new ArrayList<JSONObject>();
@@ -268,6 +276,11 @@ public final class TVHomeActivity extends Activity {
         copy.addView(counts,space(-1,-2,4));
         Button explore=button("▶ استكشف الأفلام");copy.addView(explore,space(dp(245),dp(52),6));
         explore.setOnClickListener(new View.OnClickListener(){public void onClick(View v){section="movies";render();}});
+        Button liveButton=button("● شاهد التلفزيون المباشر");
+        copy.addView(liveButton,space(dp(275),dp(48),2));
+        liveButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            section="live";render();scroller.scrollTo(0,0);
+        }});
         hero.addView(copy,new LinearLayout.LayoutParams(0,-2,1));
         int logoId=getResources().getIdentifier("alizz_brand","drawable",getPackageName());
         if(logoId!=0){ImageView logo=new ImageView(this);logo.setImageResource(logoId);
@@ -281,6 +294,52 @@ public final class TVHomeActivity extends Activity {
         LinearLayout cards=row();cards.setGravity(Gravity.TOP);scroll.addView(cards);
         for(int i=0;i<list.size()&&i<limit;i++)cards.addView(card(list.get(i),true));
         content.addView(scroll,space(-1,dp(251),4));
+    }
+    private void livePreview(){
+        heading("● البث الآن","تصفح القنوات كالتلفزيون، وغيّرها بأزرار CH± أو الأرقام أثناء المشاهدة");
+        for(int i=0;i<Math.min(channels.size(),4);i++)content.addView(channelLine(channels.get(i),i));
+        Button guide=button("عرض دليل القنوات بالكامل  ❯");
+        content.addView(guide,space(dp(325),dp(52),6));
+        guide.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            section="live";render();scroller.scrollTo(0,0);
+        }});
+    }
+    private void liveGuide(){
+        heading("دليل القنوات • LIVE TV","اضغط OK للمشاهدة • CH+ و CH− للتنقل • الأرقام لاختيار القناة مباشرة");
+        if(channels.isEmpty()){
+            heading("لا توجد قنوات منشورة","استخدم زر تحديث المكتبة أو راجع المصادر المعتمدة.");return;
+        }
+        for(int i=0;i<channels.size();i++)content.addView(channelLine(channels.get(i),i));
+    }
+    private LinearLayout channelLine(final JSONObject channel,final int position){
+        final LinearLayout line=row();
+        line.setPadding(dp(16),dp(8),dp(16),dp(8));
+        line.setFocusable(true);line.setClickable(true);
+        line.setBackgroundDrawable(bg(0xFF1D1923,0xFF39313D,13));
+        LinearLayout.LayoutParams outer=space(-1,dp(83),4);
+        line.setLayoutParams(outer);
+        TextView number=text(String.format(Locale.US,"%03d",position+1),23,0xFFFFB9C9,true);
+        number.setGravity(Gravity.CENTER);
+        line.addView(number,new LinearLayout.LayoutParams(dp(79),-1));
+        ImageView poster=new ImageView(this);poster.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        poster.setBackgroundDrawable(bg(0xFF362333,0,8));
+        String image=value(channel,"poster_url");
+        if(image.startsWith("https://"))PosterLoader.load(poster,image);
+        line.addView(poster,new LinearLayout.LayoutParams(dp(100),dp(64)));
+        LinearLayout information=column();information.setPadding(dp(14),0,dp(14),0);
+        information.addView(text(label(channel),20,WHITE,true));
+        information.addView(text("● بث مباشر   •   "+value(channel,"language_code"),12,0xFF9FE2BF,false));
+        line.addView(information,new LinearLayout.LayoutParams(0,-2,1));
+        TextView action=text("▶  مشاهدة",15,0xFFFFA2BB,true);
+        line.addView(action,new LinearLayout.LayoutParams(dp(130),-1));
+        line.setOnFocusChangeListener(new View.OnFocusChangeListener(){
+            public void onFocusChange(View v,boolean focused){
+                line.setBackgroundDrawable(bg(focused?0xFF75213D:0xFF1D1923,
+                    focused?0xFFFFAABB:0xFF39313D,13));
+            }
+        });
+        line.setOnClickListener(new View.OnClickListener(){public void onClick(View v){play(channel);}});
+        return line;
     }
     private void grid(String title,ArrayList<JSONObject> list){
         heading(title,list.size()+" عنوان متاح");
@@ -415,6 +474,29 @@ public final class TVHomeActivity extends Activity {
         intent.putExtra("is_live","channel".equals(kind(item)));
         intent.putExtra("quality",value(item,"quality"));
         intent.putExtra("stream_variants",item.optJSONArray("stream_variants")==null?"[]":item.optJSONArray("stream_variants").toString());
+        if("channel".equals(kind(item))){
+            JSONArray playlist=new JSONArray();
+            int selected=0;
+            for(JSONObject candidate:channels){
+                if("official_link".equals(value(candidate,"playback_mode")))continue;
+                String candidateUrl=value(candidate,"stream_url");
+                String variants=candidate.optJSONArray("stream_variants")==null?"[]":
+                    candidate.optJSONArray("stream_variants").toString();
+                if(StreamQuality.parse(candidateUrl,value(candidate,"quality"),variants).isEmpty())continue;
+                JSONObject record=new JSONObject();
+                try{
+                    record.put("id",value(candidate,"id"));
+                    record.put("title",label(candidate));
+                    record.put("url",candidateUrl);
+                    record.put("quality",value(candidate,"quality"));
+                    record.put("variants",new JSONArray(variants));
+                    if(value(candidate,"id").equals(value(item,"id")))selected=playlist.length();
+                    playlist.put(record);
+                }catch(Exception ignored){}
+            }
+            intent.putExtra("channel_playlist",playlist.toString());
+            intent.putExtra("channel_start",selected);
+        }
         startActivity(intent);
     }
     private void openYouTube(JSONObject selected){
@@ -497,11 +579,28 @@ public final class TVHomeActivity extends Activity {
         if(code==KeyEvent.KEYCODE_BACK && !"home".equals(section)){
             section="home";render();return true;
         }
-        if(code==KeyEvent.KEYCODE_MENU){loadCatalog();return true;}
+        if(code==KeyEvent.KEYCODE_MENU||code==KeyEvent.KEYCODE_GUIDE){
+            section="live";render();scroller.scrollTo(0,0);return true;
+        }
+        if(!(getCurrentFocus() instanceof EditText) && !channels.isEmpty()){
+            int digit=code-KeyEvent.KEYCODE_0;
+            if(digit>=0 && digit<=9){
+                remoteChannelDigits+=digit;
+                if(remoteChannelDigits.length()>3)
+                    remoteChannelDigits=remoteChannelDigits.substring(remoteChannelDigits.length()-3);
+                ui.removeCallbacks(remoteChannelCommit);
+                ui.postDelayed(remoteChannelCommit,1250L);
+                if(status!=null)status.setText("القناة "+remoteChannelDigits+" • OK للاختيار");
+                return true;
+            }
+            if(code==KeyEvent.KEYCODE_DPAD_CENTER && remoteChannelDigits.length()>0){
+                ui.removeCallbacks(remoteChannelCommit);remoteChannelCommit.run();return true;
+            }
+        }
         return super.onKeyDown(code,event);
     }
     @Override protected void onDestroy(){
-        generation++;episodeGeneration++;unlocked=false;background.shutdownNow();ui.removeCallbacksAndMessages(null);
+        generation++;episodeGeneration++;unlocked=false;background.shutdownNow();ui.removeCallbacks(remoteChannelCommit);ui.removeCallbacksAndMessages(null);
         super.onDestroy();
     }
 }
