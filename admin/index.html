@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="style.css"><link rel="stylesheet" href="studio.css">
 <script defer src="config.js"></script><script defer src="app.js?v=20261031-youtube-kids-dashboard"></script><script defer src="studio.js"></script>
 <link rel="stylesheet" href="importer.css?v=20261101-1">
-<script defer src="importer.js?v=20261101-4"></script>
+<script defer src="importer.js?v=20261101-media-v5"></script>
 </head><body>
 <header class="masthead"><div class="brand"><img class="logo brand-logo-image" src="../web/alizz-tv-transparent.png" alt="شعار العز TV"><div><strong>العز <span>TV</span></strong><small>إدارة الأفلام والمسلسلات والقنوات</small></div></div>
 <div class="right"><span id="userLabel"></span><button type="button" id="logout" class="ghost hidden">تسجيل الخروج</button></div></header>
@@ -31,7 +31,8 @@
  <p class="imp-hint">الفحص الآلي للمواقع المدعومة؛ عند الحظر أو فشل الفحص يمكنك إدخال بيانات الفيلم بنفسك أو لصق HTML من صفحة مصرح بالوصول إليها. لا يتجاوز DRM أو تسجيل الدخول.</p>
  <div id="impScanProgress" class="imp-scan-progress" hidden role="status" aria-live="polite"><span class="imp-spinner" aria-hidden="true"></span><strong id="impScanStep">فحص الرابط...</strong><small>جارٍ الاتصال بالمصدر عبر الخادم</small></div><div id="impDiagnostics" class="imp-diagnostics" role="status" aria-live="polite">حالة الجلب: لم يُطلب فحص بعد.</div>
  <details class="imp-details"><summary>بديل: لصق كود HTML يدويًا</summary><textarea id="impHtml" rows="4" placeholder="ألصق مصدر HTML الصفحة هنا..."></textarea><button type="button" id="impParseHtml">استخراج البيانات من HTML</button></details>
- <div id="impLinks" class="imp-links" aria-live="polite"></div></div>
+ <div id="impLinks" class="imp-links" aria-live="polite"></div>
+ <div id="impImages" class="imp-images" aria-live="polite"></div></div>
  <form id="impForm" class="imp-section">
  <div class="imp-section-header"><b>02</b><h3>تفاصيل الفيلم</h3><span class="imp-draft-indicator" id="impEditing">إضافة جديدة</span></div>
  <div class="imp-fields">
