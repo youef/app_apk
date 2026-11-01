@@ -150,3 +150,31 @@ body.viewer-locked{overflow:hidden!important}body.viewer-locked>:not(#activation
 
 /* Unified transparent Alizz TV PNG branding */
 .brand-logo-image{width:56px;height:56px;max-width:100%;object-fit:contain;object-position:center;filter:drop-shadow(0 4px 12px rgba(255,30,60,.25))}.footer-brand .brand-logo-image{width:54px;height:54px}.auth-mark.brand-logo-image{width:88px;height:88px}.activation-brand{display:flex;align-items:center;gap:16px}.activation-logo-image{display:block;width:clamp(70px,10vw,120px);height:clamp(70px,10vw,120px);object-fit:contain;filter:drop-shadow(0 9px 26px rgba(235,35,55,.3))}@media(max-width:600px){.brand-logo-image{width:44px;height:44px}.activation-brand{gap:8px}.activation-logo-image{width:76px;height:76px}}
+
+
+/* Curated official YouTube videos: responsive landscape cards for Kids and YouTube sections */
+.youtube-kids-section{margin:20px 0 38px;padding:25px;border:1px solid rgba(255,255,255,.11);border-radius:22px;background:linear-gradient(160deg,rgba(23,39,61,.88),rgba(15,24,38,.68))}
+.youtube-kids-heading{gap:14px;flex-wrap:wrap;margin-bottom:8px}
+.youtube-kids-heading h3{font-size:clamp(18px,2vw,25px)}
+.youtube-kids-count{color:var(--gold2);font-weight:800;background:rgba(255,255,255,.065);border-radius:16px;padding:7px 12px}
+.youtube-kids-description{color:var(--muted);font-size:13px;line-height:1.9;margin:3px 0 15px}
+.youtube-kids-toolbar{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap}
+.youtube-kids-topics{flex:1;min-width:230px}
+.youtube-kids-language-label{display:flex;align-items:center;gap:8px;color:#d4dce7;white-space:nowrap;font-size:13px}
+.youtube-kids-language-label select{border-radius:12px;background:#172438;color:#fff;border:1px solid rgba(255,255,255,.17);padding:10px 11px}
+.youtube-kids-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:19px;margin-top:14px}
+.youtube-kid-card{border:1px solid rgba(255,255,255,.11);border-radius:15px;background:#132237;overflow:hidden;cursor:pointer;transition:transform .2s,border-color .2s;min-width:0}
+.youtube-kid-card:hover{transform:translateY(-4px);border-color:rgba(255,205,139,.42)}
+.youtube-kid-card:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+.youtube-kid-poster{width:100%;aspect-ratio:16/9;background:#08111c;position:relative;overflow:hidden}
+.youtube-kid-poster img{width:100%;height:100%;object-fit:cover;display:block}
+.youtube-kid-play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:52px;height:52px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.89);color:#101928;font-size:23px;box-shadow:0 8px 25px rgba(0,0,0,.4)}
+.youtube-kid-info{padding:13px 14px 15px}
+.youtube-kid-info h4{font-size:15px;line-height:1.5;margin:0 0 7px;font-weight:800;min-height:46px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.youtube-kid-info small{color:#acbacb;font-size:12px;display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.youtube-kid-actions{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;margin-top:12px}
+.youtube-kid-watch{padding:9px 12px;background:var(--gold);color:white;border:0;border-radius:9px;font-weight:800;font-size:12px}
+.youtube-kid-official{font-size:12px;color:#bfcde0;text-decoration:underline;text-underline-offset:4px}
+@media(max-width:1150px){.youtube-kids-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:780px){.youtube-kids-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.youtube-kids-section{padding:15px}.youtube-kids-toolbar{align-items:stretch}}
+@media(max-width:460px){.youtube-kids-grid{grid-template-columns:1fr 1fr;gap:10px}.youtube-kid-info{padding:10px}.youtube-kid-info h4{font-size:12px;min-height:38px}.youtube-kid-actions{align-items:flex-start}.youtube-kid-watch{font-size:11px;padding:8px}.youtube-kid-play{width:38px;height:38px;font-size:17px}.youtube-kids-description{font-size:12px}}
