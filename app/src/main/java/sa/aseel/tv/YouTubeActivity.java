@@ -1,6 +1,8 @@
 package sa.aseel.tv;
 
 import android.app.Activity;
+import android.content.Intent;
+import android.net.Uri;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
@@ -43,7 +45,7 @@ public final class YouTubeActivity extends Activity {
         LinearLayout toolbar=new LinearLayout(this);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
         toolbar.setPadding(dp(20),dp(3),dp(20),dp(3));
-        toolbar.setBackgroundColor(0xFF12151E);
+        toolbar.setBackgroundColor(0xFF151518);
         body.addView(toolbar,new LinearLayout.LayoutParams(-1,dp(53)));
         Button back=new Button(this);back.setText("رجوع ❯");back.setTextSize(14);back.setAllCaps(false);
         back.setTextColor(Color.WHITE);back.setBackgroundColor(0xFF3A2736);
@@ -56,6 +58,25 @@ public final class YouTubeActivity extends Activity {
         TextView badge=new TextView(this);badge.setText("YouTube  ▶");
         badge.setTextColor(0xFFFF6172);badge.setTextSize(14);badge.setGravity(Gravity.CENTER);
         toolbar.addView(badge,new LinearLayout.LayoutParams(dp(118),-1));
+        final String officialLink="https://www.youtube.com/watch?v="+id;
+        Button external=new Button(this);
+        external.setText("↗  YouTube الرسمي");external.setTextSize(13);external.setAllCaps(false);
+        external.setTextColor(Color.WHITE);external.setBackgroundColor(0xFFB30B2F);
+        LinearLayout.LayoutParams externalParams=new LinearLayout.LayoutParams(dp(190),dp(44));
+        externalParams.setMargins(dp(8),0,0,0);
+        toolbar.addView(external,externalParams);
+        external.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            try{
+                Intent intent=new Intent(Intent.ACTION_VIEW,Uri.parse(officialLink));
+                intent.setPackage("com.google.android.youtube.tv");
+                if(intent.resolveActivity(getPackageManager())==null)intent.setPackage("com.google.android.youtube");
+                if(intent.resolveActivity(getPackageManager())==null)intent.setPackage(null);
+                startActivity(intent);
+            }catch(Exception e){
+                status.setVisibility(View.VISIBLE);
+                status.setText("تعذر فتح YouTube. تحقق من وجود تطبيق أو متصفح يدعم الخدمة.");
+            }
+        }});
         videoArea=new FrameLayout(this);
         body.addView(videoArea,new LinearLayout.LayoutParams(-1,0,1));
         web=new WebView(this);web.setBackgroundColor(Color.BLACK);
@@ -101,7 +122,7 @@ public final class YouTubeActivity extends Activity {
         status=new TextView(this);status.setTextColor(0xFFFFD0D3);status.setTextSize(13);
         status.setGravity(Gravity.CENTER);status.setPadding(dp(15),dp(7),dp(15),dp(7));
         status.setBackgroundColor(0xFF241A24);
-        status.setText("إذا لم يعمل الفيديو، فقد لا يدعم WebView في Android 4.4.4 مشغّل YouTube الحديث.");
+        status.setText("مشغل YouTube الرسمي. إذا كانت الشاشة قديمة ولم يعمل الفيديو، استخدم زر «YouTube الرسمي».");
         body.addView(status,new LinearLayout.LayoutParams(-1,dp(43)));
         setContentView(root);
         final String page="https://youef.github.io/app_apk/youtube-player.html?v="+id;
