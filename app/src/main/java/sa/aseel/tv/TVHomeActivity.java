@@ -237,6 +237,9 @@ public final class TVHomeActivity extends Activity {
             shelf("الأفلام","اكتشف أحدث الأعمال المتاحة",movies,14);
             shelf("مسلسلات","مواسم وحلقات مرتبة",series,12);
             if(!channels.isEmpty())livePreview();
+            ArrayList<JSONObject> sports=new ArrayList<JSONObject>();
+            for(JSONObject channel:channels)if("146b8c7f-8e03-45ee-aa4f-2d8ab20e6c95".equals(value(channel,"category_id")))sports.add(channel);
+            shelf("رياضة حول العالم","قنوات رياضية عالمية متاحة حسب بلدك",sports,20);
             shelf("يوتيوب الأطفال","مقاطع يوتيوب الرسمية المنشورة",youtubeVideos,14);
         }else if("movies".equals(section))grid("الأفلام",movies);
         else if("series".equals(section))grid("المسلسلات",series);
