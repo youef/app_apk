@@ -33,6 +33,7 @@ jobs:
           node --check web/app.js
           node --check web/access.js
           node --check web/config.js
+          node --check admin/admin.js
           node --check admin/app.js
           node --check admin/studio.js
           node --check admin/importer.js
