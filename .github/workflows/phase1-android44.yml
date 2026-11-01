@@ -142,7 +142,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: al-ezz-tv-universal-api19-v10
-          name: Al Ezz TV v9 — Universal Android 4.4+ APK
+          name: Al Ezz TV v10 — Cinematic Posters • Android TV 4.4+
           prerelease: true
           make_latest: false
           body_path: docs/CINEMA_POSTERS_V10.md
