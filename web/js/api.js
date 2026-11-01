@@ -11,7 +11,7 @@
 
   var SELECT = {
     categories: "id,name_ar,sort_order,published",
-    movies: "id,title_ar,title_original,description,poster_url,backdrop_url,release_year,category_id,duration_minutes,quality,stream_url,stream_variants,is_kids,age_rating,featured,display_order,status,rights_status,rights_holder,license_reference,youtube_url,country_code,language_code",
+    movies: "id,title_ar,title_original,description,poster_url,backdrop_url,release_year,category_id,duration_minutes,quality,stream_url,stream_variants,subtitle_url,subtitle_language_code,is_kids,age_rating,featured,display_order,status,rights_status,rights_holder,license_reference,youtube_url,country_code,language_code",
     series: "id,title_ar,title_original,description,poster_url,backdrop_url,release_year,category_id,quality,is_kids,age_rating,featured,display_order,status,rights_status,rights_holder,license_reference,country_code,language_code",
     seasons: "id,series_id,number,title_ar",
     episodes: "id,season_id,number,title_ar,description,poster_url,duration_minutes,stream_url,stream_variants,youtube_url,status,rights_status",
@@ -182,6 +182,8 @@
         language: row.language_code || null,
         stream: row.stream_url || "",
         variants: Array.isArray(row.stream_variants) ? row.stream_variants : [],
+        subtitleTrack: row.subtitle_url || "",
+        subtitleLanguage: row.subtitle_language_code || "",
         youtubeId: yt,
         rights: {
           status: row.rights_status || null,
