@@ -381,6 +381,12 @@
    $("impForm").addEventListener("input",updatePreview);
    $("impScan").onclick=scan;
    $("impHealth").onclick=health;
+   $("impRealExample").onclick=()=>{
+     reset();
+     $("impUrl").value="https://archive.org/details/BigBuckBunny_328";
+     msg("تم وضع صفحة حقيقية من Internet Archive. يجري اختبار جلب البيانات الآن، ولن يتم نشر أي شيء تلقائيًا.");
+     scan();
+   };
    $("impDemo").onclick=()=>{
      reset();
      apply({title_ar:"زهرة — نموذج فيديو تجريبي",title_original:"Flower (CC0 Sample)",
