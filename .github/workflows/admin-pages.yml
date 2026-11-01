@@ -10,107 +10,57 @@ on:
       - ".github/workflows/admin-pages.yml"
   workflow_dispatch:
 
+# GitHub Pages is already configured for automatic branch-based publishing.
+# This workflow validates files only; a second actions/deploy-pages job
+# races the built-in "pages build and deployment" job and causes HTTP 400.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: al-ezz-tv-pages
+  group: al-ezz-tv-site-checks
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  validate:
+    name: Validate viewer, admin and media assets
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: https://youef.github.io/app_apk/
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Verify JavaScript syntax
+      - name: Verify JavaScript and import service tests
         run: |
+          set -euo pipefail
           node --check web/app.js
-          grep -q 'poster-cover' web/app.js
-          grep -q 'detail-brand-logo' web/app.js
-          grep -q 'aspect-ratio:2/3' web/styles.css
           node --check web/access.js
           node --check web/config.js
           node --check admin/app.js
           node --check admin/studio.js
           node --check admin/importer.js
-          node tests/importer-smoke.cjs
           node --check admin/config.js
-      - name: Assemble public viewer and admin dashboard
+          node tests/importer-smoke.cjs
+      - name: Verify branch-published website assets
         run: |
           set -euo pipefail
-          mkdir -p _site/admin
-          cp web/index.html web/styles.css web/app.js web/access.js web/config.js web/al-ezz-mark.svg web/alizz-tv-transparent.png web/youtube-player.html _site/
-          # Serve the viewer from /app_apk/web/ too, regardless of which
-          # GitHub Pages publishing source (Actions or branch) finishes last.
-          mkdir -p _site/web
-          cp web/index.html web/styles.css web/app.js web/access.js web/config.js web/al-ezz-mark.svg web/alizz-tv-transparent.png web/youtube-player.html _site/web/
-          cp admin/index.html admin/style.css admin/studio.css admin/importer.css admin/app.js admin/studio.js admin/importer.js admin/config.js _site/admin/
-          touch _site/.nojekyll
-          test -s _site/index.html
-          test -s _site/app.js
-          test -s _site/alizz-tv-transparent.png
-          test -s _site/web/alizz-tv-transparent.png
-          test -s _site/admin/index.html
-          test -s _site/admin/importer.js
-          test -s _site/admin/importer.css
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
-      - name: Upload Pages files
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-      - name: Clear previously stalled Pages deployment if necessary
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
+          test -s index.html
+          test -s .nojekyll
+          test -s web/index.html
+          test -s web/app.js
+          test -s web/styles.css
+          test -s web/access.js
+          test -s web/alizz-tv-transparent.png
+          test -s web/al-ezz-mark.svg
+          test -s admin/index.html
+          test -s admin/app.js
+          test -s admin/importer.js
+          test -s admin/importer.css
+          grep -q 'poster-cover' web/app.js
+          grep -q 'detail-brand-logo' web/app.js
+          grep -q 'aspect-ratio:2/3' web/styles.css
+          echo "PASS: branch files are ready; native GitHub Pages will publish main:/."
+      - name: Explain publishing responsibility
         run: |
-          set -euo pipefail
-          prior="f0f66e81a5ae41c81bdbc63bdaf4210f8cc71e66"
-          state="$(gh api "repos/${GITHUB_REPOSITORY}/pages/deployments/${prior}" --jq '.status' 2>/dev/null || true)"
-          echo "Previous Pages deployment state: ${state:-not found}"
-          case "${state}" in
-            queued|pending|building|in_progress|processing)
-              echo "Canceling the blocked previous deployment before publishing the new site."
-              gh api -X POST "repos/${GITHUB_REPOSITORY}/pages/deployments/${prior}/cancel"
-              ;;
-            *)
-              echo "No stale deployment cancellation needed."
-              ;;
-          esac
-      - name: Deploy to Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-      - name: Verify published viewer and admin via real public HTTPS
-        shell: bash
-        run: |
-          set -euo pipefail
-          ROOT="https://youef.github.io/app_apk/"
-          for attempt in $(seq 1 10); do
-            echo "Published website check $attempt"
-            if curl -fLsS --max-time 12 -o /tmp/alezz-home.html "$ROOT" &&
-               curl -fLsS --max-time 12 -o /tmp/alezz-web.html "${ROOT}web/" &&
-               curl -fLsS --max-time 12 -o /tmp/alezz-access.js "${ROOT}web/access.js" &&
-               curl -fLsS --max-time 12 -o /tmp/alezz-logo.png "${ROOT}web/alizz-tv-transparent.png" &&
-               curl -fLsS --max-time 12 -o /tmp/alezz-admin.html "${ROOT}admin/" &&
-               curl -fLsS --max-time 12 -o /tmp/alezz-importer.js "${ROOT}admin/importer.js" &&
-               grep -Eq "activationGate|web/" /tmp/alezz-home.html &&
-               grep -q activationGate /tmp/alezz-web.html &&
-               grep -q AL_EZZ_ACCESS /tmp/alezz-access.js &&
-               grep -q adminGroups /tmp/alezz-admin.html &&
-               grep -q importStudio /tmp/alezz-admin.html &&
-               grep -q aseel-inspect-media /tmp/alezz-importer.js; then
-              echo "PASS: Al Ezz TV is live at /app_apk/ and /app_apk/web/, with functional assets and admin."
-              exit 0
-            fi
-            if [[ "$attempt" -lt 10 ]]; then sleep 6; fi
-          done
-          echo "::error::GitHub Pages did not expose one or more required Al Ezz TV assets."
-          exit 1
+          echo 'Source: repository main branch, directory /'
+          echo 'This workflow intentionally does not call actions/deploy-pages.'
+          echo 'GitHub Pages native "pages build and deployment" is the ONLY publisher.'
+          echo 'Viewer: https://youef.github.io/app_apk/web/'
+          echo 'Admin:  https://youef.github.io/app_apk/admin/'
