@@ -102,6 +102,7 @@ def main():
         results=list(pool.map(probe,items))
     status=Counter(r["status"] for r in results)
     approved=[r for r in results if r["status"]=="manifest_ok"]
+    logos_by_url={i["url"]:i.get("logo","") for i in items}
     output=[]
     for r in approved:
         m=meta.get(r["id"],{})
@@ -112,8 +113,11 @@ def main():
         languages=m.get("languages") or []
         lang=str(languages[0]).lower() if languages else ""
         if not re.fullmatch(r"[a-z]{2,3}",lang):lang="und"
+        logo=logos_by_url.get(r["url"],"")
+        if not (logo.startswith("https://") and len(logo)<500 and not SENSITIVE.search(logo)):
+            logo=""
         row={"name":r["title"][:190],"url":r["url"],"channel_id":r["id"][:120],
-             "country":c,"lang":lang,"group":r["group"][:80],"status":"manifest_ok"}
+             "country":c,"lang":lang,"group":r["group"][:80],"status":"manifest_ok","logo":logo}
         output.append(row)
         print("KIDS_OK_JSON "+json.dumps(row,ensure_ascii=False,separators=(",",":")),flush=True)
     report={"checked_at":datetime.now(timezone.utc).isoformat(),"source":PLAYLIST,
