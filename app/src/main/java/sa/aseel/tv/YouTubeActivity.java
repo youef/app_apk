@@ -4,78 +4,137 @@ import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.os.Build;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.Gravity;
-import android.webkit.WebChromeClient;
 import android.webkit.WebView;
-import android.webkit.WebViewClient;
 import android.webkit.WebSettings;
+import android.webkit.WebViewClient;
+import android.webkit.WebChromeClient;
 import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
-import android.os.Build;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.util.ArrayList;
+import java.util.HashSet;
 
 /**
- * First-party HTTPS hosted YouTube iframe page. Remains inside the application;
- * uses the official player and does not extract audiovisual streams.
- * Stock KitKat WebView may be incompatible with modern YouTube HTML5.
+ * Al Ezz in-app clips viewer for Android API19+.
+ * All audiovisual playback uses the official YouTube IFrame API.
+ * Never extract direct streams, remove player controls/attribution, or cover the player.
  */
 public final class YouTubeActivity extends Activity {
+    private static final int WHITE=0xFFF9F9FA, MUTED=0xFFBBB7C1, ACCENT=0xFFE52B4E;
+    private final ArrayList<JSONObject> queue=new ArrayList<JSONObject>();
     private WebView web;
-    private FrameLayout root,videoArea;
-    private TextView status;
+    private FrameLayout videoArea,root;
+    private LinearLayout recommendations,body;
+    private TextView title,status,queueStatus;
+    private Button recommendButton,backButton;
     private View fullScreenView;
     private WebChromeClient.CustomViewCallback fullScreenCallback;
+    private int current=0;
+    private boolean recommendationsOpen=false, playerReady=false;
+    private float touchX=0,touchY=0;
+
     private int dp(int i){return Math.round(getResources().getDisplayMetrics().density*i);}
-    @Override public void onCreate(Bundle savedInstanceState){
-        super.onCreate(savedInstanceState);
+    private String field(JSONObject x,String key){return x==null?"":x.optString(key,"");}
+    private String currentId(){return field(queue.get(current),"video_id");}
+    private TextView text(String value,int size,int color,boolean bold){
+        TextView t=new TextView(this);t.setText(value);t.setTextColor(color);t.setTextSize(size);
+        t.setGravity(Gravity.CENTER_VERTICAL);t.setSingleLine(true);
+        if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+        return t;
+    }
+    private GradientDrawable bg(int color,int border){
+        GradientDrawable g=new GradientDrawable();g.setColor(color);
+        g.setCornerRadius(dp(12));if(border!=0)g.setStroke(dp(1),border);
+        return g;
+    }
+    private Button action(String label){
+        Button b=new Button(this);b.setText(label);b.setTextSize(14);
+        b.setTextColor(WHITE);b.setAllCaps(false);
+        b.setBackgroundDrawable(bg(0xFF30232D,0xFF604657));b.setFocusable(true);
+        b.setOnFocusChangeListener(new View.OnFocusChangeListener(){
+            public void onFocusChange(View v,boolean focused){
+                v.setBackgroundDrawable(bg(focused?0xFFB7193C:0xFF30232D,
+                    focused?0xFFFFB2C2:0xFF604657));
+                v.setScaleX(focused?1.035f:1f);v.setScaleY(focused?1.035f:1f);
+            }
+        });
+        return b;
+    }
+    private void parseQueue(Bundle extras){
+        String value=extras==null?"":extras.getString("playlist_json","[]");
+        HashSet<String> seen=new HashSet<String>();
+        try{
+            JSONArray entries=new JSONArray(value);
+            for(int i=0;i<entries.length()&&queue.size()<120;i++){
+                JSONObject x=entries.optJSONObject(i);
+                if(x==null)continue;
+                String id=x.optString("video_id","");
+                if(!id.matches("[A-Za-z0-9_-]{11}")||!seen.add(id))continue;
+                queue.add(x);
+            }
+        }catch(Exception ignored){}
+        String start=extras==null?"":extras.getString("start_video_id","");
+        if(!start.matches("[A-Za-z0-9_-]{11}"))
+            start=YouTubeLink.videoId(getIntent().getStringExtra("youtube_url"));
+        if(start!=null&&start.matches("[A-Za-z0-9_-]{11}")){
+            boolean found=false;
+            for(int i=0;i<queue.size();i++)if(start.equals(field(queue.get(i),"video_id"))){
+                current=i;found=true;break;
+            }
+            if(!found){
+                JSONObject one=new JSONObject();
+                try{
+                    one.put("video_id",start);
+                    one.put("title",getIntent().getStringExtra("title"));
+                    one.put("channel","العز TV");
+                    one.put("topic","other");
+                    queue.add(0,one);
+                }catch(Exception ignored){}
+                current=0;
+            }
+        }
+    }
+    @Override public void onCreate(Bundle saved){
+        super.onCreate(saved);
         getWindow().getDecorView().setSystemUiVisibility(
             View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
-        final String id=YouTubeLink.videoId(getIntent().getStringExtra("youtube_url"));
-        if(id==null){finish();return;}
-        // The stock Android 4.4 WebView cannot reliably run modern YouTube iframe JavaScript.
-        // When a native YouTube TV/phone app is installed, prefer the official player.
-        if(Build.VERSION.SDK_INT<=19 && openOfficialVideo(id)){
-            finish();
-            return;
-        }
+        parseQueue(getIntent().getExtras());
+        if(queue.isEmpty()){finish();return;}
         root=new FrameLayout(this);root.setBackgroundColor(Color.BLACK);
-        LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);
+        body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);
+        body.setBackgroundColor(0xFF09090C);
         root.addView(body,new FrameLayout.LayoutParams(-1,-1));
-        LinearLayout toolbar=new LinearLayout(this);
-        toolbar.setGravity(Gravity.CENTER_VERTICAL);
-        toolbar.setPadding(dp(20),dp(3),dp(20),dp(3));
-        toolbar.setBackgroundColor(0xFF151518);
-        body.addView(toolbar,new LinearLayout.LayoutParams(-1,dp(53)));
-        Button back=new Button(this);back.setText("رجوع ❯");back.setTextSize(14);back.setAllCaps(false);
-        back.setTextColor(Color.WHITE);back.setBackgroundColor(0xFF3A2736);
-        toolbar.addView(back,new LinearLayout.LayoutParams(dp(105),dp(44)));
-        back.setOnClickListener(new View.OnClickListener(){public void onClick(View v){finish();}});
-        TextView title=new TextView(this);title.setText(getIntent().getStringExtra("title"));
-        title.setTextColor(0xFFF5F6FC);title.setTextSize(18);title.setSingleLine(true);
-        title.setGravity(Gravity.CENTER_VERTICAL|Gravity.RIGHT);title.setPadding(dp(12),0,dp(8),0);
-        toolbar.addView(title,new LinearLayout.LayoutParams(0,-1,1));
-        TextView badge=new TextView(this);badge.setText("YouTube  ▶");
-        badge.setTextColor(0xFFFF6172);badge.setTextSize(14);badge.setGravity(Gravity.CENTER);
-        toolbar.addView(badge,new LinearLayout.LayoutParams(dp(118),-1));
-        Button external=new Button(this);
-        external.setText("↗  YouTube الرسمي");external.setTextSize(13);external.setAllCaps(false);
-        external.setTextColor(Color.WHITE);external.setBackgroundColor(0xFFB30B2F);
-        LinearLayout.LayoutParams externalParams=new LinearLayout.LayoutParams(dp(190),dp(44));
-        externalParams.setMargins(dp(8),0,0,0);
-        toolbar.addView(external,externalParams);
-        external.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-            if(!openOfficialVideo(id)){
-                status.setVisibility(View.VISIBLE);
-                status.setText("لم نجد تطبيق YouTube أو متصفحًا متوافقًا. قد يلزم تحديث النظام أو تطبيق YouTube.");
-            }
-        }});
+
+        LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setPadding(dp(13),0,dp(13),0);header.setBackgroundColor(0xFF171318);
+        body.addView(header,new LinearLayout.LayoutParams(-1,dp(54)));
+        backButton=action("رجوع  ❯");
+        header.addView(backButton,new LinearLayout.LayoutParams(dp(103),dp(44)));
+        backButton.setOnClickListener(new View.OnClickListener(){
+            public void onClick(View v){finish();}
+        });
+        title=text("",18,WHITE,true);title.setGravity(Gravity.CENTER_VERTICAL|Gravity.RIGHT);
+        title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        title.setPadding(dp(15),0,dp(12),0);
+        header.addView(title,new LinearLayout.LayoutParams(0,-1,1));
+        TextView brand=text("◈  العز TV",15,ACCENT,true);
+        header.addView(brand,new LinearLayout.LayoutParams(-2,-1));
+
         videoArea=new FrameLayout(this);
         body.addView(videoArea,new LinearLayout.LayoutParams(-1,0,1));
         web=new WebView(this);web.setBackgroundColor(Color.BLACK);
@@ -84,111 +143,206 @@ public final class YouTubeActivity extends Activity {
         WebSettings settings=web.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
-        settings.setMediaPlaybackRequiresUserGesture(true);
-        settings.setSupportMultipleWindows(false);
+        settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
+        settings.setSupportMultipleWindows(false);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
-        settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
+        settings.setLoadWithOverviewMode(true);
+        web.setOnTouchListener(new View.OnTouchListener(){
+            public boolean onTouch(View v,MotionEvent e){
+                if(e.getAction()==MotionEvent.ACTION_DOWN){
+                    touchX=e.getX();touchY=e.getY();
+                }else if(e.getAction()==MotionEvent.ACTION_UP){
+                    float dy=e.getY()-touchY, dx=Math.abs(e.getX()-touchX);
+                    if(dy < -dp(70) && -dy > dx*1.3f){
+                        showRecommendations();return true;
+                    }
+                }
+                return false;
+            }
+        });
         web.setWebViewClient(new WebViewClient(){
             @Override public boolean shouldOverrideUrlLoading(WebView view,String url){
-                // Only the first-party embedded watch page and official YouTube embed may navigate.
-                if(url.startsWith("https://youef.github.io/app_apk/youtube-player.html")||
-                   url.startsWith("https://www.youtube.com/embed/")||
-                   url.startsWith("https://www.youtube-nocookie.com/embed/"))return false;
-                status.setText("تم منع الانتقال إلى صفحة خارج المشغّل. اضغط رجوع للعودة إلى العز TV.");
-                status.setVisibility(View.VISIBLE);
+                if(url==null)return false;
+                if(url.startsWith("alezzvideo://ended")){
+                    runOnUiThread(new Runnable(){public void run(){nextVideo();}});
+                    return true;
+                }
+                if(url.startsWith("alezzvideo://blocked")){
+                    status.setText("اضغط تشغيل داخل الفيديو. قد يمنع الجهاز التشغيل التلقائي.");
+                    return true;
+                }
+                if(url.startsWith("alezzvideo://error")){
+                    status.setText("تعذر تشغيل هذا الفيديو داخل الجهاز. قد يكون التضمين مقيدًا أو WebView قديمًا.");
+                    return true;
+                }
+                if(url.startsWith("https://www.youtube.com/embed/")||
+                    url.startsWith("https://www.youtube-nocookie.com/embed/")||
+                    url.startsWith("about:blank"))return false;
+                // User-selected links inside the official player retain their ordinary behavior.
+                if(url.startsWith("https://www.youtube.com/")||
+                   url.startsWith("https://m.youtube.com/")||
+                   url.startsWith("https://youtu.be/")){
+                    try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url)));}
+                    catch(Exception e){status.setText("تعذر فتح رابط الفيديو على هذا الجهاز.");}
+                    return true;
+                }
                 return true;
             }
             @Override public void onReceivedError(WebView view,int errorCode,String description,String url){
-                if(url.startsWith("https://youef.github.io/")){
-                    status.setText("تعذر تحميل مشغل YouTube: تحقق من HTTPS والإنترنت وساعة الشاشة.");
-                    status.setVisibility(View.VISIBLE);
-                }
+                status.setText("تعذر تحميل الفيديو، تحقق من الشبكة ووقت الجهاز وتوافق المتصفح.");
             }
         });
         web.setWebChromeClient(new WebChromeClient(){
-            @Override public void onShowCustomView(View view,CustomViewCallback callback){
+            @Override public void onShowCustomView(View v,CustomViewCallback callback){
                 if(fullScreenView!=null){callback.onCustomViewHidden();return;}
-                fullScreenView=view;fullScreenCallback=callback;
-                videoArea.addView(view,new FrameLayout.LayoutParams(-1,-1));
+                hideRecommendations();
+                fullScreenView=v;fullScreenCallback=callback;
+                videoArea.addView(v,new FrameLayout.LayoutParams(-1,-1));
                 web.setVisibility(View.INVISIBLE);
             }
             @Override public void onHideCustomView(){hideFullScreen();}
         });
-        status=new TextView(this);status.setTextColor(0xFFFFD0D3);status.setTextSize(13);
-        status.setGravity(Gravity.CENTER);status.setPadding(dp(15),dp(7),dp(15),dp(7));
-        status.setBackgroundColor(0xFF241A24);
-        status.setText("مشغل YouTube الرسمي. إذا كانت الشاشة قديمة ولم يعمل الفيديو، استخدم زر «YouTube الرسمي».");
-        body.addView(status,new LinearLayout.LayoutParams(-1,dp(43)));
+        LinearLayout controlBar=new LinearLayout(this);
+        controlBar.setGravity(Gravity.CENTER_VERTICAL);
+        controlBar.setPadding(dp(16),dp(4),dp(16),dp(4));
+        controlBar.setBackgroundColor(0xFF171318);
+        body.addView(controlBar,new LinearLayout.LayoutParams(-1,dp(58)));
+        recommendButton=action("↑  المقاطع المقترحة");
+        controlBar.addView(recommendButton,new LinearLayout.LayoutParams(dp(198),dp(49)));
+        recommendButton.setOnClickListener(new View.OnClickListener(){
+            public void onClick(View v){if(recommendationsOpen)hideRecommendations();else showRecommendations();}
+        });
+        Button next=action("التالي  ▶");
+        LinearLayout.LayoutParams np=new LinearLayout.LayoutParams(dp(135),dp(49));
+        np.setMargins(dp(10),0,0,0);controlBar.addView(next,np);
+        next.setOnClickListener(new View.OnClickListener(){public void onClick(View v){nextVideo();}});
+        queueStatus=text("",13,MUTED,false);queueStatus.setGravity(Gravity.CENTER_VERTICAL);
+        queueStatus.setPadding(dp(12),0,0,0);
+        controlBar.addView(queueStatus,new LinearLayout.LayoutParams(0,-1,1));
+
+        recommendations=new LinearLayout(this);
+        recommendations.setOrientation(LinearLayout.VERTICAL);
+        recommendations.setBackgroundColor(0xFF141418);
+        recommendations.setVisibility(View.GONE);
+        body.addView(recommendations,new LinearLayout.LayoutParams(-1,dp(110)));
+        status=text("",12,0xFFE6BBC7,false);
+        status.setGravity(Gravity.CENTER);
+        status.setBackgroundColor(0xFF251B25);
+        status.setSingleLine(false);
+        body.addView(status,new LinearLayout.LayoutParams(-1,dp(27)));
         setContentView(root);
-        // Generate a small player locally: no GitHub Pages 404 or missing HTML asset.
-        // Use an HTTPS origin so YouTube's official IFrame API can resolve correctly.
-        loadBundledPlayer(id);
-        back.requestFocus();
+        updateCurrentUi();
+        loadInternalPlayer(currentId());
+        backButton.requestFocus();
     }
-    private boolean openOfficialVideo(String id){
-        Uri target=Uri.parse("https://www.youtube.com/watch?v="+id);
-        for(String pkg:new String[]{"com.google.android.youtube.tv","com.google.android.youtube"}){
-            try{
-                Intent external=new Intent(Intent.ACTION_VIEW,target);
-                external.setPackage(pkg);
-                if(external.resolveActivity(getPackageManager())!=null){
-                    startActivity(external);
-                    return true;
-                }
-            }catch(Exception ignored){}
+    private void updateCurrentUi(){
+        JSONObject item=queue.get(current);
+        String label=field(item,"title");
+        title.setText(label.length()>0?label:"مقطع من العز TV");
+        queueStatus.setText((current+1)+" / "+queue.size()+"   •   التالي تلقائيًا");
+        status.setText("تشغيل داخل العز TV • اسحب للأعلى للمقترحات");
+    }
+    private void playAt(int index){
+        if(queue.isEmpty())return;
+        current=(index+queue.size())%queue.size();
+        updateCurrentUi();
+        hideRecommendations();
+        String id=currentId();
+        if(web!=null && playerReady){
+            web.loadUrl("javascript:window.alEzzPlayer&&window.alEzzPlayer.loadVideo('"+id+"')");
+        }else{
+            loadInternalPlayer(id);
         }
-        try{
-            Intent browser=new Intent(Intent.ACTION_VIEW,target);
-            if(browser.resolveActivity(getPackageManager())!=null){
-                startActivity(browser);
-                return true;
-            }
-        }catch(Exception ignored){}
-        return false;
     }
-    /** In-memory first-party player: never fetch a missing GitHub Pages HTML route. */
-    private void loadBundledPlayer(String id){
-        // id is validated by YouTubeLink.videoId() before reaching this method.
-        StringBuilder html=new StringBuilder(3700);
-        html.append("<!doctype html><html lang='ar' dir='rtl'><head><meta charset='UTF-8'>");
-        html.append("<meta name='viewport' content='width=device-width,initial-scale=1'>");
-        html.append("<style>html,body{margin:0;height:100%;background:#09090c;color:white;font-family:Arial,sans-serif}");
-        html.append("main{height:100%;display:flex;flex-direction:column}#player{flex:1;min-height:200px}");
-        html.append("nav{display:flex;gap:12px;justify-content:center;background:#16161a;padding:10px}");
-        html.append("button{color:#fff;background:#29292e;border:1px solid #555;padding:12px 19px;font-size:16px}");
-        html.append("button:focus{background:#bb163b;outline:2px solid #fff}");
-        html.append("#state{background:#16161a;color:#ccc;padding:7px;text-align:center;font-size:12px}</style></head>");
-        html.append("<body><main><div id='player'></div><nav>");
-        html.append("<button id='play'>▶ تشغيل</button><button id='pause'>⏸ إيقاف</button>");
-        html.append("<button id='back'>−10 ثوانٍ</button><button id='forward'>+10 ثوانٍ</button></nav>");
-        html.append("<div id='state'>يتم تحميل مشغّل YouTube الرسمي. استخدم الريموت.</div></main>");
-        html.append("<script>(function(){var p=null,ready=false;");
-        html.append("var note=function(t){document.getElementById('state').textContent=t;};");
-        html.append("window.alEzzPlayer={playVideo:function(){if(ready)p.playVideo();},");
-        html.append("pauseVideo:function(){if(ready)p.pauseVideo();},");
-        html.append("toggleVideo:function(){if(ready){if(p.getPlayerState()==1)p.pauseVideo();else p.playVideo();}},");
-        html.append("seek:function(s){if(ready)p.seekTo(Math.max(0,p.getCurrentTime()+s),true);}};");
-        html.append("document.getElementById('play').onclick=window.alEzzPlayer.playVideo;");
-        html.append("document.getElementById('pause').onclick=window.alEzzPlayer.pauseVideo;");
-        html.append("document.getElementById('back').onclick=function(){window.alEzzPlayer.seek(-10);};");
-        html.append("document.getElementById('forward').onclick=function(){window.alEzzPlayer.seek(10);};");
-        html.append("window.onYouTubeIframeAPIReady=function(){try{p=new YT.Player('player',{");
-        html.append("videoId:'").append(id).append("',width:'100%',height:'100%',");
-        html.append("playerVars:{controls:1,playsinline:1,enablejsapi:1,origin:'https://youef.github.io'},");
-        html.append("events:{onReady:function(){ready=true;note('المشغل جاهز. اضغط تشغيل.');},");
-        html.append("onError:function(e){note('تعذر التضمين أو توافق الجهاز (رمز '+e.data+'). افتح YouTube الرسمي من الأعلى.');}}");
-        html.append("});}catch(e){note('متصفح التلفزيون لا يدعم YouTube الحديث. استخدم التطبيق الرسمي.');}};");
-        html.append("var script=document.createElement('script');script.src='https://www.youtube.com/iframe_api';");
-        html.append("script.onerror=function(){note('تعذر الاتصال بواجهة YouTube. استخدم التطبيق الرسمي.');};");
-        html.append("document.head.appendChild(script);");
-        html.append("setTimeout(function(){if(!ready)note('المشغل غير جاهز. قد يحتاج Android القديم تطبيق YouTube الرسمي.');},18000);");
-        html.append("})();</script></body></html>");
-        web.loadDataWithBaseURL("https://youef.github.io/app_apk/web/youtube-player.html?v="+id,
-            html.toString(),"text/html","UTF-8",null);
+    private void nextVideo(){
+        if(queue.size()>1)playAt((current+1)%queue.size());
+        else status.setText("هذا آخر مقطع متاح.");
+    }
+    private void showRecommendations(){
+        if(recommendationsOpen||queue.size()<2)return;
+        recommendationsOpen=true;
+        recommendations.setVisibility(View.VISIBLE);
+        recommendButton.setText("↓  إخفاء المقترحات");
+        buildRecommendations();
+    }
+    private void hideRecommendations(){
+        if(!recommendationsOpen)return;
+        recommendationsOpen=false;
+        recommendations.setVisibility(View.GONE);
+        recommendButton.setText("↑  المقاطع المقترحة");
+    }
+    private void buildRecommendations(){
+        recommendations.removeAllViews();
+        TextView heading=text("مقاطع مقترحة لك  •  اضغط OK للتشغيل",15,WHITE,true);
+        heading.setPadding(dp(20),dp(6),dp(20),dp(3));
+        recommendations.addView(heading,new LinearLayout.LayoutParams(-1,dp(36)));
+        ScrollView scroll=new ScrollView(this);
+        scroll.setFillViewport(false);
+        recommendations.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        LinearLayout items=new LinearLayout(this);items.setOrientation(LinearLayout.VERTICAL);
+        scroll.addView(items);
+        final String currentTopic=field(queue.get(current),"topic");
+        ArrayList<Integer> order=new ArrayList<Integer>();
+        for(int i=0;i<queue.size();i++)if(i!=current && currentTopic.equals(field(queue.get(i),"topic")))order.add(i);
+        for(int i=0;i<queue.size();i++)if(i!=current&&!order.contains(i))order.add(i);
+        for(int p=0;p<order.size() && p<30;p++){
+            final int index=order.get(p);
+            JSONObject item=queue.get(index);
+            LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(10),dp(5),dp(12),dp(5));
+            row.setBackgroundDrawable(bg(0xFF1D1B20,0xFF3A343B));
+            LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,dp(78));
+            rp.setMargins(dp(12),dp(3),dp(12),dp(3));items.addView(row,rp);
+            ImageView poster=new ImageView(this);poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            row.addView(poster,new LinearLayout.LayoutParams(dp(118),dp(68)));
+            PosterLoader.load(poster,"https://i.ytimg.com/vi/"+field(item,"video_id")+"/hqdefault.jpg");
+            LinearLayout details=new LinearLayout(this);details.setOrientation(LinearLayout.VERTICAL);
+            details.setPadding(dp(15),0,dp(6),0);
+            row.addView(details,new LinearLayout.LayoutParams(0,-2,1));
+            String label=field(item,"title");
+            TextView name=text(label.length()>0?label:"مقطع",16,WHITE,true);
+            name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            details.addView(name);
+            TextView by=text(field(item,"channel"),12,MUTED,false);
+            details.addView(by);
+            Button play=action("▶  تشغيل");
+            row.addView(play,new LinearLayout.LayoutParams(dp(118),dp(48)));
+            play.setOnClickListener(new View.OnClickListener(){
+                public void onClick(View v){playAt(index);}
+            });
+        }
+    }
+    /** First-party wrapper around the *official* YouTube IFrame Player API.
+      * It does not proxy, extract, restream or hide official playback controls. */
+    private void loadInternalPlayer(String id){
+        playerReady=false;
+        StringBuilder h=new StringBuilder(3000);
+        h.append("<!doctype html><html><head><meta charset='utf-8'>");
+        h.append("<meta name='viewport' content='width=device-width,initial-scale=1'>");
+        h.append("<style>html,body,#player{margin:0;width:100%;height:100%;background:#000;overflow:hidden}</style>");
+        h.append("</head><body><div id='player'></div><script>(function(){var p=null;");
+        h.append("window.alEzzPlayer={loadVideo:function(id){if(p&&/^[A-Za-z0-9_-]{11}$/.test(id))p.loadVideoById(id);},");
+        h.append("playVideo:function(){if(p)p.playVideo();},pauseVideo:function(){if(p)p.pauseVideo();},");
+        h.append("toggleVideo:function(){if(p){if(p.getPlayerState()===1)p.pauseVideo();else p.playVideo();}},");
+        h.append("seek:function(t){if(p)p.seekTo(Math.max(0,p.getCurrentTime()+t),true);}};");
+        h.append("window.onYouTubeIframeAPIReady=function(){try{p=new YT.Player('player',{width:'100%',height:'100%',");
+        h.append("videoId:'").append(id).append("',playerVars:{autoplay:1,controls:1,playsinline:1,");
+        h.append("enablejsapi:1,origin:'https://youef.github.io'},events:{");
+        h.append("onReady:function(e){e.target.playVideo();},");
+        h.append("onStateChange:function(e){if(e.data===0)location.href='alezzvideo://ended';},");
+        h.append("onError:function(e){location.href='alezzvideo://error/'+e.data;},");
+        h.append("onAutoplayBlocked:function(){location.href='alezzvideo://blocked';}");
+        h.append("}});}catch(e){location.href='alezzvideo://error/init';}};");
+        h.append("var j=document.createElement('script');j.src='https://www.youtube.com/iframe_api';");
+        h.append("j.onerror=function(){location.href='alezzvideo://error/load';};");
+        h.append("document.head.appendChild(j);})();</script></body></html>");
+        web.loadDataWithBaseURL("https://youef.github.io/app_apk/web/youtube-player.html",
+            h.toString(),"text/html","UTF-8",null);
+        playerReady=true;
     }
     private void hideFullScreen(){
         if(fullScreenView!=null){
@@ -197,34 +351,38 @@ public final class YouTubeActivity extends Activity {
             if(fullScreenCallback!=null){fullScreenCallback.onCustomViewHidden();fullScreenCallback=null;}
         }
     }
-    @Override public boolean onKeyDown(int code,KeyEvent event){
-        if(code==KeyEvent.KEYCODE_BACK&&fullScreenView!=null){hideFullScreen();return true;}
-        if(code==KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE||code==KeyEvent.KEYCODE_MEDIA_PLAY||
-           code==KeyEvent.KEYCODE_MEDIA_PAUSE){
-            if(web!=null){
-                final String action=code==KeyEvent.KEYCODE_MEDIA_PLAY?"playVideo":
-                    code==KeyEvent.KEYCODE_MEDIA_PAUSE?"pauseVideo":"toggleVideo";
-                web.loadUrl("javascript:window.alEzzPlayer&&window.alEzzPlayer."+action+"()");
-                return true;
+    @Override public boolean dispatchKeyEvent(KeyEvent e){
+        if(e.getAction()==KeyEvent.ACTION_DOWN){
+            if(e.getKeyCode()==KeyEvent.KEYCODE_DPAD_UP&&!recommendationsOpen){
+                showRecommendations();return true;
+            }
+            if(e.getKeyCode()==KeyEvent.KEYCODE_BACK&&recommendationsOpen){
+                hideRecommendations();return true;
+            }
+            if(e.getKeyCode()==KeyEvent.KEYCODE_MEDIA_NEXT){
+                nextVideo();return true;
+            }
+            if(e.getKeyCode()==KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE||
+               e.getKeyCode()==KeyEvent.KEYCODE_MEDIA_PLAY||
+               e.getKeyCode()==KeyEvent.KEYCODE_MEDIA_PAUSE){
+                if(web!=null){
+                    String cmd=e.getKeyCode()==KeyEvent.KEYCODE_MEDIA_PLAY?"playVideo":
+                        e.getKeyCode()==KeyEvent.KEYCODE_MEDIA_PAUSE?"pauseVideo":"toggleVideo";
+                    web.loadUrl("javascript:window.alEzzPlayer&&window.alEzzPlayer."+cmd+"()");
+                    return true;
+                }
             }
         }
-        return super.onKeyDown(code,event);
+        return super.dispatchKeyEvent(e);
     }
-    @Override protected void onPause(){if(web!=null)web.onPause();super.onPause();}
-    @Override protected void onStop(){
-        super.onStop();
-        // A background/recents return must re-enter the PIN gate in MainActivity.
-        if(!isFinishing()&&!isChangingConfigurations())finish();
+    @Override protected void onPause(){
+        if(web!=null){web.loadUrl("javascript:window.alEzzPlayer&&window.alEzzPlayer.pauseVideo()");web.onPause();}
+        super.onPause();
     }
     @Override protected void onResume(){super.onResume();if(web!=null)web.onResume();}
     @Override protected void onDestroy(){
         hideFullScreen();
-        if(web!=null){
-            web.loadUrl("about:blank");
-            web.stopLoading();
-            videoArea.removeView(web);
-            web.destroy();web=null;
-        }
+        if(web!=null){web.loadUrl("about:blank");web.stopLoading();videoArea.removeView(web);web.destroy();web=null;}
         super.onDestroy();
     }
 }
