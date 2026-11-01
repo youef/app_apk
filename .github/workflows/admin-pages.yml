@@ -7,6 +7,8 @@ on:
       - "admin/**"
       - "tests/**"
       - "supabase/functions/aseel-inspect-media/**"
+      - "supabase/functions/aseel-link-health/**"
+      - "supabase/migrations/**"
       - ".github/workflows/admin-pages.yml"
   workflow_dispatch:
 
@@ -42,6 +44,7 @@ jobs:
           node tests/studio-smoke.cjs
           node tests/channel-catalog-smoke.cjs
           node tests/live-page-smoke.cjs
+          node tests/link-health-smoke.cjs
           node tests/youtube-catalog-smoke.cjs
       - name: Verify branch-published website assets
         run: |
