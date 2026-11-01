@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
       String[] paths={"/system/bin/su","/system/xbin/su","/sbin/su","/su/bin/su"};
       for(String s:paths)if(new File(s).exists())mark=true;
       if(Build.TAGS!=null&&Build.TAGS.contains("test-keys"))mark=true;
-      Process p=null;
+      java.lang.Process p=null;
       try{p=new ProcessBuilder("su","-c","id").redirectErrorStream(true).start();
         long until=System.currentTimeMillis()+4500;
         while(System.currentTimeMillis()<until){try{int code=p.exitValue();
