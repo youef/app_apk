@@ -181,6 +181,18 @@
      apply(rows[0]);msg("تم فتح السجل. يمكنك التعديل أو الإخفاء أو النشر.");$("importStudio").scrollIntoView({behavior:"smooth",block:"start"});
    }catch(e){msg(e.message,true)}
  }
+ async function ensureHls(){
+   if(window.Hls)return true;
+   return new Promise(resolve=>{
+     const script=document.createElement("script");
+     script.src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js";
+     let done=false;
+     const finish=ok=>{if(done)return;done=true;resolve(ok);};
+     script.onload=()=>finish(Boolean(window.Hls));script.onerror=()=>finish(false);
+     document.head.append(script);
+     setTimeout(()=>finish(Boolean(window.Hls)),10000);
+   });
+ }
  async function testPlayback(){
    clearPlayer();
    const stream=$("impStream").value.trim(),youtube=$("impYouTube").value.trim();
@@ -198,12 +210,12 @@
    video.addEventListener("canplay",mark,{once:true});
    video.addEventListener("error",()=>status("تعذر تشغيل الرابط في المتصفح الحالي؛ تحقق من الصلاحية أو النوع أو CORS."),{once:true});
    if(/\.m3u8(?:[?#]|$)/i.test(stream)){
-     if(window.Hls?.isSupported()){
+     if(video.canPlayType("application/vnd.apple.mpegurl"))video.src=stream;
+     else if((await ensureHls())&&window.Hls?.isSupported()){
        hls=new window.Hls({enableWorker:true});
        hls.loadSource(stream);hls.attachMedia(video);
        hls.on(window.Hls.Events.ERROR,(_,data)=>{if(data.fatal)status("فشل اختبار HLS: "+data.details);});
-     }else if(video.canPlayType("application/vnd.apple.mpegurl"))video.src=stream;
-     else status("هذه النسخة من المتصفح لا تدعم HLS. جرّب جهاز آخر أو رابط MP4.");
+     }else status("تعذر تحميل مشغل HLS أو المتصفح لا يدعمه. جرب ملف MP4 أو متصفحًا آخر.");
    }else video.src=stream;
    video.load();
    const promise=video.play();if(promise?.catch)promise.catch(()=>{status("شغّل الفيديو من الزر داخل المشغّل للتحقق من التشغيل.");});
@@ -288,7 +300,7 @@
    $("impCopy").onclick=copy;$("impReload").onclick=()=>listSaved().catch(e=>msg(e.message,true));
    $("impSearch").oninput=renderSaved;
    $("impReset").onclick=reset;
-   $("impDuplicate").onclick=()=>{currentId=null;val("source_page_url","");$("impEditing").textContent="نسخة جديدة غير محفوظة";msg("نسخة جديدة جاهزة. اختر رابط مصدر مختلفًا لتجنب التكرار.");updatePreview();};
+   $("impDuplicate").onclick=()=>{currentId=null;val("source_page_url","");val("rights_status","pending");$("impRightsConfirmed").checked=false;$("impEditing").textContent="نسخة جديدة غير محفوظة";msg("نسخة جديدة جاهزة. اختر رابط مصدر مختلفًا لتجنب التكرار.");updatePreview();};
    $("impOpenStream").onclick=()=>{const v=vals();const link=v.stream_url||v.youtube_url||v.source_page_url;if(!link||!urlOk(link))return msg("لا يوجد رابط HTTPS لفتحه",true);window.open(link,"_blank","noopener,noreferrer")};
    document.getElementById("logout")?.addEventListener("click",()=>{$("importStudio").hidden=true;clearPlayer();saved=[];found=[];currentId=null;});
    apply(null);
