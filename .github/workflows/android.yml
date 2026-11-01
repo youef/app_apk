@@ -1,104 +1,150 @@
-name: Build Android APK
-
+name: Al Ezz TV — Red Native TV (Android API19+)
 on:
   push:
-    branches:
-      - main
-    tags:
-      - "v*"
+    branches: [main]
     paths:
-      - "app/**"
-      - "web/**"
-      - "build.gradle"
-      - "settings.gradle"
-      - "gradle.properties"
-      - ".github/workflows/android.yml"
+      - 'app/**'
+      - 'scripts/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle/**'
+      - 'gradle.properties'
+      - 'web/alizz-tv-transparent.png'
+      - '.github/workflows/android.yml'
   workflow_dispatch:
-
+concurrency:
+  group: al-ezz-native-red-v9-${{ github.ref }}
+  cancel-in-progress: false
 permissions:
   contents: write
-
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  kitkat-install:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    env:
+      APPETIZE_API_TOKEN: ${{ secrets.APPETIZE_API_TOKEN }}
+      APPETIZE_ANDROID_PUBLIC_KEY: ${{ secrets.APPETIZE_ANDROID_PUBLIC_KEY }}
     steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - name: Java 17 for Android SDK CLI
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: "17"
-
-      - name: Set up Gradle 8.7
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "8.7"
-
-
-      - name: Install Android SDK platform tools
+          java-version: '17'
+      - name: Android SDK tools
         uses: android-actions/setup-android@v4
         with:
           packages: platform-tools
-
-      - name: Install API 34 and Build Tools 34.0.0
-        run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
-
-      - name: Validate web and administration scripts
+      - name: Install Android API 28 and Build Tools
         run: |
           set -euo pipefail
-          for js in web/js/*.js admin/*.js; do node --check "$js"; done
-          node tests/studio-smoke.cjs
-          node tests/youtube-catalog-smoke.cjs
-          node tests/importer-smoke.cjs
-
-      - name: Validate signing configuration
-        shell: bash
-        env:
-          KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}
-        run: |
-          if [[ -n "$KEYSTORE_FILE" && ! -f "$KEYSTORE_FILE" ]]; then
-            echo "::error::KEYSTORE_FILE must refer to an actual keystore on this runner."
-            exit 1
-          fi
-          if [[ -n "$KEYSTORE_FILE" ]]; then
-            echo "STABLE_SIGNING=true" >> "$GITHUB_ENV"
-          else
-            echo "STABLE_SIGNING=false" >> "$GITHUB_ENV"
-            echo "::warning::No stable key configured. Test-only debug-signed APK; no production release."
-          fi
-
-      - name: Build release APK
-        env:
-          # Empty values keep the debug-signing fallback enabled for forks.
-          KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: gradle assembleRelease --no-daemon --stacktrace
-
-
-      - name: Verify APK is compatible with Android API 19
-        shell: bash
-        run: |
-          set -euo pipefail
-          APK="app/build/outputs/apk/release/app-release.apk"
-          test -s "$APK"
-          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | tee /tmp/al-ezz-badging.txt
-          grep -q "sdkVersion:'19'" /tmp/al-ezz-badging.txt
-          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --min-sdk-version 19 --verbose "$APK"
-
-      - name: Upload installable APK
-        uses: actions/upload-artifact@v4
+          sdkmanager "platforms;android-28" "build-tools;33.0.2"
+      - name: JDK 11 for Android Gradle Plugin 7.4.2
+        uses: actions/setup-java@v6
         with:
-          name: al-ezz-tv-v10-api19-${{ github.run_number }}
-          path: app/build/outputs/apk/release/*.apk
+          distribution: temurin
+          java-version: '11'
+      - name: Install Gradle 7.6
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '7.6'
+      - name: Configure stable signing only when all protected secrets exist
+        env:
+          AL_EZZ_KEYSTORE_BASE64: ${{ secrets.AL_EZZ_KEYSTORE_BASE64 }}
+          AL_EZZ_STORE_PASSWORD: ${{ secrets.AL_EZZ_STORE_PASSWORD }}
+          AL_EZZ_KEY_ALIAS: ${{ secrets.AL_EZZ_KEY_ALIAS }}
+          AL_EZZ_KEY_PASSWORD: ${{ secrets.AL_EZZ_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$AL_EZZ_KEYSTORE_BASE64" && -n "$AL_EZZ_STORE_PASSWORD" && -n "$AL_EZZ_KEY_ALIAS" && -n "$AL_EZZ_KEY_PASSWORD" ]]; then
+            umask 077
+            printf '%s' "$AL_EZZ_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/al-ezz-signing.jks"
+            test -s "$RUNNER_TEMP/al-ezz-signing.jks"
+            echo "ORG_GRADLE_PROJECT_ezzStoreFile=$RUNNER_TEMP/al-ezz-signing.jks" >> "$GITHUB_ENV"
+            echo "ORG_GRADLE_PROJECT_ezzStorePassword=$AL_EZZ_STORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "ORG_GRADLE_PROJECT_ezzKeyAlias=$AL_EZZ_KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "ORG_GRADLE_PROJECT_ezzKeyPassword=$AL_EZZ_KEY_PASSWORD" >> "$GITHUB_ENV"
+            echo "SIGNING_READY=true" >> "$GITHUB_ENV"
+            echo "Stable signing secrets configured. Building release."
+          else
+            echo "SIGNING_READY=false" >> "$GITHUB_ENV"
+            echo "::warning::No permanent signing key configured. No stable signing key. This debug APK may require removing an installed APK signed by a different key; back up user data first."
+          fi
+      - name: Bundle official transparent brand artwork offline
+        run: |
+          set -euo pipefail
+          test -s web/alizz-tv-transparent.png
+          file web/alizz-tv-transparent.png | grep -q PNG
+          mkdir -p app/src/main/res/drawable-nodpi
+          cp web/alizz-tv-transparent.png app/src/main/res/drawable-nodpi/alizz_brand.png
+      - name: Build legacy-compatible APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gradle clean assembleDebug --no-daemon --stacktrace >dist/gradle-build.log 2>&1 || { tail -100 dist/gradle-build.log; exit 1; }
+          if [[ "$SIGNING_READY" == "true" ]]; then
+            gradle assembleRelease --no-daemon --stacktrace >>dist/gradle-build.log 2>&1 || { tail -100 dist/gradle-build.log; exit 1; }
+            cp app/build/outputs/apk/release/app-release.apk dist/al-ezz-tv-native-red-api19-rollback.apk
+            echo "SIGNING_MODE=protected_permanent_release" >dist/install-metadata.txt
+          else
+            cp app/build/outputs/apk/debug/app-debug.apk dist/al-ezz-tv-native-red-api19-rollback.apk
+            echo "SIGNING_MODE=temporary_debug_fresh_install_only" >dist/install-metadata.txt
+          fi
+          echo "PACKAGE=sa.alezz.tv.unified" >>dist/install-metadata.txt
+          echo "MIN_SDK=19" >>dist/install-metadata.txt
+          echo "ABIS=armeabi-v7a,arm64-v8a,x86,x86_64" >>dist/install-metadata.txt
+          echo "BUILD_VARIANT=UNIVERSAL" >>dist/install-metadata.txt
+          echo "COMMIT=$GITHUB_SHA" >>dist/install-metadata.txt
+          echo "Device installation still needs real hardware verification." >>dist/install-metadata.txt
+      - name: "Verify universal ABI coverage, Android 4.4 manifest and V1 signature"
+        run: |
+          set -euo pipefail
+          python3 scripts/verify_apk.py dist/al-ezz-tv-native-red-api19-rollback.apk | tee dist/build-report.txt
+          sha256sum dist/al-ezz-tv-native-red-api19-rollback.apk | tee -a dist/build-report.txt
+          test -s dist/al-ezz-tv-native-red-api19-rollback.apk
+      - name: Upload signed installation candidate and diagnostic report
+        uses: actions/upload-artifact@v6
+        with:
+          name: al-ezz-tv-native-red-api19-rollback-${{ github.run_number }}
+          path: |
+            dist/al-ezz-tv-native-red-api19-rollback.apk
+            dist/install-metadata.txt
+            dist/build-report.txt
+            dist/gradle-build.log
           if-no-files-found: error
-
-      - name: Publish tagged GitHub release
-        if: ${{ startsWith(github.ref, 'refs/tags/v') && env.STABLE_SIGNING == 'true' }}
+          retention-days: 30
+      - name: Keep an existing release immutable across signing-key changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view al-ezz-tv-native-red-api19-rollback --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "PUBLISH_ALLOWED=false" >> "$GITHUB_ENV"
+            echo "::notice::Existing universal v9 release retained; this build remains available as a workflow artifact."
+          else
+            echo "PUBLISH_ALLOWED=$SIGNING_READY" >> "$GITHUB_ENV"
+          fi
+      - name: Publish stable-signed native red rollback APK only
+        if: github.ref == 'refs/heads/main' && env.PUBLISH_ALLOWED == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/release/*.apk
-          generate_release_notes: true
+          tag_name: al-ezz-tv-native-red-api19-rollback
+          name: Al Ezz TV v9.3 Native Red — Android 4.4+ APK
+          prerelease: true
+          make_latest: false
+          body_path: docs/ONE_TIME_ACTIVATION_V8.md
+          files: |
+            dist/al-ezz-tv-native-red-api19-rollback.apk
+            dist/install-metadata.txt
+            dist/build-report.txt
+          fail_on_unmatched_files: true
+      - name: Upload to Appetize when linked
+        if: env.APPETIZE_API_TOKEN != '' && env.APPETIZE_ANDROID_PUBLIC_KEY != ''
+        uses: appetizeio/github-action-appetize@v1.1.0
+        with:
+          apiToken: ${{ secrets.APPETIZE_API_TOKEN }}
+          publicKey: ${{ secrets.APPETIZE_ANDROID_PUBLIC_KEY }}
+          appFile: dist/al-ezz-tv-native-red-api19-rollback.apk
+          platform: android

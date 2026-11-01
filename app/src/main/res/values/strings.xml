@@ -1,14 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">العز TV</string>
-    <string name="player_loading">جارٍ التحميل…</string>
-    <string name="player_live">مباشر</string>
-    <string name="player_hint">◀ ▶ تقديم/ترجيع · OK تشغيل/إيقاف · BACK خروج</string>
-    <string name="player_error">تعذّر تشغيل هذا المصدر.\nقد يكون الرابط غير متاح أو الترميز غير مدعوم.\nBACK للخروج</string>
-    <string name="no_stream">لا يوجد مصدر تشغيل متاح.</string>
-    <string name="player_unavailable">تعذّر فتح المشغّل.</string>
-    <string name="youtube_unavailable">تعذّر فتح يوتيوب على هذا الجهاز.</string>
-    <string name="external_unavailable">تعذّر فتح الرابط في المتصفح.</string>
-    <string name="play">تشغيل</string>
-    <string name="pause">إيقاف مؤقت</string>
+    <string name="app_name">العز TV | أفلام ومسلسلات وقنوات</string>
 </resources>
