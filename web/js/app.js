@@ -738,7 +738,7 @@
   /* spatial navigation for D-pad / arrow keys */
   function spatialMove(direction) {
     var focusables = Array.prototype.slice.call(
-      document.querySelectorAll(".card, .btn, .nav__link, .filter, .iconbtn, .section__more, .ep")
+      document.querySelectorAll(".card, .btn, .nav__link, .filter, .iconbtn, .section__more, .ep, .live-guide__item, .live-chip, .live-control, .live-outline, .live-start")
     ).filter(function (el) {
       var r = el.getBoundingClientRect();
       return r.width > 4 && r.height > 4 && r.bottom > 0 && r.top < window.innerHeight;
@@ -934,6 +934,9 @@
       if (openSearchPanel) return;
       if (document.activeElement.tagName === "INPUT") return;
 
+      if (document.activeElement && document.activeElement.closest &&
+          document.activeElement.closest("#liveGuideItems") &&
+          (e.key === "ArrowDown" || e.key === "ArrowUp")) return;
       if (e.key === "ArrowRight" || e.key === "ArrowLeft" || e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
         spatialMove(e.key.replace("Arrow", "").toLowerCase());
