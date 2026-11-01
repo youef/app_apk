@@ -363,7 +363,7 @@
       '<button type="button" class="live-outline" id="liveRefresh">' + icon("refresh") + ' تحديث القنوات</button></div></div>' +
       '<div class="live-layout"><div class="live-viewer">' +
       '<div class="live-stage" id="liveStage">' +
-      '<video id="liveVideo" controls playsinline webkit-playsinline preload="none" crossorigin="anonymous" aria-label="مشغل البث المباشر"></video>' +
+      '<video id="liveVideo" controls playsinline webkit-playsinline preload="none" aria-label="مشغل البث المباشر"></video>' +
       '<div class="live-poster" id="livePoster"><span class="live-poster__glow"></span><span class="live-emblem">' +
         icon("tv") + '</span><span class="live-poster__text">AL EZZ <b>LIVE</b></span></div>' +
       '<span class="live-stage__badge"><i></i> LIVE</span>' +
