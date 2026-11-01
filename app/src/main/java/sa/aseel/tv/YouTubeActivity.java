@@ -19,6 +19,9 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.os.Build;
+import android.util.Log;
+import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
 
 /**
  * First-party HTTPS hosted YouTube iframe page. Remains inside the application;
@@ -39,6 +42,12 @@ public final class YouTubeActivity extends Activity {
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         String id=YouTubeLink.videoId(getIntent().getStringExtra("youtube_url"));
         if(id==null){finish();return;}
+        // The stock Android 4.4 WebView cannot reliably run modern YouTube iframe JavaScript.
+        // When a native YouTube TV/phone app is installed, prefer the official player.
+        if(Build.VERSION.SDK_INT<=19 && openOfficialVideo(id)){
+            finish();
+            return;
+        }
         root=new FrameLayout(this);root.setBackgroundColor(Color.BLACK);
         LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);
         root.addView(body,new FrameLayout.LayoutParams(-1,-1));
@@ -58,7 +67,6 @@ public final class YouTubeActivity extends Activity {
         TextView badge=new TextView(this);badge.setText("YouTube  ▶");
         badge.setTextColor(0xFFFF6172);badge.setTextSize(14);badge.setGravity(Gravity.CENTER);
         toolbar.addView(badge,new LinearLayout.LayoutParams(dp(118),-1));
-        final String officialLink="https://www.youtube.com/watch?v="+id;
         Button external=new Button(this);
         external.setText("↗  YouTube الرسمي");external.setTextSize(13);external.setAllCaps(false);
         external.setTextColor(Color.WHITE);external.setBackgroundColor(0xFFB30B2F);
@@ -66,15 +74,9 @@ public final class YouTubeActivity extends Activity {
         externalParams.setMargins(dp(8),0,0,0);
         toolbar.addView(external,externalParams);
         external.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-            try{
-                Intent intent=new Intent(Intent.ACTION_VIEW,Uri.parse(officialLink));
-                intent.setPackage("com.google.android.youtube.tv");
-                if(intent.resolveActivity(getPackageManager())==null)intent.setPackage("com.google.android.youtube");
-                if(intent.resolveActivity(getPackageManager())==null)intent.setPackage(null);
-                startActivity(intent);
-            }catch(Exception e){
+            if(!openOfficialVideo(id)){
                 status.setVisibility(View.VISIBLE);
-                status.setText("تعذر فتح YouTube. تحقق من وجود تطبيق أو متصفح يدعم الخدمة.");
+                status.setText("لم نجد تطبيق YouTube أو متصفحًا متوافقًا. قد يلزم تحديث النظام أو تطبيق YouTube.");
             }
         }});
         videoArea=new FrameLayout(this);
@@ -125,9 +127,57 @@ public final class YouTubeActivity extends Activity {
         status.setText("مشغل YouTube الرسمي. إذا كانت الشاشة قديمة ولم يعمل الفيديو، استخدم زر «YouTube الرسمي».");
         body.addView(status,new LinearLayout.LayoutParams(-1,dp(43)));
         setContentView(root);
-        final String page="https://youef.github.io/app_apk/youtube-player.html?v="+id;
-        web.loadUrl(page);
+        // Bundle the YouTube iframe page inside the APK: no GitHub Pages 404 or site dependency.
+        // Use an HTTPS origin so the official YouTube IFrame API has a proper embed origin.
+        loadBundledPlayer(id);
         back.requestFocus();
+    }
+    private boolean openOfficialVideo(String id){
+        Uri target=Uri.parse("https://www.youtube.com/watch?v="+id);
+        for(String pkg:new String[]{"com.google.android.youtube.tv","com.google.android.youtube"}){
+            try{
+                Intent external=new Intent(Intent.ACTION_VIEW,target);
+                external.setPackage(pkg);
+                if(external.resolveActivity(getPackageManager())!=null){
+                    startActivity(external);
+                    return true;
+                }
+            }catch(Exception ignored){}
+        }
+        try{
+            Intent browser=new Intent(Intent.ACTION_VIEW,target);
+            if(browser.resolveActivity(getPackageManager())!=null){
+                startActivity(browser);
+                return true;
+            }
+        }catch(Exception ignored){}
+        return false;
+    }
+    private void loadBundledPlayer(String id){
+        InputStream stream=null;
+        try{
+            stream=getAssets().open("youtube-player.html");
+            ByteArrayOutputStream bytes=new ByteArrayOutputStream();
+            byte[] buffer=new byte[4096];
+            int count;
+            while((count=stream.read(buffer))!=-1){
+                if(bytes.size()+count>128*1024)throw new java.io.IOException("Bundled player too large");
+                bytes.write(buffer,0,count);
+            }
+            String html=new String(bytes.toByteArray(),"UTF-8");
+            if(html.indexOf("<script>")<0)throw new java.io.IOException("Player script missing");
+            // The ID was validated as exactly eleven safe YouTube identifier characters.
+            html=html.replace("<script>","<script>window.AL_EZZ_VIDEO_ID='"+id+"';</script><script>");
+            web.loadDataWithBaseURL("https://youef.github.io/app_apk/web/youtube-player.html?v="+id,
+                html,"text/html","UTF-8",null);
+        }catch(Exception error){
+            Log.e("AlEzzYouTube","Bundled player missing",error);
+            status.setText("تعذر تجهيز المشغل الداخلي. استخدم زر YouTube الرسمي بالأعلى.");
+            status.setVisibility(View.VISIBLE);
+            // No fallback to the old 404 GitHub Pages path.
+        }finally{
+            if(stream!=null)try{stream.close();}catch(Exception ignored){}
+        }
     }
     private void hideFullScreen(){
         if(fullScreenView!=null){
