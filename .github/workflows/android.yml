@@ -106,7 +106,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          gradle clean assembleDebug --no-daemon --stacktrace >dist/gradle-build.log 2>&1 || { tail -100 dist/gradle-build.log; exit 1; }
+          gradle clean assembleDebug --no-daemon >dist/gradle-build.log 2>&1 || {
+            echo "::error::Android build failed; showing Gradle errors and task failures"
+            grep -nE "FAILURE:|What went wrong|Could not|FAILED|error:|symbol:|package .* does not exist|Execution failed|requires|AAPT:" dist/gradle-build.log | tail -80 || true
+            tail -140 dist/gradle-build.log
+            exit 1
+          }
           if [[ "$SIGNING_READY" == "true" ]]; then
             gradle assembleRelease --no-daemon --stacktrace >>dist/gradle-build.log 2>&1 || { tail -100 dist/gradle-build.log; exit 1; }
             cp app/build/outputs/apk/release/app-release.apk dist/al-ezz-tv-v11-api19.apk
