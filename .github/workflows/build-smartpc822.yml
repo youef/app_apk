@@ -1,0 +1,35 @@
+name: SMART PC822 Updater APK (API19)
+on:
+  push:
+    branches: [feature/smartpc822-updater]
+    paths: [smartpc822-updater/**, .github/workflows/build-smartpc822.yml]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Assemble
+        working-directory: smartpc822-updater
+        run: gradle --no-daemon :app:assembleDebug
+      - name: Verify
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging smartpc822-updater/app/build/outputs/apk/debug/app-debug.apk | grep -E 'package:|sdkVersion:'
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --min-sdk-version 19 smartpc822-updater/app/build/outputs/apk/debug/app-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SMART-PC822-Updater-API19-APK
+          path: smartpc822-updater/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
