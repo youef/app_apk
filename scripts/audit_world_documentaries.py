@@ -1,3 +1,5 @@
 #!/usr/bin/env python3
-# Audit public documentary channel catalogue. This program is read-only.
-print('Documentary catalogue audit initialized')
+import os
+import audit_world_kids as audit
+audit.PLAYLIST = os.environ['DOCUMENTARY_PLAYLIST']
+audit.main()
