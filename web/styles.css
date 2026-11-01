@@ -178,3 +178,50 @@ body.viewer-locked{overflow:hidden!important}body.viewer-locked>:not(#activation
 @media(max-width:1150px){.youtube-kids-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:780px){.youtube-kids-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.youtube-kids-section{padding:15px}.youtube-kids-toolbar{align-items:stretch}}
 @media(max-width:460px){.youtube-kids-grid{grid-template-columns:1fr 1fr;gap:10px}.youtube-kid-info{padding:10px}.youtube-kid-info h4{font-size:12px;min-height:38px}.youtube-kid-actions{align-items:flex-start}.youtube-kid-watch{font-size:11px;padding:8px}.youtube-kid-play{width:38px;height:38px;font-size:17px}.youtube-kids-description{font-size:12px}}
+
+/* 2026-11-01 — Cinema posters: portrait cover, genuine brand fallback. */
+.cards-row:not(.channel-cards) .poster-frame{
+  width:100%;aspect-ratio:2/3;min-height:0;overflow:hidden;
+  background:linear-gradient(145deg,#3b1724,#151722 70%);
+}
+.channel-cards .poster-frame{width:100%;aspect-ratio:16/10}
+.poster-frame > img.poster-cover{
+  position:absolute;inset:0;z-index:1;width:100%;height:100%;
+  max-width:none;object-fit:cover;object-position:center center;
+  display:block;opacity:1;
+}
+.poster-frame > .poster-fallback{
+  position:absolute;inset:0;z-index:0;display:flex;flex-direction:column;
+  justify-content:center;align-items:center;gap:12px;padding:16px;
+  background:radial-gradient(ellipse at center,#3d2637,#131620 75%);
+}
+.poster-fallback img.poster-brand-logo{
+  width:min(55%,125px);height:auto;max-height:55%;
+  object-fit:contain;display:block;flex:none;
+  filter:drop-shadow(0 8px 18px #0007);
+}
+.poster-fallback .poster-word{
+  color:#e0bfc7;letter-spacing:2px;font-size:10px;font-weight:800;
+  text-align:center;
+}
+.poster-frame > .poster-badge{z-index:3}
+.poster-frame > .poster-play{z-index:3}
+.detail-art{position:relative;overflow:hidden;background:#171923}
+.detail-art > .detail-art-fallback{
+  position:absolute;inset:0;display:grid;place-items:center;z-index:0;
+  background:radial-gradient(ellipse at center,#4b2637,#11131c 75%);
+}
+.detail-art-fallback img.detail-brand-logo{
+  display:block;width:min(38%,180px);height:auto;max-height:80%;
+  object-fit:contain;opacity:.95;
+  filter:drop-shadow(0 10px 25px #0008);
+}
+.detail-art > img.detail-cover{
+  position:absolute;inset:0;z-index:1;display:block;width:100%;height:100%;
+  object-fit:cover;object-position:center center;opacity:1;
+}
+.detail-art:after{z-index:2;pointer-events:none;background:linear-gradient(to top,rgba(11,12,18,.8),transparent 55%)}
+@media(max-width:600px){
+  .poster-fallback img.poster-brand-logo{width:min(60%,105px)}
+  .detail-art-fallback img.detail-brand-logo{width:min(40%,130px)}
+}
