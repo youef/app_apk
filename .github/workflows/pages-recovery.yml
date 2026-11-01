@@ -1,3 +1,4 @@
+# Recover through official GitHub Pages API; no site settings or credentials are modified.
 name: Al Ezz TV - Recover stuck Pages deployment
 on:
   push:
@@ -5,6 +6,12 @@ on:
     paths:
       - ".github/workflows/pages-recovery.yml"
   workflow_dispatch:
+    inputs:
+      blocked_sha:
+        description: "Pages deployment SHA reported in the HTTP 400 error"
+        required: false
+        default: "1aa425a3aa3ccc67c805d86a7f591cc54ce03e10"
+        type: string
 
 permissions:
   contents: read
@@ -26,7 +33,7 @@ jobs:
           set -euo pipefail
           echo "GitHub Pages site status:"
           gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '{build_type: .build_type, status: .status, source: .source}' || true
-          stale="f0f66e81a5ae41c81bdbc63bdaf4210f8cc71e66"
+          stale="${{ inputs.blocked_sha || '1aa425a3aa3ccc67c805d86a7f591cc54ce03e10' }}"
           echo "Deployment ${stale} status:"
           gh api "repos/${GITHUB_REPOSITORY}/pages/deployments/${stale}" --jq '.status' || true
       - name: Attempt official cancellation of the stale deployment
@@ -35,7 +42,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          stale="f0f66e81a5ae41c81bdbc63bdaf4210f8cc71e66"
+          stale="${{ inputs.blocked_sha || '1aa425a3aa3ccc67c805d86a7f591cc54ce03e10' }}"
           echo "Trying GitHub's POST /pages/deployments/{id}/cancel endpoint."
           if gh api -i -X POST "repos/${GITHUB_REPOSITORY}/pages/deployments/${stale}/cancel"; then
             echo "Pages cancellation request accepted."
