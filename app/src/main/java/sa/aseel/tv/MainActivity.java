@@ -281,6 +281,43 @@ public final class MainActivity extends Activity {
         notice.setText(value);notice.setVisibility(value.length()==0?View.GONE:View.VISIBLE);
     }
     private String str(JSONObject x,String key){return x.optString(key,"").equals("null")?"":x.optString(key,"");}
+    /** Film cover and full-screen backdrop share the same logo-first visual system.
+     * The logo is a bundled drawable: no internet is needed for missing artwork.
+     */
+    private FrameLayout artwork(JSONObject item,boolean wide){
+        FrameLayout frame=new FrameLayout(this);
+        GradientDrawable gradient=new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+            new int[]{0xFF4E1A32,0xFF221927,0xFF0C111B});
+        gradient.setCornerRadius(dp(wide?21:13));frame.setBackgroundDrawable(gradient);
+        int id=getResources().getIdentifier("alizz_brand","drawable",getPackageName());
+        ImageView brand=new ImageView(this);
+        brand.setImageResource(id!=0?id:R.drawable.app_icon);
+        brand.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        int brandSize=dp(wide?140:105);
+        FrameLayout.LayoutParams brandP=new FrameLayout.LayoutParams(brandSize,brandSize,Gravity.CENTER);
+        frame.addView(brand,brandP);
+        TextView signature=text("AL EZZ  •  TV",wide?13:11,0xFFE9B9C4,true);
+        signature.setGravity(Gravity.CENTER);
+        signature.setLetterSpacing(.12f);
+        FrameLayout.LayoutParams sigP=new FrameLayout.LayoutParams(-1,dp(36),Gravity.BOTTOM);
+        sigP.bottomMargin=dp(wide?18:12);
+        frame.addView(signature,sigP);
+
+        ImageView cover=new ImageView(this);
+        cover.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        cover.setContentDescription("غلاف "+str(item,"title_ar"));
+        frame.addView(cover,new FrameLayout.LayoutParams(-1,-1));
+        if(!prefs.getBoolean("lite_mode",false)){
+            String poster=str(item,"poster_url"),backdrop=str(item,"backdrop_url");
+            String yt=YouTubeLink.videoId(str(item,"youtube_url"));
+            String thumbnail=yt==null?"":"https://i.ytimg.com/vi/"+yt+"/hqdefault.jpg";
+            if(wide)PosterLoader.load(cover,backdrop,poster,thumbnail);
+            else PosterLoader.load(cover,poster,backdrop,thumbnail);
+        }else{
+            cover.setVisibility(View.INVISIBLE);
+        }
+        return frame;
+    }
     private JSONArray data(String m){
         if("movie".equals(m))return movies;
         if("series".equals(m))return series;
@@ -491,17 +528,12 @@ public final class MainActivity extends Activity {
             new int[]{0xFF421528,0xFF100B14,0xFF29101C});
         backdrop.setCornerRadius(dp(24));spotlight.setBackgroundDrawable(backdrop);
         stage.addView(spotlight,lp(-1,dp(340)));
-        if(featured!=null && !prefs.getBoolean("lite_mode",false)){
-            ImageView visual=new ImageView(this);
-            visual.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            spotlight.addView(visual,new android.widget.FrameLayout.LayoutParams(-1,-1));
-            PosterLoader.load(visual,str(featured,"backdrop_url").length()>0?
-                str(featured,"backdrop_url"):str(featured,"poster_url"));
-            View shade=new View(this);
-            shade.setBackgroundDrawable(new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-                new int[]{0xF609080D,0xE909080D,0xB009080D,0x2609080D}));
-            spotlight.addView(shade,new android.widget.FrameLayout.LayoutParams(-1,-1));
-        }
+        spotlight.addView(artwork(featured!=null?featured:new JSONObject(),true),
+            new FrameLayout.LayoutParams(-1,-1));
+        View spotlightShade=new View(this);
+        spotlightShade.setBackgroundDrawable(new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+            new int[]{0xF609080D,0xDE09080D,0x9B09080D,0x2009080D}));
+        spotlight.addView(spotlightShade,new FrameLayout.LayoutParams(-1,-1));
         LinearLayout content=vertical();content.setPadding(dp(36),dp(27),dp(32),dp(27));
         android.widget.FrameLayout.LayoutParams contentParams=
             new android.widget.FrameLayout.LayoutParams(-1,-2,Gravity.CENTER_VERTICAL);
@@ -1025,31 +1057,35 @@ public final class MainActivity extends Activity {
         for(int i=0;i<all.size()&&i<max;i++){
             final JSONObject item=all.get(i);
             final LinearLayout card=vertical();
-            card.setPadding(dp(8),dp(8),dp(8),dp(13));
-            card.setBackgroundDrawable(background(0xFF1C141E,18,0xFF443140));
-            LinearLayout.LayoutParams cardLp=lp(dp(266),-2);
+            card.setPadding(dp(6),dp(6),dp(6),dp(13));
+            card.setBackgroundDrawable(background(0xFF17131D,16,0xFF46303E));
+            String visualType=str(item,"_type");
+            LinearLayout.LayoutParams cardLp=lp(dp("channel".equals(visualType)||"youtube".equals(visualType)?266:213),-2);
             cardLp.setMargins(dp(5),0,dp(5),0);holder.addView(card,cardLp);
             card.setFocusable(true);card.setClickable(true);
             card.setTag("card:"+str(item,"_type")+":"+str(item,"id"));
             card.setContentDescription("فتح تفاصيل "+str(item,"title_ar")+
                 (isFavorite(str(item,"_type"),str(item,"id"))?"، في المفضلة":"")+
                 (str(item,"quality").length()>0?"، الجودة "+str(item,"quality"):""));
-            android.widget.FrameLayout artwork=new android.widget.FrameLayout(this);
-            artwork.setBackgroundDrawable(background(0xFF301827,14,0));
-            card.addView(artwork,lp(-1,dp(158)));
-            ImageView poster=new ImageView(this);
-            poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            artwork.addView(poster,new android.widget.FrameLayout.LayoutParams(-1,-1));
-            if(!prefs.getBoolean("lite_mode",false)){
-                String posterUrl=str(item,"poster_url");
-                String yt=YouTubeLink.videoId(str(item,"youtube_url"));
-                if(posterUrl.length()==0&&yt!=null)posterUrl="https://i.ytimg.com/vi/"+yt+"/hqdefault.jpg";
-                PosterLoader.load(poster,posterUrl);
-            }
-            TextView overlay=text("▶",25,WHITE,true);overlay.setGravity(Gravity.CENTER);
-            overlay.setBackgroundDrawable(background(0xAA080B0F,12,0x66FFFFFF));
-            android.widget.FrameLayout.LayoutParams pp=new android.widget.FrameLayout.LayoutParams(dp(50),dp(44),Gravity.CENTER);
+            String contentType=str(item,"_type");
+            boolean portrait=!"channel".equals(contentType)&&!"youtube".equals(contentType);
+            final FrameLayout artwork=artwork(item,!portrait);
+            card.addView(artwork,lp(-1,dp(portrait?295:160)));
+            final TextView overlay=text("▶",24,WHITE,true);
+            overlay.setGravity(Gravity.CENTER);
+            overlay.setBackgroundDrawable(background(0xDFBD2546,35,0xAAFFFFFF));
+            FrameLayout.LayoutParams pp=new FrameLayout.LayoutParams(dp(52),dp(52),Gravity.CENTER);
             artwork.addView(overlay,pp);
+            overlay.setVisibility(View.INVISIBLE);
+            String quality=str(item,"quality");
+            if(quality.length()>0&&!quality.equalsIgnoreCase("null")){
+                TextView qualityBadge=text(quality.toUpperCase(java.util.Locale.US),12,WHITE,true);
+                qualityBadge.setGravity(Gravity.CENTER);
+                qualityBadge.setBackgroundDrawable(background(0xE61A1723,9,0x99EEA9B9));
+                FrameLayout.LayoutParams qP=new FrameLayout.LayoutParams(dp(54),dp(29),Gravity.TOP|Gravity.LEFT);
+                qP.setMargins(dp(9),dp(10),dp(9),0);
+                artwork.addView(qualityBadge,qP);
+            }
             String itemId=str(item,"id");
             if(itemId.equals(prefs.getString("resume_id",""))){
                 TextView resumeBadge=text("◉  تابع المشاهدة",12,WHITE,true);
@@ -1083,8 +1119,9 @@ public final class MainActivity extends Activity {
             TextView meta=text(sub.length()>0?sub:"العز TV",12,MUTED,false);card.addView(meta,gap(3,2));
             card.setOnFocusChangeListener(new View.OnFocusChangeListener(){
                 public void onFocusChange(View view,boolean focused){
-                    card.setBackgroundDrawable(background(focused?0xFF512139:0xFF1C141E,18,focused?0xFFFF617E:0xFF443140));
-                    card.setScaleX(focused?1.065f:1f);card.setScaleY(focused?1.065f:1f);
+                    card.setBackgroundDrawable(background(focused?0xFF452033:0xFF17131D,16,focused?0xFFFF778E:0xFF46303E));
+                    card.setScaleX(focused?1.045f:1f);card.setScaleY(focused?1.045f:1f);
+                    overlay.setVisibility(focused?View.VISIBLE:View.INVISIBLE);
                     if(Build.VERSION.SDK_INT>=21)card.setElevation(focused?dp(12):0);
                     // Focus border and scale remain compatible with Android 4.4 (API 19).
                 }
@@ -1112,18 +1149,11 @@ public final class MainActivity extends Activity {
             new int[]{0xFF361526,0xFF160E18,0xFF0D0A10}));
         LinearLayout.LayoutParams heroP=gap(16,12);
         heroP.height=dp(255);stage.addView(hero,heroP);
-        String picture=str(item,"backdrop_url");
-        if(picture.length()==0)picture=str(item,"poster_url");
-        if(picture.length()>0 && !prefs.getBoolean("lite_mode",false)){
-            ImageView image=new ImageView(this);
-            image.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            hero.addView(image,new android.widget.FrameLayout.LayoutParams(-1,-1));
-            PosterLoader.load(image,picture);
-            View shade=new View(this);
-            shade.setBackgroundDrawable(new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-                new int[]{0xF50B0910,0xC40B0910,0x240B0910}));
-            hero.addView(shade,new android.widget.FrameLayout.LayoutParams(-1,-1));
-        }
+        hero.addView(artwork(item,true),new FrameLayout.LayoutParams(-1,-1));
+        View shade=new View(this);
+        shade.setBackgroundDrawable(new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+            new int[]{0xF50B0910,0xB60B0910,0x100B0910}));
+        hero.addView(shade,new FrameLayout.LayoutParams(-1,-1));
         LinearLayout heroText=vertical();heroText.setGravity(Gravity.CENTER_VERTICAL);
         heroText.setPadding(dp(26),dp(20),dp(26),dp(20));
         hero.addView(heroText,new android.widget.FrameLayout.LayoutParams(-1,-1));
