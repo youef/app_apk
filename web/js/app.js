@@ -288,6 +288,7 @@
     rows.push(railHTML("على الهواء الآن", catalog.channels, { more: "#/live", subtitle: "بث مباشر من المصادر الرسمية" }));
     rows.push(railHTML("وثائقيات من العالم", catalog.channels.filter(function(c){return c.categoryId==="d7070bfe-19e2-403d-97de-ef2d26614624";}).slice(0,18), { more: "#/live/d7070bfe-19e2-403d-97de-ef2d26614624", subtitle: "طبيعة وتاريخ وعلوم وثقافات — يتوفر البث حسب منطقتك" }));
     rows.push(railHTML("رياضة حول العالم", catalog.channels.filter(function(c){return c.categoryId==="146b8c7f-8e03-45ee-aa4f-2d8ab20e6c95";}).slice(0,20), { more: "#/live/146b8c7f-8e03-45ee-aa4f-2d8ab20e6c95", subtitle: "قنوات رياضية دولية • بث متاح حسب الدولة" }));
+    rows.push(railHTML("beIN SPORTS — القنوات الرسمية", catalog.channels.filter(function(c){return c.categoryId==="f30c2110-ae62-47c4-99e4-b45762bde695";}).slice(0,20), { more: "#/live/f30c2110-ae62-47c4-99e4-b45762bde695", subtitle: "روابط مشاهدة رسمية • القنوات المشفرة تتطلب اشتراك beIN" }));
     var kidsCount = catalog.items.filter(function (i) { return i.kids; }).length;
     if (kidsCount) rows.push(railHTML("عالم الأطفال", catalog.items.filter(function (i) { return i.kids; }).slice(0, 18), { more: "#/kids", subtitle: "محتوى عائلي آمن" }));
     if (catalog.youtube.length) rows.push(railHTML("يوتيوب العز", catalog.youtube, { more: "#/youtube", subtitle: "فيديوهات رسمية مختارة" }));
