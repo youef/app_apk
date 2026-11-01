@@ -45,7 +45,8 @@ async function verifyAdmin(token:string):Promise<boolean> {
     const user=await auth.json();
     if(!user.id)return false;
     const role=await fetch(SUPABASE_URL+"/rest/v1/aseel_admins?select=user_id&active=eq.true&user_id=eq."+encodeURIComponent(user.id),{headers:h,signal:AbortSignal.timeout(6000)});
-    return role.ok && Array.isArray(await role.json()) && (await role.clone().json()).length>0;
+    const rows=role.ok?await role.json():[];
+    return Array.isArray(rows)&&rows.length>0;
   }catch{return false;}
 }
 const tables=[
@@ -89,7 +90,7 @@ async function publicHost(url:URL) {
     const a=await Deno.resolveDns(url.hostname,"A");
     if(!a.length||a.some(privateIp))return false;
     const aaaa=await Deno.resolveDns(url.hostname,"AAAA").catch(()=>[] as string[]);
-    if(aaaa.length)return false; // Conservative: refuse IPv6 rather than inspect private addresses.
+    if(aaaa.some((ip:string)=>!(/^[23][0-9a-f]{3}:/i.test(ip) && !/^2001:0?db8:/i.test(ip))))return false;
     return true;
   }catch{return false;}
 }
