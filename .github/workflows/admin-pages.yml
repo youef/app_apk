@@ -33,6 +33,7 @@ jobs:
           node --check web/config.js
           node --check admin/app.js
           node --check admin/studio.js
+          node --check admin/importer.js
           node --check admin/config.js
       - name: Assemble public viewer and admin dashboard
         run: |
@@ -43,11 +44,13 @@ jobs:
           # GitHub Pages publishing source (Actions or branch) finishes last.
           mkdir -p _site/web
           cp web/index.html web/styles.css web/app.js web/access.js web/config.js web/al-ezz-mark.svg web/youtube-player.html _site/web/
-          cp admin/index.html admin/style.css admin/studio.css admin/app.js admin/studio.js admin/config.js _site/admin/
+          cp admin/index.html admin/style.css admin/studio.css admin/importer.css admin/app.js admin/studio.js admin/importer.js admin/config.js _site/admin/
           touch _site/.nojekyll
           test -s _site/index.html
           test -s _site/app.js
           test -s _site/admin/index.html
+          test -s _site/admin/importer.js
+          test -s _site/admin/importer.css
       - name: Configure Pages
         uses: actions/configure-pages@v5
         with:
