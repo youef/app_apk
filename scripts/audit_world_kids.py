@@ -53,26 +53,52 @@ def permitted_candidate(item):
         return True,"eligible"
     except Exception:return False,"invalid_url"
 
+def sample_media(manifest_url, media_text):
+    # Request the first 512 bytes of a referenced media segment; do not store video.
+    media = [line.strip() for line in media_text.splitlines() if line.strip() and not line.startswith("#")]
+    if not media: return "no_segment"
+    target=urllib.parse.urljoin(manifest_url,media[0])
+    p=urllib.parse.urlsplit(target)
+    if p.scheme!="https" or not p.hostname or p.username or p.password:
+        return "non_https_segment"
+    if SENSITIVE.search(target) or len(target)>1100:return "tokenized_segment"
+    try:
+        req=urllib.request.Request(target,headers={
+            "User-Agent":USER_AGENT,"Range":"bytes=0-511","Accept":"*/*"})
+        with urllib.request.urlopen(req,timeout=TIMEOUT) as response:
+            buf=response.read(512)
+            mime=response.headers.get("Content-Type","").lower()
+            if response.status not in (200,206):return "segment_http_"+str(response.status)
+            if not buf or "text/html" in mime or buf.lstrip().lower().startswith((b"<!doctype",b"<html")):
+                return "invalid_media"
+            return "sample_reachable"
+    except urllib.error.HTTPError as e:return "segment_http_"+str(e.code)
+    except Exception:return "segment_unreachable"
+
 def probe(item):
-    result={"title":item["title"],"id":item["id"],"group":item["group"],"url":item["url"],"status":"unknown"}
+    result={"title":item["title"],"id":item["id"],"group":item["group"],"url":item["url"],
+            "status":"unknown","media_sample":"not_tested"}
     try:
         code,final,body=request_bytes(item["url"],131072)
         text=body.decode("utf-8-sig","replace")
         ok=text.startswith("#EXTM3U") and bool(re.search(r"#EXT-X-(?:STREAM-INF|TARGETDURATION|MEDIA-SEQUENCE)",text))
         encrypted=bool(re.search(r"#EXT-X-KEY:.*METHOD=(?!NONE)",text,re.I))
+        media_text=text
+        media_url=final
         if ok and not encrypted and "#EXT-X-STREAM-INF" in text:
             variants=[s.strip() for s in text.splitlines() if s.strip() and not s.startswith("#")]
             if variants:
                 sub=urllib.parse.urljoin(final,variants[0])
-                # Only follow safe https variant URLs; no segments
                 p=urllib.parse.urlsplit(sub)
                 if p.scheme=="https" and not SENSITIVE.search(sub):
-                    code2,_,data2=request_bytes(sub,131072)
-                    t2=data2.decode("utf-8-sig","replace")
-                    ok=code2==200 and t2.startswith("#EXTM3U") and "#EXT-X-" in t2
-                    encrypted=encrypted or bool(re.search(r"#EXT-X-KEY:.*METHOD=(?!NONE)",t2,re.I))
+                    code2,media_url,data2=request_bytes(sub,131072)
+                    media_text=data2.decode("utf-8-sig","replace")
+                    ok=code2==200 and media_text.startswith("#EXTM3U") and "#EXT-X-" in media_text
+                    encrypted=encrypted or bool(re.search(r"#EXT-X-KEY:.*METHOD=(?!NONE)",media_text,re.I))
                 else:ok=False
         result["status"]="manifest_ok" if code==200 and ok and not encrypted else ("encrypted" if encrypted else "invalid_manifest")
+        if result["status"]=="manifest_ok":
+            result["media_sample"]=sample_media(media_url,media_text)
     except urllib.error.HTTPError as e:
         result["status"]="http_"+str(e.code)
     except Exception:
@@ -101,6 +127,7 @@ def main():
     with concurrent.futures.ThreadPoolExecutor(max_workers=16) as pool:
         results=list(pool.map(probe,items))
     status=Counter(r["status"] for r in results)
+    media_checks=Counter(r["media_sample"] for r in results if r["status"]=="manifest_ok")
     approved=[r for r in results if r["status"]=="manifest_ok"]
     logos_by_url={i["url"]:i.get("logo","") for i in items}
     output=[]
@@ -123,10 +150,10 @@ def main():
     report={"checked_at":datetime.now(timezone.utc).isoformat(),"source":PLAYLIST,
             "warning":"Manifest reachability is not video playback or legal permission to redistribute",
             "source_entries":len(raw),"eligible_unique_https_hls":len(items),
-            "statuses":dict(status),"skipped":dict(filtered),"manifest_ok":len(output),"results":results}
+            "statuses":dict(status),"media_samples":dict(media_checks),"skipped":dict(filtered),"manifest_ok":len(output),"results":results}
     with open("kids-global-audit.json","w",encoding="utf-8") as f:json.dump(report,f,ensure_ascii=False,indent=2)
     print("KIDS_SUMMARY_JSON "+json.dumps({k:report[k] for k in
-          ("source_entries","eligible_unique_https_hls","statuses","skipped","manifest_ok")},ensure_ascii=False),flush=True)
+          ("source_entries","eligible_unique_https_hls","statuses","media_samples","skipped","manifest_ok")},ensure_ascii=False),flush=True)
 
 if __name__=="__main__":
     main()
