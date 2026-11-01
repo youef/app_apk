@@ -119,6 +119,35 @@
     el.root.classList.remove("is-idle");
   }
 
+  function bindSubtitleTrack(item) {
+    var btn = $("btnCaptions");
+    if (btn) { btn.hidden = !item.subtitleTrack; btn.textContent = "ترجمة عربية"; }
+    if (!item.subtitleTrack || !/^https:\/\//i.test(item.subtitleTrack)) return;
+    var track = document.createElement("track");
+    track.kind = "subtitles";
+    track.label = "العربية";
+    track.srclang = item.subtitleLanguage || "ar";
+    track.src = item.subtitleTrack;
+    track.default = true;
+    el.video.appendChild(track);
+    track.addEventListener("load", function () {
+      try { track.track.mode = "showing"; } catch (_e) {}
+    });
+    track.addEventListener("error", function () {
+      if (btn) { btn.textContent = "الترجمة غير متاحة"; btn.disabled = true; }
+    });
+    if (btn) btn.disabled = false;
+  }
+
+  function toggleCaptions() {
+    var tracks = el.video.textTracks;
+    if (!tracks || !tracks.length) { toast("لا توجد ترجمة متاحة لهذا الفيلم"); return; }
+    var on = tracks[0].mode === "showing";
+    tracks[0].mode = on ? "disabled" : "showing";
+    var btn = $("btnCaptions");
+    if (btn) btn.textContent = on ? "إظهار الترجمة" : "إخفاء الترجمة";
+  }
+
   function attachNative(url) {
     var v = el.video;
     v.src = url;
@@ -182,6 +211,7 @@
     var url = item.stream || "";
     if (!url) { fail("لا يوجد رابط تشغيل مسجّل لهذا العنصر."); return; }
 
+    bindSubtitleTrack(item);
     show("playerSpinner", true);
     el.video.hidden = false;
 
@@ -337,6 +367,7 @@
     $("btnFwd10").addEventListener("click", function () { seek(10); });
     $("btnFull").addEventListener("click", toggleFullscreen);
     $("btnQuality").addEventListener("click", cycleQuality);
+    $("btnCaptions").addEventListener("click", toggleCaptions);
     $("nextPlay").addEventListener("click", playNext);
     $("btnMute").addEventListener("click", function () {
       v.muted = !v.muted;
@@ -390,6 +421,7 @@
         case "ArrowUp": e.preventDefault(); v.volume = Math.min(1, v.volume + 0.1); $("volume").value = v.volume; break;
         case "ArrowDown": e.preventDefault(); v.volume = Math.max(0, v.volume - 0.1); $("volume").value = v.volume; break;
         case "m": v.muted = !v.muted; break;
+        case "c": toggleCaptions(); break;
         case "f": toggleFullscreen(); break;
         case "Escape": Player.close(); break;
         case "n": if (nextItem) playNext(); break;
