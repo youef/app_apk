@@ -2,12 +2,19 @@ name: Al Ezz TV — Universal APK (Android API19+)
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - '**/*.md'
+    paths:
+      - 'app/**'
+      - 'scripts/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle/**'
+      - 'gradle.properties'
+      - 'web/alizz-tv-transparent.png'
+      - '.github/workflows/phase1-android44.yml'
   workflow_dispatch:
 concurrency:
-  group: al-ezz-universal-api19-v9
-  cancel-in-progress: true
+  group: al-ezz-universal-api19-v9-${{ github.ref }}
+  cancel-in-progress: false
 permissions:
   contents: write
 jobs:
@@ -18,14 +25,14 @@ jobs:
       APPETIZE_API_TOKEN: ${{ secrets.APPETIZE_API_TOKEN }}
       APPETIZE_ANDROID_PUBLIC_KEY: ${{ secrets.APPETIZE_ANDROID_PUBLIC_KEY }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Java 17 for Android SDK CLI
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
       - name: Android SDK tools
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
           packages: platform-tools
       - name: Install Android API 28 and Build Tools
@@ -33,12 +40,12 @@ jobs:
           set -euo pipefail
           sdkmanager "platforms;android-28" "build-tools;33.0.2"
       - name: JDK 11 for Android Gradle Plugin 7.4.2
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '11'
       - name: Install Gradle 7.6
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '7.6'
       - name: Configure stable signing only when all protected secrets exist
@@ -97,7 +104,7 @@ jobs:
           sha256sum dist/al-ezz-tv-universal-api19-v9.apk | tee -a dist/build-report.txt
           test -s dist/al-ezz-tv-universal-api19-v9.apk
       - name: Upload signed installation candidate and diagnostic report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: al-ezz-tv-universal-api19-v9-${{ github.run_number }}
           path: |
