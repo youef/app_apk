@@ -109,20 +109,32 @@ public final class MainActivity extends Activity {
         label.setGravity(Gravity.CENTER);group.addView(label,gap(14,8));
         TextView sub=text("عالم من الحكايات على شاشتك",17,0xFFB9ADB8,false);
         sub.setGravity(Gravity.CENTER);group.addView(sub,gap(0,22));
-        android.widget.ProgressBar progress=new android.widget.ProgressBar(this);
-        LinearLayout.LayoutParams pp=lp(dp(33),dp(33));pp.gravity=Gravity.CENTER;
-        group.addView(progress,pp);
+        TextView subtitle=text("اضغط تخطي للانتقال إلى التفعيل أو المكتبة",14,0xFFC6B5C1,false);
+        subtitle.setGravity(Gravity.CENTER);group.addView(subtitle,gap(0,14));
+        final Button skip=button("تخطي الترحيب  ❯");
+        skip.setTextSize(19);
+        skip.setTag("splash:skip");
+        skip.setContentDescription("تخطي شاشة الترحيب والانتقال إلى التفعيل أو المحتوى");
+        skip.setBackgroundDrawable(background(0xFFC51A3D,15,0xFFFF9BB1));
+        LinearLayout.LayoutParams skipP=lp(dp(238),dp(57));skipP.gravity=Gravity.CENTER;
+        skipP.setMargins(0,dp(17),0,0);group.addView(skip,skipP);
+        skip.setOnClickListener(new View.OnClickListener(){public void onClick(View v){finishSplash();}});
+        skip.requestFocus();
         TextView foot=text("✦  العز TV",13,0xFFAD6378,false);
         foot.setGravity(Gravity.CENTER);
         FrameLayout.LayoutParams fp=new FrameLayout.LayoutParams(-1,dp(40),Gravity.BOTTOM);
         screen.addView(foot,fp);
         setContentView(screen);
         splashHandler.postDelayed(new Runnable(){public void run(){
-            if(isFinishing()||!splashVisible)return;
-            splashVisible=false;
-            if(PinGate.isActivated(MainActivity.this))openActivatedApp();
-            else lockScreen();
-        }},1700L);
+            finishSplash();
+        }},5000L);
+    }
+    private void finishSplash(){
+        if(!splashVisible||isFinishing())return;
+        splashVisible=false;
+        splashHandler.removeCallbacksAndMessages(null);
+        if(PinGate.isActivated(this))openActivatedApp();
+        else lockScreen();
     }
     private void openActivatedApp(){
         unlocked=true;accessGate=null;
@@ -1409,6 +1421,7 @@ public final class MainActivity extends Activity {
         super.onDestroy();
     }
     @Override public void onBackPressed(){
+        if(splashVisible){finishSplash();return;}
         if(!unlocked){finish();return;}
         if("episodes".equals(subPage)&&activeSeries!=null){
             details(activeSeries);return;
