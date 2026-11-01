@@ -13,6 +13,7 @@ import android.os.Handler;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
@@ -48,7 +49,27 @@ public final class CinemaPlayerActivity extends Activity {
     private PlayerView surface;
     private TextView status,title,details;
     private Button playButton,qualityButton,backButton,externalButton;
-    private LinearLayout footer;
+    private LinearLayout footer,controlPanel;
+    private static final long HIDE_DELAY=5500L;
+    private final Runnable autoHide=new Runnable(){public void run(){
+        if(!isFinishing()&&engine!=null&&engine.isPlaying())hideControls();
+    }};
+    private void hideControls(){
+        handler.removeCallbacks(autoHide);
+        if(controlPanel!=null)controlPanel.setVisibility(View.GONE);
+        if(surface!=null)surface.requestFocus();
+    }
+    private void showControls(boolean focusButton){
+        if(controlPanel==null)return;
+        controlPanel.setVisibility(View.VISIBLE);
+        handler.removeCallbacks(autoHide);
+        if(focusButton&&playButton!=null)playButton.requestFocus();
+        if(engine!=null&&engine.isPlaying())handler.postDelayed(autoHide,HIDE_DELAY);
+    }
+    private void toggleControls(){
+        if(controlPanel!=null&&controlPanel.getVisibility()==View.VISIBLE)hideControls();
+        else showControls(true);
+    }
     private ArrayList<StreamQuality.Source> sources;
     private int index=-1,tries=0;
     private String itemId="",currentUrl="",itemTitle="";
@@ -81,13 +102,20 @@ public final class CinemaPlayerActivity extends Activity {
             public void onFocusChange(View w,boolean focused){
                 v.setBackgroundDrawable(shape(focused?RED:0xFF2D222D,focused?0xFFFFC3CD:0xFF594350));
                 v.setScaleX(focused?1.03f:1f);v.setScaleY(focused?1.03f:1f);
-                if(focused && footer!=null)footer.setVisibility(View.VISIBLE);
+                if(focused&&controlPanel!=null&&controlPanel.getVisibility()==View.VISIBLE){
+                    handler.removeCallbacks(autoHide);
+                    if(engine!=null&&engine.isPlaying())handler.postDelayed(autoHide,HIDE_DELAY);
+                }
             }
         });return v;
     }
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        getWindow().getDecorView().setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|
+            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         Intent intent=getIntent();
         itemId=intent.getStringExtra("item_id");if(itemId==null)itemId="";
         itemTitle=intent.getStringExtra("title");if(itemTitle==null)itemTitle="العز TV";
@@ -97,8 +125,18 @@ public final class CinemaPlayerActivity extends Activity {
         FrameLayout root=new FrameLayout(this);root.setBackgroundColor(Color.BLACK);
         setContentView(root);
         surface=new PlayerView(this);surface.setUseController(false);surface.setKeepScreenOn(true);
+        surface.setFocusable(true);surface.setFocusableInTouchMode(true);
+        surface.setOnTouchListener(new View.OnTouchListener(){
+            public boolean onTouch(View view,MotionEvent event){
+                if(event.getAction()==MotionEvent.ACTION_UP){
+                    toggleControls();view.performClick();return true;
+                }
+                return true;
+            }
+        });
         root.addView(surface,new FrameLayout.LayoutParams(-1,-1));
         LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);
+        controlPanel=panel;
         panel.setPadding(dp(22),dp(13),dp(22),dp(13));
         panel.setBackgroundDrawable(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
             new int[]{0xE8111119,0xFA09090D}));
@@ -135,13 +173,14 @@ public final class CinemaPlayerActivity extends Activity {
         backButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){finish();}});
         if(sources.isEmpty()){
             status.setText("لا يوجد رابط MP4/HLS صالح لهذا العنوان. يرجى تحديثه في لوحة الإدارة.");
+            showControls(true);
             externalButton.setEnabled(false);backButton.requestFocus();return;
         }
         String preferred=getSharedPreferences("alezz_v11_player",MODE_PRIVATE).getString("quality_"+itemId,"auto");
         index=StreamQuality.choose(sources,preferred,Build.VERSION.SDK_INT);
         if(index<0)index=0;
         initPlayer();playSource(index);
-        playButton.requestFocus();
+        showControls(true);
     }
     private void initPlayer(){
         try{
@@ -164,12 +203,16 @@ public final class CinemaPlayerActivity extends Activity {
             @Override public void onPlaybackStateChanged(int state){
                 if(state==Player.STATE_BUFFERING){
                     status.setText("◌ جاري تحميل الفيديو... اضغط رجوع للخروج");started=false;
+                    showControls(false);
                 }else if(state==Player.STATE_READY){
                     handler.removeCallbacks(watchdog);started=true;tries=0;
-                    status.setText(live?"● البث المباشر يعمل":"▶ الفيديو جاهز • زر OK للإيقاف والاستكمال");
+                    status.setText(live?"● البث المباشر يعمل":"▶ الفيديو جاهز • OK أو اللمس لعرض القوائم");
+                    handler.removeCallbacks(autoHide);
+                    handler.postDelayed(autoHide,1200L);
                     details.setText((live?"مباشر":"MP4 / HLS")+"  |  "+sources.get(index).label);
                 }else if(state==Player.STATE_ENDED){
                     status.setText("انتهى الفيديو. اختر رجوع أو جودة أخرى.");
+                    showControls(true);
                 }
             }
             @Override public void onPlayerError(PlaybackException error){
@@ -199,6 +242,7 @@ public final class CinemaPlayerActivity extends Activity {
             }
         }
         status.setText(explanation+" — لا توجد جودات أخرى صالحة. استخدم المشغل البديل أو حدّث رابط الفيلم من الإدارة.");
+        showControls(true);
         footer.setVisibility(View.VISIBLE);
         externalButton.requestFocus();
     }
@@ -211,6 +255,7 @@ public final class CinemaPlayerActivity extends Activity {
         final String stream=currentUrl;
         qualityButton.setText("الجودة: "+sources.get(which).label);
         status.setText("◌ فحص رابط الفيديو قبل التشغيل...");
+        showControls(false);
         probeWorker.execute(new Runnable(){public void run(){
             final StreamProbe.Result probe=StreamProbe.inspect(getApplicationContext(),stream);
             handler.post(new Runnable(){public void run(){
@@ -265,9 +310,20 @@ public final class CinemaPlayerActivity extends Activity {
         }
     }
     @Override public boolean onKeyDown(int code,KeyEvent event){
-        if(code==KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE || code==KeyEvent.KEYCODE_DPAD_CENTER
-            && getCurrentFocus()==surface){
-            if(engine!=null){if(engine.isPlaying())engine.pause();else engine.play();}return true;
+        if(code==KeyEvent.KEYCODE_BACK&&controlPanel!=null
+           &&controlPanel.getVisibility()==View.VISIBLE){hideControls();return true;}
+        if(code==KeyEvent.KEYCODE_DPAD_CENTER||code==KeyEvent.KEYCODE_ENTER||
+           code==KeyEvent.KEYCODE_DPAD_UP||code==KeyEvent.KEYCODE_DPAD_DOWN||
+           code==KeyEvent.KEYCODE_DPAD_LEFT||code==KeyEvent.KEYCODE_DPAD_RIGHT){
+            if(controlPanel!=null&&controlPanel.getVisibility()!=View.VISIBLE){
+                showControls(true);return true;
+            }
+        }
+        if(code==KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE||
+            ((code==KeyEvent.KEYCODE_DPAD_CENTER||code==KeyEvent.KEYCODE_ENTER)
+               &&getCurrentFocus()==surface)){
+            if(engine!=null){if(engine.isPlaying())engine.pause();else engine.play();}
+            showControls(false);return true;
         }
         if(code==KeyEvent.KEYCODE_MEDIA_PLAY){if(engine!=null)engine.play();return true;}
         if(code==KeyEvent.KEYCODE_MEDIA_PAUSE){if(engine!=null)engine.pause();return true;}
@@ -278,6 +334,7 @@ public final class CinemaPlayerActivity extends Activity {
         return super.onKeyDown(code,event);
     }
     @Override protected void onPause(){
+        handler.removeCallbacks(autoHide);
         if(engine!=null){
             if(!live && itemId.length()>0){
                 getSharedPreferences("alezz_v11_player",MODE_PRIVATE).edit()
