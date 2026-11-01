@@ -24,4 +24,8 @@ for(const extension of [".mp4",".m3u8",".mpd",".mkv",".webm",".ts"])t("Source ex
 t("DASH parsing and media module present",probe.includes("dash+xml")&&gradle.includes("exoplayer-dash:2.18.7"));
 t("Probe still rejects fake HTML",probe.includes('contentType.contains("text/html")'));
 t("Unique Android package ID per build",workflow.includes('sa.alezz.tv.redclassic.b${GITHUB_RUN_ID}a${GITHUB_RUN_ATTEMPT}'));
-console.log("Static remote/format smoke tests passed. Real device playback is NOT asserted.");
+t("Movies pass playlist to in-app player",home.includes('putExtra("media_playlist"')&&home.includes('putExtra("media_kind"'));
+t("Episode queue is populated from fetched episodes",home.includes("episodeQueue.addAll(episodes)"));
+t("Movie and episode remote next/previous",player.includes("switchMedia(")&&player.includes("KEYCODE_MEDIA_NEXT")&&player.includes("KEYCODE_MEDIA_PREVIOUS"));
+t("Episodes auto-advance after finishing",player.includes('"episode".equals(mediaKind)')&&player.includes("switchMedia(mediaIndex+1)"));
+console.log("Static remote/format/playlists smoke tests passed. Real device playback is NOT asserted.");

@@ -82,6 +82,9 @@ public final class CinemaPlayerActivity extends Activity {
     private int index=-1,tries=0;
     private String itemId="",currentUrl="",itemTitle="";
     private final ArrayList<JSONObject> tvChannels=new ArrayList<JSONObject>();
+    private final ArrayList<JSONObject> mediaPlaylist=new ArrayList<JSONObject>();
+    private int mediaIndex=-1;
+    private String mediaKind="movie";
     private int tvChannelIndex=-1,aspectMode=0;
     private String remoteNumber="";
     private final Runnable commitRemoteNumber=new Runnable(){public void run(){
@@ -154,6 +157,22 @@ public final class CinemaPlayerActivity extends Activity {
                     intent.getIntExtra("channel_start",0)));
             }catch(Exception error){Log.w("AlEzzTV","TV guide unavailable",error);}
         }
+        if(!live){
+            mediaKind=intent.getStringExtra("media_kind")==null?"movie":intent.getStringExtra("media_kind");
+            try{
+                JSONArray items=new JSONArray(intent.getStringExtra("media_playlist")==null
+                    ?"[]" : intent.getStringExtra("media_playlist"));
+                for(int i=0;i<items.length() && i<100;i++){
+                    JSONObject candidate=items.optJSONObject(i);
+                    if(candidate!=null && !StreamQuality.parse(candidate.optString("url"),
+                        candidate.optString("quality"),candidate.optJSONArray("variants")==null
+                        ?"[]" : candidate.optJSONArray("variants").toString()).isEmpty())
+                        mediaPlaylist.add(candidate);
+                }
+                if(!mediaPlaylist.isEmpty())mediaIndex=Math.max(0,Math.min(
+                    mediaPlaylist.size()-1,intent.getIntExtra("media_start",0)));
+            }catch(Exception error){Log.w("AlEzzTV","Unable to load media playlist",error);}
+        }
         String url=intent.getStringExtra("stream_url");
         sources=StreamQuality.parse(url,intent.getStringExtra("quality"),intent.getStringExtra("stream_variants"));
         FrameLayout root=new FrameLayout(this);root.setBackgroundColor(Color.BLACK);
@@ -206,10 +225,10 @@ public final class CinemaPlayerActivity extends Activity {
         externalButton=button("مشغل بديل");
         footer.addView(externalButton,new LinearLayout.LayoutParams(dp(138),-1));
         externalButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){external();}});
-        Button guideButton=button("☷ القنوات");
+        Button guideButton=button(live?"☷ القنوات":"☷ المكتبة");
         footer.addView(guideButton,new LinearLayout.LayoutParams(dp(140),-1));
-        guideButton.setEnabled(live && tvChannels.size()>0);
-        guideButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showChannelGuide();}});
+        guideButton.setEnabled((live && !tvChannels.isEmpty())||(!live&&!mediaPlaylist.isEmpty()));
+        guideButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showContentGuide();}});
         Button audioButton=button("♫ صوت / ترجمة");
         footer.addView(audioButton,new LinearLayout.LayoutParams(dp(146),-1));
         audioButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showTrackMenu();}});
@@ -263,8 +282,13 @@ public final class CinemaPlayerActivity extends Activity {
                     details.setText((live ? "● القناة "+(tvChannelIndex+1)+" / "+tvChannels.size()
                         : "سينما العز • جودة تلقائية")+"   |  "+sources.get(index).label);
                 }else if(state==Player.STATE_ENDED){
-                    status.setText("انتهى الفيديو. اختر رجوع أو جودة أخرى.");
-                    showControls(true);
+                    if(!live && "episode".equals(mediaKind) &&
+                       mediaIndex>=0 && mediaIndex+1<mediaPlaylist.size()){
+                        switchMedia(mediaIndex+1);
+                    }else{
+                        status.setText("انتهى الفيديو. اختر رجوع أو جودة أخرى.");
+                        showControls(true);
+                    }
                 }
             }
             @Override public void onPlayerError(PlaybackException error){
@@ -333,6 +357,44 @@ public final class CinemaPlayerActivity extends Activity {
                 }
             }});
         }});
+    }
+    private void showContentGuide(){
+        if(live){showChannelGuide();return;}
+        if(mediaPlaylist.isEmpty()){status.setText("قائمة التشغيل غير متاحة.");return;}
+        String[] names=new String[mediaPlaylist.size()];
+        for(int i=0;i<names.length;i++)
+            names[i]=String.format(Locale.US,"%02d  •  %s",i+1,
+                mediaPlaylist.get(i).optString("title","عنوان"));
+        new android.app.AlertDialog.Builder(this).setTitle(
+            "episode".equals(mediaKind)?"الحلقات":"الأفلام")
+            .setSingleChoiceItems(names,mediaIndex,new android.content.DialogInterface.OnClickListener(){
+                public void onClick(android.content.DialogInterface dialog,int which){
+                    dialog.dismiss();switchMedia(which);
+                }
+            }).setNegativeButton("إغلاق",null).show();
+    }
+    private void switchMedia(int next){
+        if(next<0||next>=mediaPlaylist.size())return;
+        if(engine!=null && itemId.length()>0 && engine.getDuration()>0){
+            getSharedPreferences("alezz_v11_player",MODE_PRIVATE).edit()
+                .putLong("position_"+itemId,Math.max(0,engine.getCurrentPosition())).apply();
+        }
+        mediaIndex=next;
+        JSONObject selected=mediaPlaylist.get(mediaIndex);
+        ArrayList<StreamQuality.Source> variants=StreamQuality.parse(
+            selected.optString("url"),selected.optString("quality"),
+            selected.optJSONArray("variants")==null?"[]":
+                selected.optJSONArray("variants").toString());
+        if(variants.isEmpty())return;
+        itemId=selected.optString("id","");
+        itemTitle=selected.optString("title","العز TV");
+        sources=variants;index=StreamQuality.choose(sources,"auto",Build.VERSION.SDK_INT);
+        if(index<0)index=0;
+        attempted.clear();tries=0;requestToken++;
+        title.setText("▶ "+itemTitle);
+        details.setText(String.format(Locale.US,"%d / %d  •  %s",mediaIndex+1,
+            mediaPlaylist.size(),"episode".equals(mediaKind)?"حلقات":"أفلام"));
+        playSource(index);
     }
     private void showChannelGuide(){
         if(tvChannels.isEmpty()){status.setText("دليل القنوات غير متاح لهذا البث.");showControls(true);return;}
@@ -471,7 +533,7 @@ public final class CinemaPlayerActivity extends Activity {
                 switchChannel(tvChannelIndex-1);return true;
             }
             if(code==KeyEvent.KEYCODE_MENU||code==KeyEvent.KEYCODE_GUIDE){
-                showChannelGuide();return true;
+                showContentGuide();return true;
             }
             int digit=code-KeyEvent.KEYCODE_0;
             if(digit>=0 && digit<=9){
@@ -486,6 +548,17 @@ public final class CinemaPlayerActivity extends Activity {
             if((code==KeyEvent.KEYCODE_DPAD_CENTER||code==KeyEvent.KEYCODE_ENTER)
                 &&remoteNumber.length()>0){
                 handler.removeCallbacks(commitRemoteNumber);commitRemoteNumber.run();return true;
+            }
+        }
+        if(!live && !mediaPlaylist.isEmpty()){
+            if(code==KeyEvent.KEYCODE_MEDIA_NEXT){
+                switchMedia((mediaIndex+1)%mediaPlaylist.size());return true;
+            }
+            if(code==KeyEvent.KEYCODE_MEDIA_PREVIOUS){
+                switchMedia((mediaIndex-1+mediaPlaylist.size())%mediaPlaylist.size());return true;
+            }
+            if(code==KeyEvent.KEYCODE_MENU||code==KeyEvent.KEYCODE_GUIDE){
+                showContentGuide();return true;
             }
         }
         if(code==KeyEvent.KEYCODE_CAPTIONS){showTrackMenu();return true;}

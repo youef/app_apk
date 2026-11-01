@@ -163,7 +163,7 @@ jobs:
             dist/build-report.txt \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Al Ezz TV v12 - Native Remote, Channel Guide, DASH and Tracks - $AL_EZZ_EXPECTED_PACKAGE" \
+            --title "Al Ezz TV v12 - Native Remote, Channel Guide, DASH, Episodes and Tracks - $AL_EZZ_EXPECTED_PACKAGE" \
             --notes "Al Ezz TV v12 experimental native Android TV: immersive player, live channels guide and remote CH+/CH-/digits, automatic HLS and DASH variants, MP4/WebM/MKV/TS best effort, audio/subtitle track selection, screen aspect and VOD speed. Children YouTube use official in-app embed where OS supports it, direct licensed video through ExoPlayer. Unique package per release. Android 4.4.4 install checks passed, physical decoding and stream rights/availability NOT guaranteed." \
             --prerelease \
             --latest=false

@@ -8,6 +8,10 @@ This release is a **test build**, not a claim of complete decoder support.
 - Numeric 1–3 digit channel entry is accepted from supported TV remotes.
 - Menu / Guide opens the TV channels dialog.
 
+## Play-next library navigation
+- Movie and episode playlists remain inside the player: use MEDIA_NEXT / MEDIA_PREVIOUS or the in-player library chooser.
+- Published series episodes auto-advance after the previous episode ends; this does not restream media or bypass any rights controls.
+
 ## Native player controls
 - Fullscreen ExoPlayer 2.18.7 with controls hidden during playback, touch/OK to reveal.
 - Playback source quality selection and variant retry with validated, HTTPS sources only.

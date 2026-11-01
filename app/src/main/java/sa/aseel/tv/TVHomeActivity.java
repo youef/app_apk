@@ -38,6 +38,7 @@ public final class TVHomeActivity extends Activity {
     private final Handler ui=new Handler();
     private final ArrayList<JSONObject> movies=new ArrayList<JSONObject>();
     private final ArrayList<JSONObject> series=new ArrayList<JSONObject>();
+    private final ArrayList<JSONObject> episodeQueue=new ArrayList<JSONObject>();
     private final ArrayList<JSONObject> channels=new ArrayList<JSONObject>();
     private final ArrayList<JSONObject> youtubeVideos=new ArrayList<JSONObject>();
     private CatalogApi catalog;
@@ -433,6 +434,7 @@ public final class TVHomeActivity extends Activity {
                 heading(label(show),"اختر حلقة واضغط OK للتشغيل");
                 if(episodes.isEmpty())heading("لا توجد حلقات جاهزة",
                     problem.length()>0?problem:"راجع نشر الموسم والحلقات وروابط تشغيلها.");
+                episodeQueue.clear();episodeQueue.addAll(episodes);
                 for(final JSONObject ep:episodes){
                     Button b=button("▶ الموسم "+ep.optInt("_season",1)+" — الحلقة "+
                         ep.optInt("number",0)+"  |  "+label(ep));
@@ -474,6 +476,30 @@ public final class TVHomeActivity extends Activity {
         intent.putExtra("is_live","channel".equals(kind(item)));
         intent.putExtra("quality",value(item,"quality"));
         intent.putExtra("stream_variants",item.optJSONArray("stream_variants")==null?"[]":item.optJSONArray("stream_variants").toString());
+        if("movie".equals(kind(item)) || "episode".equals(kind(item))){
+            JSONArray mediaQueue=new JSONArray();
+            int currentIndex=0;
+            ArrayList<JSONObject> sourceItems="episode".equals(kind(item))?episodeQueue:movies;
+            for(JSONObject candidate:sourceItems){
+                String candidateUrl=value(candidate,"stream_url");
+                String variants=candidate.optJSONArray("stream_variants")==null
+                    ? "[]" : candidate.optJSONArray("stream_variants").toString();
+                if(StreamQuality.parse(candidateUrl,value(candidate,"quality"),variants).isEmpty())continue;
+                JSONObject record=new JSONObject();
+                try{
+                    record.put("id",value(candidate,"id"));
+                    record.put("title",label(candidate));
+                    record.put("url",candidateUrl);
+                    record.put("quality",value(candidate,"quality"));
+                    record.put("variants",new JSONArray(variants));
+                    if(value(candidate,"id").equals(value(item,"id")))currentIndex=mediaQueue.length();
+                    mediaQueue.put(record);
+                }catch(Exception ignored){}
+            }
+            intent.putExtra("media_playlist",mediaQueue.toString());
+            intent.putExtra("media_start",currentIndex);
+            intent.putExtra("media_kind",kind(item));
+        }
         if("channel".equals(kind(item))){
             JSONArray playlist=new JSONArray();
             int selected=0;
