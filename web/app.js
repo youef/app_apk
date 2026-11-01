@@ -5,7 +5,7 @@
  const cfg = window.ASEEL_WEB_CONFIG;
  const $ = id => document.getElementById(id);
  const MEDIA = ["movies","series","channels"];
- const state = { page: "home", query: "", category: "", kidsType:"all", kidsCountry:"", kidsLanguage:"", movies: [], series: [], channels: [],
+ const state = { page: "home", query: "", category: "", kidsType:"all", kidsCountry:"", kidsLanguage:"", youtubeTopic:"all", youtubeLanguage:"all", youtubeVideos:[], youtubeError:"", movies: [], series: [], channels: [],
    categories: [], favorites: new Set(), loading: true, error: "", chosen: null,
    token: "", refreshToken: "", userId: "", account: null, authMode: "login",
    playback: null, hls: null, progressTimer: 0, lastProgressAt: 0, heroIndex:0, homeCollections:[],homeCollectionItems:[] };
@@ -116,7 +116,8 @@
      api("aseel_channels", q),
      api("aseel_categories", "select=id,name_ar,sort_order&order=sort_order.asc&limit=100"),
      api("aseel_home_collections","select=id,title_ar,description,display_order&is_active=eq.true&order=display_order.asc&limit=40"),
-     api("aseel_home_collection_items","select=collection_id,movie_id,series_id,channel_id,episode_id,display_order&order=display_order.asc&limit=400")
+     api("aseel_home_collection_items","select=collection_id,movie_id,series_id,channel_id,episode_id,display_order&order=display_order.asc&limit=400"),
+     api("aseel_youtube_videos","select=id,title_ar,youtube_url,channel_name,language_code,topic,sort_order,source_page_url&status=eq.published&is_kids=eq.true&order=sort_order.asc&limit=200")
    ]);
    const errors = [];
    ["movies","series","channels","categories"].forEach((field, index) => {
@@ -129,6 +130,8 @@
    });
    state.homeCollections=results[4].status==="fulfilled"?(results[4].value||[]):[];
    state.homeCollectionItems=results[5].status==="fulfilled"?(results[5].value||[]):[];
+   state.youtubeVideos=results[6].status==="fulfilled"?(results[6].value||[]):[];
+   state.youtubeError=results[6].status==="rejected"?"تعذر تحميل فيديوهات الأطفال من قاعدة البيانات.":"";
    state.loading = false;
    state.error = errors.length ? "تعذّر الاتصال ببعض أقسام المكتبة. يمكنك إعادة المحاولة." : "";
    draw(); setHero();
@@ -220,6 +223,63 @@
      const codes=[...new Set(items.map(x=>x[field]).filter(Boolean))].sort();
      for(const c of codes){const o=el("option","",dictionary[c]||c);o.value=c;select.append(o)}
      state[stateKey]=codes.includes(current)?current:"";select.value=state[stateKey];
+   }
+ }
+ function renderYouTubeKids(){
+   const panel=$("youtubeKidsSection");
+   if(!panel)return;
+   const visible=state.page==="youtube"||state.page==="kids";
+   panel.hidden=!visible;
+   if(!visible)return;
+   const topics=[["all","الكل"],["letters","الحروف"],["numbers","الأرقام"],["animals","الحيوانات"],["colors","الألوان والأشكال"],["stories","القصص"],["songs","أناشيد وحركة"],["science","العلوم"]];
+   const topicBar=$("youtubeKidsTopics");topicBar.replaceChildren();
+   for(const [value,label] of topics){
+     const b=el("button","chip"+(state.youtubeTopic===value?" active":""),label);
+     b.type="button";b.onclick=()=>{state.youtubeTopic=value;renderYouTubeKids();};
+     topicBar.append(b);
+   }
+   const langSelect=$("youtubeKidsLanguage");
+   langSelect.replaceChildren();
+   for(const [code,name] of [["all","كل اللغات"],["ar","العربية"],["en","English"]]){
+     const option=el("option","",name);option.value=code;langSelect.append(option);
+   }
+   langSelect.value=state.youtubeLanguage;
+   langSelect.onchange=()=>{state.youtubeLanguage=langSelect.value;renderYouTubeKids();};
+   const search=state.query.trim().toLocaleLowerCase("ar");
+   const items=state.youtubeVideos.filter(v=>{
+     if(!youtubeId(v.youtube_url))return false;
+     if(state.youtubeTopic!=="all"&&v.topic!==state.youtubeTopic)return false;
+     if(state.youtubeLanguage!=="all"&&v.language_code!==state.youtubeLanguage)return false;
+     if(search && ![v.title_ar,v.channel_name].some(x=>String(x||"").toLocaleLowerCase("ar").includes(search)))return false;
+     return true;
+   });
+   $("youtubeKidsCount").textContent=items.length+" مقطع";
+   const grid=$("youtubeKidsGrid");grid.replaceChildren();
+   if(!items.length){
+     const emptyState=el("div","empty-state");
+     emptyState.append(el("h3","","لا توجد مقاطع مطابقة"),el("p","",state.youtubeError||"جرّب اختيار تصنيف أو لغة أخرى."));
+     grid.append(emptyState);
+     return;
+   }
+   for(const item of items){
+     const id=youtubeId(item.youtube_url);
+     const card=el("article","youtube-kid-card");
+     card.tabIndex=0;card.setAttribute("role","button");card.setAttribute("aria-label","تشغيل "+item.title_ar);
+     const poster=el("div","youtube-kid-poster");
+     const img=el("img");img.src="https://i.ytimg.com/vi/"+id+"/hqdefault.jpg";img.alt="";img.loading="lazy";img.decoding="async";
+     poster.append(img,el("span","youtube-kid-play","▶"));card.append(poster);
+     const textBox=el("div","youtube-kid-info");
+     textBox.append(el("h4","",item.title_ar),el("small","",item.channel_name+" · "+(item.language_code==="ar"?"العربية":"English")));
+     const actions=el("div","youtube-kid-actions");
+     const play=el("button","youtube-kid-watch","▶ مشاهدة");
+     play.type="button";play.onclick=()=>startPlayer({title_ar:item.title_ar,youtube_url:item.youtube_url},"movie");
+     const official=el("a","youtube-kid-official","فتح على يوتيوب");
+     official.href=item.youtube_url;official.target="_blank";official.rel="noopener noreferrer";
+     official.onclick=e=>e.stopPropagation();
+     actions.append(play,official);textBox.append(actions);card.append(textBox);
+     card.addEventListener("click",e=>{if(!e.target.closest("button,a"))startPlayer({title_ar:item.title_ar,youtube_url:item.youtube_url},"movie");});
+     card.addEventListener("keydown",e=>{if(e.target===card&&(e.key==="Enter"||e.key===" ")){e.preventDefault();startPlayer({title_ar:item.title_ar,youtube_url:item.youtube_url},"movie");}});
+     grid.append(card);
    }
  }
  function filtered(type) {
@@ -331,6 +391,7 @@
    $("youtubeQuick").hidden=route!=="youtube";
    if(route!=="kids")categories();
    kidsFilters();
+   renderYouTubeKids();
    const isKids=route==="kids",isYoutube=route==="youtube",allKids=state.kidsType==="all";
    const display={movie:isYoutube||route==="home"||route==="movies"||route==="favorites"||route==="search"||(isKids&&(allKids||state.kidsType==="movie")),
      series:route==="home"||route==="series"||route==="favorites"||route==="search"||(isKids&&(allKids||state.kidsType==="series")),
