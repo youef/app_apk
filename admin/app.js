@@ -164,7 +164,11 @@ $("editorForm").addEventListener("submit",async ev=>{
   const element=$("editorForm").elements.namedItem(key);
   if(!element)continue;
   let val=element.type==="checkbox"?element.checked:element.value.trim();
-  if(["release_year","duration_minutes","number","sort_order","display_order"].includes(key))val=val===""?null:Number(val);
+  // Preserve actual boolean false: PostgreSQL NOT NULL fields must not receive null.
+  if(element.type==="checkbox")val=element.checked;
+  // Non-null sortable fields default to zero when the field is left blank.
+  else if(["sort_order","display_order"].includes(key))val=val===""?0:Number(val);
+  else if(["release_year","duration_minutes","number"].includes(key))val=val===""?null:Number(val);
   else if(["value","stream_variants"].includes(key)){
      try{val=JSON.parse(val || (key==="stream_variants"?"[]":"{}"))}
      catch(_){return show("JSON غير صالح في "+key,true)}
