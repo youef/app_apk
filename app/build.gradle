@@ -11,8 +11,8 @@ android {
         // One universal APK for Android 4.4.4+, Android TV, phones and emulators.
         // The embedded Conscrypt dependency ships JNI for all four architectures.
         ndk { abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64" }
-        versionCode 11
-        versionName '9.0.1-universal-abi'
+        versionCode 12
+        versionName '9.1.0-tv-youtube-refresh'
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_7
