@@ -11,7 +11,11 @@ CANDIDATES = [
  {"channel":"CNBC Arabia","country":"AE","url":"https://cnbc-live.akamaized.net/cnbc/master.m3u8","source":"iptv-org/iptv streams/ae.m3u","rights":"unverified"},
  {"channel":"Fujairah TV","country":"AE","url":"https://live.kwikmotion.com/fujairahlive/fujairah.smil/playlist.m3u8","source":"iptv-org/iptv streams/ae.m3u","rights":"unverified"},
  {"channel":"Al Araby TV 2","country":"QA","url":"https://live.kwikmotion.com/alaraby2live/alaraby2.smil/playlist.m3u8","source":"iptv-org/iptv streams/qa.m3u","rights":"unverified"},
- {"channel":"Al Quran Al Kareem TV","country":"SA","url":"https://cdn-globecast.akamaized.net/live/eds/saudi_quran/hls_roku/index.m3u8","source":"iptv-org/iptv streams/sa.m3u","rights":"unverified"}
+ {"channel":"Al Quran Al Kareem TV","country":"SA","url":"https://cdn-globecast.akamaized.net/live/eds/saudi_quran/hls_roku/index.m3u8","source":"iptv-org/iptv streams/sa.m3u","rights":"unverified"},
+ {"channel":"Makkah TV (Arab playlist)","country":"SA","url":"https://media2.streambrothers.com:1936/8122/8122/chunklist.m3u8","source":"raid35/Arab quran.m3u","rights":"unverified"},
+ {"channel":"Saudi Quran Radio (Arab playlist)","country":"SA","url":"https://live.kwikmotion.com/sbrksaquranradiolive/srpksaquranradio/playlist.m3u8","source":"raid35/Arab quran.m3u","rights":"unverified"},
+ {"channel":"Saudi Sunnah TV (Arab playlist)","country":"SA","url":"https://cdn-globecast.akamaized.net/live/eds/saudi_sunnah/hls_roku/index.m3u8","source":"raid35/Arab quran.m3u","rights":"unverified"},
+ {"channel":"Sharjah Quran TV (Arab playlist)","country":"AE","url":"https://live.kwikmotion.com/sharjahtvquranlive/shqurantv.smil//sharjahtvquranpublish/shqurantv_source/chunks.m3u8","source":"raid35/Arab quran.m3u","rights":"unverified"}
 ]
 
 def probe(c):
