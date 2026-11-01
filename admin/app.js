@@ -98,13 +98,13 @@ function renderRows(){
  }
 }
 function optionList(key){
- if(key==="playback_mode")return [["stream","بث مباشر مرخص داخل التطبيق"],["official_link","رابط المصدر الرسمي (فتح موقع الجهة)"]];
+ if(key==="playback_mode")return [["stream","بث مباشر HTTPS MP4/HLS داخل التطبيق"],["official_link","رابط المصدر الرسمي (فتح موقع الجهة)"]];
  if(key==="status")return [["draft","مسودة"],["published","منشور"],["hidden","مخفي"]];
  if(key==="rights_status")return [["pending","قيد المراجعة"],["approved","تم التحقق من الحقوق"],["rejected","مرفوض"]];
  if(key==="quality")return [["SD","SD"],["HD","HD"],["FHD","FHD"],["4K","4K"]];
  if(key==="topic")return [["letters","الحروف"],["numbers","الأرقام"],["animals","الحيوانات"],["colors","الألوان والأشكال"],["stories","القصص"],["songs","أناشيد وحركة"],["science","العلوم"]];
  if(key==="age_rating")return [["all","مناسب للجميع"],["7+","7+"],["13+","13+"]];
- if(key==="category_id")return [["","بدون تصنيف"],...cats.map(x=>[x.id,x.name_ar])];
+ if(key==="category_id")return [["","اختر تصنيفًا"],...cats.map(x=>[x.id,x.name_ar])];
  if(key==="source_id")return [["","— اختر مصدر الحقوق —"],...sources.map(x=>[x.id,x.title+(x.verified?" ✓ موثق":" · بانتظار التوثيق")])];
  if(key==="series_id")return [["","اختر مسلسلًا"],...shows.map(x=>[x.id,x.title_ar])];
  if(key==="season_id")return [["","اختر موسمًا"],...seasons.map(x=>[x.id,"الموسم "+x.number+" — "+(shows.find(s=>s.id===x.series_id)?.title_ar||"")])];
@@ -115,7 +115,7 @@ function openEditor(row=null){
  $("editorTitle").textContent=(row?"تعديل ":"إضافة ")+tables[table].label;
  const target=$("fields");target.replaceChildren();
  for(const key of tables[table].fields){
-  const label=document.createElement("label");label.textContent=names[key]||key;
+  const label=document.createElement("label");label.textContent=(names[key]||key)+((table==="aseel_channels" && ["rights_status","rights_holder","license_reference","rights_expires_at"].includes(key))?" (اختياري)":"");
   if(["description","value","stream_variants"].includes(key))label.className="wide";
   let control;
   const choices=optionList(key);
@@ -187,11 +187,17 @@ $("editorForm").addEventListener("submit",async ev=>{
   else val=val||null;
   payload[key]=val;
  }
- if(table!=="aseel_youtube_videos"&&payload.status==="published"&&payload.rights_status!=="approved")
+ if(!["aseel_youtube_videos","aseel_channels"].includes(table)&&payload.status==="published"&&payload.rights_status!=="approved")
    return show("اعتمد الحقوق أولًا قبل النشر",true);
- if(table!=="aseel_youtube_videos"&&payload.status==="published"&&!payload.license_reference)
+ if(!["aseel_youtube_videos","aseel_channels"].includes(table)&&payload.status==="published"&&!payload.license_reference)
    return show("وثيقة الترخيص مطلوبة للنشر",true);
  if(table==="aseel_channels"){
+    if(!payload.title_ar || !payload.poster_url || !payload.category_id)
+      return show("لإضافة قناة أدخل العنوان، صورة HTTPS، والتصنيف",true);
+    if(!payload.poster_url.startsWith("https://"))
+      return show("صورة القناة يجب أن تكون برابط HTTPS",true);
+    // Rights metadata is optional. A pending value does not assert a licence.
+    if(!payload.rights_status)payload.rights_status="pending";
     if(payload.playback_mode==="official_link"){
       try { const u=new URL(payload.official_url||""); if(u.protocol!=="https:")throw Error(); }
       catch(_) {return show("أدخل رابط مشاهدة رسمي HTTPS صالحًا",true);}
@@ -207,7 +213,7 @@ $("editorForm").addEventListener("submit",async ev=>{
  if(payload.country_code)payload.country_code=payload.country_code.toUpperCase();
  if(payload.language_code && !/^[a-zA-Z]{2,3}$/.test(payload.language_code))return show("رمز اللغة غير صحيح",true);
  if(payload.language_code)payload.language_code=payload.language_code.toLowerCase();
- if(table!=="aseel_youtube_videos"&&payload.is_kids && payload.status==="published" && payload.rights_status!=="approved")return show("يتطلب نشر محتوى أطفال اعتماد الحقوق أولًا",true);
+ if(!["aseel_youtube_videos","aseel_channels"].includes(table)&&payload.is_kids && payload.status==="published" && payload.rights_status!=="approved")return show("يتطلب نشر محتوى أطفال اعتماد الحقوق أولًا",true);
  const youtubeId = value => {
   try{
    const u=new URL(String(value||""));
@@ -238,8 +244,9 @@ $("editorForm").addEventListener("submit",async ev=>{
  if(payload.stream_url && !isDirect(payload.stream_url))
    return show("ضع روابط MP4 أو HLS في خانة البث، وروابط يوتيوب في الحقل المستقل",true);
  if(["aseel_movies","aseel_episodes","aseel_channels"].includes(table) && payload.status==="published" &&
+    payload.playback_mode!=="official_link" &&
     !isDirect(payload.stream_url) && !youtubeId(payload.youtube_url))
-   return show("يلزم رابط MP4/HLS أو رابط يوتيوب رسمي، مع اعتماد الحقوق",true);
+   return show("يلزم رابط MP4/HLS مباشر أو رابط يوتيوب رسمي",true);
  if(Array.isArray(payload.stream_variants) && payload.stream_variants.some(v=>!isDirect(v.url)))
    return show("جميع الجودات يجب أن تكون روابط MP4 أو HLS مباشرة",true);
  try{
