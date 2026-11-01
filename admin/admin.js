@@ -1159,6 +1159,12 @@
       host.append(el('p', { class: 'bulk-hint' },
         'يُسمح بنشر روابط يوتيوب الرسمية فقط. فيديوهات يوتيوب لا تحتوي حقول ترخيص جماعي في قاعدة البيانات؛ لا يتم إنشاء ترخيص افتراضي.'));
     }
+    if (tableCfg.table === 'aseel_series') {
+      var withEpisodes = el('label', { class: 'bulk-ack' });
+      withEpisodes.append(el('input', { type: 'checkbox', id: 'mediaBulkIncludeEpisodes' }),
+        el('span', null, 'شمل كل حلقات المسلسلات المحددة في نفس العملية (حقوقها ونشرها عند استيفاء الشروط).'));
+      host.append(withEpisodes);
+    }
     var operations = el('div', { class: 'bulk-actions' });
     var actions = isYoutube ? [['نشر المحدد دفعة واحدة', 'publish', 'btn-gold']] : [
       ['اعتماد الترخيص للمحدد', 'license', 'btn-ghost'],
@@ -1233,6 +1239,31 @@
     }, Promise.resolve()).then(function () { return report; });
   }
 
+  function fetchSeriesEpisodes(seriesRows) {
+    var seasons = [];
+    return bulkParts(seriesRows, 30).reduce(function (chain, batch) {
+      return chain.then(function () {
+        var filter = 'series_id=in.(' + batch.map(function (s) { return s.id; }).join(',') + ')';
+        return restList('aseel_seasons', 'select=id,series_id&' + filter + '&limit=1000').then(function (rows) {
+          if (!Array.isArray(rows) || rows.length >= 1000) throw new Error('عدد المواسم يتجاوز حد الفحص الآمن.');
+          seasons = seasons.concat(rows);
+        });
+      });
+    }, Promise.resolve()).then(function () {
+      if (!seasons.length) return [];
+      var episodes = [];
+      return bulkParts(seasons, 30).reduce(function (chain, batch) {
+        return chain.then(function () {
+          var filter = 'season_id=in.(' + batch.map(function (s) { return s.id; }).join(',') + ')';
+          return restList('aseel_episodes', 'select=*&' + filter + '&limit=1000').then(function (rows) {
+            if (!Array.isArray(rows) || rows.length >= 1000) throw new Error('عدد الحلقات يتجاوز حد الفحص الآمن.');
+            episodes = episodes.concat(rows);
+          });
+        });
+      }, Promise.resolve()).then(function () { return episodes; });
+    });
+  }
+
   function runMediaBulk(action) {
     if (!isMediaBulkTable(state.table) || state.bulkBusy || !state.adminVerified) {
       toast('يلزم حساب مسؤول معتمد لإجراء النشر الجماعي.', 'error');
@@ -1242,6 +1273,7 @@
     var selected = state.rows.filter(function (row) { return state.selectedMedia[row.id]; });
     if (!selected.length) { toast('حدد عنصرًا أو أكثر أولًا.', 'error'); return; }
     var isYoutube = tableName === 'aseel_youtube_videos';
+    var includeEpisodes = tableName === 'aseel_series' && $('#mediaBulkIncludeEpisodes') && $('#mediaBulkIncludeEpisodes').checked;
     var holder = (($('#mediaBulkHolder') || {}).value || '').trim();
     var reference = (($('#mediaBulkLicense') || {}).value || '').trim();
     var expiry = (($('#mediaBulkExpiry') || {}).value || '').trim();
@@ -1262,8 +1294,11 @@
       ' لـ ' + selected.length + ' عنصر في ' + tableCfg.label + '؟ سيتم تعديل قاعدة البيانات فعليًا.')) return;
     state.bulkBusy = true;
     syncMediaBulkPanel();
-    var log = [], errors = [];
-    var flow = Promise.resolve();
+    var log = [], errors = [], childRows = [];
+    var flow = includeEpisodes ? fetchSeriesEpisodes(selected).then(function (episodes) {
+      childRows = episodes;
+      log.push('حلقات المسلسلات المحددة: ' + childRows.length);
+    }) : Promise.resolve();
     if (license) flow = flow.then(function () {
       var payload = { rights_status: 'approved', license_reference: reference };
       if (tableName !== 'aseel_episodes') payload.rights_holder = holder;
@@ -1273,6 +1308,13 @@
       return patchMediaBatch(tableName, selected, payload).then(function (result) {
         log.push('اعتماد الحقوق: ' + result.changed + ' / ' + selected.length + '، فشل: ' + result.failures);
         errors = errors.concat(result.errors);
+        if (!includeEpisodes || !childRows.length) return null;
+        var childLicense = { rights_status: 'approved', license_reference: reference };
+        if (expiry) childLicense.rights_expires_at = payload.rights_expires_at;
+        return patchMediaBatch('aseel_episodes', childRows, childLicense).then(function (sub) {
+          log.push('اعتماد حقوق الحلقات: ' + sub.changed + ' / ' + childRows.length + '، فشل: ' + sub.failures);
+          errors = errors.concat(sub.errors);
+        });
       });
     });
     if (action === 'publish' || action === 'all') flow = flow.then(function () {
@@ -1284,6 +1326,21 @@
         log.push('نشر جديد: ' + result.changed + '، منشور مسبقًا: ' + (allowed.length - drafts.length) +
           '، غير مؤهل: ' + (selected.length - allowed.length) + '، فشل: ' + result.failures);
         errors = errors.concat(result.errors);
+        if (!includeEpisodes || !childRows.length) return null;
+        var eligibleParents = {};
+        allowed.filter(function (row) { return row.status === 'published'; }).forEach(function (row) { eligibleParents[row.id] = true; });
+        return restList('aseel_seasons', 'select=id,series_id&limit=1000').then(function (seasons) {
+          var validSeasons = {};
+          (seasons || []).forEach(function (season) { if (eligibleParents[season.series_id]) validSeasons[season.id] = true; });
+          var eligible = childRows.filter(function (row) { return validSeasons[row.season_id] && canPublishMedia(row, 'aseel_episodes'); });
+          var draftEpisodes = eligible.filter(function (row) { return row.status !== 'published'; });
+          return patchMediaBatch('aseel_episodes', draftEpisodes, { status: 'published' }).then(function (sub) {
+            log.push('نشر الحلقات: ' + sub.changed + ' جديد، ' +
+              (eligible.length - draftEpisodes.length) + ' منشور مسبقًا، ' +
+              (childRows.length - eligible.length) + ' غير مؤهل، ' + sub.failures + ' فشل');
+            errors = errors.concat(sub.errors);
+          });
+        });
       });
     });
     flow.then(function () {
