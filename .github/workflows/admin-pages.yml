@@ -42,7 +42,7 @@ jobs:
         run: |
           set -euo pipefail
           test -s index.html
-          test -s .nojekyll
+          test -f .nojekyll
           test -s web/index.html
           test -s web/app.js
           test -s web/styles.css
