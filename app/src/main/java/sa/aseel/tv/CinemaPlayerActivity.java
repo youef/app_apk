@@ -1,0 +1,255 @@
+package sa.aseel.tv;
+
+import android.app.Activity;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Handler;
+import android.util.Log;
+import android.view.Gravity;
+import android.view.KeyEvent;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.WindowManager;
+import android.widget.Button;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import java.util.ArrayList;
+import java.util.Locale;
+import javax.net.ssl.HttpsURLConnection;
+
+import com.google.android.exoplayer2.ExoPlayer;
+import com.google.android.exoplayer2.MediaItem;
+import com.google.android.exoplayer2.PlaybackException;
+import com.google.android.exoplayer2.Player;
+import com.google.android.exoplayer2.source.DefaultMediaSourceFactory;
+import com.google.android.exoplayer2.upstream.DefaultDataSource;
+import com.google.android.exoplayer2.upstream.DefaultHttpDataSource;
+import com.google.android.exoplayer2.ui.PlayerView;
+
+/** Leanback-style native player. HLS/MP4 use legacy ExoPlayer, never WebView. */
+public final class CinemaPlayerActivity extends Activity {
+    private static final int BG=0xFF090A0E, RED=0xFFF03252, WHITE=0xFFF7F7FA, MUTED=0xFFB0B4C0;
+    private final Handler handler=new Handler();
+    private ExoPlayer engine;
+    private PlayerView surface;
+    private TextView status,title,details;
+    private Button playButton,qualityButton,backButton,externalButton;
+    private LinearLayout footer;
+    private ArrayList<StreamQuality.Source> sources;
+    private int index=-1,tries=0;
+    private String itemId="",currentUrl="",itemTitle="";
+    private boolean live=false,started=false;
+    private final Runnable watchdog=new Runnable(){public void run(){
+        if(isFinishing() || started || engine==null)return;
+        if(tries<1){
+            tries++;
+            status.setText("البث بطيء، إعادة الاتصال بالمصدر...");
+            try{engine.stop();engine.prepare();engine.play();}catch(Exception ignored){}
+            handler.postDelayed(this,18000);
+        }else{
+            status.setText("تعذّر تحميل الفيديو. قد تكون المشكلة في المصدر أو SSL أو ترميز جهازك. جرّب جودة أخرى أو المشغل البديل.");
+            footer.setVisibility(View.VISIBLE);
+            externalButton.requestFocus();
+        }
+    }};
+    private int dp(int px){return Math.round(px*getResources().getDisplayMetrics().density);}
+    private GradientDrawable shape(int color,int border){
+        GradientDrawable x=new GradientDrawable();x.setColor(color);x.setCornerRadius(dp(9));
+        if(border!=0)x.setStroke(dp(1),border);return x;
+    }
+    private TextView txt(String value,int size,int color,boolean strong){
+        TextView v=new TextView(this);v.setText(value);v.setTextColor(color);v.setTextSize(size);
+        v.setGravity(Gravity.CENTER_VERTICAL);v.setSingleLine(false);
+        if(strong)v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return v;
+    }
+    private Button button(String name){
+        final Button v=new Button(this);v.setText(name);v.setAllCaps(false);v.setTextSize(14);
+        v.setTextColor(WHITE);v.setFocusable(true);v.setBackgroundDrawable(shape(0xFF2D222D,0xFF594350));
+        v.setOnFocusChangeListener(new View.OnFocusChangeListener(){
+            public void onFocusChange(View w,boolean focused){
+                v.setBackgroundDrawable(shape(focused?RED:0xFF2D222D,focused?0xFFFFC3CD:0xFF594350));
+                v.setScaleX(focused?1.03f:1f);v.setScaleY(focused?1.03f:1f);
+                if(focused && footer!=null)footer.setVisibility(View.VISIBLE);
+            }
+        });return v;
+    }
+    @Override public void onCreate(Bundle state){
+        super.onCreate(state);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        Intent intent=getIntent();
+        itemId=intent.getStringExtra("item_id");if(itemId==null)itemId="";
+        itemTitle=intent.getStringExtra("title");if(itemTitle==null)itemTitle="العز TV";
+        live=intent.getBooleanExtra("is_live",false);
+        String url=intent.getStringExtra("stream_url");
+        sources=StreamQuality.parse(url,intent.getStringExtra("quality"),intent.getStringExtra("stream_variants"));
+        FrameLayout root=new FrameLayout(this);root.setBackgroundColor(Color.BLACK);
+        setContentView(root);
+        surface=new PlayerView(this);surface.setUseController(false);surface.setKeepScreenOn(true);
+        root.addView(surface,new FrameLayout.LayoutParams(-1,-1));
+        LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(22),dp(13),dp(22),dp(13));
+        panel.setBackgroundDrawable(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{0xE8111119,0xFA09090D}));
+        FrameLayout.LayoutParams pp=new FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM);
+        root.addView(panel,pp);
+        title=txt("▶ "+itemTitle,21,WHITE,true);panel.addView(title);
+        details=txt(live?"● بث مباشر":"فيلم / حلقة",12,MUTED,false);panel.addView(details);
+        status=txt("جاري تجهيز مشغّل الفيديو...",13,0xFFFFBCC6,false);
+        LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(-1,-2);
+        sp.topMargin=dp(7);panel.addView(status,sp);
+        footer=new LinearLayout(this);footer.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams fp=new LinearLayout.LayoutParams(-1,dp(55));
+        fp.topMargin=dp(8);panel.addView(footer,fp);
+        playButton=button("▶ تشغيل / إيقاف");
+        footer.addView(playButton,new LinearLayout.LayoutParams(0,-1,1));
+        playButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            if(engine==null)return;
+            if(engine.isPlaying())engine.pause();else engine.play();
+        }});
+        qualityButton=button("الجودة");
+        footer.addView(qualityButton,new LinearLayout.LayoutParams(0,-1,1));
+        qualityButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showQualityMenu();}});
+        externalButton=button("مشغل بديل");
+        footer.addView(externalButton,new LinearLayout.LayoutParams(0,-1,1));
+        externalButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){external();}});
+        backButton=button("رجوع");
+        footer.addView(backButton,new LinearLayout.LayoutParams(0,-1,1));
+        backButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){finish();}});
+        if(sources.isEmpty()){
+            status.setText("لا يوجد رابط MP4/HLS صالح لهذا العنوان. يرجى تحديثه في لوحة الإدارة.");
+            externalButton.setEnabled(false);backButton.requestFocus();return;
+        }
+        String preferred=getSharedPreferences("alezz_v11_player",MODE_PRIVATE).getString("quality_"+itemId,"auto");
+        index=StreamQuality.choose(sources,preferred,Build.VERSION.SDK_INT);
+        if(index<0)index=0;
+        initPlayer();playSource(index);
+        playButton.requestFocus();
+    }
+    private void initPlayer(){
+        try{
+            // Keep normal X.509 and hostname verification; add trusted roots/TLS1.2 on KitKat.
+            if(Build.VERSION.SDK_INT<=19){
+                HttpsURLConnection.setDefaultSSLSocketFactory(LegacyTls.factory(this));
+            }
+        }catch(Exception problem){
+            Log.w("AlezzV11","TLS provider setup failed: "+CatalogApi.describe(problem));
+        }
+        DefaultHttpDataSource.Factory http=new DefaultHttpDataSource.Factory()
+            .setUserAgent("AlEzzTV/11 (Android TV)")
+            .setConnectTimeoutMs(14000)
+            .setReadTimeoutMs(18000)
+            .setAllowCrossProtocolRedirects(false);
+        DefaultDataSource.Factory data=new DefaultDataSource.Factory(this,http);
+        engine=new ExoPlayer.Builder(this)
+            .setMediaSourceFactory(new DefaultMediaSourceFactory(data)).build();
+        engine.addListener(new Player.Listener(){
+            @Override public void onPlaybackStateChanged(int state){
+                if(state==Player.STATE_BUFFERING){
+                    status.setText("◌ جاري تحميل الفيديو... اضغط رجوع للخروج");started=false;
+                }else if(state==Player.STATE_READY){
+                    handler.removeCallbacks(watchdog);started=true;tries=0;
+                    status.setText(live?"● البث المباشر يعمل":"▶ الفيديو جاهز • زر OK للإيقاف والاستكمال");
+                    details.setText((live?"مباشر":"MP4 / HLS")+"  |  "+sources.get(index).label);
+                }else if(state==Player.STATE_ENDED){
+                    status.setText("انتهى الفيديو. اختر رجوع أو جودة أخرى.");
+                }
+            }
+            @Override public void onPlayerError(PlaybackException error){
+                handler.removeCallbacks(watchdog);started=false;
+                String reason=error.getErrorCodeName();
+                Log.w("AlezzV11","Player failed: "+reason,error);
+                if(tries<1 && index+1<sources.size()){
+                    tries++;status.setText("فشل المصدر "+reason+"، تجربة جودة أخرى...");
+                    playSource((index+1)%sources.size());
+                }else{
+                    status.setText("تعذّر التشغيل ("+reason+"). الرابط أو شهادة الاتصال أو الترميز غير مدعوم. جرّب المشغل البديل.");
+                    footer.setVisibility(View.VISIBLE);externalButton.requestFocus();
+                }
+            }
+        });
+        surface.setPlayer(engine);
+    }
+    private void playSource(int which){
+        if(which<0||which>=sources.size()||engine==null)return;
+        index=which;currentUrl=sources.get(which).url;
+        started=false;handler.removeCallbacks(watchdog);
+        qualityButton.setText("الجودة: "+sources.get(which).label);
+        status.setText("جاري الاتصال بالمصدر...");
+        try{
+            // ExoPlayer handles HLS playlists, segments, adaptive bitrate and MP4 ranges.
+            engine.setMediaItem(MediaItem.fromUri(Uri.parse(currentUrl)));
+            engine.prepare();
+            engine.play();
+            long saved=getSharedPreferences("alezz_v11_player",MODE_PRIVATE).getLong("position_"+itemId,0L);
+            if(!live&&saved>5000 && !getIntent().getBooleanExtra("no_resume",false))
+                engine.seekTo(saved);
+            handler.postDelayed(watchdog,22000);
+        }catch(Exception ex){
+            status.setText("فشل تهيئة المصدر: "+ex.getClass().getSimpleName());
+            Log.e("AlezzV11","Unable to prepare player",ex);
+        }
+    }
+    private void showQualityMenu(){
+        if(sources==null||sources.size()<2){
+            status.setText("المصدر متاح بجودة واحدة. في HLS يختار المشغل الدقة تلقائيًا.");return;
+        }
+        String[] names=new String[sources.size()];
+        for(int i=0;i<names.length;i++)names[i]=sources.get(i).label;
+        new android.app.AlertDialog.Builder(this).setTitle("جودة المشاهدة")
+            .setSingleChoiceItems(names,index,new android.content.DialogInterface.OnClickListener(){
+                public void onClick(android.content.DialogInterface dialog,int which){
+                    getSharedPreferences("alezz_v11_player",MODE_PRIVATE).edit()
+                        .putString("quality_"+itemId,sources.get(which).label).apply();
+                    tries=0;playSource(which);dialog.dismiss();
+                }
+            }).setNegativeButton("إلغاء",null).show();
+    }
+    private void external(){
+        if(currentUrl==null||!StreamQuality.isDirectUrl(currentUrl))return;
+        try{
+            Intent external=new Intent(Intent.ACTION_VIEW);
+            external.setDataAndType(Uri.parse(currentUrl),
+                currentUrl.toLowerCase(Locale.US).contains(".m3u8")?
+                "application/vnd.apple.mpegurl":"video/mp4");
+            startActivity(external);
+        }catch(Exception ex){
+            status.setText("لا يوجد مشغل خارجي مثبت يدعم الرابط. جرّب جودة MP4 أو مصدرًا آخر.");
+        }
+    }
+    @Override public boolean onKeyDown(int code,KeyEvent event){
+        if(code==KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE || code==KeyEvent.KEYCODE_DPAD_CENTER
+            && getCurrentFocus()==surface){
+            if(engine!=null){if(engine.isPlaying())engine.pause();else engine.play();}return true;
+        }
+        if(code==KeyEvent.KEYCODE_MEDIA_PLAY){if(engine!=null)engine.play();return true;}
+        if(code==KeyEvent.KEYCODE_MEDIA_PAUSE){if(engine!=null)engine.pause();return true;}
+        if(!live&&engine!=null){
+            if(code==KeyEvent.KEYCODE_MEDIA_REWIND){engine.seekTo(Math.max(0,engine.getCurrentPosition()-10000));return true;}
+            if(code==KeyEvent.KEYCODE_MEDIA_FAST_FORWARD){engine.seekTo(engine.getCurrentPosition()+10000);return true;}
+        }
+        return super.onKeyDown(code,event);
+    }
+    @Override protected void onPause(){
+        if(engine!=null){
+            if(!live && itemId.length()>0){
+                getSharedPreferences("alezz_v11_player",MODE_PRIVATE).edit()
+                    .putLong("position_"+itemId,Math.max(0,engine.getCurrentPosition())).apply();
+            }
+            engine.pause();
+        }
+        super.onPause();
+    }
+    @Override protected void onDestroy(){
+        handler.removeCallbacksAndMessages(null);
+        if(surface!=null)surface.setPlayer(null);
+        if(engine!=null){engine.release();engine=null;}
+        super.onDestroy();
+    }
+}

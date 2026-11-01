@@ -1,4 +1,4 @@
-name: Al Ezz TV — Red Classic Playback & Unique APK (API19+)
+name: Al Ezz TV v11 — Native Cinema & HLS (Android 4.4+)
 on:
   push:
     branches: [main]
@@ -38,7 +38,7 @@ jobs:
       - name: Install Android API 28 and Build Tools
         run: |
           set -euo pipefail
-          sdkmanager "platforms;android-28" "build-tools;33.0.2"
+          sdkmanager "platforms;android-33" "build-tools;33.0.2"
       - name: JDK 11 for Android Gradle Plugin 7.4.2
         uses: actions/setup-java@v6
         with:
@@ -76,13 +76,13 @@ jobs:
           set -euo pipefail
           PACKAGE="sa.alezz.tv.redclassic.b${GITHUB_RUN_ID}a${GITHUB_RUN_ATTEMPT}"
           VERSION_CODE=$(( 10000 + GITHUB_RUN_NUMBER ))
-          VERSION_NAME="9.3.3-redclassic-${GITHUB_RUN_ID}a${GITHUB_RUN_ATTEMPT}"
+          VERSION_NAME="11.0.0-native-${GITHUB_RUN_ID}a${GITHUB_RUN_ATTEMPT}"
           echo "ORG_GRADLE_PROJECT_ezzApplicationId=$PACKAGE" >> "$GITHUB_ENV"
           echo "ORG_GRADLE_PROJECT_ezzVersionCode=$VERSION_CODE" >> "$GITHUB_ENV"
           echo "ORG_GRADLE_PROJECT_ezzVersionName=$VERSION_NAME" >> "$GITHUB_ENV"
           echo "AL_EZZ_EXPECTED_PACKAGE=$PACKAGE" >> "$GITHUB_ENV"
           echo "AL_EZZ_MIN_VERSION=$VERSION_CODE" >> "$GITHUB_ENV"
-          echo "AL_EZZ_RELEASE_TAG=al-ezz-playback-${GITHUB_RUN_ID}-a${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+          echo "AL_EZZ_RELEASE_TAG=al-ezz-v11-${GITHUB_RUN_ID}-a${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
           echo "Unique install package: $PACKAGE"
 
       - name: Bundle official transparent brand artwork offline
@@ -92,6 +92,15 @@ jobs:
           file web/alizz-tv-transparent.png | grep -q PNG
           mkdir -p app/src/main/res/drawable-nodpi
           cp web/alizz-tv-transparent.png app/src/main/res/drawable-nodpi/alizz_brand.png
+      - name: Check native cinema structure and streaming modules
+        run: |
+          set -euo pipefail
+          grep -q 'TVHomeActivity' app/src/main/AndroidManifest.xml
+          grep -q 'CinemaPlayerActivity' app/src/main/AndroidManifest.xml
+          grep -q 'aseel_episodes' app/src/main/java/sa/aseel/tv/TVHomeActivity.java
+          grep -q 'aseel_channels' app/src/main/java/sa/aseel/tv/TVHomeActivity.java
+          grep -q 'exoplayer-hls:2.18.7' app/build.gradle
+          grep -q 'AL_EZZ_EXPECTED_PACKAGE' scripts/verify_apk.py
       - name: Build legacy-compatible APK
         shell: bash
         run: |
@@ -100,10 +109,10 @@ jobs:
           gradle clean assembleDebug --no-daemon --stacktrace >dist/gradle-build.log 2>&1 || { tail -100 dist/gradle-build.log; exit 1; }
           if [[ "$SIGNING_READY" == "true" ]]; then
             gradle assembleRelease --no-daemon --stacktrace >>dist/gradle-build.log 2>&1 || { tail -100 dist/gradle-build.log; exit 1; }
-            cp app/build/outputs/apk/release/app-release.apk dist/al-ezz-tv-redclassic-api19-test.apk
+            cp app/build/outputs/apk/release/app-release.apk dist/al-ezz-tv-v11-api19.apk
             echo "SIGNING_MODE=protected_permanent_release" >dist/install-metadata.txt
           else
-            cp app/build/outputs/apk/debug/app-debug.apk dist/al-ezz-tv-redclassic-api19-test.apk
+            cp app/build/outputs/apk/debug/app-debug.apk dist/al-ezz-tv-v11-api19.apk
             echo "SIGNING_MODE=temporary_debug_fresh_install_only" >dist/install-metadata.txt
           fi
           echo "PACKAGE=$AL_EZZ_EXPECTED_PACKAGE" >>dist/install-metadata.txt
@@ -115,15 +124,15 @@ jobs:
       - name: "Verify universal ABI coverage, Android 4.4 manifest and V1 signature"
         run: |
           set -euo pipefail
-          python3 scripts/verify_apk.py dist/al-ezz-tv-redclassic-api19-test.apk | tee dist/build-report.txt
-          sha256sum dist/al-ezz-tv-redclassic-api19-test.apk | tee -a dist/build-report.txt
-          test -s dist/al-ezz-tv-redclassic-api19-test.apk
+          python3 scripts/verify_apk.py dist/al-ezz-tv-v11-api19.apk | tee dist/build-report.txt
+          sha256sum dist/al-ezz-tv-v11-api19.apk | tee -a dist/build-report.txt
+          test -s dist/al-ezz-tv-v11-api19.apk
       - name: Upload signed installation candidate and diagnostic report
         uses: actions/upload-artifact@v6
         with:
           name: al-ezz-tv-redclassic-fresh-api19-${{ github.run_number }}
           path: |
-            dist/al-ezz-tv-redclassic-api19-test.apk
+            dist/al-ezz-tv-v11-api19.apk
             dist/install-metadata.txt
             dist/build-report.txt
             dist/gradle-build.log
@@ -137,13 +146,13 @@ jobs:
         run: |
           set -euo pipefail
           gh release create "$AL_EZZ_RELEASE_TAG" \
-            dist/al-ezz-tv-redclassic-api19-test.apk \
+            dist/al-ezz-tv-v11-api19.apk \
             dist/install-metadata.txt \
             dist/build-report.txt \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Al Ezz TV red classic playback fix - $AL_EZZ_EXPECTED_PACKAGE" \
-            --notes "Android 4.4/API19+ MP4 preference, playback diagnostics, and official YouTube fallback. New package per build installs beside older versions. TEST BUILD ONLY. Playback depends on old-device codecs, TLS and YouTube support." \
+            --title "Al Ezz TV v11 - Native Cinema/Movies/Series/Live - $AL_EZZ_EXPECTED_PACKAGE" \
+            --notes "v11 native rebuild: TV-first red UI with movies, series seasons and episodes, live channels, kids, search and favorites. Legacy ExoPlayer 2.18.7 MP4/HLS player. Unique package ID per build and Android KitKat APK verification. TEST BUILD: on-device video playback and link availability remain unverified." \
             --prerelease \
             --latest=false
       - name: Upload to Appetize when linked
@@ -152,5 +161,5 @@ jobs:
         with:
           apiToken: ${{ secrets.APPETIZE_API_TOKEN }}
           publicKey: ${{ secrets.APPETIZE_ANDROID_PUBLIC_KEY }}
-          appFile: dist/al-ezz-tv-redclassic-api19-test.apk
+          appFile: dist/al-ezz-tv-v11-api19.apk
           platform: android

@@ -11,7 +11,7 @@
         android:icon="@drawable/alizz_brand" android:banner="@drawable/tv_banner"
         android:supportsRtl="true" android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Holo.NoActionBar.Fullscreen">
-        <activity android:name="sa.aseel.tv.MainActivity" android:exported="true"
+        <activity android:name="sa.aseel.tv.TVHomeActivity" android:exported="true"
             android:screenOrientation="landscape"
             android:configChanges="orientation|screenSize|keyboardHidden">
             <intent-filter>
@@ -26,6 +26,8 @@
         <activity android:name="sa.aseel.tv.YouTubeActivity" android:exported="false"
             android:screenOrientation="landscape" android:hardwareAccelerated="true"
             android:configChanges="orientation|screenSize|keyboardHidden" />
+        <activity android:name="sa.aseel.tv.CinemaPlayerActivity" android:exported="false"
+            android:screenOrientation="landscape" android:hardwareAccelerated="true" />
         <activity android:name="sa.aseel.tv.PlayerActivity" android:exported="false"
             android:screenOrientation="landscape" />
     </application>

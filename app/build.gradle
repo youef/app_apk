@@ -2,7 +2,7 @@ apply plugin: 'com.android.application'
 
 android {
     namespace 'sa.aseel.tv'
-    compileSdkVersion 28
+    compileSdkVersion 33
     buildToolsVersion '33.0.2'
     defaultConfig {
         applicationId (project.findProperty('ezzApplicationId') ?: 'sa.alezz.tv.redclassic.local')
@@ -12,7 +12,7 @@ android {
         // The embedded Conscrypt dependency ships JNI for all four architectures.
         ndk { abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64" }
         versionCode Integer.parseInt(project.findProperty('ezzVersionCode') ?: '19')
-        versionName (project.findProperty('ezzVersionName') ?: '9.3.3-redclassic-local')
+        versionName (project.findProperty('ezzVersionName') ?: '11.0.0-tv-local')
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_7
@@ -52,6 +52,11 @@ android {
 }
 dependencies {
     implementation "org.conscrypt:conscrypt-android:2.5.3"
+    // Legacy ExoPlayer is retained solely because Android 4.4 requires API19.
+    // Modern Media3 requires a newer OS; do not silently raise minSdk.
+    implementation "com.google.android.exoplayer:exoplayer-core:2.18.7"
+    implementation "com.google.android.exoplayer:exoplayer-hls:2.18.7"
+    implementation "com.google.android.exoplayer:exoplayer-ui:2.18.7"
 }
 
 tasks.register('prepareTlsRoots', Exec) {
