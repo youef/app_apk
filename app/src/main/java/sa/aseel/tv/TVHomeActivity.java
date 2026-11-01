@@ -183,7 +183,7 @@ public final class TVHomeActivity extends Activity {
         }});
         background.execute(new Runnable(){public void run(){
             JSONArray data=null;String error="";
-            try{data=catalog.listQuery("aseel_channels","?select=*&status=eq.published&order=created_at.desc&limit=80");}
+            try{data=catalog.listQuery("aseel_channels","?select=*&status=eq.published&order=created_at.desc&limit=300");}
             catch(Exception e){error="قنوات: "+CatalogApi.describe(e);}
             final JSONArray rows=data;final String issue=error;
             ui.post(new Runnable(){public void run(){if(token!=generation||!unlocked)return;
