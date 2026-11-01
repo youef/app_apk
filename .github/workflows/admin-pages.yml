@@ -41,6 +41,7 @@ jobs:
           node tests/importer-smoke.cjs
           node tests/studio-smoke.cjs
           node tests/channel-catalog-smoke.cjs
+          node tests/live-page-smoke.cjs
           node tests/youtube-catalog-smoke.cjs
       - name: Verify branch-published website assets
         run: |
@@ -48,6 +49,8 @@ jobs:
           test -s index.html
           test -f .nojekyll
           test -s web/index.html
+          test -s web/js/live.js
+          test -s web/css/live.css
           test -s web/app.js
           test -s web/styles.css
           test -s web/access.js
