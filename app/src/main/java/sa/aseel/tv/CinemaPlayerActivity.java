@@ -21,7 +21,10 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import javax.net.ssl.HttpsURLConnection;
 
 import com.google.android.exoplayer2.ExoPlayer;
@@ -37,6 +40,10 @@ import com.google.android.exoplayer2.ui.PlayerView;
 public final class CinemaPlayerActivity extends Activity {
     private static final int BG=0xFF090A0E, RED=0xFFF03252, WHITE=0xFFF7F7FA, MUTED=0xFFB0B4C0;
     private final Handler handler=new Handler();
+    private final ExecutorService probeWorker=Executors.newSingleThreadExecutor();
+    private final HashSet<Integer> attempted=new HashSet<Integer>();
+    private int requestToken=0;
+    private String lastSourceHint="";
     private ExoPlayer engine;
     private PlayerView surface;
     private TextView status,title,details;
@@ -54,9 +61,7 @@ public final class CinemaPlayerActivity extends Activity {
             try{engine.stop();engine.prepare();engine.play();}catch(Exception ignored){}
             handler.postDelayed(this,18000);
         }else{
-            status.setText("تعذّر تحميل الفيديو. قد تكون المشكلة في المصدر أو SSL أو ترميز جهازك. جرّب جودة أخرى أو المشغل البديل.");
-            footer.setVisibility(View.VISIBLE);
-            externalButton.requestFocus();
+            tryNextOrExplain("انتهت مهلة الاتصال دون تشغيل الفيديو. "+lastSourceHint);
         }
     }};
     private int dp(int px){return Math.round(px*getResources().getDisplayMetrics().density);}
@@ -111,7 +116,13 @@ public final class CinemaPlayerActivity extends Activity {
         footer.addView(playButton,new LinearLayout.LayoutParams(0,-1,1));
         playButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
             if(engine==null)return;
-            if(engine.isPlaying())engine.pause();else engine.play();
+            if(engine.getPlaybackState()==Player.STATE_IDLE){attempted.clear();tries=0;playSource(index);}
+            else if(engine.isPlaying())engine.pause();else engine.play();
+        }});
+        Button retryButton=button("↻ إعادة");
+        footer.addView(retryButton,new LinearLayout.LayoutParams(0,-1,1));
+        retryButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            attempted.clear();tries=0;playSource(index);
         }});
         qualityButton=button("الجودة");
         footer.addView(qualityButton,new LinearLayout.LayoutParams(0,-1,1));
@@ -165,36 +176,66 @@ public final class CinemaPlayerActivity extends Activity {
                 handler.removeCallbacks(watchdog);started=false;
                 String reason=error.getErrorCodeName();
                 Log.w("AlezzV11","Player failed: "+reason,error);
-                if(tries<1 && index+1<sources.size()){
-                    tries++;status.setText("فشل المصدر "+reason+"، تجربة جودة أخرى...");
-                    playSource((index+1)%sources.size());
-                }else{
-                    status.setText("تعذّر التشغيل ("+reason+"). الرابط أو شهادة الاتصال أو الترميز غير مدعوم. جرّب المشغل البديل.");
-                    footer.setVisibility(View.VISIBLE);externalButton.requestFocus();
-                }
+                String explanation;
+                if("ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED".equals(reason))
+                    explanation="حاوية الفيديو غير مدعومة أو الخادم أعاد بيانات ليست فيديو. "+lastSourceHint;
+                else if(reason.contains("DECODING")||reason.contains("DECODER"))
+                    explanation="جهازك لا يدعم ترميز هذه الجودة. جرّب MP4 بجودة SD/H.264.";
+                else if(reason.contains("NETWORK")||reason.contains("HTTP")||reason.contains("IO"))
+                    explanation="تعذر الوصول للمصدر أو انتهت صلاحية الرابط. "+lastSourceHint;
+                else explanation="تعذر قراءة المصدر ("+reason+"). "+lastSourceHint;
+                tryNextOrExplain(explanation);
             }
         });
         surface.setPlayer(engine);
     }
+    private void tryNextOrExplain(String explanation){
+        handler.removeCallbacks(watchdog);
+        for(int offset=1;offset<=sources.size();offset++){
+            int next=(index+offset)%sources.size();
+            if(!attempted.contains(next)){
+                status.setText("فشل المصدر الحالي. تجربة جودة أخرى...");
+                tries=0;playSource(next);return;
+            }
+        }
+        status.setText(explanation+" — لا توجد جودات أخرى صالحة. استخدم المشغل البديل أو حدّث رابط الفيلم من الإدارة.");
+        footer.setVisibility(View.VISIBLE);
+        externalButton.requestFocus();
+    }
     private void playSource(int which){
         if(which<0||which>=sources.size()||engine==null)return;
         index=which;currentUrl=sources.get(which).url;
+        attempted.add(which);
         started=false;handler.removeCallbacks(watchdog);
+        final int token=++requestToken;
+        final String stream=currentUrl;
         qualityButton.setText("الجودة: "+sources.get(which).label);
-        status.setText("جاري الاتصال بالمصدر...");
-        try{
-            // ExoPlayer handles HLS playlists, segments, adaptive bitrate and MP4 ranges.
-            engine.setMediaItem(MediaItem.fromUri(Uri.parse(currentUrl)));
-            engine.prepare();
-            engine.play();
-            long saved=getSharedPreferences("alezz_v11_player",MODE_PRIVATE).getLong("position_"+itemId,0L);
-            if(!live&&saved>5000 && !getIntent().getBooleanExtra("no_resume",false))
-                engine.seekTo(saved);
-            handler.postDelayed(watchdog,22000);
-        }catch(Exception ex){
-            status.setText("فشل تهيئة المصدر: "+ex.getClass().getSimpleName());
-            Log.e("AlezzV11","Unable to prepare player",ex);
-        }
+        status.setText("◌ فحص رابط الفيديو قبل التشغيل...");
+        probeWorker.execute(new Runnable(){public void run(){
+            final StreamProbe.Result probe=StreamProbe.inspect(getApplicationContext(),stream);
+            handler.post(new Runnable(){public void run(){
+                if(isFinishing()||engine==null||token!=requestToken)return;
+                lastSourceHint=probe.message;
+                if(probe.rejected){
+                    tryNextOrExplain(probe.message);return;
+                }
+                try{
+                    status.setText("◌ "+probe.message+" جاري التشغيل...");
+                    MediaItem.Builder item=new MediaItem.Builder().setUri(Uri.parse(stream));
+                    if(probe.detectedMime!=null)item.setMimeType(probe.detectedMime);
+                    engine.setMediaItem(item.build());
+                    engine.prepare();
+                    engine.play();
+                    long saved=getSharedPreferences("alezz_v11_player",MODE_PRIVATE).getLong("position_"+itemId,0L);
+                    if(!live&&saved>5000 && !getIntent().getBooleanExtra("no_resume",false))
+                        engine.seekTo(saved);
+                    handler.postDelayed(watchdog,22000);
+                }catch(Exception ex){
+                    Log.e("AlezzV11","Unable to prepare media source",ex);
+                    tryNextOrExplain("فشل تهيئة الفيديو: "+ex.getClass().getSimpleName());
+                }
+            }});
+        }});
     }
     private void showQualityMenu(){
         if(sources==null||sources.size()<2){
@@ -207,7 +248,7 @@ public final class CinemaPlayerActivity extends Activity {
                 public void onClick(android.content.DialogInterface dialog,int which){
                     getSharedPreferences("alezz_v11_player",MODE_PRIVATE).edit()
                         .putString("quality_"+itemId,sources.get(which).label).apply();
-                    tries=0;playSource(which);dialog.dismiss();
+                    attempted.clear();tries=0;playSource(which);dialog.dismiss();
                 }
             }).setNegativeButton("إلغاء",null).show();
     }
@@ -247,7 +288,7 @@ public final class CinemaPlayerActivity extends Activity {
         super.onPause();
     }
     @Override protected void onDestroy(){
-        handler.removeCallbacksAndMessages(null);
+        requestToken++;probeWorker.shutdownNow();handler.removeCallbacksAndMessages(null);
         if(surface!=null)surface.setPlayer(null);
         if(engine!=null){engine.release();engine=null;}
         super.onDestroy();

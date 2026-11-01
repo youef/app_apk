@@ -1,0 +1,30 @@
+#!/usr/bin/env node
+"use strict";
+const assert=require("node:assert/strict");
+const fs=require("node:fs");
+const read=(f)=>fs.readFileSync(f,"utf8");
+const home=read("app/src/main/java/sa/aseel/tv/TVHomeActivity.java");
+const catalog=read("app/src/main/java/sa/aseel/tv/CatalogApi.java");
+const player=read("app/src/main/java/sa/aseel/tv/CinemaPlayerActivity.java");
+const probe=read("app/src/main/java/sa/aseel/tv/StreamProbe.java");
+const youtube=read("app/src/main/java/sa/aseel/tv/YouTubeActivity.java");
+const manifest=read("app/src/main/AndroidManifest.xml");
+function test(label,condition){assert.ok(condition,label);process.stdout.write("PASS "+label+"\n");}
+test("kids videos requested from published youtube table",home.includes('catalog.listQuery("aseel_youtube_videos"'));
+test("kids and published flags enforced",home.includes("status=eq.published&is_kids=eq.true"));
+test("youtube url validated before listing",home.includes('YouTubeLink.usable(value(clip,"youtube_url"))'));
+test("youtube section exists",home.includes('"youtube".equals(section)'));
+test("kids section explicitly shows youtube shelf",home.includes('shelf("مقاطع يوتيوب للأطفال"'));
+test("cards use official YouTube thumbnails",home.includes('https://i.ytimg.com/vi/'));
+test("youtube opens official embed activity",home.includes("new Intent(this,YouTubeActivity.class)"));
+test("official app/browser fallback retained",youtube.includes("openOfficialPlayer()"));
+test("catalog still filters approved movie/channel rights",catalog.includes('!"approved".equals(item.optString("rights_status"'));
+test("source probe requires https",probe.includes('https'));
+test("source probe detects html responses",probe.includes('contentType.contains("text/html")'));
+test("source probe reports 403/404",probe.includes("code==401||code==403")&&probe.includes("code==404||code==410"));
+test("source probe recognises HLS",probe.includes('prefix.startsWith("#extm3u")'));
+test("player invokes bounded preflight",player.includes("StreamProbe.inspect"));
+test("player handles unsupported media container",player.includes("ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED"));
+test("player tries remaining alternate variants",player.includes("tryNextOrExplain")&&player.includes("attempted.contains(next)"));
+test("native TV launcher and ExoPlayer player retained",manifest.includes("sa.aseel.tv.TVHomeActivity")&&manifest.includes("sa.aseel.tv.CinemaPlayerActivity"));
+process.stdout.write("OK: 17 source-level regression checks passed. Physical TV playback is not asserted.\n");

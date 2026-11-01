@@ -34,11 +34,12 @@ import java.util.concurrent.Executors;
 public final class TVHomeActivity extends Activity {
     private static final int BG=0xFF090A0E, PANEL=0xFF17141C, RED=0xFFF23154;
     private static final int WHITE=0xFFF6F5FA, MUTED=0xFFABB0BB;
-    private final ExecutorService background=Executors.newFixedThreadPool(3);
+    private final ExecutorService background=Executors.newFixedThreadPool(4);
     private final Handler ui=new Handler();
     private final ArrayList<JSONObject> movies=new ArrayList<JSONObject>();
     private final ArrayList<JSONObject> series=new ArrayList<JSONObject>();
     private final ArrayList<JSONObject> channels=new ArrayList<JSONObject>();
+    private final ArrayList<JSONObject> youtubeVideos=new ArrayList<JSONObject>();
     private CatalogApi catalog;
     private ScrollView scroller;
     private LinearLayout content,navBar;
@@ -46,7 +47,7 @@ public final class TVHomeActivity extends Activity {
     private String section="home";
     private String lastLoadError="";
     private boolean loading=false,unlocked=false;
-    private int generation=0;
+    private int generation=0,episodeGeneration=0,pendingRequests=0;
 
     private int dp(int val){return Math.round(getResources().getDisplayMetrics().density*val);}
     private LinearLayout column(){LinearLayout x=new LinearLayout(this);x.setOrientation(LinearLayout.VERTICAL);return x;}
@@ -137,8 +138,8 @@ public final class TVHomeActivity extends Activity {
     }
     private void updateNav(){
         navBar.removeAllViews();
-        final String[] tabs={"الرئيسية","الأفلام","المسلسلات","البث المباشر","الأطفال","قائمتي"};
-        final String[] modes={"home","movies","series","live","kids","favorites"};
+        final String[] tabs={"الرئيسية","الأفلام","المسلسلات","البث المباشر","يوتيوب","الأطفال","قائمتي"};
+        final String[] modes={"home","movies","series","live","youtube","kids","favorites"};
         for(int i=0;i<tabs.length;i++){
             final String selected=modes[i];Button b=button(tabs[i]);
             b.setTextSize(14);
@@ -151,7 +152,7 @@ public final class TVHomeActivity extends Activity {
     }
     private void loadCatalog(){
         if(loading || !unlocked)return;
-        loading=true;status.setText("◌ تحديث المكتبة...");
+        loading=true;pendingRequests=4;lastLoadError="";status.setText("◌ تحديث المكتبة...");
         final int token=++generation;
         background.execute(new Runnable(){public void run(){
             JSONArray data=null;String error="";
@@ -159,7 +160,7 @@ public final class TVHomeActivity extends Activity {
             catch(Exception e){error+="أفلام: "+CatalogApi.describe(e)+"  ";}
             final JSONArray rows=data;final String problem=error;
             ui.post(new Runnable(){public void run(){if(token!=generation||!unlocked)return;
-                if(rows!=null)putAll(movies,rows,"movie");if(problem.length()>0)lastLoadError=problem;render();
+                if(rows!=null)putAll(movies,rows,"movie");completeCatalog(token,problem);
             }});
         }});
         background.execute(new Runnable(){public void run(){
@@ -168,7 +169,7 @@ public final class TVHomeActivity extends Activity {
             catch(Exception e){error="مسلسلات: "+CatalogApi.describe(e);}
             final JSONArray rows=data;final String issue=error;
             ui.post(new Runnable(){public void run(){if(token!=generation||!unlocked)return;
-                if(rows!=null)putAll(series,rows,"series");if(issue.length()>0)lastLoadError=issue;render();
+                if(rows!=null)putAll(series,rows,"series");completeCatalog(token,issue);
             }});
         }});
         background.execute(new Runnable(){public void run(){
@@ -177,11 +178,42 @@ public final class TVHomeActivity extends Activity {
             catch(Exception e){error="قنوات: "+CatalogApi.describe(e);}
             final JSONArray rows=data;final String issue=error;
             ui.post(new Runnable(){public void run(){if(token!=generation||!unlocked)return;
-                if(rows!=null)putAll(channels,rows,"channel");if(issue.length()>0)lastLoadError=issue;
-                loading=false;status.setText(issue.length()>0?"⚠ بعض المصادر لم تُحمّل":"● المكتبة متصلة");
-                render();
+                if(rows!=null)putAll(channels,rows,"channel");completeCatalog(token,issue);
             }});
         }});
+        background.execute(new Runnable(){public void run(){
+            JSONArray data=null;String issue="";
+            try{
+                data=catalog.listQuery("aseel_youtube_videos",
+                    "?select=id,title_ar,youtube_url,channel_name,language_code,topic,is_kids,status,sort_order&status=eq.published&is_kids=eq.true&order=sort_order.asc&limit=120");
+            }catch(Exception e){issue="يوتيوب الأطفال: "+CatalogApi.describe(e);}
+            final JSONArray rows=data;final String error=issue;
+            ui.post(new Runnable(){public void run(){
+                if(token!=generation||!unlocked)return;
+                if(rows!=null){
+                    youtubeVideos.clear();
+                    for(int k=0;k<rows.length();k++){
+                        JSONObject clip=rows.optJSONObject(k);
+                        if(clip!=null && clip.optBoolean("is_kids",false)
+                            && YouTubeLink.usable(value(clip,"youtube_url"))){
+                            mark(clip,"youtube");youtubeVideos.add(clip);
+                        }
+                    }
+                }
+                completeCatalog(token,error);
+            }});
+        }});
+    }
+    private void completeCatalog(int token,String issue){
+        if(token!=generation||!unlocked)return;
+        if(issue!=null && issue.length()>0){
+            lastLoadError=lastLoadError.length()==0?issue:lastLoadError+" | "+issue;
+        }
+        pendingRequests=Math.max(0,pendingRequests-1);
+        loading=pendingRequests>0;
+        status.setText(loading?"◌ تحميل المكتبة...":lastLoadError.length()>0
+            ?"⚠ بعض الأقسام غير متاحة":"● المكتبة متصلة");
+        render();
     }
     private void heading(String title,String note){
         TextView h=text(title,23,WHITE,true);content.addView(h,space(-1,-2,5));
@@ -196,23 +228,27 @@ public final class TVHomeActivity extends Activity {
             shelf("الأفلام","اكتشف أحدث الأعمال المتاحة",movies,14);
             shelf("مسلسلات","مواسم وحلقات مرتبة",series,12);
             shelf("قنوات مباشرة","بث حي من المصادر المعتمدة",channels,14);
+            shelf("يوتيوب الأطفال","مقاطع يوتيوب الرسمية المنشورة",youtubeVideos,14);
         }else if("movies".equals(section))grid("الأفلام",movies);
         else if("series".equals(section))grid("المسلسلات",series);
         else if("live".equals(section))grid("البث المباشر",channels);
+        else if("youtube".equals(section))grid("مقاطع يوتيوب للأطفال",youtubeVideos);
         else if("kids".equals(section)){
             ArrayList<JSONObject> kids=new ArrayList<JSONObject>();
             for(JSONObject x:movies)if(x.optBoolean("is_kids",false))kids.add(x);
             for(JSONObject x:series)if(x.optBoolean("is_kids",false))kids.add(x);
             for(JSONObject x:channels)if(x.optBoolean("is_kids",false))kids.add(x);
-            grid("عالم الأطفال",kids);
+            grid("عالم الأطفال • أفلام وقنوات",kids);
+            shelf("مقاطع يوتيوب للأطفال","محتوى رسمي — افتح المقطع بالريموت",youtubeVideos,34);
         }else if("favorites".equals(section)){
             ArrayList<JSONObject> list=new ArrayList<JSONObject>();
             for(JSONObject x:movies)if(isFavorite(x))list.add(x);
             for(JSONObject x:series)if(isFavorite(x))list.add(x);
             for(JSONObject x:channels)if(isFavorite(x))list.add(x);
+            for(JSONObject x:youtubeVideos)if(isFavorite(x))list.add(x);
             grid("قائمتي",list);
         }else if("search".equals(section))searchScreen();
-        if(movies.size()+series.size()+channels.size()==0){
+        if(movies.size()+series.size()+channels.size()+youtubeVideos.size()==0){
             heading(loading?"جاري تحميل المكتبة...":"المكتبة لم تُحمّل",
                 loading?"اتصل بالإنترنت، ستظهر البطاقات تلقائيًا.":"اضغط تحديث. "+lastLoadError);
             Button refresh=button("إعادة المحاولة");content.addView(refresh,space(dp(240),dp(60),4));
@@ -228,7 +264,7 @@ public final class TVHomeActivity extends Activity {
         LinearLayout copy=column();
         copy.addView(text("أهلًا بك في العز TV",30,WHITE,true),space(-1,-2,3));
         copy.addView(text("اختر فيلمك أو مسلسلك أو قناتك مباشرة، وتحكم بالكامل بالريموت.",15,0xFFE1C9D1,false),space(-1,-2,3));
-        TextView counts=text(movies.size()+" فيلم  •  "+series.size()+" مسلسل  •  "+channels.size()+" قناة",13,0xFFFFBDCD,true);
+        TextView counts=text(movies.size()+" فيلم  •  "+series.size()+" مسلسل  •  "+channels.size()+" قناة  •  "+youtubeVideos.size()+" مقطع",13,0xFFFFBDCD,true);
         copy.addView(counts,space(-1,-2,4));
         Button explore=button("▶ استكشف الأفلام");copy.addView(explore,space(dp(245),dp(52),6));
         explore.setOnClickListener(new View.OnClickListener(){public void onClick(View v){section="movies";render();}});
@@ -267,10 +303,12 @@ public final class TVHomeActivity extends Activity {
         outer.addView(image,new LinearLayout.LayoutParams(-1,dp(159)));
         String poster=value(item,"poster_url");
         if(poster.length()==0)poster=value(item,"backdrop_url");
+        if("youtube".equals(kind(item))){String clip=YouTubeLink.videoId(value(item,"youtube_url"));
+            if(clip!=null)poster="https://i.ytimg.com/vi/"+clip+"/hqdefault.jpg";}
         if(poster.startsWith("https://"))PosterLoader.load(image,poster);
         TextView title=text(label(item),15,WHITE,true);title.setMaxLines(2);
         title.setEllipsize(TextUtils.TruncateAt.END);outer.addView(title,space(-1,dp(47),3));
-        String desc="channel".equals(kind(item))?"● مباشر":"series".equals(kind(item))?"▤ مسلسل":"▶ فيلم";
+        String desc="channel".equals(kind(item))?"● مباشر":"series".equals(kind(item))?"▤ مسلسل":"youtube".equals(kind(item))?"▶ يوتيوب":"▶ فيلم";
         outer.addView(text(desc,12,0xFFFF8DA6,false));
         outer.setOnFocusChangeListener(new View.OnFocusChangeListener(){public void onFocusChange(View v,boolean focused){
             outer.setBackgroundDrawable(bg(focused?0xFF79203A:0xFF201C25,focused?0xFFFFB0C6:0xFF342B38,13));
@@ -281,6 +319,7 @@ public final class TVHomeActivity extends Activity {
     }
     private void detail(final JSONObject item){
         if("series".equals(kind(item))){episodes(item);return;}
+        if("youtube".equals(kind(item))){openYouTube(item);return;}
         content.removeAllViews();
         heading(label(item),"channel".equals(kind(item))?"● قناة مباشرة":"فيلم • مشاهدة مباشرة");
         LinearLayout hero=row();content.addView(hero,space(-1,dp(240),7));
@@ -306,7 +345,7 @@ public final class TVHomeActivity extends Activity {
         content.removeAllViews();heading(label(show),"جارٍ استرجاع المواسم والحلقات...");
         final String seriesId=value(show,"id");
         if(!seriesId.matches("[0-9a-fA-F-]{36}")){heading("خطأ في معرف المسلسل","");return;}
-        final int token=++generation;
+        final int token=++episodeGeneration;
         background.execute(new Runnable(){public void run(){
             final ArrayList<JSONObject> episodes=new ArrayList<JSONObject>();
             String failure="";
@@ -330,7 +369,7 @@ public final class TVHomeActivity extends Activity {
             }catch(Exception e){failure=CatalogApi.describe(e);}
             final String problem=failure;
             ui.post(new Runnable(){public void run(){
-                if(isFinishing()||token!=generation)return;
+                if(isFinishing()||token!=episodeGeneration)return;
                 content.removeAllViews();
                 heading(label(show),"اختر حلقة واضغط OK للتشغيل");
                 if(episodes.isEmpty())heading("لا توجد حلقات جاهزة",
@@ -348,8 +387,11 @@ public final class TVHomeActivity extends Activity {
         }});
     }
     private void play(JSONObject item){
+        String youtube=value(item,"youtube_url");
+        if(YouTubeLink.usable(youtube)){openYouTube(item);return;}
         String url=value(item,"stream_url");
-        if(!StreamQuality.isDirectUrl(url)){
+        if(StreamQuality.parse(url,value(item,"quality"),
+            item.optJSONArray("stream_variants")==null?"[]":item.optJSONArray("stream_variants").toString()).isEmpty()){
             heading("لا يوجد مصدر صالح للتشغيل","تأكد من وجود رابط HTTPS MP4/HLS لهذا العنوان في لوحة الإدارة.");
             return;
         }
@@ -361,6 +403,30 @@ public final class TVHomeActivity extends Activity {
         intent.putExtra("quality",value(item,"quality"));
         intent.putExtra("stream_variants",item.optJSONArray("stream_variants")==null?"[]":item.optJSONArray("stream_variants").toString());
         startActivity(intent);
+    }
+    private void openYouTube(JSONObject selected){
+        String id=YouTubeLink.videoId(value(selected,"youtube_url"));
+        if(id==null)return;
+        JSONArray queue=new JSONArray();
+        HashSet<String> seen=new HashSet<String>();
+        for(JSONObject clip:youtubeVideos){
+            String clipId=YouTubeLink.videoId(value(clip,"youtube_url"));
+            if(clipId==null||!seen.add(clipId))continue;
+            try{
+                JSONObject entry=new JSONObject();
+                entry.put("video_id",clipId);
+                entry.put("title",label(clip));
+                entry.put("channel",value(clip,"channel_name"));
+                entry.put("topic",value(clip,"topic"));
+                queue.put(entry);
+            }catch(Exception ignored){}
+        }
+        Intent player=new Intent(this,YouTubeActivity.class);
+        player.putExtra("youtube_url",value(selected,"youtube_url"));
+        player.putExtra("start_video_id",id);
+        player.putExtra("title",label(selected));
+        player.putExtra("playlist_json",queue.toString());
+        startActivity(player);
     }
     private void searchScreen(){
         heading("البحث","ابحث في جميع العناوين المنشورة");
@@ -378,6 +444,7 @@ public final class TVHomeActivity extends Activity {
             for(JSONObject x:movies)if(label(x).toLowerCase(Locale.US).contains(term))found.add(x);
             for(JSONObject x:series)if(label(x).toLowerCase(Locale.US).contains(term))found.add(x);
             for(JSONObject x:channels)if(label(x).toLowerCase(Locale.US).contains(term))found.add(x);
+            for(JSONObject x:youtubeVideos)if(label(x).toLowerCase(Locale.US).contains(term))found.add(x);
             if(found.isEmpty())results.addView(text("لا توجد نتائج",15,MUTED,false));
             for(final JSONObject item:found){
                 Button match=button(label(item));results.addView(match,space(-1,dp(55),3));
@@ -405,7 +472,7 @@ public final class TVHomeActivity extends Activity {
         return super.onKeyDown(code,event);
     }
     @Override protected void onDestroy(){
-        generation++;unlocked=false;background.shutdownNow();ui.removeCallbacksAndMessages(null);
+        generation++;episodeGeneration++;unlocked=false;background.shutdownNow();ui.removeCallbacksAndMessages(null);
         super.onDestroy();
     }
 }

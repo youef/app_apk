@@ -1,4 +1,4 @@
-name: Al Ezz TV v11 — Native Cinema & HLS (Android 4.4+)
+name: Al Ezz TV v11.1 — Playback Validation & YouTube Kids (API19+)
 on:
   push:
     branches: [main]
@@ -76,13 +76,13 @@ jobs:
           set -euo pipefail
           PACKAGE="sa.alezz.tv.redclassic.b${GITHUB_RUN_ID}a${GITHUB_RUN_ATTEMPT}"
           VERSION_CODE=$(( 10000 + GITHUB_RUN_NUMBER ))
-          VERSION_NAME="11.0.0-native-${GITHUB_RUN_ID}a${GITHUB_RUN_ATTEMPT}"
+          VERSION_NAME="11.1.0-native-${GITHUB_RUN_ID}a${GITHUB_RUN_ATTEMPT}"
           echo "ORG_GRADLE_PROJECT_ezzApplicationId=$PACKAGE" >> "$GITHUB_ENV"
           echo "ORG_GRADLE_PROJECT_ezzVersionCode=$VERSION_CODE" >> "$GITHUB_ENV"
           echo "ORG_GRADLE_PROJECT_ezzVersionName=$VERSION_NAME" >> "$GITHUB_ENV"
           echo "AL_EZZ_EXPECTED_PACKAGE=$PACKAGE" >> "$GITHUB_ENV"
           echo "AL_EZZ_MIN_VERSION=$VERSION_CODE" >> "$GITHUB_ENV"
-          echo "AL_EZZ_RELEASE_TAG=al-ezz-v11-${GITHUB_RUN_ID}-a${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+          echo "AL_EZZ_RELEASE_TAG=al-ezz-v111-${GITHUB_RUN_ID}-a${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
           echo "Unique install package: $PACKAGE"
 
       - name: Bundle official transparent brand artwork offline
@@ -99,8 +99,13 @@ jobs:
           grep -q 'CinemaPlayerActivity' app/src/main/AndroidManifest.xml
           grep -q 'aseel_episodes' app/src/main/java/sa/aseel/tv/TVHomeActivity.java
           grep -q 'aseel_channels' app/src/main/java/sa/aseel/tv/TVHomeActivity.java
+          grep -q 'aseel_youtube_videos' app/src/main/java/sa/aseel/tv/TVHomeActivity.java
+          grep -q 'StreamProbe.inspect' app/src/main/java/sa/aseel/tv/CinemaPlayerActivity.java
           grep -q 'exoplayer-hls:2.18.7' app/build.gradle
           grep -q 'AL_EZZ_EXPECTED_PACKAGE' scripts/verify_apk.py
+      - name: Test kids YouTube listing and playback errors
+        run: |
+          node tests/tv-kids-playback-smoke.cjs
       - name: Build legacy-compatible APK
         shell: bash
         run: |
@@ -156,8 +161,8 @@ jobs:
             dist/build-report.txt \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Al Ezz TV v11 - Native Cinema/Movies/Series/Live - $AL_EZZ_EXPECTED_PACKAGE" \
-            --notes "v11 native rebuild: TV-first red UI with movies, series seasons and episodes, live channels, kids, search and favorites. Legacy ExoPlayer 2.18.7 MP4/HLS player. Unique package ID per build and Android KitKat APK verification. TEST BUILD: on-device video playback and link availability remain unverified." \
+            --title "Al Ezz TV v11.1 - Kids YouTube and video playback diagnostics - $AL_EZZ_EXPECTED_PACKAGE" \
+            --notes "v11.1 test: restores all published official kids YouTube videos from aseel_youtube_videos in Kids + YouTube tabs, uses approved official YouTube player with external option for old WebView. Source probe detects HTML/JSON/HTTP403/404 masquerading as media, probes HLS/MP4 headers and tries actual alternative sources in ExoPlayer. Android 4.4.4+ unique-package APK, V1-signature tested. On-device playback and remote source availability remain unverified." \
             --prerelease \
             --latest=false
       - name: Upload to Appetize when linked
