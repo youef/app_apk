@@ -5,6 +5,8 @@ on:
     paths:
       - "web/**"
       - "admin/**"
+      - "tests/**"
+      - "supabase/functions/aseel-inspect-media/**"
       - ".github/workflows/admin-pages.yml"
   workflow_dispatch:
 
