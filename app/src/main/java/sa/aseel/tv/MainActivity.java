@@ -127,6 +127,9 @@ public final class MainActivity extends Activity {
     private void openActivatedApp(){
         unlocked=true;accessGate=null;
         buildShell();warmCache();render();loadCatalog();
+        // The splash finishes after Activity.onResume; start periodic refresh here too.
+        refreshHandler.removeCallbacks(refreshLoop);
+        refreshHandler.postDelayed(refreshLoop,60L*1000L);
     }
     private void lockScreen(){
         unlocked=false;root=null;stage=null;menu=null;scrolling=null;navButtons=null;notice=null;
