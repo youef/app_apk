@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="style.css"><link rel="stylesheet" href="studio.css">
 <script defer src="config.js"></script><script defer src="app.js?v=20261031-youtube-kids-dashboard"></script><script defer src="studio.js"></script>
 <link rel="stylesheet" href="importer.css?v=20261101-1">
-<script defer src="importer.js?v=20261101-media-v5"></script>
+<script defer src="importer.js?v=20261101-media-v6"></script>
 </head><body>
 <header class="masthead"><div class="brand"><img class="logo brand-logo-image" src="../web/alizz-tv-transparent.png" alt="شعار العز TV"><div><strong>العز <span>TV</span></strong><small>إدارة الأفلام والمسلسلات والقنوات</small></div></div>
 <div class="right"><span id="userLabel"></span><button type="button" id="logout" class="ghost hidden">تسجيل الخروج</button></div></header>
@@ -27,7 +27,7 @@
  <div class="imp-studio-head"><div><span class="imp-kicker">AL EZZ / CONTENT STUDIO</span><h2>استوديو استيراد الأفلام <span>Web</span></h2><p>كل البيانات محفوظة في نفس Supabase. النتائج المستخرجة مسودة حتى تراجع الحقوق وتقرر النشر.</p></div><button type="button" id="impClose" class="ghost">إغلاق ×</button></div>
  <div class="imp-layout">
  <div class="imp-work">
- <div class="imp-section"><div class="imp-section-header"><b>01</b><h3>استيراد من رابط</h3></div><div class="imp-urlrow"><input id="impUrl" type="url" placeholder="https://example.com/movie-page" autocomplete="url" aria-label="رابط صفحة الفيلم"><button type="button" id="impScan" class="primary">فحص الصفحة</button><button type="button" id="impHealth">فحص اتصال الخادم</button><button type="button" id="impDemo">مثال تجريبي</button><button type="button" id="impDemo">مثال تجريبي</button></div>
+ <div class="imp-section"><div class="imp-section-header"><b>01</b><h3>استيراد من رابط</h3></div><div class="imp-urlrow"><input id="impUrl" type="url" placeholder="https://example.com/movie-page" autocomplete="url" aria-label="رابط صفحة الفيلم"><button type="button" id="impScan" class="primary">فحص الصفحة</button><button type="button" id="impHealth">فحص اتصال الخادم</button><button type="button" id="impDemo">مثال تجريبي</button></div>
  <p class="imp-hint">الفحص الآلي للمواقع المدعومة؛ عند الحظر أو فشل الفحص يمكنك إدخال بيانات الفيلم بنفسك أو لصق HTML من صفحة مصرح بالوصول إليها. لا يتجاوز DRM أو تسجيل الدخول.</p>
  <div id="impScanProgress" class="imp-scan-progress" hidden role="status" aria-live="polite"><span class="imp-spinner" aria-hidden="true"></span><strong id="impScanStep">فحص الرابط...</strong><small>جارٍ الاتصال بالمصدر عبر الخادم</small></div><div id="impDiagnostics" class="imp-diagnostics" role="status" aria-live="polite">حالة الجلب: لم يُطلب فحص بعد.</div>
  <details class="imp-details"><summary>بديل: لصق كود HTML يدويًا</summary><textarea id="impHtml" rows="4" placeholder="ألصق مصدر HTML الصفحة هنا..."></textarea><button type="button" id="impParseHtml">استخراج البيانات من HTML</button></details>
