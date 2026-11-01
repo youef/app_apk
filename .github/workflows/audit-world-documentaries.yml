@@ -1,0 +1,12 @@
+name: Check world documentary streams
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check documentary playlist
+        run: python scripts/audit_world_documentaries.py
