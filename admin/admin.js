@@ -495,7 +495,7 @@
       method: 'POST',
       headers: { Authorization: 'Bearer ' + state.session.access_token,
         apikey: cfg.publishableKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ per_table: 10 }),
+      body: JSON.stringify({ per_table: 24 }),
       cache: 'no-store'
     }).then(function (response) {
       return response.json().then(function (data) {
