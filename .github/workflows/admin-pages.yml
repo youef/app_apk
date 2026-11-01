@@ -67,6 +67,24 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
+      - name: Clear previously stalled Pages deployment if necessary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          prior="f0f66e81a5ae41c81bdbc63bdaf4210f8cc71e66"
+          state="$(gh api "repos/${GITHUB_REPOSITORY}/pages/deployments/${prior}" --jq '.status' 2>/dev/null || true)"
+          echo "Previous Pages deployment state: ${state:-not found}"
+          case "${state}" in
+            queued|pending|building|in_progress|processing)
+              echo "Canceling the blocked previous deployment before publishing the new site."
+              gh api -X POST "repos/${GITHUB_REPOSITORY}/pages/deployments/${prior}/cancel"
+              ;;
+            *)
+              echo "No stale deployment cancellation needed."
+              ;;
+          esac
       - name: Deploy to Pages
         id: deployment
         uses: actions/deploy-pages@v4
