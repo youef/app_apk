@@ -9,4 +9,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check documentary playlist
+        env:
+          DOCUMENTARY_PLAYLIST: https://iptv-org.github.io/iptv/categories/documentary.m3u
         run: python scripts/audit_world_documentaries.py
