@@ -19,7 +19,7 @@
  <script defer src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
  <script defer src="config.js"></script>
  <script defer src="access.js"></script>
- <script defer src="app.js"></script>
+ <script defer src="app.js?v=20261031-kids-youtube"></script>
 </head>
 <body class="viewer-locked"><section id="activationGate" class="activation-gate"><div class="activation-art"><div class="activation-brand"><img class="activation-logo-image" src="alizz-tv-transparent.png" alt="العز TV"><span>العز <span>TV</span></span></div><h1>شاشتك. عالمك. العز TV.</h1><p>مكتبة سينمائية للأفلام والمسلسلات والقنوات المباشرة.</p><div class="activation-trust">● مباشر &nbsp; ▶ أفلام &nbsp; ★ أطفال</div></div><form id="activationForm" class="activation-card" autocomplete="off"><div class="activation-lock">◈</div><h2>رمز الدخول لأول مرة</h2><p>فعّل هذا المتصفح مرة واحدة ثم انتقل مباشرة للمشاهدة دائمًا.</p><label for="activationPin">رمز التفعيل</label><input id="activationPin" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" placeholder="● ● ● ● ● ●" required><p id="activationMessage" role="status">أدخل ستة أرقام باستخدام لوحة المفاتيح أو الريموت.</p><button type="submit" class="activation-submit">تفعيل العز TV <span>◀</span></button><small>مسح بيانات المتصفح سيؤدي إلى طلب الرمز مرة أخرى.</small></form></section>
  <div class="ambient ambient-one" aria-hidden="true"></div>
@@ -116,7 +116,14 @@
       <button type="submit">▶ تشغيل الفيديو</button></div>
       <small>روابط watch وyoutu.be وshorts وlive عند السماح بالتضمين، دون تنزيل الفيديو.</small>
    </div></form>
-   <div id="categoryBar" class="category-bar" aria-label="تصفية حسب النوع"></div>
+   <section id="youtubeKidsSection" class="youtube-kids-section" hidden>
+  <div class="section-heading youtube-kids-heading"><div><span class="section-marker"></span><h3>مكتبة فيديوهات الأطفال من القنوات الرسمية</h3></div><span id="youtubeKidsCount" class="youtube-kids-count">0 مقطع</span></div>
+  <p class="youtube-kids-description">مقاطع تعليمية وترفيهية للأطفال باللغة العربية والإنجليزية. تُعرض عبر مشغّل يوتيوب الرسمي فقط؛ وقد تُقيّد بعض المقاطع التضمين حسب الناشر.</p>
+  <div class="youtube-kids-toolbar"><div id="youtubeKidsTopics" class="category-bar youtube-kids-topics" aria-label="تصنيفات مقاطع الأطفال"></div>
+    <label class="youtube-kids-language-label">اللغة <select id="youtubeKidsLanguage" aria-label="لغة مقاطع الأطفال"><option value="all">كل اللغات</option></select></label></div>
+  <div id="youtubeKidsGrid" class="youtube-kids-grid" aria-live="polite"></div>
+</section>
+<div id="categoryBar" class="category-bar" aria-label="تصفية حسب النوع"></div>
    <section class="media-section continue-section" id="continueSection" hidden>
      <div class="section-heading"><div><span class="section-marker"></span><h3>أكمل المشاهدة</h3><p class="section-explainer">ارجع إلى ما بدأت مشاهدته</p></div></div>
      <div class="cards-row" id="continueGrid"></div>
