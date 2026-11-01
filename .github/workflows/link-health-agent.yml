@@ -48,7 +48,7 @@ jobs:
             -o "$response_file" -w '%{http_code}' -X POST "$endpoint" \
             -H "Authorization: Bearer ${MEDIA_OIDC_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"per_table":10}')"
+            -d '{"per_table":24}')"
           cat "$response_file" | jq '{authenticated,scanned,healthy,suspect,broken,skipped,errors}'
           [[ "$code" == "200" ]] || { echo "::error::Link checker HTTP $code"; exit 1; }
           jq -e '(.authenticated == "github_oidc") and (.scanned > 0) and (.errors | length == 0)' "$response_file" > /dev/null
