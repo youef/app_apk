@@ -251,21 +251,29 @@
   function navigate(direction) {
     var list = state.shown.length ? state.shown : state.channels;
     if (!list.length) return;
-    var at = list.findIndex(function (c) { return state.current && c.key === state.current.key; });
+    var at = -1;
+    for (var i = 0; i < list.length; i++) if (state.current && list[i].key === state.current.key) { at = i; break; }
     select(list[(at + direction + list.length) % list.length], true);
   }
   function mount() {
     if (!$("livePage")) return;
     state.mounted = true;
     updateGuide();
-    var first = state.shown.find(function (c) { return !isOfficial(c) && playable(c); }) || state.shown[0];
+    var first = null;
+    for (var i = 0; i < state.shown.length; i++) {
+      if (!isOfficial(state.shown[i]) && playable(state.shown[i])) { first = state.shown[i]; break; }
+    }
+    first = first || state.shown[0];
     if (first) select(first, false);
     else stateText("لا توجد قنوات منشورة مطابقة للبحث حاليًا.", true);
     $("liveGuideItems").addEventListener("click", function (event) {
       var button = event.target.closest("[data-live-key]");
       if (!button) return;
       var key = button.getAttribute("data-live-key");
-      var item = state.channels.find(function (c) { return c.key === key; });
+      var item = null;
+      for (var i = 0; i < state.channels.length; i++) {
+        if (state.channels[i].key === key) { item = state.channels[i]; break; }
+      }
       select(item, true);
     });
     $("liveSearch").addEventListener("input", function (event) {
