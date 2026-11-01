@@ -349,27 +349,11 @@ public final class MainActivity extends Activity {
                 networkErrors=report.toString();
                 if(headerUpdate!=null)headerUpdate.setText(report.length()>0?"●  مشكلة اتصال":"✓  محدث الآن");
                 showStatus(report.length()>0?"فشل تحديث بعض البيانات. تعرض العناصر المتاحة؛ راجع الإعدادات.":"");
-                // Refresh visible content without discarding a typed YouTube query or movie details.
+                // Keep the browsing position while refreshing the clips feed.
+                // Never replace an open video or any active search text.
                 if(changed && subPage.length()==0 && !"search".equals(mode) && !"settings".equals(mode)){
                     final int oldScroll=scrolling==null?0:scrolling.getScrollY();
-                    String draft="";
-                    boolean restoreYoutubeFocus=false;
-                    if("youtube".equals(mode)){
-                        View queryField=tagged(root,"input:youtube");
-                        if(queryField instanceof EditText){
-                            draft=((EditText)queryField).getText().toString();
-                            restoreYoutubeFocus=queryField.isFocused();
-                        }
-                    }
                     render();
-                    if("youtube".equals(mode)){
-                        View updatedField=tagged(root,"input:youtube");
-                        if(updatedField instanceof EditText){
-                            ((EditText)updatedField).setText(draft);
-                            ((EditText)updatedField).setSelection(draft.length());
-                            if(restoreYoutubeFocus)updatedField.requestFocus();
-                        }
-                    }
                     if(oldScroll>0 && scrolling!=null)scrolling.post(new Runnable(){
                         public void run(){if(scrolling!=null)scrolling.scrollTo(0,oldScroll);}
                     });
@@ -586,12 +570,19 @@ public final class MainActivity extends Activity {
             }
         }
         if(!child.isEmpty()){title("★ ركن الأطفال","محتوى مختار للعائلة");cards(child,8);}
-        Button ytButton=button("▶   يوتيوب  |  شاهد روابط الفيديو داخل العز TV");
-        ytButton.setTextSize(18);
-        stage.addView(ytButton,gap(8,17));
-        ytButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-            mode="youtube";pendingFocusTag="input:youtube";render();
-        }});
+        ArrayList<JSONObject> clips=new ArrayList<JSONObject>();
+        for(int i=0;i<youtubeVideos.length() && clips.size()<8;i++){
+            JSONObject item=youtubeVideos.optJSONObject(i);
+            if(item==null||!"published".equals(str(item,"status"))||
+                !item.optBoolean("is_kids",false)||
+                !YouTubeLink.usable(str(item,"youtube_url")))continue;
+            try{item.put("_type","youtube");}catch(Exception ignored){}
+            clips.add(item);
+        }
+        if(!clips.isEmpty()){
+            title("مقاطع مختارة لك","تشغيل مباشر • المقترحات والتالي تلقائيًا");
+            cards(clips,8);
+        }
         categoriesRow();
         if(movies.length()+series.length()+channels.length()==0)
             empty("المكتبة خالية حاليًا. تظهر الأعمال المعتمدة تلقائيًا بعد إضافتها.");
