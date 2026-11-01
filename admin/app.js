@@ -225,6 +225,7 @@ $("editorForm").addEventListener("submit",async ev=>{
  };
  if(table==="aseel_youtube_videos"){
    if(!youtubeId(payload.youtube_url))return show("أدخل رابط فيديو يوتيوب رسمي صالحًا",true);
+   payload.youtube_url="https://www.youtube.com/watch?v="+youtubeId(payload.youtube_url);
    if(!payload.channel_name||!payload.title_ar)return show("أدخل عنوان المقطع واسم القناة الرسمية",true);
    try{
      const u=new URL(payload.source_page_url||"");
