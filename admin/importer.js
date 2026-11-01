@@ -134,7 +134,7 @@
      const u=document.createElement("code");u.textContent=item.url;row.append(u);
      const b=document.createElement("button");b.type="button";b.textContent=direct(item.url)?"اختيار للتشغيل":"فحص الصفحة";b.onclick=()=>{
        if(direct(item.url)){val("stream_url",item.url);updatePreview();msg("تم تعيين رابط التشغيل. اختبره أولًا");}
-       else{$("impUrl").value=item.url;msg("تم وضع الرابط في حقل الفحص، اضغط فحص الصفحة");}
+       else{$("impUrl").value=item.url;msg("يتم فحص صفحة المشغّل المرتبطة...");scan();}
      };row.append(b);box.append(row);
    }
  }
