@@ -1,87 +1,184 @@
 <!doctype html>
-<html lang="ar" dir="rtl"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#09192a">
-<title>العز | لوحة التحكم</title>
-<link rel="icon" type="image/png" href="../web/alizz-tv-transparent.png"><link rel="apple-touch-icon" href="../web/alizz-tv-transparent.png">
-<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="studio.css">
-<script defer src="config.js"></script><script defer src="app.js?v=20261031-youtube-kids-dashboard"></script><script defer src="studio.js"></script>
-<link rel="stylesheet" href="importer.css?v=20261101-media-v2">
-<script defer src="importer.js?v=20261101-media-v6"></script>
-</head><body>
-<header class="masthead"><div class="brand"><img class="logo brand-logo-image" src="../web/alizz-tv-transparent.png" alt="شعار العز TV"><div><strong>العز <span>TV</span></strong><small>إدارة الأفلام والمسلسلات والقنوات</small></div></div>
-<div class="right"><span id="userLabel"></span><button type="button" id="logout" class="ghost hidden">تسجيل الخروج</button></div></header>
-<main class="shell">
-<section id="auth" class="auth-card">
-<h1>الدخول إلى إدارة العز</h1><p>للمسؤولين المعتمدين فقط. لا يتم تخزين كلمة المرور داخل المتصفح أو المستودع.</p>
-<form id="loginForm"><label>البريد الإلكتروني<input id="email" type="email" autocomplete="username" required></label>
-<label>كلمة المرور<input id="password" type="password" autocomplete="current-password" required></label>
-<button class="primary" type="submit">تسجيل الدخول</button></form>
-<p class="hint">يُنشأ حساب المسؤول أولًا من Supabase Auth، ثم تُضاف صلاحية الإدارة في جدول aseel_admins. لا يحصل أي حساب جديد على صلاحيات تلقائيًا.</p>
-</section>
-<section id="panel" class="hidden"><div class="studio-layout"><aside class="studio-sidebar"><div class="sidebar-top"><strong>◈ إدارة العز TV</strong><small>AL EZZ STUDIO</small></div><div id="adminGroups"></div><div class="sidebar-footer">● البيانات مرتبطة بالمنصة</div></aside><div class="studio-main"><div class="dashboard-heading"><div><p class="eyebrow">OVERVIEW</p><h2>مركز التحكم بالمحتوى</h2><p>إدارة الأفلام والقنوات والمسلسلات والحقوق والصفوف الرئيسية.</p></div><button id="dashboardRefresh" class="ghost">تحديث المؤشرات</button></div><div id="dashboardKpis" class="dashboard-kpis"></div><div class="studio-shortcuts"><button type="button" data-jump="aseel_movies">＋ فيلم جديد</button><button type="button" data-jump="aseel_channels">● القنوات</button><button type="button" data-jump="aseel_home_collections">▣ الرئيسية</button><button type="button" data-jump="aseel_content_sources">◈ مصادر الحقوق</button></div>
-<div class="imp-launch"><div><strong>✧ استوديو استيراد الأفلام</strong><small>فحص • معاينة • اختبار تشغيل • حفظ • نشر</small></div><button type="button" id="impToggle" class="primary">فتح الاستوديو</button></div>
-<div class="lead"><div><p class="eyebrow">CONTENT MANAGEMENT</p><h1>لوحة إدارة المكتبة</h1><p>لن يظهر أي محتوى للجمهور حتى اعتماد الحقوق ونشره.</p></div><button id="refresh" class="ghost">تحديث البيانات</button></div>
-<nav id="tabs" aria-label="أقسام الإدارة"></nav><div class="collection-tools"><label>بحث في القسم<input id="tableSearch" type="search" placeholder="العنوان أو حالة الترخيص"></label><label>حالة النشر<select id="tableStatus"><option value="">الكل</option><option value="published">منشور</option><option value="draft">مسودة</option><option value="hidden">مخفي</option></select></label><span id="tableCount"></span></div>
-<section id="importStudio" class="imp-studio" hidden aria-label="استوديو إضافة الأفلام">
- <div class="imp-studio-head"><div><span class="imp-kicker">AL EZZ / CONTENT STUDIO</span><h2>استوديو استيراد الأفلام <span>Web</span></h2><p>كل البيانات محفوظة في نفس Supabase. النتائج المستخرجة مسودة حتى تراجع الحقوق وتقرر النشر.</p></div><button type="button" id="impClose" class="ghost">إغلاق ×</button></div>
- <div class="imp-layout">
- <div class="imp-work">
- <div class="imp-section"><div class="imp-section-header"><b>01</b><h3>استيراد من رابط</h3></div><div class="imp-urlrow"><input id="impUrl" type="url" placeholder="https://example.com/movie-page" autocomplete="url" aria-label="رابط صفحة الفيلم"><button type="button" id="impScan" class="primary">فحص الصفحة</button><button type="button" id="impHealth">فحص اتصال الخادم</button><button type="button" id="impRealExample">جلب مثال حقيقي</button><button type="button" id="impDemo">مثال تجريبي</button></div>
- <p class="imp-hint">الفحص الآلي للمواقع المدعومة؛ عند الحظر أو فشل الفحص يمكنك إدخال بيانات الفيلم بنفسك أو لصق HTML من صفحة مصرح بالوصول إليها. لا يتجاوز DRM أو تسجيل الدخول.</p>
- <div id="impScanProgress" class="imp-scan-progress" hidden role="status" aria-live="polite"><span class="imp-spinner" aria-hidden="true"></span><strong id="impScanStep">فحص الرابط...</strong><small>جارٍ الاتصال بالمصدر عبر الخادم</small></div><div id="impDiagnostics" class="imp-diagnostics" role="status" aria-live="polite">حالة الجلب: لم يُطلب فحص بعد.</div>
- <details class="imp-details"><summary>بديل: لصق كود HTML يدويًا</summary><textarea id="impHtml" rows="4" placeholder="ألصق مصدر HTML الصفحة هنا..."></textarea><button type="button" id="impParseHtml">استخراج البيانات من HTML</button></details>
- <div id="impLinks" class="imp-links" aria-live="polite"></div>
- <div id="impImages" class="imp-images" aria-live="polite"></div></div>
- <form id="impForm" class="imp-section">
- <div class="imp-section-header"><b>02</b><h3>تفاصيل الفيلم</h3><span class="imp-draft-indicator" id="impEditing">إضافة جديدة</span></div>
- <div class="imp-fields">
- <label>العنوان العربي *<input id="impTitle" required maxlength="250"></label>
- <label>العنوان الأصلي<input id="impOriginal" maxlength="250"></label>
- <label class="imp-wide">الوصف<textarea id="impDescription" rows="4" maxlength="1600"></textarea></label>
- <label>رابط البوستر HTTPS<input id="impPoster" type="url"></label>
- <label>رابط الخلفية<input id="impBackdrop" type="url"></label>
- <label>سنة الإنتاج<input id="impYear" type="number" min="1880" max="2100"></label>
- <label>المدة بالدقائق<input id="impDuration" type="number" min="1" max="99999"></label>
- <label>التصنيف<select id="impCategory"><option value="">بدون تصنيف</option></select></label>
- <label>مصدر الحقوق<select id="impSource"><option value="">غير محدد</option></select></label>
- <label>الفئة العمرية<select id="impAge"><option value="all">مناسب للجميع</option><option>7+</option><option>13+</option><option>16+</option><option>18+</option></select></label>
- <label>الجودة<select id="impQuality"><option>SD</option><option>HD</option><option>FHD</option><option>4K</option></select></label>
- <label>اللغة (ar/en/tr)<input id="impLanguage" value="ar" maxlength="3"></label>
- <label>الدولة (SA/TR/US)<input id="impCountry" maxlength="2"></label>
- <label>ترتيب الظهور<input id="impOrder" type="number" min="0" value="0"></label>
- <label class="imp-check"><input id="impKids" type="checkbox"> مناسب للأطفال</label>
- <label class="imp-check"><input id="impFeatured" type="checkbox"> فيلم مميز</label>
- <label class="imp-wide">رابط تشغيل MP4 / HLS مباشر<input id="impStream" type="url" placeholder="https://example.com/movie.m3u8"></label>
- <label class="imp-wide">رابط يوتيوب رسمي (اختياري)<input id="impYouTube" type="url" placeholder="https://www.youtube.com/watch?v=..."></label>
- <label class="imp-wide">الجودات الإضافية JSON<textarea id="impVariants" rows="3" placeholder='[{"label":"HD","url":"https://example.com/movie.mp4"}]'>[]</textarea></label>
- <label class="imp-wide">صفحة الفيلم الأصلية<input id="impSourcePage" type="url" placeholder="https://example.com/page"></label>
- <label>حالة الترخيص<select id="impRights"><option value="pending">قيد المراجعة</option><option value="approved">تم التحقق من الحقوق</option><option value="rejected">مرفوض</option></select></label>
- <label>صاحب الحقوق<input id="impHolder"></label>
- <label class="imp-wide">رابط أو رقم وثيقة الترخيص<input id="impLicense" placeholder="رابط الوثيقة أو مرجع الترخيص"></label>
- <label>نهاية صلاحية الترخيص<input id="impExpires" type="date"></label>
- </div>
- <div class="imp-rights"><label class="imp-check"><input id="impRightsConfirmed" type="checkbox"> أؤكد أن لدي إذنًا فعليًا لعرض العمل وأن بيانات الترخيص صحيحة</label><label class="imp-check"><input id="impPlaybackConfirmed" type="checkbox"> تحققت يدويًا من التشغيل على الجهاز المطلوب (عند تعذّر الاختبار الآلي)</label></div>
- <div class="imp-actions"><button type="button" id="impDraft" class="primary">حفظ كمسودة</button><button type="button" id="impPublish" class="imp-publish">اعتماد ونشر</button><button type="button" id="impHide">إخفاء</button><button type="button" id="impCopy">نسخ JSON</button><button type="button" id="impDuplicate">إنشاء نسخة</button><button type="button" id="impReset">جديد</button></div>
- </form>
- </div>
- <aside class="imp-aside">
- <section class="imp-sidepanel"><div class="imp-section-header"><b>03</b><h3>معاينة قبل النشر</h3></div><div class="imp-preview-poster" id="impPreviewPoster"><span>AL EZZ</span></div><div class="imp-preview-copy"><h3 id="impPreviewTitle">عنوان الفيلم</h3><p id="impPreviewDescription">سيظهر وصف الفيلم هنا عند إدخاله.</p><div id="impPreviewMeta">مسودة • غير منشور</div></div><button type="button" id="impRefreshPreview">تحديث المعاينة</button><a href="../web/?section=movies" target="_blank" rel="noopener noreferrer">زيارة مكتبة المشاهدة</a></section>
- <section class="imp-sidepanel"><div class="imp-section-header"><b>04</b><h3>اختبار التشغيل</h3></div><div class="imp-player" id="impPlayer"><div class="imp-player-placeholder">▶ ضع رابط الفيديو أولًا، ثم اضغط «اختبار التشغيل»</div></div><div class="imp-test-actions"><button type="button" id="impTest">▶ اختبار التشغيل</button><button type="button" id="impOpenStream">فتح الرابط الأصلي</button></div><p id="impTestStatus" class="imp-hint" role="status">لم يبدأ الاختبار. نجاح التشغيل هنا لا يضمن عمله على Android TV.</p></section>
- <section class="imp-sidepanel"><div class="imp-section-header"><b>05</b><h3>الأفلام المحفوظة</h3></div><input id="impSearch" type="search" placeholder="بحث بالعنوان أو الرابط"><div class="imp-test-actions"><button type="button" id="impReload">تحديث القائمة</button><span id="impCount"></span></div><div id="impSaved" class="imp-saved"></div></section>
- </aside></div>
- <p id="impMessage" role="status" aria-live="polite" class="imp-message"></p>
- </section>
-<div class="workspace">
-<section class="panelCard"><div class="cardhead"><h2 id="collectionName">المحتوى</h2><button id="new" class="primary">إضافة جديد</button></div>
-<div class="tablewrap"><table><thead><tr><th>العنوان</th><th>الحالة</th><th>الترخيص</th><th>الإجراء</th></tr></thead><tbody id="rows"></tbody></table></div>
-</section>
-<section id="editor" class="panelCard hidden"><div class="cardhead"><h2 id="editorTitle">إضافة محتوى</h2><button id="cancel" class="ghost">إلغاء</button></div>
-<form id="editorForm"><div id="fields" class="formgrid"></div>
-<div class="actions"><button id="save" type="submit" class="primary">حفظ التغييرات</button><button id="testLink" type="button" class="ghost">فتح رابط التشغيل للتحقق</button></div></form>
-</section>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#06070A">
+<title>العز | استوديو الإدارة</title>
+<link rel="icon" type="image/svg+xml" href="../web/assets/logo.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+
+<div class="ambient" aria-hidden="true">
+  <span class="ambient-glow ambient-glow--gold"></span>
+  <span class="ambient-glow ambient-glow--crimson"></span>
+  <span class="ambient-grain"></span>
 </div>
-<p class="footer">العز TV — التراخيص والمسؤولية القانونية للمحتوى على ناشره. التحقق الآلي من الرابط لا يثبت ملكية الحقوق.</p></div></div>
+
+<!-- ============================ login ============================ -->
+<section class="login" id="loginScreen" aria-labelledby="loginTitle">
+  <div class="login-card">
+    <div class="login-brand">
+      <img src="../web/assets/logo.svg" alt="شعار العز TV" width="66" height="66">
+      <div>
+        <strong>العز <span>TV</span></strong>
+        <small>AL EZZ STUDIO</small>
+      </div>
+    </div>
+
+    <h1 id="loginTitle">الدخول إلى استوديو العز</h1>
+    <p class="login-sub">لوحة إدارة المحتوى — للمسؤولين المعتمدين فقط.</p>
+
+    <form id="loginForm" novalidate>
+      <div class="field">
+        <label for="loginEmail">البريد الإلكتروني</label>
+        <input id="loginEmail" type="email" autocomplete="username" dir="ltr" placeholder="admin@example.com" required>
+      </div>
+      <div class="field">
+        <label for="loginPassword">كلمة المرور</label>
+        <div class="password-wrap">
+          <input id="loginPassword" type="password" autocomplete="current-password" dir="ltr" required>
+          <button class="pw-toggle" id="togglePassword" type="button" aria-label="إظهار كلمة المرور" aria-pressed="false">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+      </div>
+      <p class="form-error" id="loginError" role="alert" hidden></p>
+      <button class="btn btn-gold btn-block" id="loginSubmit" type="submit">
+        <span class="btn-label">تسجيل الدخول</span>
+      </button>
+    </form>
+
+    <p class="login-hint">
+      تُنشأ الحسابات من Supabase Auth، وتُمنح صلاحية الإدارة عبر جدول <code>aseel_admins</code>.
+      لا تُخزَّن كلمة المرور في المتصفح أو في المستودع.
+    </p>
+    <p class="login-foot">العز TV — جميع الحقوق محفوظة</p>
+  </div>
 </section>
-<p id="status" role="status" aria-live="polite"></p></main>
-</body></html>
+
+<!-- ============================ app shell ============================ -->
+<div class="app" id="appScreen" hidden>
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <img src="../web/assets/logo.svg" alt="شعار العز TV" width="42" height="42">
+      <div class="brand-copy">
+        <strong>العز <span>TV</span></strong>
+        <small>AL EZZ STUDIO</small>
+      </div>
+    </div>
+    <nav class="nav" id="nav" aria-label="أقسام الإدارة"></nav>
+    <div class="sidebar-foot">
+      <span class="live-dot" aria-hidden="true"></span>
+      <span>متصل بقاعدة بيانات Supabase</span>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar-title">
+        <h1 id="pageTitle">لوحة التحكم</h1>
+        <p id="pageCrumb">نظرة عامة</p>
+      </div>
+
+      <div class="topbar-tools">
+        <label class="topbar-search">
+          <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+          <input id="globalSearch" type="search" placeholder="بحث سريع في القسم الحالي…" aria-label="بحث سريع">
+        </label>
+        <a class="btn btn-ghost btn-sm hide-sm" href="../web/index.html" target="_blank" rel="noopener noreferrer">
+          عرض الموقع
+          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M19 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4"/></svg>
+        </a>
+        <div class="account">
+          <span class="account-email" id="accountEmail" dir="ltr"></span>
+          <button class="icon-btn" id="logoutBtn" type="button" aria-label="تسجيل الخروج" title="تسجيل الخروج">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <div class="banner" id="adminWarning" role="status" hidden>
+      <svg class="banner-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+      <p id="adminWarningText"></p>
+      <button class="banner-close" id="bannerClose" type="button" aria-label="إغلاق التنبيه">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <main class="content" id="view" tabindex="-1"></main>
+  </div>
+</div>
+
+<!-- ============================ slide-over drawer ============================ -->
+<div class="scrim" id="drawerScrim" hidden></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle" hidden>
+  <header class="drawer-head">
+    <div>
+      <p class="eyebrow" id="drawerKicker">CONTENT</p>
+      <h2 id="drawerTitle">إضافة</h2>
+    </div>
+    <button class="icon-btn" id="drawerClose" type="button" aria-label="إغلاق النموذج">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </header>
+
+  <div class="drawer-body">
+    <div class="drawer-preview" id="drawerPreview">
+      <div class="preview-poster" id="previewPoster">
+        <img id="previewImage" alt="" hidden>
+        <span aria-hidden="true">EZ</span>
+      </div>
+      <div class="preview-copy">
+        <strong id="previewTitle">—</strong>
+        <small id="previewSub">أدخل بيانات العمل لمعاينة البطاقة</small>
+        <div class="preview-tags">
+          <span class="pill pill--draft" id="previewStatus">مسودة</span>
+          <span class="chip" id="previewQuality" hidden>HD</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="form-error" id="drawerError" role="alert" hidden></p>
+    <form id="drawerForm" novalidate></form>
+  </div>
+
+  <footer class="drawer-foot">
+    <div class="drawer-foot-actions">
+      <button class="btn btn-gold" id="drawerSave" type="submit" form="drawerForm">
+        <span class="btn-label">حفظ</span>
+      </button>
+      <button class="btn btn-ghost" id="drawerCancel" type="button">إلغاء</button>
+    </div>
+    <p class="drawer-note">يُحفظ السجل مباشرة في قاعدة البيانات.</p>
+  </footer>
+</aside>
+
+<!-- ============================ delete modal ============================ -->
+<div class="modal-scrim" id="modalScrim" hidden></div>
+<div class="modal" id="deleteModal" role="dialog" aria-modal="true" aria-labelledby="deleteTitle" hidden>
+  <h2 id="deleteTitle">تأكيد الحذف</h2>
+  <p class="modal-text" id="deleteText"></p>
+  <div class="field">
+    <label for="deleteConfirmInput">اكتب «حذف» للتأكيد</label>
+    <input id="deleteConfirmInput" type="text" autocomplete="off" placeholder="حذف">
+  </div>
+  <p class="form-error" id="deleteError" role="alert" hidden></p>
+  <div class="modal-actions">
+    <button class="btn btn-danger" id="deleteConfirmBtn" type="button" disabled>حذف نهائي</button>
+    <button class="btn btn-ghost" id="deleteCancelBtn" type="button">إلغاء</button>
+  </div>
+</div>
+
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+<script src="config.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>

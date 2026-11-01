@@ -1,431 +1,518 @@
 package sa.aseel.tv;
 
 import android.app.Activity;
-import android.app.AlertDialog;
-import android.content.DialogInterface;
+import android.content.ActivityNotFoundException;
+import android.content.Intent;
 import android.content.SharedPreferences;
-import java.util.ArrayList;
-import java.util.HashSet;
-import android.graphics.Color;
-import android.graphics.drawable.GradientDrawable;
 import android.media.MediaPlayer;
 import android.net.Uri;
-import android.content.Intent;
-import android.os.Bundle;
 import android.os.Build;
-import android.util.Log;
+import android.os.Bundle;
 import android.os.Handler;
-import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
-import android.view.ViewGroup;
+import android.view.Window;
 import android.view.WindowManager;
-import android.widget.Button;
-import android.widget.FrameLayout;
-import android.widget.LinearLayout;
-import android.widget.ProgressBar;
+import android.widget.SeekBar;
 import android.widget.TextView;
+import android.widget.Toast;
 import android.widget.VideoView;
 
-/** Native VideoView player: MP4/H.264/AAC preferred; HLS is device dependent. */
-public final class PlayerActivity extends Activity {
-    private VideoView video;
-    private LinearLayout controlsPanel;
-    private TextView title,error,clock,streamStatus;
-    private Button qualityButton,playButton;
-    private ArrayList<StreamQuality.Source> sources=new ArrayList<StreamQuality.Source>();
-    private int sourceIndex=0,pendingSeekMs=0,retries=0,lastTickPosition=-1,stallTicks=0;
-    private long bufferingStarted=0L;
-    private boolean live=false,manualPause=false,changingSource=false;
-    private ProgressBar progress;
-    private final Handler handler=new Handler();
-    private final Runnable hideOverlay=new Runnable(){public void run(){
-        if(ready&&video!=null&&video.isPlaying()&&controlsPanel!=null){
-            // Move focus away before hiding the control bar on TV.
-            video.setFocusableInTouchMode(true);
-            video.requestFocus();
-            controlsPanel.setVisibility(View.INVISIBLE);
-        }
-    }};
-    private void revealControls(){
-        boolean wasHidden=controlsPanel!=null&&controlsPanel.getVisibility()!=View.VISIBLE;
-        if(controlsPanel!=null)controlsPanel.setVisibility(View.VISIBLE);
-        if(wasHidden&&playButton!=null)playButton.requestFocus();
-        handler.removeCallbacks(hideOverlay);
-        if(ready)handler.postDelayed(hideOverlay,9000);
-    }
-    private String id, nextUrl, nextId, nextTitle, currentUrl;
-    private boolean ready=false;
-    private LegacyStreamProxy mediaProxy;
-    private String playerMode="native";
-    private final Runnable tick=new Runnable(){
-        public void run(){
-            if(video!=null && ready){
-                try{
-                    int dur=video.getDuration(),pos=video.getCurrentPosition();
-                    if(dur>0&&!live){progress.setMax(dur);progress.setProgress(pos);}
-                    clock.setText(live?"● بث مباشر":format(pos)+" / "+format(dur));
-                    if(!live)savePosition(pos);
-                    if(!manualPause && !live && dur>0 && pos<dur-9000 && video.isPlaying()){
-                        if(pos>0 && pos==lastTickPosition)stallTicks++;
-                        else stallTicks=0;
-                        lastTickPosition=pos;
-                    } else {stallTicks=0;lastTickPosition=pos;}
-                    if(!manualPause && ((bufferingStarted>0 && android.os.SystemClock.elapsedRealtime()-bufferingStarted>18000)
-                        || stallTicks>=12))recover("تأخر البث أكثر من 18 ثانية");
-                }catch(Exception ignored){}
-            }
-            handler.postDelayed(this,1500);
-        }
-    };
-    @Override public void onCreate(Bundle state){
-        super.onCreate(state);
+import java.util.Locale;
+
+/**
+ * Framework-only player for old devices. ExoPlayer is intentionally avoided:
+ * it would add a large dependency and separate codec path, while Android's
+ * VideoView/MediaPlayer already handles MP4 and (usually) HLS on API 19.
+ */
+public class PlayerActivity extends Activity {
+
+    private static final String PROGRESS_PREFS = "alezz_progress";
+    private static final int HIDE_DELAY_MS = 4000;
+    private static final int SEEK_STEP_MS = 10000;
+    private static final int SAVE_EVERY_SECONDS = 5;
+
+    private final Handler handler = new Handler();
+
+    private VideoView videoView;
+    private View controls;
+    private TextView titleText;
+    private TextView subtitleText;
+    private TextView playPause;
+    private TextView statusText;
+    private TextView elapsedText;
+    private TextView totalText;
+    private SeekBar seekBar;
+
+    private Runnable hideControlsRunnable;
+    private Runnable tickRunnable;
+
+    private String mediaKey = "";
+    private boolean live;
+    private boolean prepared;
+    private boolean seeking;
+    private boolean ended;
+    private boolean error;
+
+    private int startAt;
+    private int lastSavedSeconds;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        id=getIntent().getStringExtra("item_id");
-        if(id==null)id="unknown";
-        final String url=getIntent().getStringExtra("stream_url");
-        currentUrl=url;
-        live=getIntent().getBooleanExtra("is_live",false);
-        sources=StreamQuality.parse(url,getIntent().getStringExtra("quality"),getIntent().getStringExtra("stream_variants"));
-        String preferred=getSharedPreferences("aseel_user_v2",MODE_PRIVATE).getString("quality_item_"+id,
-             getSharedPreferences("aseel_user_v2",MODE_PRIVATE).getString("quality_pref","auto"));
-        int chosen=StreamQuality.choose(sources,preferred,Build.VERSION.SDK_INT);
-        if(chosen>=0){sourceIndex=chosen;currentUrl=sources.get(chosen).url;}
-        nextUrl=getIntent().getStringExtra("next_url");
-        nextId=getIntent().getStringExtra("next_item_id");
-        nextTitle=getIntent().getStringExtra("next_title");
-        FrameLayout root=new FrameLayout(this);
-        root.setBackgroundColor(Color.BLACK);
-        video=new VideoView(this);
-        root.addView(video,new FrameLayout.LayoutParams(-1,-1));
-        LinearLayout panel=new LinearLayout(this);
-        panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setGravity(Gravity.CENTER_VERTICAL);
-        panel.setPadding(dp(35),dp(18),dp(35),dp(18));
-        panel.setBackgroundDrawable(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{0xF21A101C,0xF609070D}));
-        FrameLayout.LayoutParams pp=new FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM);
-        root.addView(panel,pp);
-        controlsPanel=panel;
-        title=new TextView(this);
-        title.setText(getIntent().getStringExtra("title"));
-        title.setTextSize(26);title.setTypeface(android.graphics.Typeface.DEFAULT,android.graphics.Typeface.BOLD);title.setTextColor(0xFFFFFFFF);
-        panel.addView(title);
-        streamStatus=new TextView(this);
-        streamStatus.setTextColor(0xFFFFB1B6);
-        streamStatus.setTextSize(13);
-        streamStatus.setText("التحميل الآمن • "+(sources.size()>0?sources.get(sourceIndex).label:"المصدر الأصلي"));
-        panel.addView(streamStatus);
-        progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
-        progress.setMax(100);
-        progress.getProgressDrawable().setColorFilter(0xFFEF2950,android.graphics.PorterDuff.Mode.SRC_IN);
-        panel.addView(progress,new LinearLayout.LayoutParams(-1,dp(5)));
-        if(live)progress.setVisibility(View.GONE);
-        clock=new TextView(this);clock.setText("00:00 / 00:00");
-        clock.setTextColor(Color.WHITE);clock.setTextSize(14);
-        panel.addView(clock);
-        LinearLayout buttons=new LinearLayout(this);buttons.setOrientation(LinearLayout.HORIZONTAL);buttons.setGravity(Gravity.CENTER);
-        panel.addView(buttons);
-        Button rewind=action("−10 ثوانٍ",buttons);
-        Button play=action("تشغيل / إيقاف",buttons);playButton=play;
-        Button forward=action("+10 ثوانٍ",buttons);
-        Button restart=action("من البداية",buttons);
-        Button next=action("الحلقة التالية",buttons);
-        qualityButton=action("الجودة",buttons);
-        qualityButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showQualityMenu();}});
-        updateQualityButton();
-        Button exit=action("رجوع",buttons);
-        if(live){rewind.setEnabled(false);forward.setEnabled(false);restart.setEnabled(false);}
-        rewind.setOnClickListener(new View.OnClickListener(){public void onClick(View v){seek(-10000);}});
-        forward.setOnClickListener(new View.OnClickListener(){public void onClick(View v){seek(10000);}});
-        restart.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-            if(!ready||live)return;
-            video.seekTo(0);
-            getSharedPreferences("aseel_user_v2",MODE_PRIVATE).edit().remove("position_"+id).apply();
-            revealControls();
-        }});
-        play.setOnClickListener(new View.OnClickListener(){public void onClick(View v){toggle();}});
-        next.setEnabled(!live&&nextUrl!=null && nextUrl.startsWith("https://"));
-        next.setOnClickListener(new View.OnClickListener(){public void onClick(View v){playNext();}});
-        exit.setOnClickListener(new View.OnClickListener(){public void onClick(View v){finish();}});
-        error=new TextView(this);
-        error.setTextColor(0xFFFFD8C7);error.setTextSize(17);error.setGravity(Gravity.CENTER);
-        FrameLayout.LayoutParams ep=new FrameLayout.LayoutParams(-1,-2,Gravity.CENTER);
-        root.addView(error,ep);
-        setContentView(root);
-        play.requestFocus();
-        if(!StreamQuality.isDirectUrl(currentUrl)){
-            error.setText("لا يوجد رابط تشغيل HTTPS مصرح به");return;
+        getWindow().setFlags(
+                WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                WindowManager.LayoutParams.FLAG_FULLSCREEN);
+
+        setContentView(R.layout.player);
+        applyImmersiveMode();
+        bindViews();
+        buildRunnables();
+
+        Intent intent = getIntent();
+        String url = safe(intent.getStringExtra("url"));
+        String title = safe(intent.getStringExtra("title"));
+        String subtitle = safe(intent.getStringExtra("subtitle"));
+        String youtubeId = safe(intent.getStringExtra("youtube"));
+        mediaKey = safe(intent.getStringExtra("key"));
+        if (mediaKey.length() == 0) {
+            mediaKey = title;
         }
-        video.setOnPreparedListener(new MediaPlayer.OnPreparedListener(){
-            public void onPrepared(MediaPlayer media){
-                ready=true;
-                int saved=pendingSeekMs>0?pendingSeekMs:
-                    getSharedPreferences("aseel_user_v2",MODE_PRIVATE).getInt("position_"+id,0);
-                pendingSeekMs=0;
-                if(!live && saved>0 && media.getDuration()>saved+15000)video.seekTo(saved);
-                video.start();
-                manualPause=false;
-                bufferingStarted=0L;lastTickPosition=-1;stallTicks=0;
-                error.setText("");
-                streamStatus.setText("▶ تشغيل • "+qualityName());
-                revealControls();
-                handler.removeCallbacks(tick);handler.post(tick);
-                media.setOnInfoListener(new MediaPlayer.OnInfoListener(){
-                    public boolean onInfo(MediaPlayer p,int what,int extra){
-                        if(what==MediaPlayer.MEDIA_INFO_BUFFERING_START){
-                            bufferingStarted=android.os.SystemClock.elapsedRealtime();
-                            streamStatus.setText("◌ جاري التخزين المؤقت • "+qualityName());
-                            revealControls();
-                        }else if(what==MediaPlayer.MEDIA_INFO_BUFFERING_END){
-                            bufferingStarted=0L;
-                            streamStatus.setText("▶ تشغيل • "+qualityName());
+        live = intent.getBooleanExtra("live", false);
+        startAt = intent.getIntExtra("startAt", 0);
+        if (startAt < 0) {
+            startAt = 0;
+        }
+
+        titleText.setText(title.length() == 0 ? getString(R.string.app_name) : title);
+        if (subtitle.length() == 0) {
+            subtitleText.setVisibility(View.GONE);
+        } else {
+            subtitleText.setText(subtitle);
+        }
+        if (live) {
+            totalText.setText(R.string.player_live);
+            seekBar.setEnabled(false);
+        }
+
+        if (youtubeId.length() > 0) {
+            launchYouTube(youtubeId);
+            return;
+        }
+
+        setupPlayer();
+        if (url.length() == 0) {
+            showError(getString(R.string.player_error));
+            return;
+        }
+
+        // MediaPlayer's platform HLS support varies by OEM on API 19, so some
+        // .m3u8 streams may fail; the error overlay lets the user go back safely.
+        videoView.setVideoURI(Uri.parse(url));
+    }
+
+    private void bindViews() {
+        videoView = (VideoView) findViewById(R.id.videoView);
+        controls = findViewById(R.id.controls);
+        titleText = (TextView) findViewById(R.id.titleText);
+        subtitleText = (TextView) findViewById(R.id.subtitleText);
+        playPause = (TextView) findViewById(R.id.playPause);
+        statusText = (TextView) findViewById(R.id.statusText);
+        elapsedText = (TextView) findViewById(R.id.elapsedText);
+        totalText = (TextView) findViewById(R.id.totalText);
+        seekBar = (SeekBar) findViewById(R.id.seekBar);
+    }
+
+    private void buildRunnables() {
+        hideControlsRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (controls != null && prepared && !error) {
+                    controls.setVisibility(View.GONE);
+                }
+            }
+        };
+
+        tickRunnable = new Runnable() {
+            @Override
+            public void run() {
+                updatePosition();
+                handler.postDelayed(this, 1000);
+            }
+        };
+    }
+
+    private void setupPlayer() {
+        View root = findViewById(R.id.playerRoot);
+        root.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showControls();
+            }
+        });
+        videoView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showControls();
+            }
+        });
+        playPause.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                togglePlay();
+            }
+        });
+
+        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
+                if (fromUser && !live && prepared) {
+                    int duration = videoView.getDuration();
+                    if (duration > 0) {
+                        long target = (long) duration * progress / 1000L;
+                        elapsedText.setText(formatTime((int) target));
+                    }
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar bar) {
+                seeking = true;
+                showControls();
+                handler.removeCallbacks(hideControlsRunnable);
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar bar) {
+                seeking = false;
+                if (prepared && !live) {
+                    int duration = videoView.getDuration();
+                    if (duration > 0) {
+                        long target = (long) duration * bar.getProgress() / 1000L;
+                        videoView.seekTo((int) target);
+                    }
+                }
+                showControls();
+            }
+        });
+
+        videoView.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
+            @Override
+            public void onPrepared(MediaPlayer mp) {
+                prepared = true;
+                error = false;
+                statusText.setVisibility(View.GONE);
+                playPause.setVisibility(View.VISIBLE);
+
+                if (!live) {
+                    int duration = videoView.getDuration();
+                    if (duration > 0) {
+                        totalText.setText(formatTime(duration));
+                    }
+                    if (startAt > 5) {
+                        long target = (long) startAt * 1000L;
+                        if (duration > 0 && target > duration - 1000L) {
+                            target = Math.max(0L, duration - 1000L);
                         }
-                        return false;
+                        videoView.seekTo((int) target);
+                        lastSavedSeconds = startAt;
                     }
-                });
-                media.setOnBufferingUpdateListener(new MediaPlayer.OnBufferingUpdateListener(){
-                    public void onBufferingUpdate(MediaPlayer p,int percent){
-                        if(bufferingStarted>0)streamStatus.setText("◌ التخزين المؤقت "+percent+"% • "+qualityName());
-                    }
-                });
+                }
+                videoView.start();
+                updatePlayPauseIcon();
+                showControls();
             }
         });
-        video.setOnCompletionListener(new MediaPlayer.OnCompletionListener(){
-            public void onCompletion(MediaPlayer media){
-                android.content.SharedPreferences prefs=getSharedPreferences("aseel_user_v2",MODE_PRIVATE);
-                android.content.SharedPreferences.Editor edit=prefs.edit().remove("position_"+id);
-                if(id.equals(prefs.getString("resume_id",""))){
-                    edit.remove("resume_id").remove("resume_title").remove("resume_url");
-                }
-                edit.apply();
-                if(!live && nextUrl!=null && nextUrl.startsWith("https://"))playNext();
+
+        videoView.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+            @Override
+            public void onCompletion(MediaPlayer mp) {
+                ended = true;
+                saveProgress(0);
+                setResult(RESULT_OK);
+                finish();
             }
         });
-        video.setOnErrorListener(new MediaPlayer.OnErrorListener(){
-            public boolean onError(MediaPlayer mp,int what,int extra){
-                ready=false;
-                revealControls();
-                if(retries<2 && !changingSource){
-                    recover("MediaPlayer "+what+"/"+extra);
-                    return true;
-                }
-                String diagnostics=mediaProxy!=null?mediaProxy.getLastError():"";
-                String code="Android API "+Build.VERSION.SDK_INT+" | "+playerMode+" | MediaPlayer "+what+"/"+extra;
-                String details=diagnostics.length()>0?"\nالشبكة: "+diagnostics:"\nقد يكون السبب شهادة TLS أو تنسيق الفيديو أو قدرات المحاكي/الشاشة.";
-                error.setText("تعذر تشغيل الفيديو.\n"+code+details);
-                Log.e("AseelVideo","Playback failed: "+code+" "+diagnostics);
+
+        videoView.setOnErrorListener(new MediaPlayer.OnErrorListener() {
+            @Override
+            public boolean onError(MediaPlayer mp, int what, int extra) {
+                showError(getString(R.string.player_error));
                 return true;
             }
         });
-        openStream(currentUrl);
-        if(live || currentUrl.toLowerCase(java.util.Locale.US).contains(".m3u8"))
-            discoverHlsRenditions(currentUrl);
     }
 
-    private void discoverHlsRenditions(final String master){
-        new Thread(new Runnable(){public void run(){
-            final org.json.JSONArray variants=HlsQualityResolver.discover(PlayerActivity.this,master);
-            if(variants.length()<1)return;
-            runOnUiThread(new Runnable(){public void run(){
-                if(isFinishing())return;
-                HashSet<String> known=new HashSet<String>();
-                for(StreamQuality.Source item:sources)known.add(item.url);
-                int added=0;
-                for(int i=0;i<variants.length();i++){
-                    org.json.JSONObject entry=variants.optJSONObject(i);
-                    if(entry==null)continue;
-                    String url=entry.optString("url"),label=entry.optString("label");
-                    if(!known.contains(url) && url.startsWith("https://")){
-                        sources.add(new StreamQuality.Source(label,url));
-                        known.add(url);added++;
-                    }
+    private void updatePosition() {
+        if (!prepared || videoView == null) {
+            return;
+        }
+        int position = videoView.getCurrentPosition();
+        int duration = videoView.getDuration();
+
+        if (live) {
+            elapsedText.setText(formatTime(position));
+            totalText.setText(R.string.player_live);
+            return;
+        }
+
+        if (!seeking) {
+            elapsedText.setText(formatTime(position));
+            if (duration > 0) {
+                totalText.setText(formatTime(duration));
+                int progress = (int) ((long) position * 1000L / duration);
+                if (progress < 0) {
+                    progress = 0;
+                } else if (progress > 1000) {
+                    progress = 1000;
                 }
-                if(added>0){
-                    updateQualityButton();
-                    streamStatus.setText("اكتشفنا "+added+" جودات من بث HLS • "+qualityName());
-                }
-            }});
-        }},"Aseel-HLS-Renditions").start();
+                seekBar.setProgress(progress);
+            }
+        }
+
+        int seconds = position / 1000;
+        if (Math.abs(seconds - lastSavedSeconds) >= SAVE_EVERY_SECONDS) {
+            saveProgress(seconds);
+            lastSavedSeconds = seconds;
+        }
     }
 
-    private String qualityName(){
-        return sources.size()>0&&sourceIndex<sources.size()?sources.get(sourceIndex).label:"المصدر الأصلي";
-    }
-    private void updateQualityButton(){
-        if(qualityButton!=null)qualityButton.setText("الجودة: "+qualityName());
-    }
-    private void showQualityMenu(){
-        if(sources.size()<2){
-            new AlertDialog.Builder(this).setTitle("جودة المشاهدة")
-               .setMessage("هذا العمل متاح حاليًا بمصدر واحد فقط ("+qualityName()+"). لا يمكن تغيير الدقة دون رابط مرخص آخر. بث HLS قد يغيّر الجودة تلقائيًا إذا دعمه المشغل.")
-               .setPositiveButton("حسنًا",null).show();
+    private void seekBy(int deltaMs) {
+        if (live || !prepared || error || videoView == null) {
             return;
         }
-        final String[] labels=new String[sources.size()+1];
-        labels[0]="تلقائي اقتصادي (مناسب لشاشتك)";
-        for(int i=0;i<sources.size();i++)labels[i+1]=sources.get(i).label;
-        new AlertDialog.Builder(this).setTitle("اختيار الجودة المتاحة")
-         .setSingleChoiceItems(labels,sourceIndex+1,new DialogInterface.OnClickListener(){
-            public void onClick(DialogInterface dialog,int choice){
-                SharedPreferences prefs=getSharedPreferences("aseel_user_v2",MODE_PRIVATE);
-                int next=choice==0?StreamQuality.choose(sources,"auto",Build.VERSION.SDK_INT):choice-1;
-                prefs.edit().putString("quality_item_"+id,choice==0?"auto":sources.get(next).label).apply();
-                dialog.dismiss();
-                if(next!=sourceIndex)switchSource(next,true,"تغيير الجودة");
-            }
-         }).setNegativeButton("إلغاء",null).show();
+        int duration = videoView.getDuration();
+        int target = videoView.getCurrentPosition() + deltaMs;
+        if (target < 0) {
+            target = 0;
+        }
+        if (duration > 0 && target > duration) {
+            target = duration;
+        }
+        videoView.seekTo(target);
+        elapsedText.setText(formatTime(target));
+        showControls();
     }
-    private void recover(String cause){
-        if(changingSource||retries>=2)return;
-        int lower=StreamQuality.lower(sources,sourceIndex);
-        retries++;
-        int next=lower>=0?lower:sourceIndex;
-        switchSource(next,false,"محاولة معالجة التقطيع ("+retries+"/2): "+cause);
-    }
-    private void switchSource(int next,boolean manual,String reason){
-        if(next<0||next>=sources.size())return;
-        changingSource=true;
-        if(!live && ready){try{pendingSeekMs=video.getCurrentPosition();}catch(Exception ignored){}}
-        handler.removeCallbacks(tick);
-        ready=false;bufferingStarted=0L;stallTicks=0;lastTickPosition=-1;
-        try{video.stopPlayback();}catch(Exception ignored){}
-        sourceIndex=next;currentUrl=sources.get(next).url;
-        if(manual)retries=0;
-        updateQualityButton();
-        streamStatus.setText(reason+" • "+qualityName());
-        error.setText("جاري إعادة الاتصال... "+qualityName());
-        final String target=currentUrl;
-        handler.postDelayed(new Runnable(){public void run(){
-            changingSource=false;
-            if(isFinishing())return;
-            openStream(target);
-        }},1000);
-    }
-    private void playNext(){
-        if(nextUrl==null||!nextUrl.startsWith("https://"))return;
-        try{
-            handler.removeCallbacks(tick);
-            video.stopPlayback();
-            ready=false;
-            currentUrl=nextUrl;
-            sources=StreamQuality.parse(currentUrl,"الحلقة التالية","[]");
-            sourceIndex=0;retries=0;pendingSeekMs=0;live=false;
-            updateQualityButton();
-            nextUrl=null;
-            id=(nextId==null||nextId.length()==0)?"next_episode":nextId;
-            if(nextTitle!=null&&nextTitle.length()>0)title.setText(nextTitle);
-            nextId=null;nextTitle=null;
-            error.setText("جاري تحميل الحلقة التالية...");
-            openStream(currentUrl);
-        }catch(Exception ex){error.setText("تعذر تشغيل الحلقة التالية: "+ex.getClass().getSimpleName());}
-    }
-    /**
-     * Android KitKat MediaPlayer uses system TLS, not the safe TLS 1.2 adapter
-     * used for the catalog; for API 19 use the restricted loopback range
-     * bridge. Android 5+ keeps native HTTPS playback.
-     */
-    private void openStream(String url){
-        if(mediaProxy!=null){mediaProxy.close();mediaProxy=null;}
-        ready=false;bufferingStarted=0L;
-        if(url==null || !url.startsWith("https://")){
-            error.setText("رابط الفيديو مفقود أو غير آمن (HTTPS مطلوب)");
+
+    private void togglePlay() {
+        if (!prepared || error || videoView == null) {
             return;
         }
-        try{
-            String address=url;
-            boolean isHls=url.toLowerCase(java.util.Locale.US).contains(".m3u8");
-            if(Build.VERSION.SDK_INT<=19 && !isHls){
-                mediaProxy=new LegacyStreamProxy(this,url);
-                address=mediaProxy.start();
-                playerMode="TLS 1.2 via localhost";
-            }else{
-                playerMode=isHls?"HLS native (may require external player on KitKat)":"HTTPS native";
-            }
-            error.setText("جاري تحميل الفيديو... ("+playerMode+")");
-            video.setVideoURI(Uri.parse(address));
-            video.requestFocus();
-        }catch(Exception exception){
-            String message=exception.getClass().getSimpleName()+": "+exception.getMessage();
-            error.setText("تعذر فتح المشغل: "+message);
-            Log.e("AseelVideo","Unable to start secure media stream",exception);
+        if (videoView.isPlaying()) {
+            videoView.pause();
+        } else {
+            videoView.start();
+        }
+        updatePlayPauseIcon();
+        showControls();
+    }
+
+    private void updatePlayPauseIcon() {
+        if (videoView == null || playPause == null) {
+            return;
+        }
+        boolean playing = videoView.isPlaying();
+        playPause.setText(playing ? "❚❚" : "▶");
+        playPause.setContentDescription(
+                getString(playing ? R.string.pause : R.string.play));
+    }
+
+    private void showControls() {
+        if (controls == null) {
+            return;
+        }
+        controls.setVisibility(View.VISIBLE);
+        handler.removeCallbacks(hideControlsRunnable);
+        if (prepared && !error) {
+            handler.postDelayed(hideControlsRunnable, HIDE_DELAY_MS);
         }
     }
-    private void savePosition(int position){
-        if(position<1000 || currentUrl==null || !currentUrl.startsWith("https://"))return;
-        getSharedPreferences("aseel_user_v2",MODE_PRIVATE).edit()
-            .putInt("position_"+id,position)
-            .putString("resume_id",id)
-            .putString("resume_url",currentUrl)
-            .putString("resume_title",title.getText().toString())
-            .apply();
-    }
-    private String format(int ms){int sec=Math.max(ms,0)/1000;return String.format(java.util.Locale.US,"%02d:%02d",sec/60,sec%60);}
-    private void seek(int amount){if(!ready)return;int d=video.getDuration();
-        video.seekTo(Math.max(0,Math.min(d,video.getCurrentPosition()+amount)));}
-    private void toggle(){
-        if(!ready)return;
-        if(video.isPlaying()){video.pause();manualPause=true;}
-        else{video.start();manualPause=false;}
-        revealControls();
-    }
-    @Override public boolean onKeyDown(int code,KeyEvent event){
-        if(code==KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE){toggle();return true;}
-        if(code==KeyEvent.KEYCODE_MEDIA_PLAY){if(ready&&!video.isPlaying()){video.start();manualPause=false;}revealControls();return true;}
-        if(code==KeyEvent.KEYCODE_MEDIA_PAUSE){if(ready&&video.isPlaying()){video.pause();manualPause=true;}revealControls();return true;}
-        if(code==KeyEvent.KEYCODE_MEDIA_REWIND){seek(-10000);revealControls();return true;}
-        if(code==KeyEvent.KEYCODE_MEDIA_FAST_FORWARD){seek(10000);revealControls();return true;}
-        if(code==KeyEvent.KEYCODE_MEDIA_STOP){finish();return true;}
-        if(code==KeyEvent.KEYCODE_MENU){revealControls();showQualityMenu();return true;}
-        if(code==KeyEvent.KEYCODE_INFO){revealControls();return true;}
-        if(controlsPanel!=null && controlsPanel.getVisibility()!=View.VISIBLE){
-            if(code==KeyEvent.KEYCODE_DPAD_LEFT){seek(-10000);revealControls();return true;}
-            if(code==KeyEvent.KEYCODE_DPAD_RIGHT){seek(10000);revealControls();return true;}
-            if(code==KeyEvent.KEYCODE_DPAD_UP || code==KeyEvent.KEYCODE_DPAD_DOWN ||
-               code==KeyEvent.KEYCODE_DPAD_CENTER || code==KeyEvent.KEYCODE_ENTER){
-                revealControls();return true;
-            }
+
+    private void showError(String message) {
+        error = true;
+        prepared = false;
+        handler.removeCallbacks(hideControlsRunnable);
+        if (controls != null) {
+            controls.setVisibility(View.VISIBLE);
         }
-        if((code==KeyEvent.KEYCODE_DPAD_CENTER||code==KeyEvent.KEYCODE_ENTER)&&
-           controlsPanel!=null&&controlsPanel.getVisibility()==View.VISIBLE&&getCurrentFocus()==video){
-            toggle();return true;
+        if (statusText != null) {
+            statusText.setText(message);
+            statusText.setVisibility(View.VISIBLE);
         }
-        if(code==KeyEvent.KEYCODE_DPAD_LEFT || code==KeyEvent.KEYCODE_DPAD_RIGHT ||
-           code==KeyEvent.KEYCODE_DPAD_UP || code==KeyEvent.KEYCODE_DPAD_DOWN ||
-           code==KeyEvent.KEYCODE_DPAD_CENTER || code==KeyEvent.KEYCODE_ENTER)
-            revealControls();
-        return super.onKeyDown(code,event);
+        if (playPause != null) {
+            playPause.setVisibility(View.GONE);
+        }
+        if (seekBar != null) {
+            seekBar.setEnabled(false);
+        }
     }
-    private Button action(String name,LinearLayout row){
-        final Button b=new Button(this);b.setText(name);b.setTextSize(13);
-        b.setTextColor(Color.WHITE);b.setAllCaps(false);
-        b.setBackgroundDrawable(controlBackground(false));
-        b.setFocusable(true);
-        b.setOnFocusChangeListener(new View.OnFocusChangeListener(){
-            public void onFocusChange(View v,boolean focused){
-                b.setBackgroundDrawable(controlBackground(focused));
-                b.setTextColor(Color.WHITE);
-                b.setScaleX(focused?1.035f:1f);
-                b.setScaleY(focused?1.035f:1f);
-                if(focused)revealControls();
-            }
-        });
-        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(50),1);p.setMargins(dp(4),0,dp(4),0);
-        row.addView(b,p);return b;
+
+    private void launchYouTube(String videoId) {
+        Intent intent = new Intent(Intent.ACTION_VIEW,
+                Uri.parse("https://www.youtube.com/watch?v=" + Uri.encode(videoId)));
+        try {
+            startActivity(intent);
+        } catch (ActivityNotFoundException e) {
+            Toast.makeText(this, R.string.youtube_unavailable, Toast.LENGTH_LONG).show();
+        } catch (SecurityException e) {
+            Toast.makeText(this, R.string.youtube_unavailable, Toast.LENGTH_LONG).show();
+        }
+        finish();
     }
-    private GradientDrawable controlBackground(boolean focused){
-        GradientDrawable shape=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            focused?new int[]{0xFFF14C67,0xFFB71B3E}:new int[]{0xFF322232,0xFF201823});
-        shape.setCornerRadius(dp(11));
-        shape.setStroke(dp(1),focused?0xFFFFA7BB:0xFF563749);
-        return shape;
+
+    private void saveCurrentProgress() {
+        if (!prepared || live || ended || videoView == null) {
+            return;
+        }
+        saveProgress(videoView.getCurrentPosition() / 1000);
     }
-    private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
-    @Override protected void onPause(){super.onPause();if(video!=null&&ready){video.pause();if(!live)savePosition(video.getCurrentPosition());}}
-    @Override protected void onStop(){
-        // Do not leave a playable movie reachable from Android recent apps without PIN re-entry.
+
+    private void saveProgress(int seconds) {
+        if (live || mediaKey.length() == 0) {
+            return;
+        }
+        int safeSeconds = Math.max(0, seconds);
+        SharedPreferences prefs = getSharedPreferences(PROGRESS_PREFS, MODE_PRIVATE);
+        prefs.edit().putInt(mediaKey, safeSeconds).apply();
+        lastSavedSeconds = safeSeconds;
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        applyImmersiveMode();
+        if (!error && tickRunnable != null) {
+            handler.removeCallbacks(tickRunnable);
+            handler.postDelayed(tickRunnable, 1000);
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        saveCurrentProgress();
+        if (videoView != null && videoView.isPlaying()) {
+            videoView.pause();
+        }
+        handler.removeCallbacks(tickRunnable);
+        handler.removeCallbacks(hideControlsRunnable);
+        super.onPause();
+    }
+
+    @Override
+    protected void onStop() {
+        saveCurrentProgress();
         super.onStop();
-        if(!isFinishing()&&!isChangingConfigurations())finish();
     }
-    @Override protected void onDestroy(){handler.removeCallbacks(hideOverlay);handler.removeCallbacks(tick);if(video!=null)video.stopPlayback();if(mediaProxy!=null)mediaProxy.close();super.onDestroy();}
+
+    @Override
+    protected void onDestroy() {
+        saveCurrentProgress();
+        handler.removeCallbacks(tickRunnable);
+        handler.removeCallbacks(hideControlsRunnable);
+        if (videoView != null) {
+            try {
+                videoView.stopPlayback();
+            } catch (Exception ignored) {
+                // Releasing a failed framework decoder must never crash the app.
+            }
+        }
+        super.onDestroy();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            applyImmersiveMode();
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        saveCurrentProgress();
+        super.onBackPressed();
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event == null) {
+            return super.dispatchKeyEvent(null);
+        }
+        int code = event.getKeyCode();
+        int action = event.getAction();
+
+        if (action == KeyEvent.ACTION_DOWN) {
+            showControls();
+        }
+
+        if (code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_MEDIA_REWIND) {
+            if (action == KeyEvent.ACTION_DOWN) {
+                seekBy(-SEEK_STEP_MS);
+            }
+            return true;
+        }
+        if (code == KeyEvent.KEYCODE_DPAD_RIGHT
+                || code == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) {
+            if (action == KeyEvent.ACTION_DOWN) {
+                seekBy(SEEK_STEP_MS);
+            }
+            return true;
+        }
+        if (code == KeyEvent.KEYCODE_DPAD_CENTER
+                || code == KeyEvent.KEYCODE_ENTER
+                || code == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+                || code == KeyEvent.KEYCODE_MEDIA_PLAY
+                || code == KeyEvent.KEYCODE_MEDIA_PAUSE) {
+            if (action == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+                togglePlay();
+            }
+            return true;
+        }
+        if (code == KeyEvent.KEYCODE_MEDIA_STOP) {
+            if (action == KeyEvent.ACTION_DOWN) {
+                finish();
+            }
+            return true;
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
+    private void applyImmersiveMode() {
+        if (Build.VERSION.SDK_INT >= 16) {
+            int flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    | View.SYSTEM_UI_FLAG_FULLSCREEN;
+            if (Build.VERSION.SDK_INT >= 19) {
+                flags |= View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
+            }
+            getWindow().getDecorView().setSystemUiVisibility(flags);
+        } else {
+            getWindow().setFlags(
+                    WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                    WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        }
+    }
+
+    private static String safe(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private static String formatTime(int millis) {
+        if (millis < 0) {
+            return "--:--";
+        }
+        int totalSeconds = millis / 1000;
+        int seconds = totalSeconds % 60;
+        int minutes = (totalSeconds / 60) % 60;
+        int hours = totalSeconds / 3600;
+        if (hours > 0) {
+            return String.format(Locale.US, "%d:%02d:%02d", hours, minutes, seconds);
+        }
+        return String.format(Locale.US, "%02d:%02d", minutes, seconds);
+    }
 }

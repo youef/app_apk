@@ -1,0 +1,14 @@
+﻿<!doctype html><meta charset="utf-8"><body style="background:#111;color:#0f0;font:14px monospace;padding:20px"><pre id="o">…</pre>
+<script>
+var k="sb_publishable_Mcev7qFw9oLWgKO7GBT8Kg_nHvaQ3ES";
+var base="https://qyzmlwtvzzgooccqxglq.supabase.co/rest/v1/";
+var jobs={
+ movies:"select=id,title_ar,title_original,description,poster_url,backdrop_url,release_year,category_id,duration_minutes,quality,stream_url,stream_variants,is_kids,age_rating,featured,display_order,status,rights_status,rights_holder,license_reference,youtube_url,country_code,language_code&status=eq.published&order=display_order.asc&limit=800",
+ categories:"select=id,name_ar,sort_order,published&published=eq.true&order=sort_order.asc&limit=500",
+ collections:"select=id,title_ar,slug,description,display_order,is_active&is_active=eq.true&order=display_order.asc&limit=200"
+};
+var out=[];
+Object.keys(jobs).forEach(function(t){
+ fetch(base+"aseel_"+t+"?"+jobs[t]+"&apikey="+k).then(function(r){return r.text().then(function(x){out.push(t+" -> "+r.status+" len="+x.length+(r.status!==200?" BODY:"+x.slice(0,160):""))})}).catch(function(e){out.push(t+" EXC "+e.message)}).then(function(){document.getElementById("o").textContent=out.join("\n")});
+});
+</script>

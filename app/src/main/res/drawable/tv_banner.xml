@@ -1,5 +1,63 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <gradient android:angle="0" android:startColor="#10121A" android:centerColor="#711C30" android:endColor="#11141D"/>
-    <stroke android:width="2dp" android:color="#E6364A"/>
-</shape>
+<!-- 320x180 Android TV banner drawn with framework shapes (no bitmap assets). -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="0"
+                android:endColor="#17110A"
+                android:startColor="#06070A" />
+            <size
+                android:width="320dp"
+                android:height="180dp" />
+        </shape>
+    </item>
+    <item
+        android:bottom="18dp"
+        android:left="18dp"
+        android:right="18dp"
+        android:top="18dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#00000000" />
+            <stroke
+                android:width="2dp"
+                android:color="#B8952F" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+    <item
+        android:bottom="55dp"
+        android:left="55dp"
+        android:right="55dp"
+        android:top="55dp">
+        <shape android:shape="oval">
+            <gradient
+                android:endColor="#D4AF37"
+                android:gradientRadius="60dp"
+                android:startColor="#F5D77A"
+                android:type="radial" />
+            <stroke
+                android:width="2dp"
+                android:color="#F0C75E" />
+        </shape>
+    </item>
+    <item
+        android:bottom="73dp"
+        android:left="73dp"
+        android:right="73dp"
+        android:top="73dp">
+        <shape android:shape="oval">
+            <solid android:color="#06070A" />
+        </shape>
+    </item>
+    <item
+        android:left="140dp"
+        android:right="20dp"
+        android:top="86dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#D4AF37" />
+            <corners android:radius="2dp" />
+            <size android:height="3dp" />
+        </shape>
+    </item>
+</layer-list>

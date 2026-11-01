@@ -1,0 +1,8 @@
+﻿<!doctype html><meta charset="utf-8"><body style="background:#111;color:#0f0;font:16px monospace;padding:20px"><pre id="o">…</pre>
+<script>
+var url="https://qyzmlwtvzzgooccqxglq.supabase.co/rest/v1/aseel_movies?select=id&status=eq.published&limit=1&apikey=sb_publishable_Mcev7qFw9oLWgKO7GBT8Kg_nHvaQ3ES";
+var o=document.getElementById("o"), t0=Date.now();
+fetch(url,{headers:{apikey:"sb_publishable_Mcev7qFw9oLWgKO7GBT8Kg_nHvaQ3ES"},cache:"no-store"})
+.then(function(r){return r.text().then(function(t){o.textContent="status="+r.status+" ms="+(Date.now()-t0)+"\nbody="+t.slice(0,300)})})
+.catch(function(e){o.textContent="ERR "+e.name+" "+e.message+" after "+(Date.now()-t0)+"ms"});
+</script>

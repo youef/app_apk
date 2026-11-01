@@ -1,0 +1,6 @@
+﻿<!doctype html><meta charset="utf-8"><body style="background:#111;color:#0f0;font:16px monospace;padding:24px"><pre id="o">loading…</pre>
+<script src="js/config.js"></script><script src="js/api.js"></script>
+<script>
+var t0=Date.now();
+AlezzApi.load().then(function(c){document.getElementById("o").textContent="SOURCE="+AlezzApi.source+" ms="+(Date.now()-t0)+"\nmovies="+c.movies.length+" series="+c.series.length+" channels="+c.channels.length+" yt="+c.youtube.length+" rows="+c.rows.length});
+</script>
