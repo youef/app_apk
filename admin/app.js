@@ -2,6 +2,7 @@
 const cfg=window.ASEEL_CONFIG;
 const api=cfg.url+"/rest/v1/";
 const tables={
+ aseel_youtube_videos:{label:"مقاطع أطفال يوتيوب",fields:["title_ar","youtube_url","channel_name","language_code","topic","age_rating","sort_order","status","is_kids","source_page_url"]},
  aseel_movies:{label:"الأفلام",fields:["title_ar","title_original","description","poster_url","backdrop_url","release_year","category_id","source_id","source_page_url","display_order","duration_minutes","language_code","country_code","is_kids","quality","stream_url","youtube_url","stream_variants","status","rights_status","rights_holder","license_reference","rights_expires_at","featured"]},
  aseel_series:{label:"المسلسلات",fields:["title_ar","title_original","description","poster_url","backdrop_url","release_year","category_id","language_code","country_code","is_kids","quality","status","rights_status","rights_holder","license_reference","rights_expires_at","featured"]},
  aseel_seasons:{label:"المواسم",fields:["series_id","number","title_ar"]},
@@ -11,7 +12,7 @@ const tables={
  aseel_content_sources:{label:"مصادر الحقوق",fields:["title","source_url","rights_contact","license_reference","verified"]},
  aseel_settings:{label:"إعدادات التطبيق",fields:["key","value","is_public"]}
 };
-const names={title_ar:"العنوان العربي",title_original:"العنوان الأصلي",description:"الوصف",poster_url:"رابط البوستر HTTPS",backdrop_url:"رابط الخلفية",release_year:"سنة الإنتاج",category_id:"التصنيف",duration_minutes:"المدة بالدقائق",language_code:"اللغة (ar/en/tr)",country_code:"الدولة (رمز مثل US/TR)",is_kids:"محتوى مخصص للأطفال",quality:"الجودة",stream_url:"رابط تشغيل MP4/HLS مباشر",youtube_url:"رابط فيديو يوتيوب رسمي (اختياري)",stream_variants:"جودات إضافية (JSON: label + url)",official_url:"رابط مشاهدة الجهة الرسمية HTTPS",playback_mode:"طريقة عرض القناة",status:"النشر",rights_status:"حالة الترخيص",rights_holder:"صاحب الحقوق",license_reference:"رابط أو رقم وثيقة الترخيص",rights_expires_at:"نهاية صلاحية الترخيص",featured:"مميز",series_id:"المسلسل",season_id:"الموسم",number:"الترتيب",name_ar:"اسم التصنيف",sort_order:"الترتيب",published:"منشور",title:"العنوان",source_url:"رابط المصدر",source_id:"مصدر الحقوق المرتبط",source_page_url:"رابط صفحة الاستخراج الأصلية HTTPS",display_order:"ترتيب الظهور",rights_contact:"التواصل مع صاحب الحقوق",verified:"تم التحقق",key:"مفتاح الإعداد",value:"قيمة الإعداد بصيغة JSON",is_public:"إعداد عام"};
+const names={channel_name:"القناة الرسمية",topic:"نوع المقطع",age_rating:"الفئة العمرية",title_ar:"العنوان العربي",title_original:"العنوان الأصلي",description:"الوصف",poster_url:"رابط البوستر HTTPS",backdrop_url:"رابط الخلفية",release_year:"سنة الإنتاج",category_id:"التصنيف",duration_minutes:"المدة بالدقائق",language_code:"اللغة (ar/en/tr)",country_code:"الدولة (رمز مثل US/TR)",is_kids:"محتوى مخصص للأطفال",quality:"الجودة",stream_url:"رابط تشغيل MP4/HLS مباشر",youtube_url:"رابط فيديو يوتيوب رسمي (اختياري)",stream_variants:"جودات إضافية (JSON: label + url)",official_url:"رابط مشاهدة الجهة الرسمية HTTPS",playback_mode:"طريقة عرض القناة",status:"النشر",rights_status:"حالة الترخيص",rights_holder:"صاحب الحقوق",license_reference:"رابط أو رقم وثيقة الترخيص",rights_expires_at:"نهاية صلاحية الترخيص",featured:"مميز",series_id:"المسلسل",season_id:"الموسم",number:"الترتيب",name_ar:"اسم التصنيف",sort_order:"الترتيب",published:"منشور",title:"العنوان",source_url:"رابط المصدر",source_id:"مصدر الحقوق المرتبط",source_page_url:"رابط صفحة الاستخراج الأصلية HTTPS",display_order:"ترتيب الظهور",rights_contact:"التواصل مع صاحب الحقوق",verified:"تم التحقق",key:"مفتاح الإعداد",value:"قيمة الإعداد بصيغة JSON",is_public:"إعداد عام"};
 const $=id=>document.getElementById(id);
 let jwt="",userId="",table="aseel_movies",editing=null,rows=[],cats=[],shows=[],seasons=[],sources=[];
 let timeout;
@@ -101,6 +102,8 @@ function optionList(key){
  if(key==="status")return [["draft","مسودة"],["published","منشور"],["hidden","مخفي"]];
  if(key==="rights_status")return [["pending","قيد المراجعة"],["approved","تم التحقق من الحقوق"],["rejected","مرفوض"]];
  if(key==="quality")return [["SD","SD"],["HD","HD"],["FHD","FHD"],["4K","4K"]];
+ if(key==="topic")return [["letters","الحروف"],["numbers","الأرقام"],["animals","الحيوانات"],["colors","الألوان والأشكال"],["stories","القصص"],["songs","أناشيد وحركة"],["science","العلوم"]];
+ if(key==="age_rating")return [["all","مناسب للجميع"],["7+","7+"],["13+","13+"]];
  if(key==="category_id")return [["","بدون تصنيف"],...cats.map(x=>[x.id,x.name_ar])];
  if(key==="source_id")return [["","— اختر مصدر الحقوق —"],...sources.map(x=>[x.id,x.title+(x.verified?" ✓ موثق":" · بانتظار التوثيق")])];
  if(key==="series_id")return [["","اختر مسلسلًا"],...shows.map(x=>[x.id,x.title_ar])];
@@ -122,7 +125,7 @@ function openEditor(row=null){
            ["release_year","duration_minutes","number","sort_order","display_order"].includes(key)?"number":
            ["rights_expires_at"].includes(key)?"datetime-local":"text";}
   control.name=key;
-  if(control.type==="checkbox")control.checked=Boolean(row?row[key]:false);
+  if(control.type==="checkbox")control.checked=Boolean(row?row[key]:(key==="is_kids"&&table==="aseel_youtube_videos"));
   else {
     const initial=row?.[key];
     control.value=initial==null?("status"===key?"draft":"rights_status"===key?"pending":"") :
@@ -184,9 +187,9 @@ $("editorForm").addEventListener("submit",async ev=>{
   else val=val||null;
   payload[key]=val;
  }
- if(payload.status==="published"&&payload.rights_status!=="approved")
+ if(table!=="aseel_youtube_videos"&&payload.status==="published"&&payload.rights_status!=="approved")
    return show("اعتمد الحقوق أولًا قبل النشر",true);
- if(payload.status==="published"&&!payload.license_reference)
+ if(table!=="aseel_youtube_videos"&&payload.status==="published"&&!payload.license_reference)
    return show("وثيقة الترخيص مطلوبة للنشر",true);
  if(table==="aseel_channels"){
     if(payload.playback_mode==="official_link"){
@@ -204,7 +207,7 @@ $("editorForm").addEventListener("submit",async ev=>{
  if(payload.country_code)payload.country_code=payload.country_code.toUpperCase();
  if(payload.language_code && !/^[a-zA-Z]{2,3}$/.test(payload.language_code))return show("رمز اللغة غير صحيح",true);
  if(payload.language_code)payload.language_code=payload.language_code.toLowerCase();
- if(payload.is_kids && payload.status==="published" && payload.rights_status!=="approved")return show("يتطلب نشر محتوى أطفال اعتماد الحقوق أولًا",true);
+ if(table!=="aseel_youtube_videos"&&payload.is_kids && payload.status==="published" && payload.rights_status!=="approved")return show("يتطلب نشر محتوى أطفال اعتماد الحقوق أولًا",true);
  const youtubeId = value => {
   try{
    const u=new URL(String(value||""));
@@ -220,6 +223,15 @@ $("editorForm").addEventListener("submit",async ev=>{
    try { const u=new URL(String(value||"")); return u.protocol==="https:" && /\.(?:mp4|m3u8)$/i.test(u.pathname); }
    catch (_) {return false;}
  };
+ if(table==="aseel_youtube_videos"){
+   if(!youtubeId(payload.youtube_url))return show("أدخل رابط فيديو يوتيوب رسمي صالحًا",true);
+   if(!payload.channel_name||!payload.title_ar)return show("أدخل عنوان المقطع واسم القناة الرسمية",true);
+   try{
+     const u=new URL(payload.source_page_url||"");
+     if(u.protocol!=="https:")throw Error("invalid protocol");
+   }catch(_){return show("أدخل رابط الصفحة الرسمية لمصدر المقطع HTTPS",true);}
+   if(payload.status==="published"&&payload.is_kids!==true)return show("حدّد محتوى مخصصًا للأطفال عند نشره بقسم الأطفال",true);
+ }
  if(payload.youtube_url && !youtubeId(payload.youtube_url))
    return show("أدخل رابط يوتيوب رسمي صالحًا: watch أو shorts أو live أو youtu.be",true);
  if(payload.stream_url && !isDirect(payload.stream_url))
