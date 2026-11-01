@@ -36,7 +36,7 @@
   if(payload.stream_url&&!direct(payload.stream_url))errors.push("رابط التشغيل يجب أن يكون MP4 أو M3U8 مباشرًا");
   if(payload.youtube_url&&!youtubeId(payload.youtube_url))errors.push("رابط يوتيوب غير صالح");
   if(payload.stream_variants.length>8||payload.stream_variants.some(x=>!x||!x.label||typeof x.label!=="string"||x.label.length>24||!direct(x.url)))errors.push("الجودات الإضافية: حتى 8 عناصر MP4/HLS مع label وurl");
-  if(payload.rights_expires_at&&new Date(payload.rights_expires_at)<new Date())errors.push("تاريخ انتهاء الترخيص قد مضى");
+
   return errors;
  };
  function payload(){
@@ -228,6 +228,7 @@
       if(p.rights_status!=="approved"||!p.license_reference||!p.rights_holder)return msg("لنشر الفيلم: اعتمد الحقوق، وأدخل صاحب الحقوق ووثيقة الترخيص.",true);
       if(!$("impRightsConfirmed").checked)return msg("أكّد أن لديك حق عرض الفيلم قبل نشره.",true);
       if(!p.stream_url&&!p.youtube_url)return msg("يلزم رابط MP4/HLS أو يوتيوب رسمي قبل النشر.",true);
+      if(p.rights_expires_at&&new Date(p.rights_expires_at)<=new Date())return msg("لا يمكن نشر فيلم انتهت رخصته. يمكن حفظه كمسودة أو إخفاؤه.",true);
       if(!playbackOK&&!$("impPlaybackConfirmed").checked)return msg("اختبر التشغيل أو أكّد الاختبار اليدوي قبل النشر.",true);
       if(!window.confirm("هل تؤكد نشر هذا الفيلم للجمهور بعد التحقق من الترخيص والتشغيل؟"))return;
    }
