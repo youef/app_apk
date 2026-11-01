@@ -185,7 +185,7 @@ public final class TVHomeActivity extends Activity {
             JSONArray data=null;String issue="";
             try{
                 data=catalog.listQuery("aseel_youtube_videos",
-                    "?select=id,title_ar,youtube_url,channel_name,language_code,topic,is_kids,status,sort_order&status=eq.published&is_kids=eq.true&order=sort_order.asc&limit=120");
+                    "?select=id,title_ar,youtube_url,channel_name,language_code,topic,is_kids,status,sort_order,licensed_stream_url,licensed_stream_variants,licensed_stream_approved&status=eq.published&is_kids=eq.true&order=sort_order.asc&limit=120");
             }catch(Exception e){issue="يوتيوب الأطفال: "+CatalogApi.describe(e);}
             final JSONArray rows=data;final String error=issue;
             ui.post(new Runnable(){public void run(){
@@ -405,6 +405,22 @@ public final class TVHomeActivity extends Activity {
         startActivity(intent);
     }
     private void openYouTube(JSONObject selected){
+        // Owner-provided licensed MP4/HLS can play natively even on Android 4.4.4.
+        // A normal YouTube watch URL is never passed to ExoPlayer.
+        String licensedUrl=value(selected,"licensed_stream_url");
+        String variants=selected.optJSONArray("licensed_stream_variants")==null
+            ? "[]" : selected.optJSONArray("licensed_stream_variants").toString();
+        if(selected.optBoolean("licensed_stream_approved",false)
+            && !StreamQuality.parse(licensedUrl,"auto",variants).isEmpty()){
+            Intent nativePlayer=new Intent(this,CinemaPlayerActivity.class);
+            nativePlayer.putExtra("item_id",value(selected,"id"));
+            nativePlayer.putExtra("title",label(selected));
+            nativePlayer.putExtra("stream_url",licensedUrl);
+            nativePlayer.putExtra("stream_variants",variants);
+            nativePlayer.putExtra("quality","auto");
+            startActivity(nativePlayer);
+            return;
+        }
         String id=YouTubeLink.videoId(value(selected,"youtube_url"));
         if(id==null)return;
         JSONArray queue=new JSONArray();
