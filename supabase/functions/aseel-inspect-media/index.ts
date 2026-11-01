@@ -76,21 +76,43 @@ Deno.serve(async(req)=>{
   if(!user.id)return response({error:"تعذر التحقق من الهوية"},401);
   const role=await fetch(PROJECT+"/rest/v1/aseel_admins?select=user_id,active&user_id=eq."+encodeURIComponent(user.id)+"&active=eq.true",{headers:{apikey:KEY,authorization:auth},signal:AbortSignal.timeout(5000)});
   if(!role.ok||!(await role.json()).length)return response({error:"الحساب ليس مسؤولًا معتمدًا"},403);
-  const body=await req.json();const url=safeUrl(body.url);
-  if(!url)return response({error:"المصدر غير مدعوم للفحص التلقائي. استخدم خيار لصق HTML يدويًا، أو رابط HTTPS من مصدر مسموح."},400);
-  // No redirects: prevent redirect-based access to internal metadata servers.
-  const fetched=await fetch(url.href,{method:"GET",redirect:"manual",headers:{"user-agent":"AlEzz-Catalog-Metadata-Inspector/1.0","accept":"text/html,application/xhtml+xml"},signal:AbortSignal.timeout(9000)});
-  if(fetched.status>=300&&fetched.status<400)return response({error:"الصفحة تعيد توجيهًا. افتحها وانسخ الرابط النهائي للفحص."},422);
-  if(!fetched.ok)return response({error:"الموقع لم يسمح بالفحص الآلي ("+fetched.status+"). يمكنك لصق HTML الصفحة يدويًا."},422);
+  const body=await req.json();
+  // End-to-end diagnostic that validates login, admin permission, CORS and JSON parsing without an external host.
+  if(body.mode==="selftest"){
+    const fixture='<html><head><title>اختبار جلب بيانات العز</title><meta property="og:image" content="https://archive.org/poster.jpg"><meta name="description" content="نجح الاتصال بالخادم"></head><body><video src="https://archive.org/download/sample.mp4"></video></body></html>';
+    return response({data:parsePage(fixture,"https://archive.org/details/sample"),diagnostics:{service:"online",authenticated:true,admin:true,externalFetch:false}});
+  }
+  const url=safeUrl(body.url);
+  if(!url)return response({error:"مصدر الرابط ليس ضمن المواقع المسموح بفحصها آليًا. استخدم HTML اليدوي أو مصدرًا معتمدًا.",error_code:"UNSUPPORTED_HOST"},400);
+  let address=url;let fetched=null;let redirects=0;
+  // Follow at most 3 redirects; EVERY destination must pass the HTTPS hostname allowlist, avoiding SSRF.
+  for(let step=0;step<4;step++){
+    fetched=await fetch(address.href,{method:"GET",redirect:"manual",headers:{"User-Agent":"Mozilla/5.0 (compatible; AlEzzTVMeta/2.0)","Accept":"text/html,application/xhtml+xml;q=0.9,*/*;q=0.5"},signal:AbortSignal.timeout(12000)});
+    if(fetched.status>=300&&fetched.status<400){
+      const location=fetched.headers.get("location")||"";
+      const target=location?safeUrl(new URL(location,address).href):null;
+      if(!target)return response({error:"الموقع حوّل الطلب إلى رابط غير مسموح. افتح الصفحة مباشرة واستخرج رابطها النهائي.",error_code:"REDIRECT_BLOCKED"},422);
+      address=target;redirects++;continue;
+    }
+    break;
+  }
+  if(!fetched || fetched.status>=300&&fetched.status<400)return response({error:"عدد تحويلات الصفحة أكبر من الحد. ضع الرابط النهائي مباشرة.",error_code:"REDIRECT_LIMIT"},422);
+  if(!fetched.ok){
+    let error="فشل جلب الصفحة من المصدر (HTTP "+fetched.status+").";
+    if(fetched.status===403||fetched.status===429)error+=" الموقع يمنع القراءة الآلية؛ افتحه من متصفحك واستخدم لصق HTML.";
+    else if(fetched.status>=500)error+=" خادم الموقع لا يستجيب بشكل صحيح؛ جرّب لاحقًا أو أدخل البيانات يدويًا.";
+    return response({error,error_code:"REMOTE_HTTP_"+fetched.status,diagnostics:{http_status:fetched.status,redirects}},422);
+  }
   const type=fetched.headers.get("content-type")||"";
-  if(!/text\/html|application\/xhtml\+xml/i.test(type))return response({error:"الرابط لا يعرض صفحة HTML"},422);
-  const len=Number(fetched.headers.get("content-length")||0);
-  if(len>900000)return response({error:"صفحة المصدر كبيرة جدًا"},413);
-  const reader=fetched.body?.getReader();if(!reader)return response({error:"تعذر قراءة الصفحة"},422);
+  if(!/text\/html|application\/xhtml\+xml/i.test(type))return response({error:"الصفحة ليست HTML ("+type.slice(0,70)+"). أدخل رابط صفحة الفيلم وليس رابط المشغّل.",error_code:"NOT_HTML"},422);
+  if(Number(fetched.headers.get("content-length")||0)>1100000)return response({error:"حجم الصفحة أكبر من الحد"},413);
+  const reader=fetched.body?.getReader();if(!reader)return response({error:"تعذر قراءة محتوى الصفحة"},422);
   const chunks=[];let size=0;
-  try{while(true){const {value,done}=await reader.read();if(done)break;size+=value.length;if(size>900000)break;chunks.push(value);}}finally{await reader.cancel().catch(()=>{});}
-  if(size>900000)return response({error:"الصفحة أكبر من حد الفحص"},413);
-  const html=new TextDecoder().decode(Uint8Array.from(chunks.flatMap(x=>Array.from(x))));
-  return response({data:parsePage(html,url.href),note:"معلومات وروابط ظاهرة في الصفحة فقط؛ لا يتم تجاوز DRM أو تحميل الفيديو أو إثبات حقوق نشره."});
+  try{while(true){const {value,done}=await reader.read();if(done)break;size+=value.byteLength;if(size>1100000)break;chunks.push(value);}}finally{await reader.cancel().catch(()=>{});}
+  if(size>1100000)return response({error:"حجم الصفحة أكبر من الحد"},413);
+  const buffer=new Uint8Array(size);let offset=0;for(const chunk of chunks){buffer.set(chunk,offset);offset+=chunk.byteLength;}
+  const html=new TextDecoder().decode(buffer);
+  const data=parsePage(html,address.href);
+  return response({data,diagnostics:{http_status:fetched.status,redirects,html_bytes:size,found_links:data.links.length},note:"الفحص يقرأ HTML الظاهر فقط، وليس الفيديو المشفر أو المشغل الديناميكي. لا يثبت حقوق البث."});
  }catch(e){return response({error:e instanceof Error&&e.name==="TimeoutError"?"انتهت مهلة فحص المصدر":"تعذر فحص الصفحة آليًا؛ جرّب إدخال البيانات يدويًا."},422);}
 });
