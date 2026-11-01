@@ -324,15 +324,15 @@ public final class YouTubeActivity extends Activity {
         h.append("<!doctype html><html><head><meta charset='utf-8'>");
         h.append("<meta name='viewport' content='width=device-width,initial-scale=1'>");
         h.append("<style>html,body,#player{margin:0;width:100%;height:100%;background:#000;overflow:hidden}</style>");
-        h.append("</head><body><div id='player'></div><script>(function(){var p=null;");
-        h.append("window.alEzzPlayer={loadVideo:function(id){if(p&&/^[A-Za-z0-9_-]{11}$/.test(id))p.loadVideoById(id);},");
+        h.append("</head><body><div id='player'></div><script>(function(){var p=null,requestedId=null;");
+        h.append("window.alEzzPlayer={loadVideo:function(id){if(/^[A-Za-z0-9_-]{11}$/.test(id)){if(p)p.loadVideoById(id);else requestedId=id;}},");
         h.append("playVideo:function(){if(p)p.playVideo();},pauseVideo:function(){if(p)p.pauseVideo();},");
         h.append("toggleVideo:function(){if(p){if(p.getPlayerState()===1)p.pauseVideo();else p.playVideo();}},");
         h.append("seek:function(t){if(p)p.seekTo(Math.max(0,p.getCurrentTime()+t),true);}};");
         h.append("window.onYouTubeIframeAPIReady=function(){try{p=new YT.Player('player',{width:'100%',height:'100%',");
         h.append("videoId:'").append(id).append("',playerVars:{autoplay:1,controls:1,playsinline:1,");
         h.append("enablejsapi:1,origin:'https://youef.github.io'},events:{");
-        h.append("onReady:function(e){e.target.playVideo();},");
+        h.append("onReady:function(e){if(requestedId)e.target.loadVideoById(requestedId);else e.target.playVideo();},");
         h.append("onStateChange:function(e){if(e.data===0)location.href='alezzvideo://ended';},");
         h.append("onError:function(e){location.href='alezzvideo://error/'+e.data;},");
         h.append("onAutoplayBlocked:function(){location.href='alezzvideo://blocked';}");
