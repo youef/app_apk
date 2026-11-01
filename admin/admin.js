@@ -1038,6 +1038,7 @@
     host.append(buttons);
     host.append(el('p', { class: 'bulk-status', id: 'bulkStatus', role: 'status', 'aria-live': 'polite' },
       'التنفيذ الكامل: ترخيص مشترك عند إدخاله والتأكيد عليه، ثم نشر المستوفي، ثم إضافته لصف البث دون تكرار.'));
+    host.append(el('p', { class: 'bulk-status', id: 'bulkReadiness', role: 'status' }, ''));
     syncChannelBulkPanel();
   }
 
@@ -1046,6 +1047,14 @@
     var count = Object.keys(state.selectedChannels).length;
     var summary = $('#bulkSelectionSummary');
     if (summary) summary.textContent = formatNumber(count) + ' محددة من ' + formatNumber(state.rows.length);
+    var readiness = $('#bulkReadiness');
+    if (readiness) {
+      var chosen = state.rows.filter(function (row) { return state.selectedChannels[row.id]; });
+      var qualified = chosen.filter(canPublishChannel).length;
+      readiness.textContent = chosen.length ? ('الجاهز للنشر حسب البيانات: ' + qualified + ' / ' + chosen.length +
+        ' — غير المؤهل: ' + (chosen.length - qualified) + '. يلزم إذن بث صالح ورابط تشغيل HTTPS؛ النشر وحده لا يضمن ظهور المحتوى.') :
+        'حدد القنوات لمعاينة عدد المؤهل للنشر قبل تنفيذ الحفظ.';
+    }
     var master = $('.bulk-check-cell input', state.els.thead);
     if (master) {
       var total = state.filteredChannels.length;
@@ -1068,21 +1077,42 @@
     return result;
   }
 
+  function payloadMatchesRecord(row, payload) {
+    return Object.keys(payload).every(function (key) {
+      if (key === 'rights_expires_at') return new Date(row[key]).getTime() === new Date(payload[key]).getTime();
+      return row[key] === payload[key];
+    });
+  }
+
   function patchChannelBatch(rows, payload) {
     var report = { changed: 0, failures: 0, errors: [] };
     return bulkParts(rows, 40).reduce(function (chain, batch) {
       return chain.then(function () {
-        return api('aseel_channels?id=in.(' + batch.map(function (row) { return row.id; }).join(',') + ')', {
+        var ids = batch.map(function (row) { return row.id; });
+        var path = 'aseel_channels?id=in.(' + ids.join(',') + ')';
+        return api(path, {
           method: 'PATCH', body: payload, headers: { Prefer: 'return=representation' }
         }).then(function (returned) {
-          returned = Array.isArray(returned) ? returned : [];
-          returned.forEach(function (row) {
-            var found = state.rows.filter(function (current) { return current.id === row.id; })[0];
-            if (found) Object.assign(found, row);
+          // A successful HTTP status is not proof that all requested records changed.
+          // Confirm persisted values with a fresh read before reporting success.
+          if (!Array.isArray(returned) || returned.length !== batch.length) {
+            throw new Error('لم يتم تحديث كل السجلات المطلوبة في هذه الدفعة.');
+          }
+          return restList('aseel_channels', 'select=*&id=in.(' + ids.join(',') + ')').then(function (verified) {
+            verified = Array.isArray(verified) ? verified : [];
+            var verifiedById = {};
+            verified.forEach(function (row) { verifiedById[row.id] = row; });
+            batch.forEach(function (original) {
+              var confirmed = verifiedById[original.id];
+              if (confirmed && payloadMatchesRecord(confirmed, payload)) {
+                Object.assign(original, confirmed);
+                report.changed++;
+              } else {
+                report.failures++;
+                report.errors.push('تعذّر تأكيد حفظ القناة: ' + (original.title_ar || original.id));
+              }
+            });
           });
-          report.changed += returned.length;
-          report.failures += batch.length - returned.length;
-          if (returned.length !== batch.length) report.errors.push('رفضت صلاحيات قاعدة البيانات تعديل بعض القنوات');
         }).catch(function (err) {
           report.failures += batch.length;
           report.errors.push(describeError(err));
@@ -1132,7 +1162,19 @@
               report.errors.push(describeError(err));
             });
           });
-        }, Promise.resolve()).then(function () { return report; });
+        }, Promise.resolve()).then(function () {
+          return fetchLiveLinks(collectionId).then(function (latest) {
+            var linked = {};
+            latest.forEach(function (item) { if (item.channel_id) linked[item.channel_id] = true; });
+            var verifiedCount = pending.filter(function (row) { return linked[row.id]; }).length;
+            if (verifiedCount !== report.added) {
+              report.errors.push('بعض روابط القنوات لم تثبت في قاعدة البيانات بعد إعادة القراءة.');
+            }
+            report.failures = pending.length - verifiedCount;
+            report.added = verifiedCount;
+            return report;
+          });
+        });
       });
     });
   }
@@ -1172,6 +1214,7 @@
     state.bulkBusy = true;
     syncChannelBulkPanel();
     var results = [];
+    var hadFailures = false;
     var flow = Promise.resolve();
     if (applyLicense) {
       flow = flow.then(function () {
@@ -1179,7 +1222,8 @@
         var payload = { rights_status: 'approved', rights_holder: holder, license_reference: reference };
         if (expires) payload.rights_expires_at = new Date(expires + 'T23:59:59').toISOString();
         return patchChannelBatch(selected, payload).then(function (report) {
-          results.push('الترخيص: ' + report.changed + ' ناجح / ' + report.failures + ' فشل');
+          results.push('الترخيص المؤكد بالداتا: ' + report.changed + ' / ' + selected.length + '، فشل: ' + report.failures);
+          if (report.failures || report.errors.length) hadFailures = true;
           if (report.errors.length) results.push(report.errors[0]);
         });
       });
@@ -1190,7 +1234,8 @@
         var allowed = selected.filter(canPublishChannel);
         var draft = allowed.filter(function (row) { return row.status !== 'published'; });
         return patchChannelBatch(draft, { status: 'published' }).then(function (report) {
-          results.push('النشر: ' + report.changed + ' جديد / ' + (selected.length - allowed.length) + ' غير مؤهل / ' + report.failures + ' فشل');
+          results.push('نشر جديد مؤكد: ' + report.changed + '، منشور سابقًا: ' + (allowed.length - draft.length) + '، غير مؤهل: ' + (selected.length - allowed.length) + '، فشل: ' + report.failures);
+          if (report.failures || report.errors.length) hadFailures = true;
           if (report.errors.length) results.push(report.errors[0]);
         });
       });
@@ -1200,15 +1245,16 @@
         bulkStatus('جارٍ إضافة القنوات إلى «على الهواء الآن» دون تكرار…');
         var allowed = selected.filter(function (row) { return row.status === 'published' && canPublishChannel(row); });
         return addChannelsToLive(allowed).then(function (report) {
-          results.push('البث: ' + report.added + ' مضافة / ' + report.existing + ' موجودة / ' +
-            (selected.length - allowed.length) + ' غير مؤهلة / ' + report.failures + ' فشل');
+          results.push('ربط البث المؤكد بالداتا: ' + report.added + ' مضافة، ' + report.existing + ' موجودة، ' +
+            (selected.length - allowed.length) + ' غير مؤهلة، ' + report.failures + ' فشل');
+          if (report.failures || report.errors.length) hadFailures = true;
           if (report.errors.length) results.push(report.errors[0]);
         });
       });
     }
     flow.then(function () {
       bulkStatus(results.join(' | '));
-      toast('انتهى التنفيذ الجماعي. راجع ملخص النتائج.', 'success');
+      toast(hadFailures ? 'اكتمل جزء من العملية مع أخطاء. افتح تقرير النتائج.' : 'تم تأكيد حفظ التغييرات في Supabase.', hadFailures ? 'error' : 'success');
     }).catch(function (err) {
       bulkStatus('توقفت العملية: ' + results.concat([describeError(err)]).join(' | '));
       toast('توقف التنفيذ: ' + describeError(err), 'error');
