@@ -1063,6 +1063,248 @@
   }
 
 
+  /* ---------- batch editing across movies, series, episodes and YouTube ---------- */
+  function isMediaBulkTable(tableCfg) {
+    return !!tableCfg && ['aseel_movies', 'aseel_series', 'aseel_episodes', 'aseel_youtube_videos']
+      .indexOf(tableCfg.table) >= 0;
+  }
+
+  function fetchAllMedia(tableCfg) {
+    var found = [];
+    var name = tableCfg.table;
+    function page(offset) {
+      if (offset >= 10000) return Promise.reject(new Error('عدد العناصر يتجاوز حد التحديد الآمن (10000).'));
+      return restList(name, 'select=*&order=created_at.desc,id.asc&limit=500&offset=' + offset).then(function (rows) {
+        if (!Array.isArray(rows)) throw new Error('استجابة غير متوقعة عند تحميل ' + tableCfg.label);
+        found = found.concat(rows);
+        return rows.length === 500 ? page(offset + 500) : found;
+      });
+    }
+    return page(0);
+  }
+
+  function canPublishMedia(row, tableName) {
+    if (!row || row.link_health_status === 'broken') return false;
+    if (tableName === 'aseel_youtube_videos') {
+      try {
+        var u = new URL(row.youtube_url || '');
+        var h = u.hostname.toLowerCase();
+        return u.protocol === 'https:' && ['www.youtube.com','youtube.com','m.youtube.com','youtu.be'].indexOf(h) !== -1;
+      } catch (e) { return false; }
+    }
+    if (row.rights_status !== 'approved' || !String(row.license_reference || '').trim()) return false;
+    if (row.rights_expires_at && !(new Date(row.rights_expires_at).getTime() > Date.now())) return false;
+    if (tableName === 'aseel_series') return true; /* Episodes are independently guarded by RLS. */
+    if (tableName === 'aseel_episodes') return isHttps(row.stream_url); /* Matches public episode policy. */
+    return isHttps(row.stream_url) || isHttps(row.youtube_url);
+  }
+
+  function selectFilteredMedia(checked) {
+    if (state.bulkBusy || !isMediaBulkTable(state.table)) return;
+    state.filteredMedia.forEach(function (row) {
+      if (checked) state.selectedMedia[row.id] = true;
+      else delete state.selectedMedia[row.id];
+    });
+    applyFilter();
+  }
+
+  function buildMediaBulkPanel(tableCfg) {
+    var host = state.els.bulkPanel;
+    if (!host) return;
+    host.replaceChildren();
+    var isYoutube = tableCfg.table === 'aseel_youtube_videos';
+    var header = el('div', { class: 'bulk-header' });
+    header.append(el('strong', null, 'عمليات جماعية — ' + tableCfg.label),
+      el('span', { class: 'bulk-count', id: 'mediaBulkSummary', role: 'status' }, '0 محدد'));
+    host.append(header);
+    var selection = el('div', { class: 'bulk-actions' });
+    [
+      ['تحديد نتائج البحث', function () { selectFilteredMedia(true); }],
+      ['تحديد الكل', function () {
+        state.rows.forEach(function (row) { state.selectedMedia[row.id] = true; }); applyFilter();
+      }],
+      ['إلغاء التحديد', function () { state.selectedMedia = {}; applyFilter(); }]
+    ].forEach(function (entry) {
+      var button = el('button', { class: 'btn btn-ghost btn-sm media-bulk-control', type: 'button' }, entry[0]);
+      button.addEventListener('click', entry[1]);
+      selection.append(button);
+    });
+    host.append(selection);
+    if (!isYoutube) {
+      var details = el('details', { class: 'bulk-license', open: false });
+      details.append(el('summary', null, 'الترخيص والحقوق للمحتوى المحدد'));
+      details.append(el('p', { class: 'bulk-hint' },
+        'لا تعتمد ترخيصًا مشتركًا إلا إذا كانت وثيقته تغطي جميع العناصر المحددة. لا تمنح هذه الخطوة حقوق عرض جديدة.'));
+      var fields = el('div', { class: 'bulk-fields' });
+      var inputs = [];
+      if (tableCfg.table !== 'aseel_episodes') {
+        inputs.push(['صاحب الحقوق', 'mediaBulkHolder', 'الجهة التي تملك حقوق العرض', 'text']);
+      }
+      inputs.push(['مرجع الترخيص', 'mediaBulkLicense', 'وثيقة أو رابط يثبت الإذن لجميع العناصر', 'text']);
+      inputs.push(['انتهاء الترخيص (اختياري)', 'mediaBulkExpiry', '', 'date']);
+      inputs.forEach(function (item) {
+        var field = el('label', { class: 'bulk-field' });
+        field.append(el('span', null, item[0]),
+          el('input', { id: item[1], type: item[3], autocomplete: 'off', placeholder: item[2],
+            dir: item[3] === 'date' ? 'ltr' : 'auto' }));
+        fields.append(field);
+      });
+      details.append(fields);
+      var acknowledgement = el('label', { class: 'bulk-ack' });
+      acknowledgement.append(el('input', { type: 'checkbox', id: 'mediaBulkAck' }),
+        el('span', null, 'أؤكد أن لدي إذنًا صالحًا يغطّي كل المحتوى المحدد، بما يشمل حقوق إعادة العرض.'));
+      details.append(acknowledgement);
+      host.append(details);
+    } else {
+      host.append(el('p', { class: 'bulk-hint' },
+        'يُسمح بنشر روابط يوتيوب الرسمية فقط. فيديوهات يوتيوب لا تحتوي حقول ترخيص جماعي في قاعدة البيانات؛ لا يتم إنشاء ترخيص افتراضي.'));
+    }
+    var operations = el('div', { class: 'bulk-actions' });
+    var actions = isYoutube ? [['نشر المحدد دفعة واحدة', 'publish', 'btn-gold']] : [
+      ['اعتماد الترخيص للمحدد', 'license', 'btn-ghost'],
+      ['نشر المحتوى المؤهل', 'publish', 'btn-ghost'],
+      ['اعتماد الحقوق والنشر دفعة واحدة', 'all', 'btn-gold']
+    ];
+    actions.forEach(function (entry) {
+      var button = el('button', { type: 'button', class: 'btn btn-sm media-bulk-control ' + entry[2] }, entry[0]);
+      button.addEventListener('click', function () { runMediaBulk(entry[1]); });
+      operations.append(button);
+    });
+    host.append(operations);
+    host.append(el('p', { class: 'bulk-status', id: 'mediaBulkReadiness', role: 'status' }, ''));
+    host.append(el('p', { class: 'bulk-status', id: 'mediaBulkStatus', role: 'status', 'aria-live': 'polite' },
+      'يتم الحفظ على دفعات مع إعادة قراءة البيانات للتأكد من تطبيق كل عملية. المحتوى المعطوب لا يعاد نشره حتى إصلاح الرابط.'));
+    syncMediaBulkPanel();
+  }
+
+  function syncMediaBulkPanel() {
+    if (!state.table || !isMediaBulkTable(state.table) || !state.els.bulkPanel) return;
+    var total = Object.keys(state.selectedMedia).length;
+    var selected = state.rows.filter(function (row) { return state.selectedMedia[row.id]; });
+    var valid = selected.filter(function (row) { return canPublishMedia(row, state.table.table); }).length;
+    var summary = $('#mediaBulkSummary');
+    if (summary) summary.textContent = formatNumber(total) + ' محدد من ' + formatNumber(state.rows.length);
+    var readiness = $('#mediaBulkReadiness');
+    if (readiness) readiness.textContent = 'المؤهل للنشر حاليًا: ' + valid + ' / ' + selected.length +
+      (state.table.table === 'aseel_series' ? ' — يجب اعتماد ونشر الحلقات التابعة من قسم الحلقات لظهورها للمشاهدين.' : '') +
+      ' — المرفوض أو المعطوب يبقى دون نشر.';
+    var master = $('.bulk-check-cell input', state.els.thead);
+    if (master) {
+      var filtered = state.filteredMedia || [];
+      var marked = filtered.filter(function (row) { return state.selectedMedia[row.id]; }).length;
+      master.checked = filtered.length > 0 && marked === filtered.length;
+      master.indeterminate = marked > 0 && marked < filtered.length;
+      master.disabled = state.bulkBusy;
+    }
+    $('.media-bulk-control', state.els.bulkPanel).forEach(function (button) { button.disabled = state.bulkBusy; });
+  }
+
+  function patchMediaBatch(tableName, selected, payload) {
+    var report = { changed: 0, failures: 0, errors: [] };
+    return bulkParts(selected, 35).reduce(function (chain, batch) {
+      return chain.then(function () {
+        var ids = batch.map(function (row) { return row.id; });
+        var filter = 'id=in.(' + ids.join(',') + ')';
+        return api(tableName + '?' + filter, {
+          method: 'PATCH', body: payload, headers: { Prefer: 'return=representation' }
+        }).then(function (returned) {
+          if (!Array.isArray(returned) || returned.length !== batch.length) {
+            throw new Error('عدد السجلات المحدثة لا يطابق الطلب: ' + tableName);
+          }
+          return restList(tableName, 'select=*&' + filter).then(function (confirmed) {
+            var records = {};
+            (confirmed || []).forEach(function (row) { records[row.id] = row; });
+            batch.forEach(function (original) {
+              var saved = records[original.id];
+              if (saved && payloadMatchesRecord(saved, payload)) {
+                Object.assign(original, saved);
+                report.changed++;
+              } else {
+                report.failures++;
+                report.errors.push('تعذر تأكيد حفظ ' + (original.title_ar || original.id));
+              }
+            });
+          });
+        }).catch(function (error) {
+          report.failures += batch.length;
+          report.errors.push(describeError(error));
+        });
+      });
+    }, Promise.resolve()).then(function () { return report; });
+  }
+
+  function runMediaBulk(action) {
+    if (!isMediaBulkTable(state.table) || state.bulkBusy || !state.adminVerified) {
+      toast('يلزم حساب مسؤول معتمد لإجراء النشر الجماعي.', 'error');
+      return;
+    }
+    var tableCfg = state.table, tableName = tableCfg.table;
+    var selected = state.rows.filter(function (row) { return state.selectedMedia[row.id]; });
+    if (!selected.length) { toast('حدد عنصرًا أو أكثر أولًا.', 'error'); return; }
+    var isYoutube = tableName === 'aseel_youtube_videos';
+    var holder = (($('#mediaBulkHolder') || {}).value || '').trim();
+    var reference = (($('#mediaBulkLicense') || {}).value || '').trim();
+    var expiry = (($('#mediaBulkExpiry') || {}).value || '').trim();
+    var agreed = Boolean($('#mediaBulkAck') && $('#mediaBulkAck').checked);
+    var license = !isYoutube && (action === 'license' || (action === 'all' && (holder || reference || expiry || agreed)));
+    if (license) {
+      if ((!holder && tableName !== 'aseel_episodes') || !reference || !agreed) {
+        toast('أدخل صاحب الحقوق ومرجع الترخيص وأكد أن الإذن يشمل الجميع. للحلقات يكفي المرجع والتأكيد.', 'error');
+        return;
+      }
+      if (holder.length > 250 || reference.length > 500 ||
+          (expiry && !(new Date(expiry + 'T23:59:59').getTime() > Date.now()))) {
+        toast('بيانات الترخيص طويلة أو منتهية الصلاحية.', 'error');
+        return;
+      }
+    }
+    if (!window.confirm('تأكيد تنفيذ ' + (action === 'all' ? 'الترخيص والنشر' : action === 'license' ? 'الترخيص' : 'النشر') +
+      ' لـ ' + selected.length + ' عنصر في ' + tableCfg.label + '؟ سيتم تعديل قاعدة البيانات فعليًا.')) return;
+    state.bulkBusy = true;
+    syncMediaBulkPanel();
+    var log = [], errors = [];
+    var flow = Promise.resolve();
+    if (license) flow = flow.then(function () {
+      var payload = { rights_status: 'approved', license_reference: reference };
+      if (tableName !== 'aseel_episodes') payload.rights_holder = holder;
+      if (expiry) payload.rights_expires_at = new Date(expiry + 'T23:59:59').toISOString();
+      var progress = $('#mediaBulkStatus');
+      if (progress) progress.textContent = 'جارٍ اعتماد وثيقة الحقوق في قاعدة البيانات...';
+      return patchMediaBatch(tableName, selected, payload).then(function (result) {
+        log.push('اعتماد الحقوق: ' + result.changed + ' / ' + selected.length + '، فشل: ' + result.failures);
+        errors = errors.concat(result.errors);
+      });
+    });
+    if (action === 'publish' || action === 'all') flow = flow.then(function () {
+      var allowed = selected.filter(function (row) { return canPublishMedia(row, tableName); });
+      var drafts = allowed.filter(function (row) { return row.status !== 'published'; });
+      var progress = $('#mediaBulkStatus');
+      if (progress) progress.textContent = 'جارٍ نشر العناصر المؤهلة والتحقق من كل دفعة…';
+      return patchMediaBatch(tableName, drafts, { status: 'published' }).then(function (result) {
+        log.push('نشر جديد: ' + result.changed + '، منشور مسبقًا: ' + (allowed.length - drafts.length) +
+          '، غير مؤهل: ' + (selected.length - allowed.length) + '، فشل: ' + result.failures);
+        errors = errors.concat(result.errors);
+      });
+    });
+    flow.then(function () {
+      var summary = log.join(' | ') + (errors.length ? ' | خطأ: ' + errors[0] : '');
+      var progress = $('#mediaBulkStatus');
+      if (progress) progress.textContent = summary;
+      toast(errors.length ? 'اكتمل جزء من العملية؛ راجع النتائج.' : 'تم تأكيد الحفظ في Supabase.',
+        errors.length ? 'error' : 'success');
+    }).catch(function (error) {
+      var progress = $('#mediaBulkStatus');
+      if (progress) progress.textContent = 'توقفت العملية: ' + describeError(error);
+      toast('فشل التنفيذ: ' + describeError(error), 'error');
+    }).finally(function () {
+      state.bulkBusy = false;
+      if (state.table === tableCfg) {
+        syncMediaBulkPanel();
+        loadTable(tableCfg);
+      }
+    });
+  }
+
   /* ---------- bulk channel licensing and live shelf management ---------- */
   function fetchAllChannels() {
     var collected = [];
