@@ -1,0 +1,126 @@
+name: Audit raid35 beIN/4K IPTV links (read-only)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/audit-raid35-bein.yml
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check all playlist entries without broadcasting or publishing
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import concurrent.futures
+          import datetime
+          import hashlib
+          import json
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          # Pinned, reviewed source: 18 channel labels / 19 URLs at this commit.
+          SOURCE = "https://raw.githubusercontent.com/raid35/bein/9094a6fe29f1b7a942cb0f687fd364a1cb71457a/4K.m3u"
+          HEADERS = {"User-Agent": "AlEzzTV-ReadOnly-LinkAudit/1.0", "Accept": "*/*"}
+          def request(url, method="GET", sample=2048):
+              headers = dict(HEADERS)
+              if method == "GET" and url != SOURCE:
+                  headers["Range"] = "bytes=0-2047"
+              req = urllib.request.Request(url, headers=headers, method=method)
+              with urllib.request.urlopen(req, timeout=10) as response:
+                  return response.status, response.geturl(), response.read(sample) if method == "GET" else b""
+
+          def parse(raw):
+              entries = []
+              name = "Unnamed channel"
+              group = ""
+              for line in raw.decode("utf-8-sig", "replace").splitlines():
+                  line = line.strip()
+                  if line.startswith("#EXTINF"):
+                      name = line.partition(",")[2].strip() or "Unnamed channel"
+                      group = ""
+                      marker = 'group-title="'
+                      if marker in line:
+                          group = line.split(marker, 1)[1].split('"', 1)[0]
+                  elif line.startswith(("http://", "https://")):
+                      entries.append({"name": name, "group": group, "url": line})
+              return entries
+
+          def check(index_and_entry):
+              idx, item = index_and_entry
+              url = item["url"]
+              parsed = urllib.parse.urlsplit(url)
+              extension = parsed.path.rsplit(".", 1)[-1].lower() if "." in parsed.path else "unknown"
+              report = {
+                  "number": idx,
+                  "name": item["name"],
+                  "group": item["group"],
+                  "host": parsed.hostname,
+                  "format": extension,
+                  "https_required_by_current_android_app": True,
+                  "compatible_with_current_android_app": parsed.scheme == "https",
+                  "http_status": None,
+                  "result": "unchecked",
+              }
+              # Never include raw URLs (possibly containing subscription credentials)
+              # in reports, logs or artifacts.
+              if parsed.scheme not in ("http", "https") or not parsed.hostname:
+                  report["result"] = "invalid_url"
+                  return report
+              try:
+                  code, _, data = request(url)
+                  report["http_status"] = code
+                  if extension == "m3u8":
+                      valid = data.startswith(b"#EXTM3U")
+                  elif extension == "ts":
+                      valid = len(data) > 188 and data[0] == 0x47 and data[188] == 0x47
+                  else:
+                      valid = False
+                  report["result"] = "sample_matches_format" if valid else "reachable_format_not_verified"
+              except urllib.error.HTTPError as exc:
+                  report["http_status"] = exc.code
+                  report["result"] = "http_error"
+              except Exception as exc:
+                  report["result"] = "network_error"
+                  report["error_type"] = type(exc).__name__
+              return report
+
+          try:
+              code, _, source_bytes = request(SOURCE, sample=200000)
+              entries = parse(source_bytes)
+              if code != 200 or not entries:
+                  raise ValueError("Source playlist is empty or unavailable")
+          except Exception as exc:
+              print("Playlist source failed:", type(exc).__name__)
+              raise SystemExit(1)
+          with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+              reports = list(pool.map(check, enumerate(entries, 1)))
+          output = {
+              "checked_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              "source_repo": "raid35/bein",
+              "source_commit": "9094a6fe29f1b7a942cb0f687fd364a1cb71457a",
+              "playlist_sha256": hashlib.sha256(source_bytes).hexdigest(),
+              "total_stream_urls": len(reports),
+              "unique_channel_names": len(set(x["name"] for x in entries)),
+              "warning": "URL/segment header checks are not a playback test or proof of distribution rights. The Android app rejects HTTP URLs.",
+              "results": reports,
+          }
+          with open("bein-4k-link-audit.json", "w", encoding="utf-8") as out:
+              json.dump(output, out, indent=2, ensure_ascii=False)
+          for row in reports:
+              print(f'{row["number"]:02d} {row["name"]} | {row["result"]} | HTTP={row["http_status"]} | app_compatible={row["compatible_with_current_android_app"]}')
+          print("TOTAL", output["total_stream_urls"], "UNIQUE_CHANNELS", output["unique_channel_names"])
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bein-4k-link-audit
+          path: bein-4k-link-audit.json
+          if-no-files-found: warn
+          retention-days: 7
