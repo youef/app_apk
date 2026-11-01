@@ -2,7 +2,7 @@
 const cfg=window.ASEEL_CONFIG;
 const api=cfg.url+"/rest/v1/";
 const tables={
- aseel_movies:{label:"الأفلام",fields:["title_ar","title_original","description","poster_url","backdrop_url","release_year","category_id","duration_minutes","language_code","country_code","is_kids","quality","stream_url","youtube_url","stream_variants","status","rights_status","rights_holder","license_reference","rights_expires_at","featured"]},
+ aseel_movies:{label:"الأفلام",fields:["title_ar","title_original","description","poster_url","backdrop_url","release_year","category_id","source_id","source_page_url","display_order","duration_minutes","language_code","country_code","is_kids","quality","stream_url","youtube_url","stream_variants","status","rights_status","rights_holder","license_reference","rights_expires_at","featured"]},
  aseel_series:{label:"المسلسلات",fields:["title_ar","title_original","description","poster_url","backdrop_url","release_year","category_id","language_code","country_code","is_kids","quality","status","rights_status","rights_holder","license_reference","rights_expires_at","featured"]},
  aseel_seasons:{label:"المواسم",fields:["series_id","number","title_ar"]},
  aseel_episodes:{label:"الحلقات",fields:["season_id","number","title_ar","description","poster_url","duration_minutes","stream_url","youtube_url","stream_variants","status","rights_status","license_reference","rights_expires_at"]},
@@ -11,9 +11,9 @@ const tables={
  aseel_content_sources:{label:"مصادر الحقوق",fields:["title","source_url","rights_contact","license_reference","verified"]},
  aseel_settings:{label:"إعدادات التطبيق",fields:["key","value","is_public"]}
 };
-const names={title_ar:"العنوان العربي",title_original:"العنوان الأصلي",description:"الوصف",poster_url:"رابط البوستر HTTPS",backdrop_url:"رابط الخلفية",release_year:"سنة الإنتاج",category_id:"التصنيف",duration_minutes:"المدة بالدقائق",language_code:"اللغة (ar/en/tr)",country_code:"الدولة (رمز مثل US/TR)",is_kids:"محتوى مخصص للأطفال",quality:"الجودة",stream_url:"رابط تشغيل MP4/HLS مباشر",youtube_url:"رابط فيديو يوتيوب رسمي (اختياري)",stream_variants:"جودات إضافية (JSON: label + url)",official_url:"رابط مشاهدة الجهة الرسمية HTTPS",playback_mode:"طريقة عرض القناة",status:"النشر",rights_status:"حالة الترخيص",rights_holder:"صاحب الحقوق",license_reference:"رابط أو رقم وثيقة الترخيص",rights_expires_at:"نهاية صلاحية الترخيص",featured:"مميز",series_id:"المسلسل",season_id:"الموسم",number:"الترتيب",name_ar:"اسم التصنيف",sort_order:"الترتيب",published:"منشور",title:"العنوان",source_url:"رابط المصدر",rights_contact:"التواصل مع صاحب الحقوق",verified:"تم التحقق",key:"مفتاح الإعداد",value:"قيمة الإعداد بصيغة JSON",is_public:"إعداد عام"};
+const names={title_ar:"العنوان العربي",title_original:"العنوان الأصلي",description:"الوصف",poster_url:"رابط البوستر HTTPS",backdrop_url:"رابط الخلفية",release_year:"سنة الإنتاج",category_id:"التصنيف",duration_minutes:"المدة بالدقائق",language_code:"اللغة (ar/en/tr)",country_code:"الدولة (رمز مثل US/TR)",is_kids:"محتوى مخصص للأطفال",quality:"الجودة",stream_url:"رابط تشغيل MP4/HLS مباشر",youtube_url:"رابط فيديو يوتيوب رسمي (اختياري)",stream_variants:"جودات إضافية (JSON: label + url)",official_url:"رابط مشاهدة الجهة الرسمية HTTPS",playback_mode:"طريقة عرض القناة",status:"النشر",rights_status:"حالة الترخيص",rights_holder:"صاحب الحقوق",license_reference:"رابط أو رقم وثيقة الترخيص",rights_expires_at:"نهاية صلاحية الترخيص",featured:"مميز",series_id:"المسلسل",season_id:"الموسم",number:"الترتيب",name_ar:"اسم التصنيف",sort_order:"الترتيب",published:"منشور",title:"العنوان",source_url:"رابط المصدر",source_id:"مصدر الحقوق المرتبط",source_page_url:"رابط صفحة الاستخراج الأصلية HTTPS",display_order:"ترتيب الظهور",rights_contact:"التواصل مع صاحب الحقوق",verified:"تم التحقق",key:"مفتاح الإعداد",value:"قيمة الإعداد بصيغة JSON",is_public:"إعداد عام"};
 const $=id=>document.getElementById(id);
-let jwt="",userId="",table="aseel_movies",editing=null,rows=[],cats=[],shows=[],seasons=[];
+let jwt="",userId="",table="aseel_movies",editing=null,rows=[],cats=[],shows=[],seasons=[],sources=[];
 let timeout;
 function show(message,error=false){const n=$("status");n.textContent=message;n.className="visible"+(error?" error":"");clearTimeout(timeout);timeout=setTimeout(()=>{n.className="";},7000)}
 function headers(extra={}){return Object.assign({"apikey":cfg.publishableKey,"Authorization":"Bearer "+jwt},extra)}
@@ -63,11 +63,12 @@ async function setup(){
 }
 async function loadOptions(){
  try{
-  const [a,b,c]=await Promise.all([
+  const [a,b,c,d]=await Promise.all([
    request("aseel_categories?select=id,name_ar&order=sort_order.asc"),
    request("aseel_series?select=id,title_ar&order=title_ar.asc"),
-   request("aseel_seasons?select=id,number,series_id&order=number.asc")
-  ]);cats=a||[];shows=b||[];seasons=c||[];
+   request("aseel_seasons?select=id,number,series_id&order=number.asc"),
+   request("aseel_content_sources?select=id,title,verified&order=title.asc")
+  ]);cats=a||[];shows=b||[];seasons=c||[];sources=d||[];
  }catch(e){show("تعذر تحميل بعض الخيارات: "+e.message,true)}
 }
 async function selectTable(name){
@@ -101,6 +102,7 @@ function optionList(key){
  if(key==="rights_status")return [["pending","قيد المراجعة"],["approved","تم التحقق من الحقوق"],["rejected","مرفوض"]];
  if(key==="quality")return [["SD","SD"],["HD","HD"],["FHD","FHD"],["4K","4K"]];
  if(key==="category_id")return [["","بدون تصنيف"],...cats.map(x=>[x.id,x.name_ar])];
+ if(key==="source_id")return [["","— اختر مصدر الحقوق —"],...sources.map(x=>[x.id,x.title+(x.verified?" ✓ موثق":" · بانتظار التوثيق")])];
  if(key==="series_id")return [["","اختر مسلسلًا"],...shows.map(x=>[x.id,x.title_ar])];
  if(key==="season_id")return [["","اختر موسمًا"],...seasons.map(x=>[x.id,"الموسم "+x.number+" — "+(shows.find(s=>s.id===x.series_id)?.title_ar||"")])];
  return null;
