@@ -91,7 +91,7 @@ public final class PosterLoader {
             connection.setSSLSocketFactory(LegacyTls.factory(app));
             connection.setConnectTimeout(6000);
             connection.setReadTimeout(9000);
-            connection.setRequestProperty("Accept","image/avif,image/webp,image/jpeg,image/png,image/*;q=0.8");
+            connection.setRequestProperty("Accept","image/jpeg,image/png,image/webp,image/*;q=0.8");
             connection.setRequestProperty("User-Agent","AlEzzTV/10 AndroidTV");
             connection.setInstanceFollowRedirects(true);
             if(connection.getResponseCode()!=200)return null;
