@@ -40,11 +40,11 @@
   let total=0,published=0,pending=0,kids=0,shelves=0;
   reports.forEach((r,i)=>{if(r.status!=="fulfilled")return;const list=r.value||[];
    if(i===4){shelves=list.filter(x=>x.is_active).length;return}
-   total+=list.length;published+=list.filter(x=>x.status==="published"&&x.rights_status==="approved").length;
+   total+=list.length;published+=list.filter(x=>x.status==="published").length;
    pending+=list.filter(x=>x.rights_status==="pending").length;kids+=list.filter(x=>x.is_kids).length;
   });
   const target=$("dashboardKpis");target.replaceChildren();
-  for(const [name,count,icon] of [["كل المحتوى",total,"▣"],["منشور ومعتمد",published,"✓"],["قيد مراجعة الحقوق",pending,"◈"],["الأطفال",kids,"★"],["صفوف نشطة",shelves,"✦"]]){
+  for(const [name,count,icon] of [["كل المحتوى",total,"▣"],["منشور",published,"✓"],["حقوق غير موثقة",pending,"◈"],["الأطفال",kids,"★"],["صفوف نشطة",shelves,"✦"]]){
    const card=document.createElement("article");card.className="kpi-card";const label=document.createElement("span");label.textContent=icon+" "+name;
    const number=document.createElement("strong");number.textContent=String(count);card.append(label,number);target.append(card);
   }
