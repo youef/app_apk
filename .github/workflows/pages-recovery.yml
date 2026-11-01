@@ -1,0 +1,57 @@
+name: Al Ezz TV - Recover stuck Pages deployment
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/pages-recovery.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+
+concurrency:
+  group: al-ezz-tv-pages-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Diagnose the blocked deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "GitHub Pages site status:"
+          gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '{build_type: .build_type, status: .status, source: .source}' || true
+          stale="f0f66e81a5ae41c81bdbc63bdaf4210f8cc71e66"
+          echo "Deployment ${stale} status:"
+          gh api "repos/${GITHUB_REPOSITORY}/pages/deployments/${stale}" --jq '.status' || true
+      - name: Attempt official cancellation of the stale deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          stale="f0f66e81a5ae41c81bdbc63bdaf4210f8cc71e66"
+          echo "Trying GitHub's POST /pages/deployments/{id}/cancel endpoint."
+          if gh api -i -X POST "repos/${GITHUB_REPOSITORY}/pages/deployments/${stale}/cancel"; then
+            echo "Pages cancellation request accepted."
+          else
+            echo "::warning::GitHub rejected cancellation; the Pages lock may require GitHub Support."
+          fi
+      - name: Request exactly one branch-based Pages rebuild
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_type="$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.build_type' || true)"
+          if [[ "${build_type}" == "legacy" ]]; then
+            echo "Triggering the ONE built-in GitHub Pages publisher."
+            gh api -i -X POST "repos/${GITHUB_REPOSITORY}/pages/builds" || echo "::warning::GitHub rejected the rebuild; inspect the blocked deployment."
+          else
+            echo "::warning::Build type is ${build_type:-unknown}, not legacy. Set Pages Source to Deploy from a branch (main /)."
+          fi
