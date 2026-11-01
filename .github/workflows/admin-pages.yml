@@ -42,15 +42,17 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p _site/admin
-          cp web/index.html web/styles.css web/app.js web/access.js web/config.js web/al-ezz-mark.svg web/youtube-player.html _site/
+          cp web/index.html web/styles.css web/app.js web/access.js web/config.js web/al-ezz-mark.svg web/alizz-tv-transparent.png web/youtube-player.html _site/
           # Serve the viewer from /app_apk/web/ too, regardless of which
           # GitHub Pages publishing source (Actions or branch) finishes last.
           mkdir -p _site/web
-          cp web/index.html web/styles.css web/app.js web/access.js web/config.js web/al-ezz-mark.svg web/youtube-player.html _site/web/
+          cp web/index.html web/styles.css web/app.js web/access.js web/config.js web/al-ezz-mark.svg web/alizz-tv-transparent.png web/youtube-player.html _site/web/
           cp admin/index.html admin/style.css admin/studio.css admin/importer.css admin/app.js admin/studio.js admin/importer.js admin/config.js _site/admin/
           touch _site/.nojekyll
           test -s _site/index.html
           test -s _site/app.js
+          test -s _site/alizz-tv-transparent.png
+          test -s _site/web/alizz-tv-transparent.png
           test -s _site/admin/index.html
           test -s _site/admin/importer.js
           test -s _site/admin/importer.css
@@ -75,6 +77,7 @@ jobs:
             if curl -fLsS --max-time 12 -o /tmp/alezz-home.html "$ROOT" &&
                curl -fLsS --max-time 12 -o /tmp/alezz-web.html "${ROOT}web/" &&
                curl -fLsS --max-time 12 -o /tmp/alezz-access.js "${ROOT}web/access.js" &&
+               curl -fLsS --max-time 12 -o /tmp/alezz-logo.png "${ROOT}web/alizz-tv-transparent.png" &&
                curl -fLsS --max-time 12 -o /tmp/alezz-admin.html "${ROOT}admin/" &&
                curl -fLsS --max-time 12 -o /tmp/alezz-importer.js "${ROOT}admin/importer.js" &&
                grep -Eq "activationGate|web/" /tmp/alezz-home.html &&
