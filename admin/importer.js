@@ -108,6 +108,14 @@
      backdrop_url:abs(getMeta("og:image")),source_page_url:url||null,
      links:[]
    };
+   const pictures=[];
+   for(const img of doc.querySelectorAll("img,video[poster]")){
+     const src=img.getAttribute("data-original")||img.getAttribute("data-src")||img.getAttribute("data-lazy-src")||img.getAttribute("poster")||img.getAttribute("src");
+     const u=abs(src);if(u&&!pictures.some(x=>x.url===u))pictures.push({url:u,source:"pasted-html"});
+   }
+   ret.image_candidates=pictures.slice(0,12);
+   if(!ret.poster_url&&pictures.length)ret.poster_url=pictures[0].url;
+   if(!ret.backdrop_url&&pictures.length>1)ret.backdrop_url=pictures[1].url;
    const seen=new Set();
    for(const n of doc.querySelectorAll("iframe[src],source[src],video[src],a[href]")){
      const link=abs(n.getAttribute("src")||n.getAttribute("href"));if(!link||seen.has(link))continue;
@@ -121,9 +129,49 @@
    for(const key of ["title_ar","title_original","description","poster_url","backdrop_url","release_year","duration_minutes","source_page_url"]){
      if(data[key]!==undefined&&data[key]!==null&&data[key]!=="")val(key,data[key]);
    }
-   found=Array.isArray(data.links)?data.links.slice(0,40):[];
-   const first=found.find(x=>x.kind==="media"&&direct(x.url));if(first&&!$("impStream").value)val("stream_url",first.url);
-   renderLinks();updatePreview();
+   if(data.poster_url&&!data.backdrop_url&&!$("impBackdrop").value)val("backdrop_url",data.poster_url);
+   found=Array.isArray(data.links)?data.links.slice(0,75):[];
+   const first=(data.stream_url&&direct(data.stream_url)?data.stream_url:null)
+      ||found.find(x=>x.kind==="media"&&direct(x.url))?.url||null;
+   // A fresh scan must update the direct playable URL. Embed pages are never inserted as MP4/HLS.
+   if(first)val("stream_url",first);
+   const variants=Array.isArray(data.stream_variants)
+     ?data.stream_variants.filter(x=>x&&typeof x.label==="string"&&direct(x.url)).slice(0,8):[];
+   if(variants.length)val("stream_variants",JSON.stringify(variants,null,2));
+   renderLinks();
+   renderImages(Array.isArray(data.image_candidates)?data.image_candidates:[]);
+   updatePreview();
+ }
+ function renderImages(items){
+   const area=$("impImages");area.replaceChildren();
+   const unique=new Set(),photos=[];
+   for(const item of items){
+     const url=typeof item==="string"?item:item?.url;
+     if(!urlOk(url)||unique.has(url))continue;
+     unique.add(url);photos.push(url);
+     if(photos.length>=12)break;
+   }
+   for(const key of ["poster_url","backdrop_url"]){
+     const value=$(F[key]).value.trim();
+     if(urlOk(value)&&!unique.has(value)){unique.add(value);photos.unshift(value);}
+   }
+   if(!photos.length){area.textContent="لم تُكتشف صور صالحة. بعض المواقع تمنع قراءة الصور أو تخزنها في JavaScript.";return;}
+   const title=document.createElement("strong");title.textContent="الصور المكتشفة ("+photos.length+") — اختر صورة البوستر أو الخلفية";
+   area.append(title);
+   const grid=document.createElement("div");grid.className="imp-image-grid";
+   for(const url of photos){
+     const card=document.createElement("div");card.className="imp-image-option";
+     const image=document.createElement("img");image.loading="lazy";image.alt="صورة مكتشفة";image.src=url;
+     image.onerror=()=>{image.style.opacity=".22";image.alt="تعذر تحميل الصورة من المصدر";};
+     const actions=document.createElement("div");actions.className="imp-image-actions";
+     for(const [label,key] of [["بوستر","poster_url"],["خلفية","backdrop_url"]]){
+       const btn=document.createElement("button");btn.type="button";btn.textContent=label;
+       btn.onclick=()=>{val(key,url);updatePreview();msg("تم اختيار صورة "+label+" من نتائج الفحص. راجع المعاينة قبل الحفظ.");};
+       actions.append(btn);
+     }
+     card.append(image,actions);grid.append(card);
+   }
+   area.append(grid);
  }
  function renderLinks(){
    const box=$("impLinks");box.replaceChildren();
@@ -198,9 +246,14 @@
      applyScan(data.data||{});
      const d=data.diagnostics||{};
      const count=Array.isArray(data.data?.links)?data.data.links.length:0;
-     diagnostics("✓ HTTP "+(d.http_status||200)+" — حجم HTML: "+(d.html_bytes||0)+" بايت — التحويلات: "+(d.redirects||0)+" — الروابط المكتشفة: "+count+".");
-     msg("تم الجلب الحقيقي من الموقع. راجع البيانات، ثم اختر رابط فيديو مباشر واختبره قبل الحفظ.");
-     if(!data.data?.title_ar&&count===0)msg("اتصلنا بالصفحة لكن لا توجد بيانات مرئية قابلة للاستخراج. قد يحمل المشغل بياناته عبر JavaScript.");
+     const md=data.data?.diagnostics||{};
+     diagnostics("✓ HTTP "+(d.http_status||200)+" — صفحات مفحوصة: "+(d.pages_scanned||1)+" — الصور: "+(d.images_found??md.images_found??0)+" — روابط الفيديو: "+(d.media_found??md.video_links_found??0)+" — المشغلات: "+(md.embed_links_found??0)+".");
+     if(data.data?.stream_url&&direct(data.data.stream_url)){
+       msg("تم جلب رابط تشغيل مباشر من الصفحة وتعبئة الحقل. اختبر التشغيل بنفسك؛ العثور على الرابط لا يؤكد صلاحية إعادة نشره.");
+     }else{
+       msg("تمت قراءة الصفحة لكن لم يُكتشف MP4/HLS مباشر. يمكن فحص روابط المشغلات الظاهرة أو إدخال الرابط المصرّح به يدويًا.",true);
+     }
+     if(!data.data?.poster_url)diagnostics("اكتمل طلب HTTP لكن الصورة غير موجودة في البيانات المتاحة. "+$("impDiagnostics").textContent,true);
    }catch(e){
      diagnostics("✗ فشل الجلب — "+(e.code||"ERROR")+": "+e.message,true);
      msg("فشل جلب المصدر: "+e.message+" — يمكنك إدخال البيانات أو لصق HTML المسموح لك به.",true);
@@ -306,7 +359,7 @@
    }catch(e){msg("فشل الحفظ: "+e.message,true)}
    finally{busy=false;$("impDraft").disabled=false;$("impPublish").disabled=false}
  }
- function reset(){apply(null);$("impUrl").value="";$("impHtml").value="";found=[];$("impLinks").replaceChildren();msg("نموذج جديد جاهز.")}
+ function reset(){apply(null);$("impUrl").value="";$("impHtml").value="";found=[];$("impLinks").replaceChildren();$("impImages").replaceChildren();msg("نموذج جديد جاهز.")}
  function copy(){
     let data;try{data=payload();}catch(e){msg(e.message,true);return;}
     const s=JSON.stringify({...data,status:"draft"},null,2);
