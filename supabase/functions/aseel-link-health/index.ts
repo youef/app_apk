@@ -20,6 +20,16 @@ async function verifyGithub(token: string): Promise<boolean> {
     const header=JSON.parse(new TextDecoder().decode(b64(parts[0])));
     const claims=JSON.parse(new TextDecoder().decode(b64(parts[1])));
     const now=Math.floor(Date.now()/1000);
+    console.warn("OIDC_DIAG", JSON.stringify({
+      algorithm:header.alg==="RS256",has_kid:!!header.kid,
+      issuer:claims.iss==="https://token.actions.githubusercontent.com",
+      audience:claims.aud==="al-ezz-media-link-health",
+      subject:claims.sub==="repo:youef/app_apk:ref:refs/heads/main",
+      repository:claims.repository==="youef/app_apk",
+      ref:claims.ref==="refs/heads/main",
+      workflow:claims.workflow_ref==="youef/app_apk/.github/workflows/link-health-agent.yml@refs/heads/main",
+      event:claims.event_name, exp_valid:claims.exp>=now, iat_age:now-claims.iat
+    }));
     if(header.alg!=="RS256" || !header.kid || claims.iss!=="https://token.actions.githubusercontent.com"
        || claims.aud!=="al-ezz-media-link-health"
        || claims.sub!=="repo:youef/app_apk:ref:refs/heads/main"
