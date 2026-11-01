@@ -861,3 +861,21 @@ body.is-drawer-open { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+
+/* Automatic media link health: broken rows remain visible to administrators. */
+.health-panel{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:14px 0;padding:14px 16px;border:1px solid rgba(231,194,124,.22);border-radius:14px;background:rgba(231,194,124,.045)}
+.health-panel[hidden]{display:none}
+.health-panel__text{flex:1;min-width:180px;font-size:12px;font-weight:700;line-height:1.8;color:var(--text-2)}
+.health-panel__message{flex-basis:100%;font-size:12px;line-height:1.7;color:var(--muted)}
+.health-panel #healthOnly.is-active{background:rgba(224,72,60,.17);border-color:rgba(224,72,60,.5);color:#ffb9ad}
+.health-row--broken{background:rgba(176,25,33,.095)!important}
+.health-row--broken td{border-bottom-color:rgba(224,72,60,.25)!important}
+.health-row--broken td:first-child{box-shadow:inset -4px 0 0 #f05255}
+.health-row--suspect{background:rgba(250,184,66,.045)!important}
+.health-label{display:block;max-width:300px;width:fit-content;margin-top:8px;font-size:11px;line-height:1.65;padding:3px 8px;border-radius:7px;font-weight:800}
+.health-label--broken{color:#ffb2b2;background:rgba(224,72,60,.2);border:1px solid rgba(224,72,60,.35)}
+.health-label--suspect{color:#ffd594;background:rgba(212,147,40,.14);border:1px solid rgba(212,147,40,.3)}
+.health-label--healthy{color:#a4edca;background:rgba(32,153,101,.11);border:1px solid rgba(32,153,101,.24)}
+.health-reason,.health-date{display:block;max-width:350px;color:#f9a5a5;font-size:11px;line-height:1.65;margin-top:4px;white-space:normal;overflow-wrap:anywhere}
+.health-date{color:var(--muted)}
