@@ -138,21 +138,74 @@
      };row.append(b);box.append(row);
    }
  }
- async function scan(){
-   if(!jwt){msg("سجل دخول المسؤول أولًا",true);return;}
-   const url=$("impUrl").value.trim();
-   if(!urlOk(url)){msg("أدخل رابط صفحة HTTPS صالحًا",true);return;}
-   if(busy)return;busy=true;$("impScan").disabled=true;msg("جارٍ فحص الصفحة عبر Supabase...");
+ function setScanState(active,label){
+   $("impScanProgress").hidden=!active;
+   $("impScanStep").textContent=label||"جارٍ الفحص...";
+   $("impScan").disabled=active;
+   $("impHealth").disabled=active;
+   $("impScan").textContent=active?"جارٍ جلب البيانات...":"فحص الصفحة";
+ }
+ function diagnostics(text,err=false){
+   const node=$("impDiagnostics");node.textContent=text;
+   node.classList.toggle("error",Boolean(err));
+ }
+ async function callInspector(data){
+   const controller=new AbortController();
+   const timeout=setTimeout(()=>controller.abort(),24000);
    try{
      const res=await fetch(cfg.url+"/functions/v1/aseel-inspect-media",{
-       method:"POST",headers:{"Content-Type":"application/json","apikey":cfg.publishableKey,"Authorization":"Bearer "+jwt},
-       body:JSON.stringify({url})
+       method:"POST",
+       headers:{"Content-Type":"application/json","apikey":cfg.publishableKey,"Authorization":"Bearer "+jwt},
+       body:JSON.stringify(data),signal:controller.signal,cache:"no-store"
      });
-     const json=await res.json().catch(()=>({error:"تعذر تفسير استجابة الفحص"}));
-     if(!res.ok)throw Error(json.error||"فشل الفحص ("+res.status+")");
-     applyScan(json.data||{});msg("اكتمل فحص البيانات الظاهرة. راجع التفاصيل وروابط التشغيل، ثم احفظ مسودة أو انشر بعد اعتماد الحقوق.");
-   }catch(e){msg("فشل الفحص: "+e.message+" — يمكن تعبئة البيانات يدويًا أو لصق HTML.",true);}
-   finally{busy=false;$("impScan").disabled=false}
+     const raw=await res.text();let result;
+     try{result=JSON.parse(raw);}catch{throw Error("رد خادم غير صالح (HTTP "+res.status+").");}
+     if(!res.ok){
+       const error=new Error(result.error||"فشل الفحص (HTTP "+res.status+")");
+       error.code=result.error_code||String(res.status);
+       error.diagnostics=result.diagnostics;
+       throw error;
+     }
+     return result;
+   }catch(e){
+     if(e.name==="AbortError")throw Error("انتهت مهلة الجلب خلال 24 ثانية. تأكد من أن المصدر يسمح بالاتصال الخارجي.");
+     throw e;
+   }finally{clearTimeout(timeout);}
+ }
+ async function health(){
+   if(!jwt){msg("سجّل الدخول بصلاحيات الإدارة أولًا",true);return;}
+   if(busy)return;busy=true;setScanState(true,"التحقق من صلاحية الحساب والخادم...");
+   diagnostics("يتم اختبار Supabase Auth وصلاحية المسؤول وخدمة استخراج البيانات.");
+   try{
+     const r=await callInspector({mode:"selftest"});
+     if(!r.data?.title_ar)throw Error("الخادم أعاد نتائج فارغة");
+     diagnostics("✓ الاتصال يعمل — تحقق المسؤول ناجح — جلب JSON يعمل — تم تحليل صفحة تجريبية داخليًا.");
+     msg("نجح اختبار اتصال الخادم. الآن الصق رابط فيلم واضغط «فحص الصفحة» لجلب بياناته الحقيقية.");
+   }catch(e){diagnostics("✗ فشل اختبار الاتصال: "+e.message,true);msg(e.message,true);}
+   finally{busy=false;setScanState(false);}
+ }
+ async function scan(){
+   if(!jwt){msg("سجّل دخول المسؤول أولًا",true);return;}
+   const url=$("impUrl").value.trim();
+   if(!urlOk(url)){msg("ألصق رابط صفحة HTTPS صحيحًا أولًا",true);return;}
+   if(busy)return;
+   busy=true;setScanState(true,"جارٍ جلب صفحة المصدر...");
+   diagnostics("الاتصال جارٍ: "+new URL(url).hostname+" — قد تمنع بعض المواقع الفحص الآلي.");
+   $("impLinks").textContent="جارٍ فحص بيانات HTML والروابط الظاهرة...";
+   msg("جارٍ جلب صفحة المصدر عبر خادم Supabase...");
+   try{
+     const data=await callInspector({url});
+     applyScan(data.data||{});
+     const d=data.diagnostics||{};
+     const count=Array.isArray(data.data?.links)?data.data.links.length:0;
+     diagnostics("✓ HTTP "+(d.http_status||200)+" — حجم HTML: "+(d.html_bytes||0)+" بايت — التحويلات: "+(d.redirects||0)+" — الروابط المكتشفة: "+count+".");
+     msg("تم الجلب الحقيقي من الموقع. راجع البيانات، ثم اختر رابط فيديو مباشر واختبره قبل الحفظ.");
+     if(!data.data?.title_ar&&count===0)msg("اتصلنا بالصفحة لكن لا توجد بيانات مرئية قابلة للاستخراج. قد يحمل المشغل بياناته عبر JavaScript.");
+   }catch(e){
+     diagnostics("✗ فشل الجلب — "+(e.code||"ERROR")+": "+e.message,true);
+     msg("فشل جلب المصدر: "+e.message+" — يمكنك إدخال البيانات أو لصق HTML المسموح لك به.",true);
+     $("impLinks").textContent="لا توجد نتائج جديدة. الفحص لم ينجح.";
+   }finally{busy=false;setScanState(false);}
  }
  async function listSaved(){
    if(!jwt)return;
@@ -274,15 +327,7 @@
    $("impForm").addEventListener("submit",e=>e.preventDefault());
    $("impForm").addEventListener("input",updatePreview);
    $("impScan").onclick=scan;
-   $("impDemo").onclick=()=>{
-     reset();
-     apply({title_ar:"زهرة — نموذج تجريبي",title_original:"Flower (CC0 sample)",
-       description:"فيديو تجريبي قصير للمعاينة واختبار التشغيل. لن يُحفظ أو يُنشر تلقائيًا.",
-       stream_url:"https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
-       language_code:"und",quality:"HD",rights_status:"pending",
-       featured:false,is_kids:false,stream_variants:[],display_order:0});
-     msg("المثال جاهز: افحص شكل البطاقة واختبر الفيديو، ثم عدّل البيانات. لم يتم حفظ أي شيء.");
-   };
+   $("impHealth").onclick=health;
    $("impDemo").onclick=()=>{
      reset();
      apply({title_ar:"زهرة — نموذج فيديو تجريبي",title_original:"Flower (CC0 Sample)",
