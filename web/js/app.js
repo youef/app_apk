@@ -285,6 +285,7 @@
     rows.push(railHTML("أفلام تستحق المشاهدة", catalog.movies.filter(function (m) { return m.poster || m.description; }).slice(0, 18), { more: "#/movies", subtitle: "مختارات من المكتبة المرخّصة" }));
     rows.push(railHTML("مسلسلات وحكايات", catalog.series, { more: "#/series", subtitle: "مواسم وحلقات متتابعة" }));
     rows.push(railHTML("على الهواء الآن", catalog.channels, { more: "#/live", subtitle: "بث مباشر من المصادر الرسمية" }));
+    rows.push(railHTML("وثائقيات من العالم", catalog.channels.filter(function(c){return c.categoryId==="d7070bfe-19e2-403d-97de-ef2d26614624";}).slice(0,18), { more: "#/live/d7070bfe-19e2-403d-97de-ef2d26614624", subtitle: "طبيعة وتاريخ وعلوم وثقافات — يتوفر البث حسب منطقتك" }));
     var kidsCount = catalog.items.filter(function (i) { return i.kids; }).length;
     if (kidsCount) rows.push(railHTML("عالم الأطفال", catalog.items.filter(function (i) { return i.kids; }).slice(0, 18), { more: "#/kids", subtitle: "محتوى عائلي آمن" }));
     if (catalog.youtube.length) rows.push(railHTML("يوتيوب العز", catalog.youtube, { more: "#/youtube", subtitle: "فيديوهات رسمية مختارة" }));
