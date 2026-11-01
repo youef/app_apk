@@ -113,7 +113,7 @@
         xhr.onreadystatechange = function () {
           if (xhr.readyState !== 4) return;
           var status = xhr.status === 1223 ? 204 : xhr.status;
-          var fileSuccess = status === 0 && /^(file:|\.?\.?\/)/.test(String(resource)) && xhr.responseText.length > 0;
+          var fileSuccess = status === 0 && !/^https?:/i.test(String(resource)) && xhr.responseText.length > 0;
           var text = xhr.responseText;
           resolve({
             status: status, ok: (status >= 200 && status < 300) || fileSuccess,

@@ -351,13 +351,18 @@ public class PlayerActivity extends Activity {
     }
 
     private void launchYouTube(String videoId) {
-        Intent intent = new Intent(Intent.ACTION_VIEW,
-                Uri.parse("https://www.youtube.com/watch?v=" + Uri.encode(videoId)));
-        try {
-            startActivity(intent);
-        } catch (ActivityNotFoundException e) {
+        if (videoId == null || !videoId.matches("[A-Za-z0-9_-]{11}")) {
             Toast.makeText(this, R.string.youtube_unavailable, Toast.LENGTH_LONG).show();
-        } catch (SecurityException e) {
+            finish();
+            return;
+        }
+        try {
+            // Always keep official YouTube embed inside Al Ezz TV.
+            Intent intent = new Intent(this, YouTubeActivity.class);
+            intent.putExtra("start_video_id", videoId);
+            intent.putExtra("title", safe(getIntent().getStringExtra("title")));
+            startActivity(intent);
+        } catch (Exception e) {
             Toast.makeText(this, R.string.youtube_unavailable, Toast.LENGTH_LONG).show();
         }
         finish();
