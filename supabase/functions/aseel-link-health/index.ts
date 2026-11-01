@@ -51,7 +51,8 @@ async function verifyAdmin(token:string):Promise<boolean> {
 const tables=[
   {name:"aseel_channels",fields:"id,title_ar,stream_url,stream_variants,youtube_url,official_url,playback_mode,link_health_status,link_health_failures,link_health_checked_at,link_health_url",max:18},
   {name:"aseel_movies",fields:"id,title_ar,stream_url,stream_variants,youtube_url,link_health_status,link_health_failures,link_health_checked_at,link_health_url",max:8},
-  {name:"aseel_episodes",fields:"id,title_ar,stream_url,stream_variants,youtube_url,link_health_status,link_health_failures,link_health_checked_at,link_health_url",max:8}
+  {name:"aseel_episodes",fields:"id,title_ar,stream_url,stream_variants,youtube_url,link_health_status,link_health_failures,link_health_checked_at,link_health_url",max:8},
+  {name:"aseel_youtube_videos",fields:"id,title_ar,youtube_url,link_health_status,link_health_failures,link_health_checked_at,link_health_url",max:8}
 ];
 type Row=Record<string,unknown>;
 async function rest(table:string, query:string, opts:RequestInit={}) {
@@ -95,9 +96,17 @@ async function publicHost(url:URL) {
 }
 type Probe={kind:"healthy"|"definite"|"unknown",reason:string};
 async function probe(raw:unknown,mode:"stream"|"official"|"youtube"):Promise<Probe> {
-  if(mode==="youtube")return {kind:"unknown",reason:"مقاطع يوتيوب تحتاج تحققًا من المشغل ولا تُحجب بمجرد رفض الفحص الآلي"};
   let u=safeUrl(raw);
   if(!u)return {kind:"unknown",reason:"رابط غير آمن أو غير صالح للفحص التلقائي"};
+  if(mode==="youtube"){
+    const host=u.hostname.toLowerCase();
+    if(!["youtube.com","www.youtube.com","m.youtube.com","youtu.be","www.youtube-nocookie.com"].includes(host))
+      return {kind:"unknown",reason:"رابط يوتيوب لا يطابق النطاق الرسمي"};
+    const id=host==="youtu.be"?u.pathname.split("/")[1]:
+      u.searchParams.get("v")||u.pathname.match(/\/(?:embed|shorts|live)\/([a-zA-Z0-9_-]+)/)?.[1]||"";
+    if(!/^[a-zA-Z0-9_-]{11}$/.test(id))return {kind:"unknown",reason:"معرف الفيديو غير صالح"};
+    u=new URL("https://www.youtube.com/oembed?url="+encodeURIComponent("https://www.youtube.com/watch?v="+id)+"&format=json");
+  }
   for(let redirect=0;redirect<3;redirect++){
     if(!(await publicHost(u)))return {kind:"unknown",reason:"تعذر التحقق الآمن من نطاق المصدر"};
     try {
@@ -117,7 +126,7 @@ async function probe(raw:unknown,mode:"stream"|"official"|"youtube"):Promise<Pro
       const type=response.headers.get("content-type")||"";
       const path=u.pathname.toLowerCase();
       const isHls=/\.m3u8$/.test(path),isDash=/\.mpd$/.test(path);
-      if(mode==="official")return {kind:"healthy",reason:"صفحة المصدر استجابت بنجاح"};
+      if(mode==="official"||mode==="youtube")return {kind:"healthy",reason:mode==="youtube"?"فيديو متاح عبر معلومات يوتيوب الرسمية":"صفحة المصدر استجابت بنجاح"};
       if(isHls||isDash){
         const text=(await response.text()).slice(0,8000).trimStart();
         const valid=isHls ? text.startsWith("#EXTM3U") : /<MPD\b/i.test(text);
@@ -156,8 +165,8 @@ async function checkRow(table:string,row:Row){
     (probes[0]?.reason||"تعذر تشغيل المصدر")+" — التحقق "+failed+" من 3":
     (probes[0]?.reason||"تعذر التحقق التلقائي؛ لا يُحجب المحتوى بسبب نتيجة غير حاسمة");
   // Re-read the source before writing; never apply stale probe after admin edits.
-  const current=await rest(table,"select=stream_url,stream_variants,youtube_url"+
-    (table==="aseel_channels"?",official_url,playback_mode":"")+
+  const current=await rest(table,"select="+(table==="aseel_youtube_videos"?"youtube_url":"stream_url,stream_variants,youtube_url"+
+    (table==="aseel_channels"?",official_url,playback_mode":""))+
     "&id=eq."+encodeURIComponent(String(row.id))+"&limit=1");
   if(!Array.isArray(current)||!current.length||JSON.stringify(mediaList(current[0]))!==fingerprint)
     return {state:"skipped",title:row.title_ar};
