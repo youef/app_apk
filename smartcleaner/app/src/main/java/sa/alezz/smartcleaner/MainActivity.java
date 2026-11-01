@@ -33,6 +33,7 @@ public class MainActivity extends Activity {
     cleanup=btn(col,"2 • حذف الملفات بعد التأكيد",new View.OnClickListener(){public void onClick(View v){clean();}});
     cleanup.setEnabled(false);
     btn(col,"3 • كشف الروت وصلاحيات النظام",new View.OnClickListener(){public void onClick(View v){root();}});
+    btn(col,"4 • تنظيف آثار التطبيقات المحذوفة",new View.OnClickListener(){public void onClick(View v){startActivity(new Intent(MainActivity.this,ResidualCleanerActivity.class));}});
     btn(col,"4 • إدارة التطبيقات",new View.OnClickListener(){public void onClick(View v){try{startActivity(new Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS));}catch(Exception e){alert("الإعدادات","غير مدعومة على هذه الشاشة");}}});
     col.addView(txt("الأزرار تدعم أسهم الريموت وزر OK. لا يحتاج التطبيق إلى الإنترنت أو إلى صلاحيات الروت.",13));
     refresh();

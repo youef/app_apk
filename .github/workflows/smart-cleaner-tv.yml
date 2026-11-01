@@ -1,4 +1,4 @@
-name: SMART Cleaner TV Android 4.4.4 APK
+name: SMART Cleaner TV v2 - Android 4.4.4 APK
 on:
   push:
     branches: [smart-pc822-cleaner]
@@ -14,8 +14,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Configure Android SDK
+      - name: Install Android SDK
         run: |
+          set -e
           SDK=/usr/local/lib/android/sdk
           MANAGER=$(find "$SDK/cmdline-tools" -type f -name sdkmanager | head -n 1)
           test -x "$MANAGER"
@@ -25,15 +26,21 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.4'
-      - name: Assemble Android 4.4.4 APK
+      - name: Build Android KitKat APK
         run: gradle --no-daemon -p smartcleaner :app:assembleDebug
-      - name: Verify API 19 and APK
+      - name: Verify API 19 / certificate / file
         run: |
-          test -s smartcleaner/app/build/outputs/apk/debug/app-debug.apk
-          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging smartcleaner/app/build/outputs/apk/debug/app-debug.apk | head -20
+          set -e
+          APK="smartcleaner/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | tee /tmp/apk-info.txt
+          grep -q "sdkVersion:'19'" /tmp/apk-info.txt
+          grep -q "sa.alezz.smartcleaner.residualfix02" /tmp/apk-info.txt
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --min-sdk-version 19 "$APK"
+          sha256sum "$APK"
       - uses: actions/upload-artifact@v4
         with:
-          name: SMART-Cleaner-TV-Android-4.4.4-APK
+          name: SMART-Cleaner-TV-v2-Residuals-Android-4.4.4
           path: smartcleaner/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
