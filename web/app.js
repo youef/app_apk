@@ -143,22 +143,37 @@
  function itemCategory(item) {
    return state.categories.find(x => x.id === item.category_id)?.name_ar || "";
  }
- function makePoster(item, type) {
-   const frame = el("div","poster-frame");
-   const fallback = el("div","poster-fallback");
-   fallback.append(el("span","logo-ghost","عز"), el("span","poster-word", type === "channel" ? "AL EZZ LIVE" : "AL EZZ CINEMA"));
-   frame.append(fallback);
+ function brandFallbackLogo(className) {
+   const image = el("img",className);
+   image.src="alizz-tv-transparent.png";
+   image.alt="شعار العز TV";
+   image.decoding="async";
+   image.onerror=()=>{image.onerror=null;image.src="al-ezz-mark.svg";};
+   return image;
+ }
+ function posterImageCandidates(item) {
    const yt=youtubeId(item.youtube_url);
-   const imgUrl = safeUrl(item.poster_url)||(yt?"https://i.ytimg.com/vi/"+yt+"/hqdefault.jpg":"");
-   if (imgUrl) {
-     const img = el("img");
-     img.loading = "lazy"; img.decoding="async"; img.alt = "";
-     img.src = imgUrl; img.onerror = () => img.remove();
+   return [...new Set([safeUrl(item.poster_url),safeUrl(item.backdrop_url),
+     yt?"https://i.ytimg.com/vi/"+yt+"/hqdefault.jpg":""].filter(Boolean))];
+ }
+ function makePoster(item, type) {
+   const frame=el("div","poster-frame");
+   const fallback=el("div","poster-fallback");
+   fallback.append(brandFallbackLogo("poster-brand-logo"),
+      el("span","poster-word",type==="channel"?"AL EZZ LIVE":"AL EZZ TV"));
+   frame.append(fallback);
+   const candidates=posterImageCandidates(item);
+   if(candidates.length){
+     const img=el("img","poster-cover");
+     img.loading="lazy";img.decoding="async";img.alt="";
+     let index=0;
+     img.onerror=()=>{index+=1;if(index<candidates.length)img.src=candidates[index];else img.remove();};
+     img.src=candidates[0];
      frame.append(img);
    }
-   const badge = el("span","poster-badge"+(type === "channel"?" live":""), youtubeId(item.youtube_url)?"▶ YouTube":type === "channel"?"● مباشر":item.quality || (type==="series"?"مسلسل":"فيلم"));
-   frame.append(badge);
-   frame.append(el("span","poster-play","▶"));
+   const badge=el("span","poster-badge"+(type==="channel"?" live":""),
+      youtubeId(item.youtube_url)?"▶ YouTube":type==="channel"?"● مباشر":item.quality||(type==="series"?"مسلسل":"فيلم"));
+   frame.append(badge,el("span","poster-play","▶"));
    return frame;
  }
  function makeCard(item, type) {
@@ -420,7 +435,12 @@
    state.heroIndex=(state.heroIndex+picks.length)%picks.length;
    const {item,type}=picks[state.heroIndex];
    const imageUrl=safeUrl(item.backdrop_url)||safeUrl(item.poster_url);
-   $("heroBackdrop").style.backgroundImage=imageUrl?'url("'+imageUrl.replace(/"/g,"%22")+'")':"";
+   const heroBackground=$("heroBackdrop");
+   heroBackground.style.backgroundImage=imageUrl
+     ?'url("'+imageUrl.replace(/"/g,"%22")+'"), url("al-ezz-mark.svg")'
+     :'url("al-ezz-mark.svg")';
+   heroBackground.style.backgroundSize=imageUrl?"cover, min(30vw, 260px)":"min(30vw, 260px)";
+   heroBackground.style.backgroundPosition="center center";
    $("heroContent").querySelector("h1").textContent=item.title_ar;
    $("heroContent").querySelector(".hero-description").textContent=
      (item.description||"شاهد أعمالاً مجانية ومرخّصة، من أي جهاز.") .slice(0,260);
@@ -457,8 +477,19 @@
    state.chosen={item,type};
    const body=$("modalBody");body.replaceChildren();
    const hero=el("div","detail-art");
-   const pic=safeUrl(item.backdrop_url)||safeUrl(item.poster_url);
-   if (pic) { const i=el("img");i.src=pic;i.alt="";i.onerror=()=>i.remove();hero.append(i); }
+   const brand=el("div","detail-art-fallback");
+   brand.append(brandFallbackLogo("detail-brand-logo"));
+   hero.append(brand);
+   const yt=youtubeId(item.youtube_url);
+   const pictures=[...new Set([safeUrl(item.backdrop_url),safeUrl(item.poster_url),
+     yt?"https://i.ytimg.com/vi/"+yt+"/hqdefault.jpg":""].filter(Boolean))];
+   if(pictures.length){
+     const image=el("img","detail-cover");
+     image.alt="";image.decoding="async";
+     let index=0;
+     image.onerror=()=>{index+=1;if(index<pictures.length)image.src=pictures[index];else image.remove();};
+     image.src=pictures[0];hero.append(image);
+   }
    body.append(hero);
    const data=el("div","detail-body");
    data.append(el("span","detail-sub",labels[type]+" • "+(item.release_year||item.quality||"مكتبة العز")));
