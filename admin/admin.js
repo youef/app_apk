@@ -1321,7 +1321,7 @@
   }
 
   function canPublishChannel(row) {
-    if (!row || row.rights_status !== 'approved' || !String(row.license_reference || '').trim()) return false;
+    if (!row || row.link_health_status === 'broken' || row.rights_status !== 'approved' || !String(row.license_reference || '').trim()) return false;
     if (row.rights_expires_at && !(new Date(row.rights_expires_at).getTime() > Date.now())) return false;
     if (row.playback_mode === 'stream') return isHttps(row.stream_url);
     if (row.playback_mode === 'official_link') return isHttps(row.official_url);
@@ -1659,6 +1659,14 @@
     var next;
     if (field === 'status') {
       var publishing = row.status !== 'published';
+      if (publishing && row.link_health_status === 'broken') {
+        toast('الرابط معطوب ومخفي. أصلح رابط التشغيل أولًا ليُعاد فحصه قبل النشر.', 'error');
+        return;
+      }
+      if (publishing && isMediaBulkTable(tableCfg) && !canPublishMedia(row, tableCfg.table)) {
+        toast('لا يمكن نشر هذا المحتوى قبل استيفاء الرابط والترخيص المطلوبين.', 'error');
+        return;
+      }
       if (publishing && tableCfg.publishGuard) {
         if (row.rights_status !== 'approved') {
           toast('لا يمكن النشر قبل اعتماد الحقوق — افتح السجل وحدّث قسم الحقوق والتراخيص.', 'error');
