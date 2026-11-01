@@ -133,7 +133,12 @@
     try { p = video.play(); }
     catch (e) { stateText("اضغط زر التشغيل لبدء البث.", false); return; }
     if (p && p.catch) p.catch(function () {
-      if (ticket === state.request) stateText("المتصفح منع التشغيل التلقائي. اضغط تشغيل في الفيديو.", false);
+      if (ticket !== state.request) return;
+      clearTimeout(state.timeout);
+      stateText("المتصفح منع التشغيل التلقائي. اضغط تشغيل من أدوات الفيديو.", false);
+      if ($("liveStage")) $("liveStage").classList.remove("is-loading");
+      if ($("livePoster")) $("livePoster").hidden = true;
+      if ($("liveStart")) $("liveStart").hidden = false;
     });
   }
   function useScript(src, globalName, timeout) {
