@@ -113,13 +113,25 @@
    (records || []).forEach(x => state.favorites.add(x.item_type+":"+x.item_id));
    saveFavorites(); draw();
  }
+ async function loadAllChannels() {
+   const result=[];
+   let offset=0;
+   while(offset<10000){
+     const rows=await api("aseel_channels","select=*&order=created_at.desc,id.desc&limit=500&offset="+offset);
+     const page=Array.isArray(rows)?rows:[];
+     result.push(...page);
+     if(page.length<500)return result;
+     offset+=500;
+   }
+   throw new Error("عدد القنوات تجاوز حد التحميل الآمن، يلزم تقسيم النتائج.");
+ }
  async function load() {
    state.loading = true; draw();
    const q = "select=*&order=created_at.desc&limit=100";
    const results = await Promise.allSettled([
      api("aseel_movies", q),
      api("aseel_series", q),
-     api("aseel_channels", q),
+     loadAllChannels(),
      api("aseel_categories", "select=id,name_ar,sort_order&order=sort_order.asc&limit=100"),
      api("aseel_home_collections","select=id,title_ar,description,display_order&is_active=eq.true&order=display_order.asc&limit=40"),
      api("aseel_home_collection_items","select=collection_id,movie_id,series_id,channel_id,episode_id,display_order&order=display_order.asc&limit=400"),
