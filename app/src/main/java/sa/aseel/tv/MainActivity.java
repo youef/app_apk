@@ -43,7 +43,7 @@ import java.util.concurrent.TimeUnit;
  */
 public final class MainActivity extends Activity {
     private static final int NAVY=0xFF0F0F11, PANEL=0xFF222226, GOLD=0xFFFF0033, WHITE=0xFFF8F9FC, MUTED=0xFFB5B5BC;
-    private final String[] labels={"الرئيسية","يوتيوب","الأفلام","المسلسلات","القنوات","الأطفال","المفضلة","البحث","الإعدادات"};
+    private final String[] labels={"الرئيسية","المقاطع","الأفلام","المسلسلات","القنوات","الأطفال","المفضلة","البحث","الإعدادات"};
     private final String[] modes={"home","youtube","movie","series","channel","kids","favorites","search","settings"};
     private LinearLayout stage,root,menu;
     private Button[] navButtons;
@@ -340,7 +340,7 @@ public final class MainActivity extends Activity {
                 if(fetched[4]!=null)youtubeVideos=fetched[4];
                 hasLoaded=true;loading=false;
                 lastUpdatedAt=System.currentTimeMillis();
-                String[] names={"الأفلام","المسلسلات","القنوات","التصنيفات","فيديوهات يوتيوب"};
+                String[] names={"الأفلام","المسلسلات","القنوات","التصنيفات","المقاطع"};
                 StringBuilder report=new StringBuilder();
                 for(int i=0;i<tables.length;i++){
                     if(errors[i]!=null)report.append(names[i]).append(": ").append(errors[i]).append("\n");
@@ -554,7 +554,7 @@ public final class MainActivity extends Activity {
             explore.setOnClickListener(new View.OnClickListener(){public void onClick(View v){mode="movie";render();}});
         }
         if(!hasLoaded){empty("جاري تحديث مكتبة العز TV...");return;}
-        Button ytShortcut=button("▶  فيديوهات YouTube  •  البحث والمشاهدة");
+        Button ytShortcut=button("▶  شاهد المقاطع  •  تشغيل مباشر");
         ytShortcut.setTextSize(17);
         ytShortcut.setBackgroundDrawable(background(0xFF32171C,14,0xFFA82B42));
         stage.addView(ytShortcut,gap(15,8));
@@ -679,43 +679,14 @@ public final class MainActivity extends Activity {
     /** Official YouTube search and local viewing history without an unlicensed feed. */
     private void youtube(){
         LinearLayout panel=vertical();
-        panel.setPadding(dp(25),dp(22),dp(25),dp(24));
+        panel.setPadding(dp(25),dp(24),dp(25),dp(22));
         panel.setBackgroundDrawable(new GradientDrawable(GradientDrawable.Orientation.RIGHT_LEFT,
-            new int[]{0xFF530F22,0xFF26141B,0xFF19191D}));
+            new int[]{0xFF5D1024,0xFF22151B,0xFF19191E}));
         stage.addView(panel,gap(6,12));
-        panel.addView(text("▶  YouTube  |  العز TV",31,WHITE,true));
-        panel.addView(text("شاهد الفيديوهات الرسمية وابحث من التلفزيون والريموت",15,0xFFE2CBD3,false),gap(5,14));
-        LinearLayout inputRow=horizontal();panel.addView(inputRow,gap(0,8));
-        final EditText input=new EditText(this);
-        input.setTag("input:youtube");input.setSingleLine(true);
-        input.setTextSize(17);input.setTextColor(WHITE);input.setHintTextColor(MUTED);
-        input.setHint("ابحث في YouTube أو ألصق رابط فيديو...");
-        input.setBackgroundDrawable(background(0xFF29292D,12,0xFF515159));
-        input.setPadding(dp(17),0,dp(17),0);
-        inputRow.addView(input,new LinearLayout.LayoutParams(0,dp(55),1));
-        Button search=button("⌕  بحث");
-        LinearLayout.LayoutParams sp=lp(dp(124),dp(55));sp.setMargins(dp(10),0,0,0);
-        inputRow.addView(search,sp);
-        search.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-            String value=input.getText().toString().trim();
-            if(value.length()==0){showStatus("اكتب اسم فيديو أو ألصق رابطًا.");return;}
-            if(YouTubeLink.usable(value))openYouTube(value,"فيديو من YouTube");
-            else openOfficialYouTube(value);
-        }});
-        LinearLayout actions=horizontal();panel.addView(actions,gap(5,0));
-        Button play=button("▶  شغّل الرابط");
-        actions.addView(play,lp(dp(165),dp(48)));
-        play.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-            String value=input.getText().toString().trim();
-            if(!YouTubeLink.usable(value)){showStatus("ألصق رابط فيديو من youtube.com أو youtu.be.");return;}
-            openYouTube(value,"فيديو من YouTube");
-        }});
-        Button official=button("↗  YouTube الرسمي");
-        LinearLayout.LayoutParams op=lp(dp(208),dp(48));op.setMargins(dp(12),0,0,0);
-        actions.addView(official,op);
-        official.setOnClickListener(new View.OnClickListener(){public void onClick(View v){openOfficialYouTube("");}});
-        TextView hint=text("بحث YouTube يُفتح في التطبيق أو المتصفح الرسمي. تشغيل رابط يستخدم مشغّل العز عند دعمه على الجهاز.",12,MUTED,false);
-        stage.addView(hint,gap(1,15));
+        panel.addView(text("▶  مقاطع العز",31,WHITE,true));
+        panel.addView(text("اختر ما تريد مشاهدته • تشغيل مباشر داخل التطبيق • التالي تلقائيًا",15,0xFFE4D4DC,false),gap(5,6));
+        TextView tip=text("مرّر للأعلى أثناء المشاهدة أو استخدم زر ↑ لعرض المقاطع المقترحة",13,0xFFBDB4BC,false);
+        stage.addView(tip,gap(0,14));
         JSONArray recent;
         try{recent=new JSONArray(prefs.getString("youtube_recent_v1","[]"));}
         catch(Exception e){recent=new JSONArray();}
@@ -733,10 +704,10 @@ public final class MainActivity extends Activity {
         }
         // Identical source and approval scope as the working public website.
         if(loading && youtubeVideos.length()==0)
-            empty("جاري تحميل فيديوهات YouTube من مكتبة العز...");
+            empty("جاري تحميل مكتبة المقاطع...");
         final String[] topics={"all","letters","numbers","animals","colors","stories","songs","science"};
         final String[] topicLabels={"الكل","الحروف","الأرقام","الحيوانات","الألوان","القصص","الأناشيد","العلوم"};
-        title("▶  فيديوهات YouTube للأطفال","فيديوهات منشورة من القنوات الرسمية • تحديث تلقائي");
+        title("استكشف المقاطع","فيديوهات تعليمية وترفيهية مصنّفة • تحديث تلقائي");
         HorizontalScrollView filters=new HorizontalScrollView(this);
         filters.setHorizontalScrollBarEnabled(false);
         LinearLayout chips=horizontal();filters.addView(chips);
@@ -801,7 +772,7 @@ public final class MainActivity extends Activity {
         }else if(!loading || youtubeVideos.length()>0){
             TextView warning=text(youtubeVideos.length()>0?
                 "لا توجد مقاطع مطابقة للتصنيف المحدد. جرّب «الكل».":
-                "لم تصل مقاطع YouTube من قاعدة البيانات. اضغط «تحديث» بالأعلى أو راجع الاتصال.",15,MUTED,false);
+                "لم تصل المقاطع من قاعدة البيانات. اضغط «تحديث» بالأعلى أو راجع الاتصال.",15,MUTED,false);
             warning.setPadding(dp(18),dp(19),dp(18),dp(19));
             warning.setBackgroundDrawable(background(0xFF232329,13,0xFF404049));
             stage.addView(warning,gap(13,16));
@@ -815,7 +786,7 @@ public final class MainActivity extends Activity {
             }
         }
         if(!library.isEmpty()){
-            title("مقترحات من العز TV","محتوى المكتبة وليس فيديوهات YouTube");
+            title("شاهد أيضًا","من مكتبة الأفلام والقنوات");
             cards(library,9);
         }
     }
@@ -836,27 +807,45 @@ public final class MainActivity extends Activity {
             prefs.edit().putString("youtube_recent_v1",next.toString()).apply();
         }catch(Exception ignored){}
     }
-    private void openOfficialYouTube(String query){
-        String url=query.length()==0?"https://www.youtube.com/":
-            "https://www.youtube.com/results?search_query="+Uri.encode(query);
-        Intent view=new Intent(Intent.ACTION_VIEW,Uri.parse(url));
-        for(String pkg:new String[]{"com.google.android.youtube.tv","com.google.android.youtube"}){
-            try{
-                view.setPackage(pkg);
-                if(view.resolveActivity(getPackageManager())!=null){startActivity(view);return;}
-            }catch(Exception ignored){}
-        }
-        try{view.setPackage(null);startActivity(view);}
-        catch(Exception error){showStatus("تطبيق YouTube والمتصفح غير متاحين أو غير متوافقين مع هذا الجهاز.");}
-    }
+    /** Launch the native in-app viewer with a bounded, published local queue. */
     private void openYouTube(String url,String label){
         if(!unlocked)return;
-        String id=YouTubeLink.videoId(url);
-        if(id==null){showStatus("الرابط ليس فيديو YouTube صالحًا.");return;}
+        String selected=YouTubeLink.videoId(url);
+        if(selected==null){showStatus("المقطع غير متاح.");return;}
         saveYouTubeRecent(url,label);
+        JSONArray queue=new JSONArray();
+        boolean selectedInCatalog=false;
+        for(int i=0;i<youtubeVideos.length() && queue.length()<120;i++){
+            JSONObject source=youtubeVideos.optJSONObject(i);
+            if(source==null||!"published".equals(str(source,"status"))||
+                !source.optBoolean("is_kids",false))continue;
+            String itemId=YouTubeLink.videoId(str(source,"youtube_url"));
+            if(itemId==null)continue;
+            JSONObject item=new JSONObject();
+            try{
+                item.put("video_id",itemId);
+                item.put("title",str(source,"title_ar"));
+                item.put("channel",str(source,"channel_name"));
+                item.put("topic",str(source,"topic"));
+                queue.put(item);
+                if(itemId.equals(selected))selectedInCatalog=true;
+            }catch(Exception ignored){}
+        }
+        if(!selectedInCatalog){
+            JSONObject first=new JSONObject();
+            try{
+                first.put("video_id",selected);
+                first.put("title",label);
+                first.put("channel","العز TV");
+                first.put("topic","other");
+                JSONArray merged=new JSONArray();merged.put(first);
+                for(int i=0;i<queue.length();i++)merged.put(queue.optJSONObject(i));
+                queue=merged;
+            }catch(Exception ignored){}
+        }
         Intent view=new Intent(this,YouTubeActivity.class);
-        view.putExtra("youtube_url","https://www.youtube.com/watch?v="+id);
-        view.putExtra("title",label);
+        view.putExtra("start_video_id",selected);
+        view.putExtra("playlist_json",queue.toString());
         startActivity(view);
     }
     private void kids(){
@@ -864,7 +853,7 @@ public final class MainActivity extends Activity {
         TextView note=text("تظهر المواد المرخّصة ذات الروابط المباشرة فقط. قد يختلف توفر القنوات بحسب البلد أو الجهاز.",14,MUTED,false);
         stage.addView(note,gap(0,11));
         LinearLayout typeRow=horizontal();stage.addView(typeRow,gap(5,10));
-        final String[] kinds={"all","movie","series","channel","youtube"},names={"الكل","أفلام","مسلسلات","قنوات","يوتيوب"};
+        final String[] kinds={"all","movie","series","channel","youtube"},names={"الكل","أفلام","مسلسلات","قنوات","مقاطع"};
         for(int i=0;i<kinds.length;i++){
             final String selected=kinds[i];
             Button b=button(names[i]+(selected.equals(kidsKind)?" ✓":""));b.setTextSize(12);
@@ -905,9 +894,9 @@ public final class MainActivity extends Activity {
             }
             if(!videos.isEmpty()){
                 visible=true;
-                title("▶  يوتيوب للأطفال",youtubeVideos.length()+" مقطع متاح • انتقل إلى يوتيوب لعرض الكل");
+                title("▶  مقاطع الأطفال",youtubeVideos.length()+" مقطع متاح • انتقل إلى المقاطع لعرض الكل");
                 cards(videos,12);
-                Button seeAll=button("عرض كل فيديوهات يوتيوب");
+                Button seeAll=button("عرض كل المقاطع");
                 stage.addView(seeAll,gap(0,12));
                 seeAll.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
                     mode="youtube";youtubePage=0;render();
@@ -1087,7 +1076,7 @@ public final class MainActivity extends Activity {
                 artwork.addView(love,badgeP);
             }
             String type=str(item,"_type");
-            TextView label=text("youtube".equals(type)?"▶ YouTube":"channel".equals(type)?"● مباشر":"series".equals(type)?"▣ مسلسل":"▶ فيلم",11,
+            TextView label=text("youtube".equals(type)?"▶ مقطع":"channel".equals(type)?"● مباشر":"series".equals(type)?"▣ مسلسل":"▶ فيلم",11,
                     "channel".equals(type)?0xFFFF646C:0xFFFFC4C8,true);
             label.setPadding(dp(7),dp(5),dp(7),dp(2));card.addView(label);
             TextView name=text(str(item,"title_ar"),16,WHITE,true);name.setSingleLine(true);
