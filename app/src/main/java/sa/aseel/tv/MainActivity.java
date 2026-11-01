@@ -298,7 +298,7 @@ public final class MainActivity extends Activity {
         frame.addView(brand,brandP);
         TextView signature=text("AL EZZ  •  TV",wide?13:11,0xFFE9B9C4,true);
         signature.setGravity(Gravity.CENTER);
-        signature.setLetterSpacing(.12f);
+        if(Build.VERSION.SDK_INT>=21)signature.setLetterSpacing(.12f);
         FrameLayout.LayoutParams sigP=new FrameLayout.LayoutParams(-1,dp(36),Gravity.BOTTOM);
         sigP.bottomMargin=dp(wide?18:12);
         frame.addView(signature,sigP);
