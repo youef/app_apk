@@ -1202,7 +1202,7 @@
       master.indeterminate = marked > 0 && marked < filtered.length;
       master.disabled = state.bulkBusy;
     }
-    $('.media-bulk-control', state.els.bulkPanel).forEach(function (button) { button.disabled = state.bulkBusy; });
+    Array.prototype.forEach.call(state.els.bulkPanel.querySelectorAll('.media-bulk-control'), function (button) { button.disabled = state.bulkBusy; });
   }
 
   function patchMediaBatch(tableName, selected, payload) {
