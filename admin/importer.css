@@ -43,3 +43,14 @@
 .imp-saved-row button{padding:7px 10px;font-size:11px}.imp-message{min-height:18px;color:#a3dabc;margin:8px 0 0;font-size:13px}.imp-message.error{color:#ffabb7}
 @media(max-width:1050px){.imp-layout{grid-template-columns:1fr}.imp-aside{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.imp-sidepanel{margin-bottom:0}.imp-sidepanel:last-child{grid-column:1/-1}}
 @media(max-width:660px){.imp-launch,.imp-studio-head{flex-direction:column;align-items:stretch}.imp-fields{grid-template-columns:1fr}.imp-aside{display:block}.imp-sidepanel{margin-bottom:14px}.imp-urlrow{flex-wrap:wrap}.imp-urlrow button{width:100%}}
+
+
+.imp-scan-progress{display:flex;align-items:center;gap:12px;padding:12px 14px;margin:10px 0;border:1px solid #536b81;border-radius:12px;background:rgba(44,74,97,.3);flex-wrap:wrap}
+.imp-scan-progress[hidden]{display:none}
+.imp-scan-progress strong{font-size:13px;color:#e5edf7}
+.imp-scan-progress small{font-size:11px;color:#9eb2c4}
+.imp-spinner{width:18px;height:18px;flex:none;border:3px solid #556b79;border-top-color:#f35a78;border-radius:50%;animation:imp-spin .72s linear infinite}
+@keyframes imp-spin{to{transform:rotate(360deg)}}
+.imp-diagnostics{padding:11px 13px;margin:9px 0 12px;border:1px solid #405568;border-radius:10px;background:#112838;color:#c5e1ed;font-size:12px;line-height:1.8;overflow-wrap:anywhere}
+.imp-diagnostics.error{background:#3b222c;border-color:#9c465a;color:#ffd1d8}
+.imp-urlrow #impHealth{background:#19394a;color:#a8f2e6;border-color:#36697a}
