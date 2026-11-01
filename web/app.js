@@ -393,9 +393,9 @@
    kidsFilters();
    renderYouTubeKids();
    const isKids=route==="kids",isYoutube=route==="youtube",allKids=state.kidsType==="all";
-   const display={movie:isYoutube||route==="home"||route==="movies"||route==="favorites"||route==="search"||(isKids&&(allKids||state.kidsType==="movie")),
+   const display={movie:(isYoutube&&filtered("movie").length>0)||route==="home"||route==="movies"||route==="favorites"||route==="search"||(isKids&&(allKids||state.kidsType==="movie")),
      series:route==="home"||route==="series"||route==="favorites"||route==="search"||(isKids&&(allKids||state.kidsType==="series")),
-     channel:isYoutube||route==="home"||route==="channels"||route==="favorites"||route==="search"||(isKids&&(allKids||state.kidsType==="channel"))};
+     channel:(isYoutube&&filtered("channel").length>0)||route==="home"||route==="channels"||route==="favorites"||route==="search"||(isKids&&(allKids||state.kidsType==="channel"))};
    setHidden("movieSection",!display.movie);
    setHidden("seriesSection",!display.series);
    setHidden("channelSection",!display.channel);
