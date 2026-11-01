@@ -53,7 +53,7 @@ async function main() {
   assert.ok(live.requested.includes("aseel_youtube_videos"));
   assert.ok(live.requested.includes("aseel_home_collections"));
   assert.ok(live.requested.includes("aseel_home_collection_items"));
-  assert.deepEqual(live.api.failedTables, []);
+  assert.equal(live.api.failedTables.length, 0, "No failed tables on successful load");
   const partial = client("aseel_youtube_videos");
   const partialCatalog = await partial.api.load();
   assert.equal(partialCatalog.youtube.length, 0);
