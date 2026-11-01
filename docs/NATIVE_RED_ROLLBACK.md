@@ -1,10 +1,13 @@
-# Android TV — Native red rollback (2026-11-01)
+# Android TV — Red Classic fresh-install fix (November 2026)
 
-Restores Android **native** red/black v9.3 navigation and Al Ezz TV logo from commit `8d1dd27816af760e147e0b4c603b4eee9a15a4b1` instead of the v10 WebView wrapper (unresponsive on legacy TV remotes).
+Android native red/black v9.3 design, original Al Ezz logo and D-pad navigation restored from commit `8d1dd27816af760e147e0b4c603b4eee9a15a4b1`.
 
-- Restored `app/` (Java Activities, PIN gate, posters, menu/focus/navigation, playback) and Gradle 7.4.2/Gradle 7.6 toolchain.
-- Code version incremented to `17` (name `9.3.1-native-red-rollback`) to prevent Android version downgrade rejection.
-- Existing `web/`, `admin/`, `supabase/`, and iOS resources remain untouched.
-- CI: `.github/workflows/android.yml` builds and verifies Android API 19 and APK v1 signing; APK is available as workflow artifact.
-- **Signing:** Without `AL_EZZ_KEYSTORE_BASE64`, passwords and key alias, GitHub's debug key changes; installing over an existing same-package app can fail. Back up user data and test on a second device before uninstalling a current version.
-- Actual remote responsiveness and SSL/media support still need physical TV testing. YouTube playback is subject to the official iframe API and the TV's browser capabilities.
+**For "App not installed":** independent Android application ID `sa.alezz.tv.redclassic` bypasses same-package signature mismatch. Do not uninstall the older app. New version `9.3.2-redclassic-fresh-install`, versionCode 18, minSdk 19, Android 4.4.4 compatible DEX and V1 signature validated by CI.
+
+- Java source package `sa.aseel.tv` and fully qualified Activities stay intact.
+- Gradle 7.6, AGP 7.4.2, Java 7 source compatibility, Conscrypt, native UI.
+- CI validates package, manifest, signing, ABI, ZIP, DEX. Rejected builds cannot publish.
+- One immutable GitHub prerelease `al-ezz-tv-redclassic-install-test-v1` hosts the test APK for direct download.
+- If no protected signing secrets are configured the APK is *debug signed* and future builds may use a different key. Do not treat as production/update-stable.
+- Existing `web/`, `admin/`, `supabase/`, and iOS remain unchanged.
+- Physical TV compatibility, media playback, and D-pad responsiveness still require on-device verification.

@@ -3,9 +3,9 @@
 import hashlib, os, re, subprocess, sys, zipfile
 from pathlib import Path
 
-EXPECTED_PACKAGE="sa.alezz.tv.unified"
+EXPECTED_PACKAGE="sa.alezz.tv.redclassic"
 MIN_SDK=19
-MIN_VERSION=11
+MIN_VERSION=18
 REQUIRED_ABIS=("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
 ELF_MACHINE={"armeabi-v7a": 40, "arm64-v8a": 183, "x86": 3, "x86_64": 62}
 ELF_CLASS={"armeabi-v7a": 1, "arm64-v8a": 2, "x86": 1, "x86_64": 2}
