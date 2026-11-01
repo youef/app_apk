@@ -55,6 +55,7 @@ assert.ok(!canPublishMedia({...movie,stream_url:null,youtube_url:"https://youtub
 assert.ok(canPublishMedia({youtube_url:"https://www.youtube.com/watch?v=abcdefghijk"},"aseel_youtube_videos"));
 assert.ok(!canPublishMedia({youtube_url:"https://youtube.com.fake.org/watch?v=abcdefghijk"},"aseel_youtube_videos"));
 assert.ok(source.includes("mediaBulkIncludeEpisodes"),"Optional series and episode one-click batch missing");
+assert.ok(source.includes("bulkPanel.querySelectorAll(\'.media-bulk-control\')"), "Bulk toolbar must iterate over multiple controls, not a single element");
 (async()=>{
   const all=await fetchAllMedia({table:"aseel_movies",label:"الأفلام"});
   assert.equal(all.length,620,"Select all must include more than the first 300 or 500 rows");
