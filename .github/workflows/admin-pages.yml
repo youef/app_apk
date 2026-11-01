@@ -73,10 +73,13 @@ jobs:
                curl -fLsS --max-time 12 -o /tmp/alezz-web.html "${ROOT}web/" &&
                curl -fLsS --max-time 12 -o /tmp/alezz-access.js "${ROOT}web/access.js" &&
                curl -fLsS --max-time 12 -o /tmp/alezz-admin.html "${ROOT}admin/" &&
+               curl -fLsS --max-time 12 -o /tmp/alezz-importer.js "${ROOT}admin/importer.js" &&
                grep -Eq "activationGate|web/" /tmp/alezz-home.html &&
                grep -q activationGate /tmp/alezz-web.html &&
                grep -q AL_EZZ_ACCESS /tmp/alezz-access.js &&
-               grep -q adminGroups /tmp/alezz-admin.html; then
+               grep -q adminGroups /tmp/alezz-admin.html &&
+               grep -q importStudio /tmp/alezz-admin.html &&
+               grep -q aseel-inspect-media /tmp/alezz-importer.js; then
               echo "PASS: Al Ezz TV is live at /app_apk/ and /app_apk/web/, with functional assets and admin."
               exit 0
             fi
