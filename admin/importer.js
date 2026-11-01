@@ -262,6 +262,15 @@
    $("impScan").onclick=scan;
    $("impDemo").onclick=()=>{
      reset();
+     apply({title_ar:"زهرة — نموذج تجريبي",title_original:"Flower (CC0 sample)",
+       description:"فيديو تجريبي قصير للمعاينة واختبار التشغيل. لن يُحفظ أو يُنشر تلقائيًا.",
+       stream_url:"https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+       language_code:"und",quality:"HD",rights_status:"pending",
+       featured:false,is_kids:false,stream_variants:[],display_order:0});
+     msg("المثال جاهز: افحص شكل البطاقة واختبر الفيديو، ثم عدّل البيانات. لم يتم حفظ أي شيء.");
+   };
+   $("impDemo").onclick=()=>{
+     reset();
      apply({title_ar:"زهرة — نموذج فيديو تجريبي",title_original:"Flower (CC0 Sample)",
        description:"فيديو قصير للتجربة والمعاينة قبل النشر. لا تتم إضافته إلى القاعدة تلقائيًا.",
        stream_url:"https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
