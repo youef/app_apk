@@ -106,7 +106,8 @@
     var wide = opts.wide || item.live || item.kind === "youtube";
     var pct = progressOf(item);
     var tag = "";
-    if (item.live) tag = '<span class="card__tag card__tag--live"><i></i>مباشر</span>';
+    if (item.kind === "channel" && item.playback === "official_link") tag = '<span class="card__tag">↗ موقع رسمي</span>';
+    else if (item.live) tag = '<span class="card__tag card__tag--live"><i></i>مباشر</span>';
     else if (item.featured) tag = '<span class="card__tag card__tag--gold">مختار</span>';
     else if (item.kind === "youtube") tag = '<span class="card__tag">يوتيوب</span>';
 
@@ -121,7 +122,8 @@
     if (item.duration) metaBits.push(esc(fmtDuration(item.duration)));
     if (item.kind === "series" && item.episodeCount) metaBits.push(item.episodeCount + " حلقة");
     if (item.category && !wide) metaBits.push(esc(item.category));
-    if (item.live && !item.category) metaBits.push("بث حي");
+    if (item.playback === "official_link") metaBits.push("رابط رسمي");
+    else if (item.live && !item.category) metaBits.push("بث حي");
 
     return '<article class="card' + (wide ? " card--wide" : "") + '" tabindex="0" role="button" data-key="' +
       esc(item.key) + '" aria-label="' + esc(item.title + " — " + kindLabel(item.kind)) + '">' +
@@ -449,6 +451,7 @@
   }
 
   function sourceLabel(item) {
+    if (item.kind === "channel" && item.playback === "official_link") return "رابط جهة البث الرسمية (تنقل خارجي)";
     if (item.youtubeId) return "YouTube (تضمين رسمي)";
     if (item.live) return "بث مباشر من الناشر";
     if (item.stream && /\.mp4/i.test(item.stream)) return "ملف MP4 مباشر";
@@ -460,8 +463,11 @@
     var fav = Store.isFavorite(item.key);
     var backdrop = item.backdrop;
     var canPlay = !!(item.stream || item.youtubeId || (item.seasons && item.episodeCount));
+    var isOfficial = item.kind === "channel" && item.playback === "official_link" &&
+      /^https:\/\//i.test(item.official || "") && !item.stream;
     var chips = [];
-    if (item.live) chips.push('<span class="chip chip--live"><i></i>مباشر</span>');
+    if (isOfficial) chips.push('<span class="chip">↗ مصدر رسمي</span>');
+    else if (item.live) chips.push('<span class="chip chip--live"><i></i>مباشر</span>');
     if (item.year) chips.push('<span class="chip">' + esc(item.year) + "</span>");
     if (item.quality) chips.push('<span class="chip chip--hd">' + esc(item.quality) + "</span>");
     if (item.duration) chips.push('<span class="chip">' + esc(fmtDuration(item.duration)) + "</span>");
@@ -475,7 +481,7 @@
     if (item.language) meta.push(["اللغة", item.language]);
     meta.push(["المصدر", sourceLabel(item)]);
     if (item.rights && item.rights.holder) meta.push(["صاحب الحقوق", item.rights.holder]);
-    if (item.live) meta.push(["النوع", "قناة مباشرة"]);
+    if (item.live) meta.push(["النوع", isOfficial ? "رابط للموقع الرسمي" : "قناة مباشرة"]);
 
     var epsHTML = "";
     if (item.kind === "series" && item.seasons && item.seasons.length) {
@@ -500,6 +506,7 @@
       (item.original && item.original !== item.title ? '<p class="detail__orig">' + esc(item.original) + "</p>" : "") +
       '<div class="detail__chips">' + chips.join("") + "</div>" +
       '<div class="detail__actions">' +
+      (isOfficial ? '<a class="btn btn--gold" href="' + esc(item.official) + '" target="_blank" rel="noopener noreferrer">↗ فتح الموقع الرسمي</a>' : "") +
       (canPlay ? '<button class="btn btn--gold" data-play="' + esc(item.key) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6L20 12z" fill="currentColor" stroke="none"/></svg>' +
         (progressOf(item) > 1 ? "متابعة المشاهدة" : item.live ? "مشاهدة مباشرة" : "تشغيل") + "</button>" : "") +
       '<button class="btn btn--ghost" data-fav="' + esc(item.key) + '"><svg viewBox="0 0 24 24" aria-hidden="true">' +
@@ -562,6 +569,11 @@
   function playItem(item, opts) {
     opts = opts || {};
     if (!item) return;
+    if (item.kind === "channel" && item.playback === "official_link" &&
+        /^https:\/\//i.test(item.official || "") && !item.stream) {
+      window.open(item.official, "_blank", "noopener,noreferrer");
+      return;
+    }
 
     /* a series has no stream of its own: start the first episode */
     if (item.kind === "series" && !item.stream && !item.youtubeId) {
