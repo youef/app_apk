@@ -78,11 +78,30 @@
   };
   var failedTables = [];
 
+  // Load every published channel, not only the first REST page.
+  // This is the catalogue module used by the active /web/ page.
+  function loadPublishedChannels() {
+    var all = [];
+    var settings = publishedFilters("channels");
+    settings.limit = 500;
+    function fetchPage(offset) {
+      if (offset >= 10000) return Promise.reject(new Error("Channel catalogue exceeds the safe page limit"));
+      settings.offset = offset;
+      return rest(TABLE_PATHS.channels, settings).then(function (rows) {
+        rows = Array.isArray(rows) ? rows : [];
+        all = all.concat(rows);
+        return rows.length === settings.limit ? fetchPage(offset + settings.limit) : all;
+      });
+    }
+    return fetchPage(0);
+  }
+
   function loadLive() {
     var tables = ["categories", "movies", "series", "seasons", "episodes", "channels", "youtube", "collections", "collection_items"];
     failedTables = [];
     return Promise.all(tables.map(function (t) {
-      return rest(TABLE_PATHS[t], publishedFilters(t)).then(function (rows) {
+      var request = t === "channels" ? loadPublishedChannels() : rest(TABLE_PATHS[t], publishedFilters(t));
+      return request.then(function (rows) {
         return Array.isArray(rows) ? rows : [];
       }, function () { failedTables.push(t); return []; });
     })).then(function (results) {
