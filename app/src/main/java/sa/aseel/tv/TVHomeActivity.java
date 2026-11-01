@@ -240,6 +240,9 @@ public final class TVHomeActivity extends Activity {
             ArrayList<JSONObject> sports=new ArrayList<JSONObject>();
             for(JSONObject channel:channels)if("146b8c7f-8e03-45ee-aa4f-2d8ab20e6c95".equals(value(channel,"category_id")))sports.add(channel);
             shelf("رياضة حول العالم","قنوات رياضية عالمية متاحة حسب بلدك",sports,20);
+            ArrayList<JSONObject> beIN=new ArrayList<JSONObject>();
+            for(JSONObject channel:channels)if("f30c2110-ae62-47c4-99e4-b45762bde695".equals(value(channel,"category_id")))beIN.add(channel);
+            shelf("قنوات beIN SPORTS الرسمية","قد تحتاج إلى اشتراك • تفتح موقع beIN الرسمي",beIN,20);
             shelf("يوتيوب الأطفال","مقاطع يوتيوب الرسمية المنشورة",youtubeVideos,14);
         }else if("movies".equals(section))grid("الأفلام",movies);
         else if("series".equals(section))grid("المسلسلات",series);
