@@ -25,7 +25,7 @@ async function verifyGithub(token: string): Promise<boolean> {
        || claims.sub!=="repo:youef/app_apk:ref:refs/heads/main"
        || claims.repository!=="youef/app_apk" || claims.ref!=="refs/heads/main"
        || claims.workflow_ref!=="youef/app_apk/.github/workflows/link-health-agent.yml@refs/heads/main"
-       || !["schedule","workflow_dispatch"].includes(claims.event_name)
+       || !["schedule","workflow_dispatch","push"].includes(claims.event_name)
        || !claims.exp || claims.exp<now || claims.iat>now+60 || now-claims.iat>600)return false;
     const jwksResp=await fetch("https://token.actions.githubusercontent.com/.well-known/jwks", {signal:AbortSignal.timeout(6000)});
     if(!jwksResp.ok)return false;
