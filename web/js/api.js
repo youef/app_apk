@@ -78,16 +78,17 @@
   };
   var failedTables = [];
 
-  // Load every published channel, not only the first REST page.
-  // This is the catalogue module used by the active /web/ page.
+  // Preserve the known-good single request while supporting future catalogues
+  // larger than the Supabase page size. Published rows remain subject to RLS.
   function loadPublishedChannels() {
     var all = [];
     var settings = publishedFilters("channels");
-    settings.limit = 500;
+    settings.limit = 800;
     function fetchPage(offset) {
       if (offset >= 10000) return Promise.reject(new Error("Channel catalogue exceeds the safe page limit"));
-      settings.offset = offset;
-      return rest(TABLE_PATHS.channels, settings).then(function (rows) {
+      var params = Object.assign({}, settings);
+      if (offset) params.offset = offset;
+      return rest(TABLE_PATHS.channels, params).then(function (rows) {
         rows = Array.isArray(rows) ? rows : [];
         all = all.concat(rows);
         return rows.length === settings.limit ? fetchPage(offset + settings.limit) : all;
