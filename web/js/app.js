@@ -18,6 +18,7 @@
   var heroIndex = 0;
   var heroItems = [];
   var lastFocus = null;
+  var kidsType = "channel", kidsCountry = "", kidsLanguage = "";
 
   /* ---------------------------------------------------------------- utils */
 
@@ -333,9 +334,37 @@
   }
 
   function viewKids() {
-    var list = catalog.items.filter(function (i) { return i.kids; });
-    return pageHead("عالم الأطفال", "أفلام وبرامج وقنوات صديقة للعائلة.", list.length) +
-      (list.length ? gridHTML(list) : emptyHTML("لا محتوى للأطفال منشور حاليًا."));
+    var all = catalog.items.filter(function (i) { return i.kids; });
+    var channelItems=all.filter(function (i) {return i.kind==="channel";});
+    var countries=[],languages=[];
+    channelItems.forEach(function (i) {
+      if(i.country && countries.indexOf(i.country)===-1)countries.push(i.country);
+      if(i.language && languages.indexOf(i.language)===-1)languages.push(i.language);
+    });
+    countries.sort();languages.sort();
+    var list=all.filter(function (i) {
+      return (!kidsType || kidsType==="all" ||
+        (kidsType==="channel"?i.kind==="channel":i.kind!=="channel")) &&
+        (!kidsCountry || i.country===kidsCountry) &&
+        (!kidsLanguage || i.language===kidsLanguage);
+    });
+    list.sort(function (a,b) {return a.title.localeCompare(b.title,"ar")});
+    function options(values,selected) {
+      return values.map(function (v) {
+        return '<option value="'+esc(v)+'"'+(v===selected?' selected':'')+'>'+esc(v)+'</option>';
+      }).join("");
+    }
+    var filters='<div style="display:flex;gap:10px;flex-wrap:wrap;margin:18px 0 23px">'+
+      '<label style="display:grid;gap:6px">النوع<select id="kidsTypeFilter" style="padding:10px;color:inherit;background:#191e29;border:1px solid #515663;border-radius:10px">'+
+      '<option value="channel"'+(kidsType==="channel"?' selected':'')+'>قنوات الأطفال</option>'+
+      '<option value="other"'+(kidsType==="other"?' selected':'')+'>أفلام ومسلسلات</option>'+
+      '<option value="all"'+(kidsType==="all"?' selected':'')+'>كل محتوى الأطفال</option></select></label>'+
+      '<label style="display:grid;gap:6px">الدولة<select id="kidsCountryFilter" style="padding:10px;color:inherit;background:#191e29;border:1px solid #515663;border-radius:10px">'+
+      '<option value="">كل الدول</option>'+options(countries,kidsCountry)+'</select></label>'+
+      '<label style="display:grid;gap:6px">اللغة<select id="kidsLanguageFilter" style="padding:10px;color:inherit;background:#191e29;border:1px solid #515663;border-radius:10px">'+
+      '<option value="">كل اللغات</option>'+options(languages,kidsLanguage)+'</select></label></div>';
+    return pageHead("عالم الأطفال", "قنوات وبرامج مجانية عبر مواقع الجهات الرسمية. قد يختلف التوفر حسب البلد.", list.length) +
+      filters+(list.length ? gridHTML(list) : emptyHTML("لا يوجد محتوى يطابق الفلاتر."));
   }
 
   function viewYoutube() {
@@ -802,6 +831,12 @@
   /* ---------------------------------------------------------------- events */
 
   function wireGlobal() {
+    document.addEventListener("change",function(e){
+      if(!e.target || !e.target.id)return;
+      if(e.target.id==="kidsTypeFilter") {kidsType=e.target.value;kidsCountry="";kidsLanguage="";render(true);}
+      else if(e.target.id==="kidsCountryFilter"){kidsCountry=e.target.value;render(true);}
+      else if(e.target.id==="kidsLanguageFilter"){kidsLanguage=e.target.value;render(true);}
+    });
     document.addEventListener("click", function (e) {
       var t = e.target;
 
