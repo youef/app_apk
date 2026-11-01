@@ -40,7 +40,13 @@
    const url=safeUrl(v);
    return url && /\.(?:mp4|m3u8)(?:[?#]|$)/i.test(url) ? url : "";
  }
+ function officialNavigation(item,type) {
+   return type === "channel" && item && item.status==="published" && item.rights_status==="pending" &&
+     item.playback_mode==="official_link" && !item.stream_url && !item.youtube_url &&
+     /^https:\/\//i.test(safeUrl(item.official_url));
+ }
  function playable(item, type) {
+   if (officialNavigation(item,type)) return true;
    if (!item || !(directStream(item.stream_url)||youtubeId(item.youtube_url)))return false;
    if (type === "channel" && !["stream","youtube_embed"].includes(item.playback_mode||"stream"))return false;
    return item.status === "published" && item.rights_status === "approved";
@@ -172,7 +178,7 @@
      frame.append(img);
    }
    const badge=el("span","poster-badge"+(type==="channel"?" live":""),
-      youtubeId(item.youtube_url)?"▶ YouTube":type==="channel"?"● مباشر":item.quality||(type==="series"?"مسلسل":"فيلم"));
+      youtubeId(item.youtube_url)?"▶ YouTube":officialNavigation(item,type)?"↗ موقع رسمي":type==="channel"?"● مباشر":item.quality||(type==="series"?"مسلسل":"فيلم"));
    frame.append(badge,el("span","poster-play","▶"));
    return frame;
  }
@@ -201,7 +207,7 @@
    const meta = el("div","media-meta");
    meta.append(el("span","",item.release_year||itemCategory(item)||labels[type]));
    meta.append(el("span","meta-dot"));
-   meta.append(el("span","",type==="channel"?"بث مباشر":(item.quality||"شاهد الآن")));
+   meta.append(el("span","",officialNavigation(item,type)?"رابط رسمي":type==="channel"?"بث مباشر":(item.quality||"شاهد الآن")));
    card.append(meta);
    card.addEventListener("click",() => details(item,type));
    card.addEventListener("keydown",e => {
@@ -394,7 +400,7 @@
    const items={home:["اكتشف عالم العز","مختارات سينمائية تستحق وقتك، كل يوم."],
      movies:["مكتبة الأفلام","اكتشف أفلامًا ومشاهد من مصادر موثّقة."],
      series:["عالم المسلسلات","تابع المواسم والحلقات، في مكان واحد."],
-     channels:["البث المباشر","قنوات مجانية تعمل من المشغل مباشرة."],
+     channels:["البث المباشر","قنوات مباشرة وروابط مشاهدة عبر المواقع الرسمية للجهات المالكة."],
      kids:["★ عالم الأطفال","أفلام كرتون ومسلسلات وقنوات أطفال مجانية ومباشرة؛ دون متصفح خارجي."],
      youtube:["▶ يوتيوب داخل العز","الصق روابط يوتيوب الرسمية أو شاهد الفيديوهات المعتمدة داخل التطبيق."],
      favorites:["قائمتي المفضلة","كل ما اخترته من الأفلام والمسلسلات والقنوات."],
@@ -496,7 +502,13 @@
    data.append(el("h2","",item.title_ar));
    if (item.description) data.append(el("p","detail-desc",item.description));
    const buttons=el("div","detail-buttons");
-   if (type!=="series") buttons.append(detailButton(type==="channel"?"◉  شاهد الآن":"▶  تشغيل الآن","btn-primary",()=>startPlayer(item,type)));
+   if (type!=="series") {
+     const isOfficial=officialNavigation(item,type);
+     buttons.append(detailButton(isOfficial?"↗  فتح موقع القناة الرسمي":type==="channel"?"◉  شاهد الآن":"▶  تشغيل الآن","btn-primary",()=>{
+       if(isOfficial) window.open(safeUrl(item.official_url),"_blank","noopener,noreferrer");
+       else startPlayer(item,type);
+     }));
+   }
    buttons.append(detailButton(state.favorites.has(key(type,item))?"♥  في قائمتي":"♡  أضف إلى قائمتي","btn-outline",()=>{toggleFavorite(item,type);modalClose("modal")}));
    data.append(buttons);
    if (type==="series") {
