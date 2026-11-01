@@ -1,8 +1,7 @@
 name: SMART Cleaner TV Android 4.4.4 APK
 on:
   push:
-    branches:
-      - smart-pc822-cleaner
+    branches: [smart-pc822-cleaner]
   workflow_dispatch:
 permissions:
   contents: read
@@ -15,10 +14,14 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Install Android SDK 28
+      - name: Configure Android SDK
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-28" "build-tools;34.0.0"
+          SDK=/usr/local/lib/android/sdk
+          MANAGER=$(find "$SDK/cmdline-tools" -type f -name sdkmanager | head -n 1)
+          test -x "$MANAGER"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          yes | "$MANAGER" --sdk_root="$SDK" --licenses >/dev/null || true
+          "$MANAGER" --sdk_root="$SDK" "platforms;android-28" "build-tools;34.0.0"
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.4'
