@@ -480,7 +480,7 @@
 
   /* ---------- media health monitor ---------- */
   function hasLinkHealth(tableCfg) {
-    return !!tableCfg && ['aseel_channels', 'aseel_movies', 'aseel_episodes', 'aseel_series'].indexOf(tableCfg.table) !== -1;
+    return !!tableCfg && ['aseel_channels', 'aseel_movies', 'aseel_episodes', 'aseel_series', 'aseel_youtube_videos'].indexOf(tableCfg.table) !== -1;
   }
   function runLinkHealthScan() {
     if (state.scanBusy || !state.adminVerified || !state.session) {
