@@ -4,8 +4,8 @@ const api=read("web/js/api.js"),app=read("web/js/app.js"),explore=read("web/js/e
 const config=read("admin/config.js"),admin=read("admin/admin.js");
 assert(api.includes("genre_tags,auto_tags")&&api.includes("genreTags:"));
 assert(app.includes("function itemMatches(item,choice)")&&app.includes("function viewSeries(filterCat)"));
-assert(app.includes('classifiedFilterBar(list,filterCat,"series")'));
-assert(app.includes('classifiedFilterBar(list,filterCat,"movies")'));
+assert(/classifiedFilterBar\(list,\s*filterCat,\s*"series"\)/.test(app));
+assert(/classifiedFilterBar\(list,\s*filterCat,\s*"movies"\)/.test(app));
 assert(explore.includes('["TR","تركية"]')&&explore.includes('["action","أكشن"]'));
 assert(explore.includes("country:")&&explore.includes("genre:"));
 assert(config.includes("genre_tags: {")&&config.includes("type: 'tags'"));
