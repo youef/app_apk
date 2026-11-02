@@ -24,4 +24,5 @@ check("Poster bounded memory and disk cache",poster.includes("MAX_DISK_BYTES=14L
 check("Android KitKat API19 stays supported",flow.includes("v15-smart-cinema-api19.apk")&&flow.includes("15.0.0-native-"));
 check("No new backend credential exposure",!state.includes("SERVICE_ROLE")&&!state.includes("SUPABASE_SERVICE"));
 console.log("PASS | Al Ezz TV v15 static acceptance; media playback still needs physical device verification.");
-\ncheck("Favorites are scoped per local profile",home.includes('String scoped=profile+"."+favKey(item)')&&home.includes('String scoped=PlaybackMemory.activeProfile(this)+"."+favKey(item)'));\n
+
+check("Favorites are scoped per local profile",home.includes('String scoped=profile+"."+favKey(item)')&&home.includes('String scoped=PlaybackMemory.activeProfile(this)+"."+favKey(item)'));
