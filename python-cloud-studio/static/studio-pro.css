@@ -155,3 +155,24 @@ button:active:not(:disabled){transform:scale(.985)}
 }
 @media(max-width:390px){.mobile-dock a{font-size:9px}.page{padding-inline:10px}.episode-row{grid-template-columns:23px 41px minmax(0,1fr) auto;padding:9px;column-gap:6px}.episode-poster{width:40px;height:55px}.account-btn #accountText{display:none}.studio-command-actions{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important}}
+
+/* Studio 6 advanced content searching and iOS home-screen polish */
+.library-work-tools{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:15px 0 10px}
+.library-work-tools label{font-size:12px;font-weight:800;color:#c5d3e3}
+.library-work-tools input,.library-work-tools select{background:#0b1624;border:1px solid #354760;color:#e4eaf5;border-radius:11px;min-height:44px;padding:10px 13px;max-width:100%;font-size:13px}
+.library-work-tools input{flex:1;min-width:170px}
+.library-work-tools select{min-width:145px}
+.library-work-tools span{font-size:12px;color:#e9c481;font-weight:800;white-space:nowrap}
+.studio-mobile-health{font-size:11px;color:#88d5b2}
+.studio-mobile-health.is-bad{color:#eda4ab}
+.studio-paste-btn{min-height:47px}
+@media(max-width:740px){
+ .library-work-tools{display:grid;grid-template-columns:minmax(0,1fr) auto}
+ .library-work-tools label{grid-column:1/-1}
+ .library-work-tools input{font-size:16px;min-width:0;flex:none}
+ .library-work-tools select{min-width:0;font-size:16px}
+ .library-work-tools span{grid-column:1/-1}
+ .studio-mobile-health{display:block;margin-top:2px}
+ .studio-paste-btn{width:100%;flex-basis:100%}
+ .studio-command-bar .command-copy{min-width:0}
+}
