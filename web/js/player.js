@@ -29,7 +29,7 @@
   var youtubeFrame = null;
   var playbackToken = 0;
   var fitMode = Store.pref("videoFit", "contain") === "cover" ? "cover" : "contain";
-  var offlineLoadToken=0, autoSaveStartedFor="";
+  var offlineLoadToken=0, autoSaveStartedFor="", activeBlobURL="";
 
   function $(id) { return document.getElementById(id); }
 
@@ -346,6 +346,7 @@
         window.AlezzOffline.resolve(item.key).then(function(url){
           if(openToken!==offlineLoadToken || el.root.hidden)return;
           if(url){
+            if(url.indexOf("blob:")===0) activeBlobURL=url;
             current.stream=url; current.variants=[]; current.youtubeId="";
             current.offlineActive=true; current.offlinePermitted=false;
           }
@@ -366,6 +367,7 @@
     close: function () {
       offlineLoadToken++;
       persist(true);
+      if(activeBlobURL){try{URL.revokeObjectURL(activeBlobURL);}catch(e){}activeBlobURL="";}
       if (window.AlezzCast) window.AlezzCast.detach("player");
       if (window.AlezzKids && window.AlezzKids.stop) window.AlezzKids.stop();
       clearStage();

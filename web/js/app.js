@@ -696,6 +696,8 @@
 
   function episodesHTML(season) {
     if (!season || !season.episodes.length) return '<p class="search__hint">لا حلقات منشورة في هذا الموسم.</p>';
+    var first=season.episodes[0],parent=findEpisode(first.key);
+    var parentSeries=parent&&parent.series;
     return season.episodes.map(function (e) {
       var pct = progressOf(e), started = pct > 1 && pct < 97;
       return '<div class="episode-line"><button class="ep' + (started ? ' is-playing' : '') + '" data-ep="' + esc(e.key) + '" aria-label="تشغيل ' + esc(e.title) + '">' +
@@ -709,7 +711,7 @@
         '</span><span class="ep__trailing">' +
         (e.duration ? '<span class="ep__dur">' + esc(fmtDuration(e.duration)) + '</span>' : '') +
         '<span class="ep__play">▶</span></span></button>' +
-        offlineButton(e, findEpisode(e.key) && findEpisode(e.key).series, "episode-download") + '</div>';
+        offlineButton(e, parentSeries, "episode-download") + '</div>';
     }).join("");
   }
 
