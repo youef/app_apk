@@ -1,0 +1,34 @@
+#!/usr/bin/env node
+"use strict";
+const fs=require("node:fs"),assert=require("node:assert/strict"),vm=require("node:vm");
+const src=p=>fs.readFileSync(p,"utf8");
+for(const path of ["web/js/kids.js","web/js/app.js","web/js/api.js","web/js/player.js","web/sw.js"])
+ new vm.Script(src(path),{filename:path});
+const kid=src("web/js/kids.js"),app=src("web/js/app.js"),api=src("web/js/api.js"),player=src("web/js/player.js"),html=src("web/index.html"),sw=src("web/sw.js");
+assert(html.includes("js/kids.js")&&html.includes("css/kids.css"),"Kids assets must load");
+assert(app.includes("Kids.render(catalog")&&app.includes("Kids.handleClick(e)"),"Kids route must be independent");
+assert(api.includes("rightsStatus: e.rights_status"),"Episode rights metadata required");
+assert(player.includes("window.AlezzKids.tick")&&player.includes("window.AlezzKids.stop"),"Track actual viewing");
+assert(kid.includes('item.kind==="youtube"')&&kid.includes('item.rights.status!=="approved"'),"Exclude YouTube and unapproved sources");
+assert(kid.includes('ep.rightsStatus==="approved"')&&kid.includes('youtubeId:""'),"Episodes must be cleared, not YouTube embeds");
+assert(kid.includes('onNext:next?function(){play(next.key);}:null'),"Safe sequential playback required");
+assert(kid.includes("seconds>=p.minutes*60"),"Enforce daily limit");
+assert(sw.includes("js/kids.js")&&sw.includes("css/kids.css"),"Kids assets must be cached");
+let storage={};
+const Store={pref:(k,d)=>storage[k]===undefined?d:storage[k],setPref:(k,v)=>{storage[k]=v;}};
+const mock={AlezzStore:Store,AlezzPlayer:{isOpen:()=>false,open:()=>{},close:()=>{}},Date,Math,confirm:()=>true};
+const context={window:mock,location:{hash:"#/kids"},Date,Math,document:{getElementById:()=>null}};
+vm.runInNewContext(kid,context);
+const K=mock.AlezzKids;
+assert.equal(K.ratingAge("TV-Y7"),7);
+assert.equal(K.ratingAge("PG-13"),18);
+assert.equal(K.ratingAge("UNRATED"),99);
+const id=K.create("زياد",6,60);
+assert.equal(K.active().id,id);
+const item={kids:true,kind:"movie",age:"all",stream:"https://media.example.org/clip.mp4",variants:[],rights:{status:"approved"},youtubeId:""};
+assert(K.approved(item,6),"Approved kids MP4 allowed");
+assert(!K.approved(Object.assign({},item,{youtubeId:"YouTube"}),6),"No YouTube");
+assert(!K.approved(Object.assign({},item,{rights:{status:"pending"}}),6),"No unapproved rights");
+assert(!K.approved(Object.assign({},item,{age:"PG-13"}),6),"Respect age gate");
+assert(!K.approved(Object.assign({},item,{stream:"http://media.example.org/clip.mp4"}),6),"No insecure stream");
+console.log("PASS: standalone Kids World, age profiles, direct approved streams, daily timer, sequential playback and native isolation");
