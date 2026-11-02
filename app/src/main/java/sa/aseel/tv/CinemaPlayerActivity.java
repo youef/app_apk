@@ -47,7 +47,7 @@ import com.google.android.exoplayer2.ui.PlayerView;
 
 /** Leanback-style native player. HLS/MP4 use legacy ExoPlayer, never WebView. */
 public final class CinemaPlayerActivity extends Activity {
-    private static final int BG=0xFF090A0E, RED=0xFFF03252, WHITE=0xFFF7F7FA, MUTED=0xFFB0B4C0;
+    private static final int BG=0xFF090B11, RED=0xFFEF3658, WHITE=0xFFF7F4F8, MUTED=0xFFA7A6B4;
     private final Handler handler=new Handler();
     private final ExecutorService probeWorker=Executors.newSingleThreadExecutor();
     private final HashSet<Integer> attempted=new HashSet<Integer>();
@@ -76,19 +76,38 @@ public final class CinemaPlayerActivity extends Activity {
     private PlayerView surface;
     private TextView status,title,details;
     private Button playButton,qualityButton,backButton,externalButton;
-    private LinearLayout footer,controlPanel;
+    private LinearLayout footer,controlPanel,leftRail,rightRail;
+    private FrameLayout rootFrame;
+    private Button skipIntroButton;
+    private ScrollView channelsScroll;
+    private String profile="family",seriesId="",activeGroup="الكل";
+    private boolean railVisible=false;
+    private final Runnable progressTick=new Runnable(){public void run(){
+        if(isFinishing())return;
+        if(engine!=null&&engine.isPlaying()&&!live)saveProgress();
+        updateSkipButton();
+        handler.postDelayed(this,9000L);
+    }};
     private static final long HIDE_DELAY=5500L;
     private final Runnable autoHide=new Runnable(){public void run(){
-        if(!isFinishing()&&engine!=null&&engine.isPlaying())hideControls();
+        if(isFinishing()||engine==null||!engine.isPlaying())return;
+        if((leftRail!=null&&leftRail.hasFocus())||(rightRail!=null&&rightRail.hasFocus())){
+            handler.postDelayed(this,HIDE_DELAY);return;
+        }
+        hideControls();
     }};
     private void hideControls(){
         handler.removeCallbacks(autoHide);
         if(controlPanel!=null)controlPanel.setVisibility(View.GONE);
+        if(leftRail!=null)leftRail.setVisibility(View.GONE);
+        if(rightRail!=null)rightRail.setVisibility(View.GONE);
+        railVisible=false;
         if(surface!=null)surface.requestFocus();
     }
     private void showControls(boolean focusButton){
         if(controlPanel==null)return;
         controlPanel.setVisibility(View.VISIBLE);
+        setRailsVisible(true);
         handler.removeCallbacks(autoHide);
         if(focusButton&&playButton!=null)playButton.requestFocus();
         if(engine!=null&&engine.isPlaying())handler.postDelayed(autoHide,HIDE_DELAY);
@@ -160,6 +179,8 @@ public final class CinemaPlayerActivity extends Activity {
         Intent intent=getIntent();
         itemId=intent.getStringExtra("item_id");if(itemId==null)itemId="";
         itemTitle=intent.getStringExtra("title");if(itemTitle==null)itemTitle="العز TV";
+        profile=intent.getStringExtra("profile");if(profile==null)profile=PlaybackMemory.activeProfile(this);
+        seriesId=intent.getStringExtra("series_id");if(seriesId==null)seriesId="";
         live=intent.getBooleanExtra("is_live",false);
         kidsPlayback=intent.getBooleanExtra("kids_mode",false);
         kidsAge=intent.getIntExtra("kids_age",6);
@@ -197,7 +218,7 @@ public final class CinemaPlayerActivity extends Activity {
         }
         String url=intent.getStringExtra("stream_url");
         sources=StreamQuality.parse(url,intent.getStringExtra("quality"),intent.getStringExtra("stream_variants"));
-        FrameLayout root=new FrameLayout(this);root.setBackgroundColor(Color.BLACK);
+        FrameLayout root=new FrameLayout(this);rootFrame=root;root.setBackgroundColor(Color.BLACK);
         setContentView(root);
         surface=new PlayerView(this);surface.setUseController(false);surface.setKeepScreenOn(true);
         surface.setFocusable(true);surface.setFocusableInTouchMode(true);
@@ -263,12 +284,17 @@ public final class CinemaPlayerActivity extends Activity {
         backButton=button("رجوع");
         footer.addView(backButton,new LinearLayout.LayoutParams(dp(138),-1));
         backButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){finish();}});
+        buildSideRails(root);
+        handler.postDelayed(progressTick,9000L);
         if(sources.isEmpty()){
             status.setText("لا يوجد رابط MP4/HLS صالح لهذا العنوان. يرجى تحديثه في لوحة الإدارة.");
             showControls(true);
             externalButton.setEnabled(false);backButton.requestFocus();return;
         }
-        String preferred=getSharedPreferences("alezz_v11_player",MODE_PRIVATE).getString("quality_"+itemId,"auto");
+        JSONObject previous=PlaybackMemory.entry(this,profile,itemId);
+        String preferred=previous==null
+            ?getSharedPreferences("alezz_v11_player",MODE_PRIVATE).getString("quality_"+itemId,"auto")
+            :previous.optString("quality","auto");
         index=StreamQuality.choose(sources,preferred,Build.VERSION.SDK_INT);
         if(index<0)index=0;
         initPlayer();playSource(index);
@@ -295,15 +321,24 @@ public final class CinemaPlayerActivity extends Activity {
             @Override public void onPlaybackStateChanged(int state){
                 if(state==Player.STATE_BUFFERING){
                     status.setText("◌ جاري تحميل الفيديو... اضغط رجوع للخروج");started=false;
+                    handler.removeCallbacks(watchdog);
+                    handler.postDelayed(watchdog,22000L);
                     showControls(false);
                 }else if(state==Player.STATE_READY){
                     handler.removeCallbacks(watchdog);started=true;tries=0;
+                    if(live)PlaybackMemory.lastChannel(CinemaPlayerActivity.this,profile,itemId);
+                    updateSkipButton();
                     status.setText(live?"● البث المباشر يعمل":"▶ الفيديو جاهز • OK أو اللمس لعرض القوائم");
                     handler.removeCallbacks(autoHide);
                     handler.postDelayed(autoHide,1200L);
                     details.setText((live ? "● القناة "+(tvChannelIndex+1)+" / "+tvChannels.size()
                         : "سينما العز • جودة تلقائية")+"   |  "+sources.get(index).label);
                 }else if(state==Player.STATE_ENDED){
+                    if(!live){
+                        PlaybackMemory.remove(CinemaPlayerActivity.this,profile,itemId);
+                        getSharedPreferences("alezz_v11_player",MODE_PRIVATE)
+                            .edit().remove("position_"+itemId).apply();
+                    }
                     if(!live && "episode".equals(mediaKind) &&
                        getSharedPreferences("alezz_tv_settings_v14",MODE_PRIVATE).getBoolean("auto_next",true) &&
                        mediaIndex>=0 && mediaIndex+1<mediaPlaylist.size()){
@@ -326,21 +361,34 @@ public final class CinemaPlayerActivity extends Activity {
                 else if(reason.contains("NETWORK")||reason.contains("HTTP")||reason.contains("IO"))
                     explanation="تعذر الوصول للمصدر أو انتهت صلاحية الرابط. "+lastSourceHint;
                 else explanation="تعذر قراءة المصدر ("+reason+"). "+lastSourceHint;
-                tryNextOrExplain(explanation);
+                if((reason.contains("NETWORK")||reason.contains("HTTP")||reason.contains("IO"))
+                    &&tries==0){
+                    tries=1;
+                    status.setText("فقد الاتصال بالمصدر. محاولة ثانية ثم خفض الجودة إن لزم...");
+                    final int oldIndex=index;
+                    handler.postDelayed(new Runnable(){public void run(){
+                        if(!isFinishing()&&engine!=null)playSource(oldIndex);
+                    }},1800L);
+                }else tryNextOrExplain(explanation);
             }
         });
         surface.setPlayer(engine);
     }
     private void tryNextOrExplain(String explanation){
         handler.removeCallbacks(watchdog);
+        int lower=StreamQuality.lower(sources,index);
+        if(lower>=0&&!attempted.contains(lower)){
+            status.setText("تعذر تشغيل الجودة الحالية؛ تجربة جودة أقل...");
+            tries=0;playSource(lower);return;
+        }
         for(int offset=1;offset<=sources.size();offset++){
             int next=(index+offset)%sources.size();
             if(!attempted.contains(next)){
-                status.setText("فشل المصدر الحالي. تجربة جودة أخرى...");
+                status.setText("تجربة رابط أو جودة بديلة معتمدة...");
                 tries=0;playSource(next);return;
             }
         }
-        status.setText(explanation+" — لا توجد جودات أخرى صالحة. استخدم المشغل البديل أو حدّث رابط الفيلم من الإدارة.");
+        status.setText("رمز العطل: "+explanation+" — انتهت المحاولات والجودات المتاحة. راجع الرابط من لوحة الإدارة.");
         showControls(true);
         footer.setVisibility(View.VISIBLE);
         externalButton.requestFocus();
@@ -370,7 +418,8 @@ public final class CinemaPlayerActivity extends Activity {
                     engine.setMediaItem(item.build());
                     engine.prepare();
                     engine.play();
-                    long saved=getSharedPreferences("alezz_v11_player",MODE_PRIVATE).getLong("position_"+itemId,0L);
+                    long saved=PlaybackMemory.position(CinemaPlayerActivity.this,profile,itemId);
+                    if(saved<=0)saved=getSharedPreferences("alezz_v11_player",MODE_PRIVATE).getLong("position_"+itemId,0L);
                     if(!live&&saved>5000 && !getIntent().getBooleanExtra("no_resume",false))
                         engine.seekTo(saved);
                     handler.postDelayed(watchdog,22000);
@@ -380,6 +429,197 @@ public final class CinemaPlayerActivity extends Activity {
                 }
             }});
         }});
+    }
+
+    private void saveProgress(){
+        if(engine==null||live||itemId==null||itemId.isEmpty())return;
+        try{
+            long position=Math.max(0L,engine.getCurrentPosition());
+            long duration=Math.max(0L,engine.getDuration());
+            String quality=(sources!=null&&index>=0&&index<sources.size())?sources.get(index).label:"auto";
+            PlaybackMemory.save(this,profile,itemId,mediaKind,seriesId,itemTitle,position,duration,quality);
+        }catch(Exception ignored){}
+    }
+    private void setRailsVisible(boolean visible){
+        railVisible=visible;
+        if(leftRail!=null)leftRail.setVisibility(visible&&live?View.VISIBLE:View.GONE);
+        if(rightRail!=null)rightRail.setVisibility(visible?View.VISIBLE:View.GONE);
+    }
+    /** Left channels: category filter and EPG. Right controls: next, fullscreen, intro, tracks. */
+    private void buildSideRails(FrameLayout root){
+        final int screen=getResources().getDisplayMetrics().widthPixels;
+        int leftWidth=Math.min(dp(340),Math.max(dp(200),screen*31/100));
+        int rightWidth=Math.min(dp(215),Math.max(dp(140),screen*20/100));
+        leftRail=new LinearLayout(this);leftRail.setOrientation(LinearLayout.VERTICAL);
+        leftRail.setPadding(dp(9),dp(15),dp(9),dp(8));
+        leftRail.setBackgroundDrawable(new GradientDrawable(
+            GradientDrawable.Orientation.LEFT_RIGHT,new int[]{0xFA090C16,0xE71D1722}));
+        root.addView(leftRail,new FrameLayout.LayoutParams(leftWidth,-1,Gravity.LEFT));
+        rightRail=new LinearLayout(this);rightRail.setOrientation(LinearLayout.VERTICAL);
+        rightRail.setPadding(dp(7),dp(14),dp(7),dp(10));
+        rightRail.setBackgroundDrawable(new GradientDrawable(
+            GradientDrawable.Orientation.LEFT_RIGHT,new int[]{0xE814101D,0xFA090C16}));
+        root.addView(rightRail,new FrameLayout.LayoutParams(rightWidth,-1,Gravity.RIGHT));
+        TextView heading=txt("العز TV  •  تحكم",17,WHITE,true);
+        heading.setGravity(Gravity.CENTER);
+        rightRail.addView(heading,new LinearLayout.LayoutParams(-1,dp(58)));
+        Button fullscreen=button("⛶ عرض كامل");
+        rightRail.addView(fullscreen,new LinearLayout.LayoutParams(-1,dp(53)));
+        fullscreen.setOnClickListener(new View.OnClickListener(){public void onClick(View v){hideControls();}});
+        if(!live){
+            Button next=button("⏭ الحلقة التالية");
+            next.setEnabled("episode".equals(mediaKind)&&mediaIndex>=0&&mediaIndex+1<mediaPlaylist.size());
+            rightRail.addView(next,new LinearLayout.LayoutParams(-1,dp(54)));
+            next.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                saveProgress();switchMedia(mediaIndex+1);showControls(false);
+            }});
+            skipIntroButton=button("⏭ تخطي المقدمة");
+            rightRail.addView(skipIntroButton,new LinearLayout.LayoutParams(-1,dp(52)));
+            skipIntroButton.setVisibility(View.GONE);
+            skipIntroButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                skipMarkedSegment();
+            }});
+            Button edit=button("✎ المقدمة / الملخص");
+            edit.setEnabled("episode".equals(mediaKind));
+            rightRail.addView(edit,new LinearLayout.LayoutParams(-1,dp(53)));
+            edit.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                configureSegments();
+            }});
+        }else{
+            Button channelUp=button("▲ القناة التالية");
+            rightRail.addView(channelUp,new LinearLayout.LayoutParams(-1,dp(54)));
+            channelUp.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                switchChannel(tvChannelIndex+1);
+            }});
+            Button channelDown=button("▼ القناة السابقة");
+            rightRail.addView(channelDown,new LinearLayout.LayoutParams(-1,dp(54)));
+            channelDown.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                switchChannel(tvChannelIndex-1);
+            }});
+            Button guide=button("☷ قائمة القنوات");
+            rightRail.addView(guide,new LinearLayout.LayoutParams(-1,dp(54)));
+            guide.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                updateChannelRail();setRailsVisible(true);
+            }});
+        }
+        Button quality=button("⚙ الجودة");
+        rightRail.addView(quality,new LinearLayout.LayoutParams(-1,dp(52)));
+        quality.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showQualityMenu();}});
+        Button tracks=button("♫ صوت وترجمة");
+        rightRail.addView(tracks,new LinearLayout.LayoutParams(-1,dp(52)));
+        tracks.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showTrackMenu();}});
+        Button close=button("✕ إخفاء القوائم");
+        rightRail.addView(close,new LinearLayout.LayoutParams(-1,dp(52)));
+        close.setOnClickListener(new View.OnClickListener(){public void onClick(View v){hideControls();}});
+        if(live)updateChannelRail();
+        setRailsVisible(false);
+    }
+    private String groupFor(JSONObject row){
+        String name=row.optString("category","");
+        if(name.isEmpty())name=row.optString("category_name","");
+        if(name.isEmpty())name=row.optString("group_title","");
+        return name.isEmpty()?"غير مصنف":name;
+    }
+    private void updateChannelRail(){
+        if(!live||leftRail==null)return;
+        leftRail.removeAllViews();
+        TextView title=txt("☷ القنوات والتصنيفات",19,WHITE,true);
+        title.setGravity(Gravity.CENTER);
+        leftRail.addView(title,new LinearLayout.LayoutParams(-1,dp(52)));
+        java.util.LinkedHashSet<String> groups=new java.util.LinkedHashSet<String>();
+        groups.add("الكل");
+        for(JSONObject c:tvChannels)groups.add(groupFor(c));
+        if(!groups.contains(activeGroup))activeGroup="الكل";
+        HorizontalScrollView types=new HorizontalScrollView(this);
+        types.setHorizontalScrollBarEnabled(false);
+        leftRail.addView(types,new LinearLayout.LayoutParams(-1,dp(54)));
+        LinearLayout horizontal=new LinearLayout(this);
+        horizontal.setOrientation(LinearLayout.HORIZONTAL);types.addView(horizontal);
+        for(final String group:groups){
+            Button filter=button((group.equals(activeGroup)?"✓ ":"")+group);
+            filter.setTextSize(12);
+            horizontal.addView(filter,new LinearLayout.LayoutParams(dp(116),dp(48)));
+            filter.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                activeGroup=group;updateChannelRail();
+                setRailsVisible(true);
+            }});
+        }
+        channelsScroll=new ScrollView(this);
+        channelsScroll.setVerticalScrollBarEnabled(false);
+        leftRail.addView(channelsScroll,new LinearLayout.LayoutParams(-1,0,1));
+        LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);
+        channelsScroll.addView(list);
+        int found=0;
+        for(int i=0;i<tvChannels.size();i++){
+            JSONObject item=tvChannels.get(i);
+            if(!"الكل".equals(activeGroup)&&!activeGroup.equals(groupFor(item)))continue;
+            found++;
+            final int index=i;
+            String name=item.optString("title","قناة");
+            String now=item.optString("epg_now_title","");
+            String next=item.optString("epg_next_title","");
+            String line=String.format(Locale.US,"%03d   %s",i+1,name);
+            if(!now.isEmpty())line+="\nالآن: "+now;
+            if(!next.isEmpty())line+="\nالتالي: "+next;
+            Button channel=button((i==tvChannelIndex?"● ":"")+line);
+            channel.setAllCaps(false);channel.setTextSize(13);
+            list.addView(channel,new LinearLayout.LayoutParams(-1,dp(
+                now.isEmpty()&&next.isEmpty()?54:84)));
+            channel.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                switchChannel(index);setRailsVisible(true);
+            }});
+        }
+        if(found==0)list.addView(txt("لا توجد قنوات بهذا التصنيف",14,MUTED,false));
+    }
+    private void updateSkipButton(){
+        if(skipIntroButton==null)return;
+        if(engine==null||seriesId.isEmpty()||!"episode".equals(mediaKind)){
+            skipIntroButton.setVisibility(View.GONE);return;
+        }
+        long pos=engine.getCurrentPosition();
+        for(String type:new String[]{"intro","recap"}){
+            long start=PlaybackMemory.segmentStart(this,profile,seriesId,type);
+            long end=PlaybackMemory.segmentEnd(this,profile,seriesId,type);
+            if(start>=0&&end>start&&pos>=start&&pos<end){
+                skipIntroButton.setText("⏭ تخطي "+("intro".equals(type)?"المقدمة":"الملخص"));
+                skipIntroButton.setVisibility(View.VISIBLE);return;
+            }
+        }
+        skipIntroButton.setVisibility(View.GONE);
+    }
+    private void skipMarkedSegment(){
+        if(engine==null)return;
+        long pos=engine.getCurrentPosition();
+        for(String type:new String[]{"intro","recap"}){
+            long start=PlaybackMemory.segmentStart(this,profile,seriesId,type);
+            long end=PlaybackMemory.segmentEnd(this,profile,seriesId,type);
+            if(start>=0&&end>start&&pos>=start&&pos<end){
+                engine.seekTo(end);updateSkipButton();return;
+            }
+        }
+    }
+    private void configureSegments(){
+        if(engine==null||seriesId.isEmpty()){
+            status.setText("حفظ المقدمة والملخص متاح لحلقات المسلسلات فقط.");return;
+        }
+        final String[] options={
+            "حفظ بداية المقدمة عند هذه الدقيقة","حفظ نهاية المقدمة عند هذه الدقيقة",
+            "حفظ بداية الملخص عند هذه الدقيقة","حفظ نهاية الملخص عند هذه الدقيقة",
+            "مسح توقيت المقدمة","مسح توقيت الملخص"
+        };
+        new android.app.AlertDialog.Builder(this).setTitle("تحديد وقت المقدمة / الملخص محليًا")
+            .setItems(options,new android.content.DialogInterface.OnClickListener(){
+                public void onClick(android.content.DialogInterface dialog,int which){
+                    String type=which<2||which==4?"intro":"recap";
+                    if(which<4){
+                        PlaybackMemory.setSegmentEdge(CinemaPlayerActivity.this,
+                            profile,seriesId,type,which%2==0?"start":"end",
+                            engine.getCurrentPosition());
+                    }else PlaybackMemory.clearSegment(CinemaPlayerActivity.this,profile,seriesId,type);
+                    status.setText("تم حفظ أوقات "+("intro".equals(type)?"المقدمة":"الملخص")+" محليًا.");
+                    updateSkipButton();showControls(false);
+                }
+            }).setNegativeButton("إلغاء",null).show();
     }
     private void showContentGuide(){
         if(live){showChannelGuide();return;}
@@ -398,10 +638,7 @@ public final class CinemaPlayerActivity extends Activity {
     }
     private void switchMedia(int next){
         if(next<0||next>=mediaPlaylist.size())return;
-        if(engine!=null && itemId.length()>0 && engine.getDuration()>0){
-            getSharedPreferences("alezz_v11_player",MODE_PRIVATE).edit()
-                .putLong("position_"+itemId,Math.max(0,engine.getCurrentPosition())).apply();
-        }
+        saveProgress();
         mediaIndex=next;
         JSONObject selected=mediaPlaylist.get(mediaIndex);
         ArrayList<StreamQuality.Source> variants=StreamQuality.parse(
@@ -410,27 +647,23 @@ public final class CinemaPlayerActivity extends Activity {
                 selected.optJSONArray("variants").toString());
         if(variants.isEmpty())return;
         itemId=selected.optString("id","");
+        seriesId=selected.optString("series_id",seriesId);
         itemTitle=selected.optString("title","العز TV");
-        sources=variants;index=StreamQuality.choose(sources,"auto",Build.VERSION.SDK_INT);
+        sources=variants;
+        JSONObject savedItem=PlaybackMemory.entry(this,profile,itemId);
+        String quality=savedItem==null?"auto":savedItem.optString("quality","auto");
+        index=StreamQuality.choose(sources,quality,Build.VERSION.SDK_INT);
         if(index<0)index=0;
         attempted.clear();tries=0;requestToken++;
         title.setText("▶ "+itemTitle);
+        updateSkipButton();
         details.setText(String.format(Locale.US,"%d / %d  •  %s",mediaIndex+1,
             mediaPlaylist.size(),"episode".equals(mediaKind)?"حلقات":"أفلام"));
         playSource(index);
     }
     private void showChannelGuide(){
-        if(tvChannels.isEmpty()){status.setText("دليل القنوات غير متاح لهذا البث.");showControls(true);return;}
-        String[] labels=new String[tvChannels.size()];
-        for(int i=0;i<labels.length;i++)
-            labels[i]=String.format(Locale.US,"%03d  •  %s",i+1,
-                tvChannels.get(i).optString("title","قناة"));
-        new android.app.AlertDialog.Builder(this).setTitle("دليل قنوات العز TV")
-            .setSingleChoiceItems(labels,tvChannelIndex,new android.content.DialogInterface.OnClickListener(){
-                public void onClick(android.content.DialogInterface dialog,int which){
-                    dialog.dismiss();switchChannel(which);
-                }
-            }).setNegativeButton("رجوع",null).show();
+        if(tvChannels.isEmpty()){status.setText("دليل القنوات غير متاح.");showControls(true);return;}
+        updateChannelRail();showControls(false);setRailsVisible(true);
     }
     private void switchChannel(int position){
         if(tvChannels.isEmpty())return;
@@ -448,7 +681,9 @@ public final class CinemaPlayerActivity extends Activity {
         if(index<0)index=0;
         attempted.clear();tries=0;requestToken++;
         title.setText(String.format(Locale.US,"● CH %03d  •  %s",tvChannelIndex+1,itemTitle));
+        PlaybackMemory.lastChannel(this,profile,itemId);
         details.setText("بث مباشر • CH± للتنقل • اضغط MENU للدليل");
+        updateChannelRail();
         playSource(index);
     }
     private void cycleAspectRatio(){
@@ -617,16 +852,13 @@ public final class CinemaPlayerActivity extends Activity {
         handler.removeCallbacks(autoHide);
         handler.removeCallbacks(commitRemoteNumber);
         if(engine!=null){
-            if(!live && itemId.length()>0){
-                getSharedPreferences("alezz_v11_player",MODE_PRIVATE).edit()
-                    .putLong("position_"+itemId,Math.max(0,engine.getCurrentPosition())).apply();
-            }
+            if(!live && itemId.length()>0)saveProgress();
             engine.pause();
         }
         super.onPause();
     }
     @Override protected void onDestroy(){
-        requestToken++;probeWorker.shutdownNow();handler.removeCallbacksAndMessages(null);
+        saveProgress();requestToken++;probeWorker.shutdownNow();handler.removeCallbacksAndMessages(null);
         if(surface!=null)surface.setPlayer(null);
         if(engine!=null){engine.release();engine=null;}
         super.onDestroy();

@@ -49,6 +49,7 @@ public final class TVHomeActivity extends Activity {
     private String section="home";
     private boolean detailVisible=false, showingWelcome=false;
     private String detailOrigin="home";
+    private String pendingResumeEpisodeId="",activeChannelCategory="الكل";
     private int kidsAge=6,kidsDailyMinutes=60;
     private String lastLoadError="";
     private boolean loading=false,unlocked=false;
@@ -169,6 +170,7 @@ public final class TVHomeActivity extends Activity {
         catalog=new CatalogApi(this);
         kidsAge=getSharedPreferences("alezz_kids",MODE_PRIVATE).getInt("age",6);
         kidsDailyMinutes=getSharedPreferences("alezz_kids",MODE_PRIVATE).getInt("minutes",60);
+        PlaybackMemory.prune(this);
         showSplash();
     }
     /** Figma v14: public viewer has no PIN, credential or activation gate. */
@@ -444,6 +446,7 @@ public final class TVHomeActivity extends Activity {
             grid("كل الأفلام",movies);
         }
         else if("series".equals(section)){
+            showContinueWatching(true);
             heading("المسلسلات بحسب التصنيف","تُحدّث التصنيفات تلقائيًا عند إضافة حلقات ومسلسلات.");
             shelf("مسلسلات تركية","بلد الإنتاج: تركيا",originItems(series,"TR"),30);
             shelf("مسلسلات أجنبية","بلد إنتاج غير عربي",originItems(series,"FOREIGN"),30);
@@ -478,6 +481,7 @@ public final class TVHomeActivity extends Activity {
             for(JSONObject x:channels)if(kidsDirect(x))kids.add(x);
             grid("محتوى أطفال ملائم للشاشة",kids);
         }else if("favorites".equals(section)){
+            showContinueWatching(false);
             ArrayList<JSONObject> list=new ArrayList<JSONObject>();
             for(JSONObject x:movies)if(isFavorite(x))list.add(x);
             for(JSONObject x:series)if(isFavorite(x))list.add(x);
@@ -497,6 +501,16 @@ public final class TVHomeActivity extends Activity {
     private void settingsScreen(){
         heading("الإعدادات","تخصيص تجربة العز TV • التفضيلات محفوظة على هذا الجهاز فقط");
         final SharedPreferences prefs=getSharedPreferences(SETTINGS,MODE_PRIVATE);
+        final String active=PlaybackMemory.activeProfile(this);
+        heading("ملفات مشاهدة محلية","ملف مستقل للمفضلة والتقدم وآخر قناة • بدون تسجيل دخول");
+        LinearLayout profiles=row();content.addView(profiles,space(-1,-2,4));
+        for(final String profile:new String[]{"family","kids","guest"}){
+            Button choice=button((active.equals(profile)?"✓ ":"")+PlaybackMemory.profileName(profile));
+            profiles.addView(choice,new LinearLayout.LayoutParams(0,dp(55),1));
+            choice.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                PlaybackMemory.setProfile(TVHomeActivity.this,profile);render();
+            }});
+        }
         final boolean autoNext=prefs.getBoolean("auto_next",true);
         Button next=button((autoNext?"✓  ":"")+"تشغيل الحلقة التالية تلقائيًا");
         content.addView(next,space(-1,dp(62),6));
@@ -559,6 +573,74 @@ public final class TVHomeActivity extends Activity {
         for(int i=0;i<list.size()&&i<limit;i++)cards.addView(card(list.get(i),true));
         content.addView(scroll,space(-1,dp(251),4));
     }
+
+    private JSONObject findCatalogItem(String id,boolean isSeries){
+        if(id==null||id.isEmpty())return null;
+        for(JSONObject x:isSeries?series:movies)if(id.equals(value(x,"id")))return x;
+        return null;
+    }
+    private void showContinueWatching(boolean episodesOnly){
+        final String profile=PlaybackMemory.activeProfile(this);
+        ArrayList<JSONObject> recent=PlaybackMemory.recent(this,profile);
+        HashSet<String> shows=new HashSet<String>();
+        ArrayList<JSONObject> entries=new ArrayList<JSONObject>();
+        for(JSONObject progress:recent){
+            String id=progress.optString("id"),seriesId=progress.optString("series_id");
+            boolean episode="episode".equals(progress.optString("kind"));
+            if(episodesOnly&&!episode)continue;
+            if(episode){
+                if(seriesId.isEmpty()||!shows.add(seriesId)||findCatalogItem(seriesId,true)==null)continue;
+            }else if(findCatalogItem(id,false)==null)continue;
+            entries.add(progress);if(entries.size()>=7)break;
+        }
+        if(entries.isEmpty())return;
+        heading("▶ أكمل المشاهدة","ملف "+PlaybackMemory.profileName(profile)+" • الحلقة والدقيقة محفوظتان");
+        for(final JSONObject progress:entries){
+            final String id=progress.optString("id"),seriesId=progress.optString("series_id");
+            final boolean episode="episode".equals(progress.optString("kind"));
+            LinearLayout line=row();line.setBackgroundDrawable(bg(PANEL,0xFF373341,12));
+            content.addView(line,space(-1,dp(69),3));
+            long seconds=progress.optLong("position",0)/1000;
+            Button resume=button("▶ "+progress.optString("title","متابعة")+
+                "  •  "+(seconds/60)+":"+String.format(Locale.US,"%02d",seconds%60));
+            line.addView(resume,new LinearLayout.LayoutParams(0,dp(57),1));
+            resume.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                if(episode){
+                    JSONObject show=findCatalogItem(seriesId,true);
+                    if(show!=null){pendingResumeEpisodeId=id;episodes(show);}
+                }else{
+                    JSONObject movie=findCatalogItem(id,false);
+                    if(movie!=null)play(movie);
+                }
+            }});
+            Button remove=button("✕ حذف السجل");
+            line.addView(remove,space(dp(155),dp(57),3));
+            remove.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                PlaybackMemory.remove(TVHomeActivity.this,profile,id);render();
+            }});
+        }
+    }
+    private String channelCategory(JSONObject x){
+        String value=value(x,"category_name");
+        if(value.isEmpty())value=value(x,"category_label");
+        if(value.isEmpty())value=value(x,"group_title");
+        if(value.isEmpty())value=value(x,"genre");
+        if(value.isEmpty())value=value(x,"category");
+        return value.isEmpty()||value.length()>40?"غير مصنف":value;
+    }
+    private String epgNow(JSONObject x){
+        String s=value(x,"epg_now_title");
+        if(s.isEmpty())s=value(x,"current_program");
+        if(s.isEmpty())s=value(x,"now_title");
+        return s;
+    }
+    private String epgNext(JSONObject x){
+        String s=value(x,"epg_next_title");
+        if(s.isEmpty())s=value(x,"next_program");
+        if(s.isEmpty())s=value(x,"next_title");
+        return s;
+    }
+
     private void livePreview(){
         heading("● البث الآن","تصفح القنوات كالتلفزيون، وغيّرها بأزرار CH± أو الأرقام أثناء المشاهدة");
         for(int i=0;i<Math.min(channels.size(),4);i++)content.addView(channelLine(channels.get(i),i));
@@ -569,11 +651,37 @@ public final class TVHomeActivity extends Activity {
         }});
     }
     private void liveGuide(){
-        heading("دليل القنوات • LIVE TV","اضغط OK للمشاهدة • CH+ و CH− للتنقل • الأرقام لاختيار القناة مباشرة");
+        heading("دليل القنوات • LIVE TV","قنوات يسار المشغل وأزرار يمينه • OK / CH± / الأرقام");
         if(channels.isEmpty()){
-            heading("لا توجد قنوات منشورة","استخدم زر تحديث المكتبة أو راجع المصادر المعتمدة.");return;
+            heading("لا توجد قنوات منشورة","استخدم تحديث المكتبة أو راجع المصادر.");return;
         }
-        for(int i=0;i<channels.size();i++)content.addView(channelLine(channels.get(i),i));
+        String last=PlaybackMemory.lastChannel(this,PlaybackMemory.activeProfile(this));
+        for(JSONObject channel:channels)if(last.equals(value(channel,"id"))){
+            final JSONObject recent=channel;
+            Button resume=button("▶ آخر قناة: "+label(channel));
+            content.addView(resume,space(-1,dp(60),4));
+            resume.setOnClickListener(new View.OnClickListener(){public void onClick(View v){play(recent);}});
+            break;
+        }
+        java.util.LinkedHashSet<String> types=new java.util.LinkedHashSet<String>();
+        types.add("الكل");for(JSONObject x:channels)types.add(channelCategory(x));
+        if(!types.contains(activeChannelCategory))activeChannelCategory="الكل";
+        HorizontalScrollView scroll=new HorizontalScrollView(this);
+        scroll.setHorizontalScrollBarEnabled(false);
+        content.addView(scroll,space(-1,dp(60),3));
+        LinearLayout filters=row();scroll.addView(filters);
+        for(final String type:types){
+            Button b=button((type.equals(activeChannelCategory)?"✓ ":"")+type);
+            filters.addView(b,space(dp(150),dp(52),3));
+            b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                activeChannelCategory=type;render();
+            }});
+        }
+        for(int i=0;i<channels.size();i++){
+            JSONObject x=channels.get(i);
+            if("الكل".equals(activeChannelCategory)||activeChannelCategory.equals(channelCategory(x)))
+                content.addView(channelLine(x,i));
+        }
     }
     private LinearLayout channelLine(final JSONObject channel,final int position){
         final LinearLayout line=row();
@@ -592,7 +700,10 @@ public final class TVHomeActivity extends Activity {
         line.addView(poster,new LinearLayout.LayoutParams(dp(100),dp(64)));
         LinearLayout information=column();information.setPadding(dp(14),0,dp(14),0);
         information.addView(text(label(channel),20,WHITE,true));
-        information.addView(text("● بث مباشر   •   "+value(channel,"language_code"),12,0xFF9FE2BF,false));
+        information.addView(text("● بث مباشر   •   "+channelCategory(channel),12,0xFF9FE2BF,false));
+        String now=epgNow(channel),next=epgNext(channel);
+        if(!now.isEmpty()||!next.isEmpty())information.addView(text(
+            (!now.isEmpty()?"الآن: "+now:"")+(!next.isEmpty()?"  التالي: "+next:""),12,MUTED,false));
         line.addView(information,new LinearLayout.LayoutParams(0,-2,1));
         TextView action=text("▶  مشاهدة",15,0xFFFFA2BB,true);
         line.addView(action,new LinearLayout.LayoutParams(dp(130),-1));
@@ -631,6 +742,11 @@ public final class TVHomeActivity extends Activity {
         if(poster.startsWith("https://"))PosterLoader.load(image,poster);
         TextView title=text(label(item),15,WHITE,true);title.setMaxLines(2);
         title.setEllipsize(TextUtils.TruncateAt.END);outer.addView(title,space(-1,dp(47),3));
+        if("series".equals(kind(item))&&isFavorite(item)){
+            int count=item.optInt("episode_count",-1);
+            int seen=PlaybackMemory.seenEpisodeCount(this,PlaybackMemory.activeProfile(this),value(item,"id"));
+            if(seen>=0&&count>seen)outer.addView(text("● حلقة جديدة",12,0xFF44C892,true));
+        }
         String desc="channel".equals(kind(item))?("official_link".equals(value(item,"playback_mode"))?"↗ موقع رسمي":"● مباشر"):"series".equals(kind(item))?"▤ مسلسل":"youtube".equals(kind(item))?"▶ يوتيوب":"▶ فيلم";
         outer.addView(text(desc,12,0xFFFF8DA6,false));
         outer.setOnFocusChangeListener(new View.OnFocusChangeListener(){public void onFocusChange(View v,boolean focused){
@@ -704,11 +820,14 @@ public final class TVHomeActivity extends Activity {
                     String seasonId=value(season,"id");
                     if(!seasonId.matches("[0-9a-fA-F-]{36}"))continue;
                     JSONArray list=catalog.listQuery("aseel_episodes",
-                        "?select=*&season_id=eq."+seasonId+"&status=eq.published&rights_status=eq.approved&order=number.asc&limit=100");
+                        "?select=*&season_id=eq."+seasonId+"&status=eq.published&rights_status=eq.approved&order=number.asc&limit=500");
                     for(int k=0;k<list.length();k++){
                         JSONObject episode=list.optJSONObject(k);if(episode==null)continue;
                         mark(episode,"episode");
-                        try{episode.put("_season",season.optInt("number",i+1));}catch(Exception ignored){}
+                        try{
+                            episode.put("_season",season.optInt("number",i+1));
+                            episode.put("_series_id",seriesId);
+                        }catch(Exception ignored){}
                         episodes.add(episode);
                     }
                 }
@@ -721,6 +840,16 @@ public final class TVHomeActivity extends Activity {
                 if(episodes.isEmpty())heading("لا توجد حلقات جاهزة",
                     problem.length()>0?problem:"راجع نشر الموسم والحلقات وروابط تشغيلها.");
                 episodeQueue.clear();episodeQueue.addAll(episodes);
+                int last=PlaybackMemory.seenEpisodeCount(TVHomeActivity.this,
+                    PlaybackMemory.activeProfile(TVHomeActivity.this),seriesId);
+                if(last>=0&&episodes.size()>last)
+                    heading("● حلقات جديدة","تمت إضافة "+(episodes.size()-last)+" حلقات منذ آخر تصفح.");
+                PlaybackMemory.markEpisodeCount(TVHomeActivity.this,
+                    PlaybackMemory.activeProfile(TVHomeActivity.this),seriesId,episodes.size());
+                String resumeId=pendingResumeEpisodeId;pendingResumeEpisodeId="";
+                if(!resumeId.isEmpty()){
+                    for(JSONObject ep:episodes)if(resumeId.equals(value(ep,"id"))){play(ep);return;}
+                }
                 for(final JSONObject ep:episodes){
                     Button b=button("▶ الموسم "+ep.optInt("_season",1)+" — الحلقة "+
                         ep.optInt("number",0)+"  |  "+label(ep));
@@ -760,6 +889,8 @@ public final class TVHomeActivity extends Activity {
         Intent intent=new Intent(this,CinemaPlayerActivity.class);
         intent.putExtra("item_id",value(item,"id"));
         intent.putExtra("title",label(item));
+        intent.putExtra("series_id",value(item,"_series_id"));
+        intent.putExtra("profile","kids".equals(section)?"kids":PlaybackMemory.activeProfile(this));
         intent.putExtra("stream_url",url);
         intent.putExtra("is_live","channel".equals(kind(item)));
         intent.putExtra("kids_mode",kidsMode);
@@ -783,6 +914,7 @@ public final class TVHomeActivity extends Activity {
                 try{
                     record.put("id",value(candidate,"id"));
                     record.put("title",label(candidate));
+                    record.put("series_id",value(candidate,"_series_id"));
                     record.put("url",candidateUrl);
                     record.put("quality",value(candidate,"quality"));
                     record.put("variants",new JSONArray(variants));
@@ -811,6 +943,9 @@ public final class TVHomeActivity extends Activity {
                     record.put("url",candidateUrl);
                     record.put("quality",value(candidate,"quality"));
                     record.put("variants",new JSONArray(variants));
+                    record.put("category",channelCategory(candidate));
+                    record.put("epg_now_title",epgNow(candidate));
+                    record.put("epg_next_title",epgNext(candidate));
                     if(value(candidate,"id").equals(value(item,"id")))selected=playlist.length();
                     playlist.put(record);
                 }catch(Exception ignored){}
