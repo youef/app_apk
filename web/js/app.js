@@ -292,7 +292,10 @@
     var kids = catalog.items.filter(function(i) { return i.kids; });
     if (kids.length) rows.push(railHTML("عالم الأطفال", kids.slice(0, 16), { more: "#/kids" }));
     if (catalog.youtube.length) rows.push(railHTML("الفيديوهات", catalog.youtube.slice(0, 14), { more: "#/youtube" }));
-    return renderHero() + '<div class="home-content">' + rows.join("") + '</div>';
+    var shortcuts='<nav class="home-quick" aria-label="أقسام العز">' +
+      '<a href="#/movies">🎬 أفلام</a><a href="#/series">🎞 مسلسلات</a>' +
+      '<a href="#/live">📺 مباشر</a><a href="#/kids">⭐ أطفال</a></nav>';
+    return renderHero() + shortcuts + '<div class="home-content">' + rows.join("") + '</div>';
   }
 
     function pageHead(title, subtitle, count) {
@@ -436,6 +439,11 @@
       (route.name === "watch" ? " view--watch" : "");
     view.innerHTML = route.name === "kids" ? html : (unified ? experienceHeader(route.name) + html : html);
     document.body.classList.toggle("kids-world-active", route.name === "kids");
+    document.title="العز TV — سينما في بيتك";
+    if(route.name==="title"||route.name==="watch"){
+      var episodeTitle=findEpisode(route.arg),targetItem=episodeTitle?episodeTitle.series:findItem(route.arg);
+      if(targetItem)document.title=(episodeTitle?episodeTitle.episode.title+" — ":"")+targetItem.title+" | العز TV";
+    }
     setNav(route.name === "title" || route.name === "watch" ? parentSection(route.arg) : route.name);
     if (preserveScroll) window.scrollTo(0, y); else window.scrollTo(0, 0);
     startHeroRotation();
@@ -587,18 +595,38 @@
       '<a href="#/movies" class="btn btn--gold">تصفح الأفلام</a></div>')+'</section>';
   }
 
+  function relatedHTML(item) {
+    if (!item || (item.kind!=="movie" && item.kind!=="series")) return "";
+    var pool=item.kind==="movie" ? catalog.movies : catalog.series, tags=item.genreTags||[];
+    var matched=pool.filter(function(x){return x.key!==item.key && !!x.kids===!!item.kids;})
+      .map(function(x){
+        var common=0;
+        (x.genreTags||[]).forEach(function(tag){if(tags.indexOf(tag)!==-1)common++;});
+        return {item:x,score:common*5+(item.country&&item.country===x.country?3:0)+
+          (item.categoryId&&item.categoryId===x.categoryId?2:0)};
+      }).filter(function(x){return x.score>0;});
+    matched.sort(function(a,b){return b.score-a.score;});
+    var items=matched.slice(0,9).map(function(x){return x.item;});
+    return items.length?'<div class="title-page__related">'+railHTML("قد يعجبك أيضًا",items)+'</div>':"";
+  }
+
   function viewDetail(key) {
     var item = findItem(key);
     if (!item) return '<div class="route-empty"><h1>هذا العمل غير متاح الآن</h1><a href="#/home" class="btn btn--gold">الرئيسية</a></div>';
     return '<article class="title-page" id="titlePage"><div class="title-page__breadcrumb">' +
       '<a href="#/' + parentSection(key) + '" data-detail-back>← العودة للمكتبة</a></div>' +
-      detailHTML(item) + '</article>';
+      detailHTML(item) + relatedHTML(item) + '</article>';
   }
   function viewWatch(key) {
     var entry = findEpisode(key), item = entry ? entry.series : findItem(key);
     if (!item) return '<div class="route-empty"><h1>الفيديو غير متاح الآن</h1><a href="#/home">الرئيسية</a></div>';
     var title = entry ? (item.title + " — " + entry.episode.title) : item.title;
     var back = detailLink(item.key), all = entry ? entry.list : [];
+    var prev=entry&&entry.index>0?all[entry.index-1]:null, next=entry&&entry.index<all.length-1?all[entry.index+1]:null;
+    var episodeControls=entry?'<nav class="watch-episode-nav" aria-label="التنقل بين الحلقات">'+
+      (prev?'<a href="'+watchLink(prev.key)+'">→ الحلقة السابقة</a>':'<span></span>')+
+      (next?'<a class="watch-episode-nav__next" href="'+watchLink(next.key)+'">الحلقة التالية ←</a>':'<span class="watch-episode-nav__end">آخر حلقة متاحة</span>')+
+      '</nav>':"";
     var epLinks = all.length ? '<section class="watch-episodes"><div class="watch-section-head"><h2>حلقات المسلسل</h2><a href="' + back + '">كل التفاصيل</a></div>' +
       '<div class="watch-episodes__list">' + all.map(function(ep) {
         return '<a class="watch-episode' + (ep.key === key ? ' is-current' : '') + '" href="' + watchLink(ep.key) + '">' +
@@ -608,8 +636,10 @@
       '<a href="' + back + '" data-watch-back>← ' + esc(item.title) + '</a></nav>' +
       '<div class="watch-player-slot" id="watchPlayerSlot"></div>' +
       '<div class="watch-page__below"><div class="watch-page__heading"><div><span>العز TV · مشاهدة</span><h1>' +
-      esc(title) + '</h1></div><a class="watch-page__details" href="' + back + '">تفاصيل العمل</a></div>' +
-      '<div class="watch-download-area">'+offlineButton(entry?entry.episode:item,entry?item:null)+'</div>'+
+      esc(title) + '</h1></div><div class="watch-page__heading-actions">'+
+      '<button type="button" class="watch-share" data-share="'+esc(key)+'" data-share-route="watch">مشاركة</button>'+
+      '<a class="watch-page__details" href="' + back + '">التفاصيل</a></div></div>'+
+      episodeControls + '<div class="watch-download-area">'+offlineButton(entry?entry.episode:item,entry?item:null)+'</div>'+
       epLinks + '</div></div>';
   }
 
@@ -659,7 +689,11 @@
         item.seasons.map(function (s) {
           return '<button class="filter' + (s.id === firstSeason.id ? " is-on" : "") + '" data-season="' + esc(s.id) + '" aria-label="' + esc(s.title) + '">' + esc(s.title) + "</button>";
         }).join("") + "</div></div>" +
-        '<div id="epList">' + episodesHTML(firstSeason) + "</div></div>";
+        '<div class="episode-tools"><label class="episode-tools__search"><span aria-hidden="true">⌕</span>'+
+        '<input type="search" id="episodeSearch" placeholder="ابحث عن حلقة" autocomplete="off" aria-label="بحث الحلقات"></label>'+
+        '<span id="episodeCount" class="episode-tools__count">'+firstSeason.episodes.length+' حلقة</span></div>'+
+        '<div id="epList">' + episodesHTML(firstSeason) + '</div>'+
+        '<p id="episodeSearchEmpty" class="episode-search__empty" hidden>لا توجد حلقات مطابقة.</p></div>';
     }
 
     return '<div class="detail__hero">' +
@@ -680,6 +714,7 @@
       '<button class="btn btn--ghost" data-fav="' + esc(item.key) + '"><svg viewBox="0 0 24 24" aria-hidden="true">' +
       (fav ? '<path d="M5 12l5 5L19 7"/>' : '<path d="M12 5v14M5 12h14"/>') + "</svg>" +
       (fav ? "في قائمتي" : "أضف إلى قائمتي") + "</button>" +
+      '<button type="button" class="btn btn--ghost" data-share="'+esc(item.key)+'" data-share-route="title">مشاركة</button>'+
       (item.kind==="movie"?offlineButton(item):"") +
       "</div></div></div>" +
       (item.description ? '<p class="detail__desc">' + esc(item.description) + "</p>" : "") +
@@ -1025,9 +1060,35 @@
     });
   }
 
+  function filterVisibleEpisodes(){
+    var input=$("episodeSearch"),host=$("epList");
+    if(!input||!host)return;
+    var term=input.value.trim().toLowerCase(),lines=host.querySelectorAll(".episode-line"),shown=0;
+    Array.prototype.forEach.call(lines,function(row){
+      var matches=!term||(row.textContent||"").toLowerCase().indexOf(term)!==-1;
+      row.hidden=!matches;if(matches)shown++;
+    });
+    var count=$("episodeCount"),empty=$("episodeSearchEmpty");
+    if(count)count.textContent=shown+" من "+lines.length+" حلقة";
+    if(empty)empty.hidden=shown>0||!term;
+  }
+  function shareCurrent(key,route){
+    var entry=findEpisode(key),item=entry?entry.series:findItem(key);
+    var link=location.href.split("#")[0]+"#/"+(route==="watch"?"watch":"title")+"/"+encodeURIComponent(key);
+    if(navigator.share){
+      navigator.share({title:item?item.title:"العز TV",url:link}).catch(function(){});
+    }else if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(link).then(function(){toast("تم نسخ الرابط");})
+        .catch(function(){window.prompt("انسخ الرابط:",link);});
+    }else window.prompt("انسخ الرابط:",link);
+  }
+
   /* ---------------------------------------------------------------- events */
 
   function wireGlobal() {
+    document.addEventListener("input",function(e){
+      if(e.target&&e.target.id==="episodeSearch")filterVisibleEpisodes();
+    });
     document.addEventListener("change",function(e){
       var target=e.target;
       if(target&&target.getAttribute&&target.getAttribute("data-browse-select")==="main"){
@@ -1069,6 +1130,8 @@
         window.AlezzOffline.remove(removal.getAttribute("data-offline-remove")).then(function(){render(true);toast("تم الحذف");}).catch(function(){toast("تعذّر الحذف","err");});
         return;
       }
+      var shareBtn=t.closest("[data-share]");
+      if(shareBtn){shareCurrent(shareBtn.getAttribute("data-share"),shareBtn.getAttribute("data-share-route"));return;}
       var playBtn = t.closest("[data-play]");
       if (playBtn) { playItem(findItem(playBtn.getAttribute("data-play"))); return; }
 
@@ -1107,7 +1170,12 @@
         var host = $("epList"), currentSeries = findItem(seriesKey);
         if (host && currentSeries && currentSeries.kind === "series") {
           currentSeries.seasons.forEach(function (season) {
-            if (season.id === sid) host.innerHTML = episodesHTML(season);
+            if (season.id === sid){
+              host.innerHTML=episodesHTML(season);
+              if($("episodeSearch"))$("episodeSearch").value="";
+              if($("episodeSearchEmpty"))$("episodeSearchEmpty").hidden=true;
+              filterVisibleEpisodes();
+            }
           });
         }
         return;
