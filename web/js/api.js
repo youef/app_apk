@@ -249,7 +249,7 @@
       return r.playback_mode === "stream" &&
         r.link_health_status === "healthy" &&
         r.status === "published" &&
-        !!(r.stream_url && /^https:\/\/[^\\s]+\\.(m3u8|mp4)(\\?[^\\s]*)?$/i.test(r.stream_url));
+        !!(r.stream_url && /^https:\/\/[^\s]+\.(m3u8|mp4)(\?[^\s]*)?$/i.test(r.stream_url));
     }).map(function (r) {
       var item = base("channel", r);
       item.live = true;
