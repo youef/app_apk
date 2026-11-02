@@ -29,6 +29,7 @@
   var youtubeFrame = null;
   var playbackToken = 0;
   var fitMode = Store.pref("videoFit", "contain") === "cover" ? "cover" : "contain";
+  var offlineLoadToken=0, autoSaveStartedFor="";
 
   function $(id) { return document.getElementById(id); }
 
@@ -338,10 +339,19 @@
       if (!options.restart && saved && saved.t > 5) current.resumeAt = saved.t;
 
       el.root.hidden = false;
+      var openToken=++offlineLoadToken;
       document.body.style.overflow = document.body.classList.contains("watch-route") ? "" : "hidden";
       updateFit();
-      startPlayback(current);
-
+      if(window.AlezzOffline && !current.live && !current.youtubeId){
+        window.AlezzOffline.resolve(item.key).then(function(url){
+          if(openToken!==offlineLoadToken || el.root.hidden)return;
+          if(url){
+            current.stream=url; current.variants=[]; current.youtubeId="";
+            current.offlineActive=true; current.offlinePermitted=false;
+          }
+          startPlayback(current);
+        }).catch(function(){if(openToken===offlineLoadToken&&!el.root.hidden)startPlayback(current);});
+      }else startPlayback(current);
       show("playerQuickNext", !!nextItem);
       show("youtubeNext", !!(nextItem && current.youtubeId));
       if (nextItem) {
@@ -354,6 +364,7 @@
     },
 
     close: function () {
+      offlineLoadToken++;
       persist(true);
       if (window.AlezzCast) window.AlezzCast.detach("player");
       if (window.AlezzKids && window.AlezzKids.stop) window.AlezzKids.stop();
@@ -679,7 +690,14 @@
     v.setAttribute("playsinline", "");
     v.setAttribute("x-webkit-airplay", "allow");
     v.addEventListener("timeupdate", function () { if (!scrubbing) updateScrub(); persist(false); updateNextPrompt(); });
-    v.addEventListener("playing", function () { show("playerSpinner", false); setPlayIcon(true); wake(); });
+    v.addEventListener("playing", function () {
+      show("playerSpinner",false);setPlayIcon(true);wake();
+      if(current&&!current.offlineActive&&current.offlinePermitted&&
+         autoSaveStartedFor!==current.key&&window.AlezzOffline){
+        autoSaveStartedFor=current.key;
+        window.AlezzOffline.maybeAutoSave(current);
+      }
+    });
     v.addEventListener("progress", updateScrub);
     v.addEventListener("pause", function () { setPlayIcon(false); setChromeIdle(false); });
     v.addEventListener("ended", function () {
