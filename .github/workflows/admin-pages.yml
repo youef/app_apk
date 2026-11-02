@@ -52,6 +52,7 @@ jobs:
           node tests/quality-picker-smoke.cjs
           node tests/importer-smoke.cjs
           node tests/bulk-domain-smoke.cjs
+          node tests/bulk-metadata-smoke.cjs
           node tests/studio-smoke.cjs
           node tests/channel-catalog-smoke.cjs
           node tests/live-page-smoke.cjs

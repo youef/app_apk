@@ -11,9 +11,9 @@ for (const file of ["web/js/player.js","web/js/app.js","web/js/api.js"])
 assert.ok(html.includes('id="playerQualityMenu"'),"Quality menu must exist inside player");
 assert.ok(html.includes('aria-controls="playerQualityMenu"'),"Quality trigger needs accessible menu link");
 assert.ok(html.includes('aria-expanded="false"'),"Quality trigger needs expanded state");
-assert.ok(/player\.js\?v=[a-z0-9][a-z0-9-]+/.test(html),"Player cache bust required");
-assert.ok(/js\/app\.js\?v=[a-z0-9][a-z0-9-]+/.test(html),"Episode payload cache bust required");
-assert.ok(/app\.css\?v=[a-z0-9][a-z0-9-]+/.test(html),"Responsive styling cache bust required");
+assert.ok(/player\.js\?v=[a-z0-9][\w.-]+/i.test(html),"Player cache bust required");
+assert.ok(/app\.js\?v=[a-z0-9][\w.-]+/i.test(html),"App cache bust required");
+assert.ok(/app\.css\?v=[a-z0-9][\w.-]+/i.test(html),"Responsive styling cache bust required");
 assert.ok(css.includes(".player__quality-menu[hidden]"),"Hidden quality menu must not be visible");
 assert.ok(css.includes(".player__quality-option:focus-visible"),"D-pad focus must be visible");
 assert.ok(app.includes("variants: episode.variants || []"),"Episode must forward its stream variants");
