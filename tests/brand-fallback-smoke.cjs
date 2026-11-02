@@ -11,7 +11,8 @@ const liveCss = read("web/css/live.css");
 
 assert(fs.statSync("web/alizz-tv-transparent.png").size > 0, "Brand image must exist");
 assert(!page.includes('src="assets/logo.svg"'), "All page branding must use the new logo");
-assert(page.includes('<link rel="icon" href="alizz-tv-transparent.png"'));
+assert(page.includes('<link rel="icon" href="assets/al-ezz-app-icon.svg"'),"Premium web favicon must use the app icon");
+assert(page.includes('<link rel="apple-touch-icon" href="alizz-tv-transparent.png"'),"Apple fallback icon must exist");
 assert(page.includes('brand__mark brand__mark--full'));
 assert(page.includes('class="footer__logo"'));
 assert(page.includes('class="gate__mark"'));
