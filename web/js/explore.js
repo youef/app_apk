@@ -48,7 +48,8 @@ function picker(list,active,section,categories){
  '<button type="button" '+attr+'="" class="browse-pill'+(!active?' is-on':'')+'">الكل</button>'+
  quick.map(function(x){return '<button type="button" '+attr+'="'+esc(x.id)+'" class="browse-pill'+(active===x.id?' is-on':'')+'">'+esc(x.label)+'</button>';}).join('');
  if(active&&!present) html+='<button type="button" class="browse-pill is-on" aria-current="true">'+esc(selected?selected.label:"محدد")+'</button>';
- html+='</div><details class="browse-advanced"><summary>فلاتر إضافية</summary><div class="browse-panel__controls">';
+ if(active) html+='<button type="button" '+attr+'="" class="browse-pill browse-pill--reset">إزالة التصفية ×</button>';
+ html+='</div><span class="browse-panel__count">'+count(list,active)+' من '+list.length+'</span><details class="browse-advanced"><summary>فلاتر إضافية</summary><div class="browse-panel__controls">';
  sections.forEach(function(g){
   var options=g.items.filter(function(x){return x.count>0||x.id===active;});
   if(!options.length)return;

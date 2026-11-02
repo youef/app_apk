@@ -187,3 +187,6 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible,.c
 @media(min-width:761px) and (max-width:1100px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.grid--wide{grid-template-columns:repeat(3,minmax(0,1fr))}.hero{height:360px}.nav__link{padding:8px 7px}}
 @media(max-height:480px) and (orientation:landscape){.app-dock{display:none!important}.view{padding-bottom:25px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+/* Preserve correct fullscreen crop mode from the shared player. */
+.player.is-cropped #video{object-fit:cover}
