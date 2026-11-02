@@ -189,6 +189,7 @@
     ]
   };
 
+  // Simplified channel editor: publication is automatic; RLS/admin identity still protect writes.
   var CHANNELS = {
     table: 'aseel_channels',
     label: 'القنوات',
@@ -196,22 +197,19 @@
     order: 'display_order.asc',
     fallbackOrder: 'title_ar.asc',
     searchKeys: ['title_ar', 'description'],
-    statusFilter: { field: 'status', options: [['', 'الكل'], ['published', 'منشور'], ['draft', 'مسودة']] },
-    publishGuard: true,
+    statusFilter: null,
+    publishGuard: false,
     fields: [
-      F.title_ar, F.description, F.category_id, F.poster_url,
-      F.stream_url, F.youtube_url, F.stream_variants, F.official_url, F.playback_mode,
-      F.language_code, F.country_code, F.age_rating, F.status,
-      F.rights_status, F.rights_holder, F.license_reference, F.rights_expires_at,
-      F.is_kids, F.display_order
+      Object.assign({}, F.title_ar, { required: true }),
+      Object.assign({}, F.poster_url, { required: true }),
+      Object.assign({}, F.stream_url, { required: true }),
+      Object.assign({}, F.category_id, { required: true })
     ],
     columns: [
       { key: 'poster_url', kind: 'poster', label: '' },
       { key: 'title_ar', kind: 'title', sub: 'description', label: 'القناة' },
       { key: 'category_id', kind: 'lookup', source: 'categories', label: 'التصنيف' },
-      { key: 'playback_mode', kind: 'map', map: { stream: 'بث مباشر', youtube_embed: 'يوتيوب', official_link: 'رابط رسمي' }, label: 'طريقة العرض' },
-      { key: 'rights_status', kind: 'map', map: { approved: 'حقوق معتمدة', pending: 'قيد المراجعة', rejected: 'مرفوض' }, label: 'الترخيص' },
-      { key: 'status', kind: 'status', label: 'الحالة' }
+      { key: 'link_health_status', kind: 'map', map: { healthy: 'شغّال', suspect: 'يحتاج فحص', broken: 'معطوب', unchecked: 'غير مفحوص' }, label: 'فحص الرابط' }
     ]
   };
 
