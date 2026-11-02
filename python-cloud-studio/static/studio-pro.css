@@ -1,0 +1,157 @@
+/* AL EZZ Studio 6 – responsive control surface, layered over v5 without breaking the existing UI. */
+:root{--bg:#080c14;--sidebar:#0b111e;--panel:#121c2b;--panel-light:#182438;--border:#2a3a50;--gold:#f0c77f;--muted:#a0adc0;--radius:19px}
+html{-webkit-text-size-adjust:100%;scroll-padding-top:90px}
+body{background:radial-gradient(ellipse at 72% -12%,#273348 0,transparent 46%),var(--bg);min-width:0}
+[hidden]{display:none!important}
+button,input,select,textarea{touch-action:manipulation}
+button,a,input,select,textarea{-webkit-tap-highlight-color:transparent}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #f0cb86;outline-offset:3px}
+button{transition:background-color .18s,border-color .18s,transform .18s}
+button:active:not(:disabled){transform:scale(.985)}
+.topbar{position:sticky;top:0;z-index:20;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);background:#0b121eea}
+.brand{margin-bottom:39px}.brand-symbol{border-radius:16px}
+.sidebar{border-left-color:#394252}.nav-link{min-height:50px}
+.nav-link.active{background:linear-gradient(90deg,#463525,#252434);border:1px solid #765634;color:#f6d6a0}
+.page{padding-bottom:55px}
+.heading-row{align-items:center}
+.heading-row h1{max-width:810px}
+.heading-actions{display:flex;gap:9px;flex-wrap:wrap}
+.stat-card{border:1px solid #2f3e54;box-shadow:0 10px 35px #03070d2e}
+.section-panel{box-shadow:0 13px 39px #03070e35}
+.section-head-main p,.batch-head p,.lead{color:#a2b0c4}
+.field-label{color:#d0d9e7}
+.field input,.field select,.field textarea,.episodes-toolbar input{color:#f5f7fa;caret-color:#ebc483}
+.primary-btn{box-shadow:0 9px 25px #bd864323}
+#activity{scroll-margin-top:92px}
+.section-title-row,#library,#episodes,#publish,#import,#librarySync{scroll-margin-top:92px}
+.section-title-row{align-items:center}
+.episodes-head{gap:13px}
+.episode-row{border-radius:11px;margin-block:3px;padding-inline:11px;background:#0d1826;border:1px solid #26374c}
+.episode-row:focus-within{border-color:#816545}
+.episode-row.expanded{border-color:#766041}
+.episode-identity input{width:100%}
+.episode-url{font-size:12px}
+.episode-row input[type=checkbox]{width:20px;height:20px;cursor:pointer}
+.episode-details{background:#101e30;border:1px solid #2e4057;border-radius:12px;padding:13px}
+.episode-tools{display:grid;gap:13px;padding:16px 2px;border-bottom:1px solid var(--border-soft)}
+.episode-tools-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.episode-metrics{display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:#a9b6ca;font-size:12px}
+.episode-metrics strong{color:#f5d29a;font:800 15px system-ui}
+.episode-filter-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.episode-filter{border:1px solid #324358;background:#192537;color:#c0cde0;min-height:40px;border-radius:30px;padding:8px 14px;font-size:12px;font-weight:800}
+.episode-filter[aria-pressed=true]{background:#4b392a;border-color:#a57c4b;color:#ffdfa7}
+.episode-select-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.episode-select-actions button{border-radius:9px;min-height:42px}
+.studio-edit-state{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:#a7b9ce;border:1px solid #344359;border-radius:12px;background:#192434;padding:10px 14px}
+.studio-edit-state[data-dirty=true]{color:#ffe0a0;border-color:#80603e;background:#35291f}
+.studio-edit-state:before{content:'●';color:#72caa5;font-size:10px}
+.studio-edit-state[data-dirty=true]:before{color:#eac27c}
+.studio-command-bar{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin:16px 0 6px;padding:15px 18px;background:linear-gradient(110deg,#19283a,#17202e);border:1px solid #3b4b61;border-radius:17px}
+.studio-command-bar .command-copy{display:grid;gap:2px}
+.studio-command-bar .command-copy strong{font-size:15px;color:#f7d299}
+.studio-command-bar .command-copy small{color:#99abc0;font-size:11px}
+.studio-command-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.studio-command-actions button{min-height:44px}
+.mobile-dock{display:none}
+.mobile-dock a{color:#9aaac0;text-decoration:none}
+.mobile-dock a[aria-current=page]{color:#f6d093}
+.studio-help{background:#121f31;border:1px solid #34455e;padding:14px 16px;border-radius:14px;margin:18px 0;color:#aebed3;font-size:12px;line-height:1.9}
+.studio-help summary{font-weight:800;color:#edc889;cursor:pointer;list-style-position:inside}
+.studio-help p{margin:8px 0}
+#serverHealthText{font-size:11px;color:#8bdbb8}
+#serverHealthText.is-bad{color:#f2a3ab}
+@media(min-width:1021px){.page{padding-inline:clamp(25px,3.2vw,50px)}}
+@media(max-width:1020px) and (min-width:741px){
+ .studio-command-bar{align-items:start}
+ .episode-filter-row{overflow-x:auto;flex-wrap:nowrap;padding:2px 0 6px;scrollbar-width:thin}
+}
+@media(max-width:740px){
+ html{scroll-padding-top:75px}
+ body{overscroll-behavior-y:contain}
+ .sidebar{z-index:80;padding-top:max(27px,env(safe-area-inset-top))}
+ .topbar{height:62px;padding:0 13px;gap:6px}
+ .breadcrumbs{gap:6px;min-width:0;font-size:12px}
+ .breadcrumbs>span:not(.crumb-chevron){display:none}
+ .breadcrumbs strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .top-actions{gap:5px}
+ .top-actions form{display:none!important}
+ .icon-btn{font-size:18px}
+ .account-btn{padding:6px}
+ .account-btn #accountText{font-size:11px}
+ .page{padding:20px 13px calc(106px + env(safe-area-inset-bottom));width:100%;overflow:clip}
+ .heading-row{display:grid;gap:12px}
+ .heading-row h1{font-size:clamp(28px,6.9vw,39px);line-height:1.24}
+ .heading-actions{width:100%;display:flex}
+ .heading-row .outline-action{font-size:12px;flex:1;min-height:46px;padding:10px}
+ .heading-row .outline-action span{font-size:17px}
+ .quick-stats{margin:20px 0;gap:9px}
+ .stat-card{min-height:126px;padding:14px}
+ .stat-number{font-size:clamp(26px,8vw,36px)}
+ .section-panel{border-radius:16px}
+ .section-head{align-items:start}
+ .section-count{width:39px;height:39px;flex:none}
+ .source-form{margin-top:19px}
+ .action-row .primary-btn,.action-row .secondary-btn{flex:1}
+ .batch-toolbar button{min-height:50px}
+ .library-sync{margin:15px 0}
+ .library-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+ .library-actions button{width:100%;white-space:normal;min-height:51px}
+ .library-actions #libraryStart,.library-actions #librarySave{grid-column:1/-1}
+ .library-counters{display:grid;grid-template-columns:1fr 1fr}
+ .library-counters span{min-width:0}
+ .library-work-list{grid-template-columns:1fr;max-height:440px}
+ .preview-card{max-height:186px}
+ .poster-art{height:186px;width:125px}
+ .metadata-panel{padding:17px}
+ .preview-grid{gap:12px}
+ .meta-form{grid-template-columns:1fr}
+ .meta-form .wide{grid-column:auto}
+ .meta-form .field{min-width:0}
+ .section-title-row{margin-top:29px}
+ .section-title-row h2{font-size:22px}
+ .inline-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+ .inline-actions button{width:100%;white-space:normal;min-height:43px}
+ .inline-actions #verifyAllBtn{grid-column:1/-1}
+ .media-panel{padding:0 11px 15px}
+ .episode-tools{padding:15px 2px}
+ .episode-filter-row{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:7px}
+ .episode-filter-row::-webkit-scrollbar{display:none}
+ .episode-filter{flex:none;white-space:nowrap;min-height:44px}
+ .episode-select-actions{display:grid;grid-template-columns:1fr 1fr}
+ .episode-select-actions button{min-height:44px}
+ .episodes-head{gap:8px}
+ .episodes-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px}
+ .episodes-toolbar input{width:100%;min-width:0;height:45px}
+ .season-tab{min-height:44px}
+ .episode-list{gap:10px;padding:10px 0}
+ .episode-row{display:grid;grid-template-columns:26px 48px minmax(0,1fr) auto;column-gap:9px;row-gap:9px;padding:12px;align-items:center;margin:0}
+ .episode-poster{width:47px;height:62px}
+ .episode-identity input{font-size:14px}
+ .episode-identity small{font-size:11px}
+ .episode-url{grid-column:2/-1;grid-row:2;font-size:14px;height:43px}
+ .media-badge{grid-column:3;grid-row:3;justify-self:start;min-width:0;font-size:11px}
+ .row-info{grid-column:4;grid-row:1;width:38px;height:38px;font-size:19px}
+ .episode-details{grid-column:1/-1;grid-row:4}
+ .episode-details label{grid-column:1/-1!important}
+ .episodes-foot{gap:11px}
+ .episodes-foot #verifySelectedBtn{width:100%;min-height:45px}
+ .publish-panel,.sync-panel{padding:17px}
+ .mode-switch span{font-size:12px;line-height:1.5}
+ .studio-command-bar{padding:14px;gap:12px}
+ .studio-command-actions{display:grid;grid-template-columns:1fr 1fr;width:100%}
+ .studio-command-actions button{font-size:12px;white-space:normal}
+ .mobile-dock{position:fixed;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));inset:auto 0 0;bottom:0;z-index:70;padding:8px 8px max(10px,env(safe-area-inset-bottom));background:#101827f2;border-top:1px solid #37465c;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 -9px 35px #03060e78}
+ .mobile-dock a{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;min-height:55px;font-size:10px;font-weight:800;border-radius:12px;white-space:nowrap}
+ .mobile-dock a[aria-current=page]{background:#47372766}
+ .mobile-dock .dock-icon{font-size:23px;line-height:1.1}
+ .toast-area{bottom:calc(91px + env(safe-area-inset-bottom));left:10px;right:10px;width:auto}
+ .modal-backdrop{padding:10px;align-items:flex-end}
+ .modal{width:100%;max-height:calc(100dvh - env(safe-area-inset-top) - 18px);border-radius:22px 22px 12px 12px;padding:23px 18px calc(18px + env(safe-area-inset-bottom))}
+ .modal textarea{font-size:16px}
+ .field input,.field select,.field textarea,.episodes-toolbar input,.episode-row input,.episode-row textarea,.modal input,.modal textarea{font-size:16px!important}
+ .movie-media-form{display:grid;grid-template-columns:1fr}
+ .movie-media-form button{width:100%}
+ .footer{margin-top:30px}
+}
+@media(max-width:390px){.mobile-dock a{font-size:9px}.page{padding-inline:10px}.episode-row{grid-template-columns:23px 41px minmax(0,1fr) auto;padding:9px;column-gap:6px}.episode-poster{width:40px;height:55px}.account-btn #accountText{display:none}.studio-command-actions{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important}}
