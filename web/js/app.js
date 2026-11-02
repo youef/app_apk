@@ -655,6 +655,47 @@
     }).join("");
   }
 
+  function showUnavailableEpisodes(item) {
+    if (!item || item.kind !== "series") return;
+    var panel = $("sheetPanel"), host = panel && panel.querySelector(".detail__body");
+    if (!host) return;
+    var section = document.createElement("section");
+    section.className = "eps eps--outline";
+    section.innerHTML = '<h3>بيانات بقية الحلقات</h3><p class="search__hint">جارٍ تحميل تفاصيل الحلقات...</p>';
+    host.appendChild(section);
+    var seen = {};
+    (item.seasons || []).forEach(function(season) {
+      (season.episodes || []).forEach(function(ep) { seen[season.number + ":" + ep.number] = true; });
+    });
+    fetch(CFG.supabaseUrl + "/functions/v1/aseel-series-outline?series_id=" + encodeURIComponent(item.id), {
+      headers: { apikey: CFG.publishableKey, Accept: "application/json" },
+      cache: "no-store"
+    }).then(function(response) {
+      if (!response.ok) throw Error("Metadata not available");
+      return response.json();
+    }).then(function(data) {
+      if (!section.parentNode || $("sheet").hidden || !Array.isArray(data.seasons)) return;
+      var parts = [];
+      data.seasons.forEach(function(season) {
+        var eps = (season.episodes || []).filter(function(ep) {
+          return !seen[season.number + ":" + ep.number];
+        });
+        if (!eps.length) return;
+        parts.push('<h4>' + esc(season.title || "الموسم " + season.number) + '</h4>');
+        eps.forEach(function(ep) {
+          parts.push('<article class="outline-episode"><strong>' + esc(ep.title || "الحلقة " + ep.number) +
+            '</strong><p>' + esc(ep.description || "تتوفر بيانات الحلقة، لكن التشغيل لم يُعتمد بعد.") +
+            '</p><small>التشغيل غير متاح حاليًا</small></article>');
+        });
+      });
+      if (!parts.length) { section.remove(); return; }
+      section.innerHTML = '<h3>حلقات لم يكتمل تشغيلها</h3>' + parts.join("");
+    }).catch(function() {
+      if (section.parentNode) section.innerHTML =
+        '<h3>بيانات الحلقات</h3><p class="search__hint">تعذر تحميل تفاصيل الحلقات الآن.</p>';
+    });
+  }
+
   function openDetail(key) {
     var item = findItem(key);
     if (!item) { toast("هذا العنصر لم يعد متوفرًا", "err"); return; }
@@ -666,6 +707,7 @@
     $("sheetPanel").scrollTop = 0;
     var closeBtn = sheet.querySelector("[data-close-sheet]");
     if (closeBtn) closeBtn.focus({ preventScroll: true });
+    if (item.kind === "series") showUnavailableEpisodes(item);
   }
 
   function closeDetail() {
