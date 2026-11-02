@@ -54,6 +54,25 @@ public final class CinemaPlayerActivity extends Activity {
     private int requestToken=0;
     private String lastSourceHint="";
     private ExoPlayer engine;
+    private boolean kidsPlayback=false;
+    private int kidsAge=6,kidsMinutes=60;
+    private final Runnable kidsClock=new Runnable(){public void run(){
+        if(!kidsPlayback||isFinishing())return;
+        if(engine!=null&&engine.isPlaying()){
+            java.text.SimpleDateFormat fmt=new java.text.SimpleDateFormat("yyyy-MM-dd",java.util.Locale.US);
+            String today=fmt.format(new java.util.Date());
+            String key="watched_"+kidsAge+"_"+today;
+            android.content.SharedPreferences pref=getSharedPreferences("alezz_kids",MODE_PRIVATE);
+            int seconds=pref.getInt(key,0)+1;
+            pref.edit().putInt(key,seconds).apply();
+            if(seconds>=kidsMinutes*60){
+                engine.pause();
+                if(status!=null)status.setText("انتهى وقت المشاهدة اليوم. يمكنك العودة غدًا.");
+                finish();return;
+            }
+        }
+        handler.postDelayed(this,1000L);
+    }};
     private PlayerView surface;
     private TextView status,title,details;
     private Button playButton,qualityButton,backButton,externalButton;
@@ -142,6 +161,9 @@ public final class CinemaPlayerActivity extends Activity {
         itemId=intent.getStringExtra("item_id");if(itemId==null)itemId="";
         itemTitle=intent.getStringExtra("title");if(itemTitle==null)itemTitle="العز TV";
         live=intent.getBooleanExtra("is_live",false);
+        kidsPlayback=intent.getBooleanExtra("kids_mode",false);
+        kidsAge=intent.getIntExtra("kids_age",6);
+        kidsMinutes=intent.getIntExtra("kids_minutes",60);
         if(live){
             try{
                 JSONArray list=new JSONArray(intent.getStringExtra("channel_playlist")==null
@@ -585,7 +607,12 @@ public final class CinemaPlayerActivity extends Activity {
         }
         return super.onKeyDown(code,event);
     }
+    @Override protected void onResume(){
+        super.onResume();
+        if(kidsPlayback){handler.removeCallbacks(kidsClock);handler.postDelayed(kidsClock,1000L);}
+    }
     @Override protected void onPause(){
+        handler.removeCallbacks(kidsClock);
         handler.removeCallbacks(autoHide);
         handler.removeCallbacks(commitRemoteNumber);
         if(engine!=null){
