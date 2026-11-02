@@ -1,0 +1,68 @@
+/* Al Ezz TV — standalone kids world, RTL and TV-remote friendly */
+.kids-world-active .view{background:radial-gradient(ellipse at 20% 0,rgba(53,71,128,.20),transparent 55%);padding-bottom:110px}
+.kid-world{padding:20px var(--pad-x) 55px;max-width:1720px;margin:auto}
+.kid-world__banner{position:relative;overflow:hidden;background:linear-gradient(120deg,#102a49,#222040 68%,#483050);
+ border:1px solid rgba(152,195,255,.25);border-radius:25px;padding:clamp(28px,5vw,64px)}
+.kid-world__banner:after{content:"★";position:absolute;left:7%;top:-40px;font-size:220px;opacity:.06;pointer-events:none}
+.kid-world__banner>span{color:#ffdc9e;font-size:12px;font-weight:900;letter-spacing:1px}
+.kid-world__banner h1{font-size:clamp(33px,5vw,61px);line-height:1.2;margin:12px 0}
+.kid-world__banner p{font-size:clamp(13px,1.5vw,16px);line-height:1.8;color:#e4e9f9;max-width:670px}
+.kid-world__banner small{display:inline-block;padding:8px 14px;border-radius:50px;background:#ffffff14;color:#d0e7ff}
+.kid-world__profile-heading{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;margin:26px 0 12px}
+.kid-world__profile-heading h2{font-size:22px;margin:0}.kid-world__profile-heading span{font-size:12px;color:#afb9d3}
+.kid-world__profiles{display:flex;gap:12px;overflow-x:auto;padding:3px 3px 12px}
+.kid-profile{display:flex;flex:1 0 120px;max-width:185px;min-height:132px;flex-direction:column;align-items:center;justify-content:center;
+ gap:5px;background:#182237;color:#fff;border:2px solid #354869;border-radius:20px;padding:15px;transition:.2s}
+.kid-profile>span{font-size:37px}.kid-profile strong{font-size:17px}.kid-profile small{font-size:12px;color:#c4cee5}
+.kid-profile.is-selected,.kid-profile:focus-visible{border-color:#ffdc96;background:#31324e;outline:none}
+.kid-profile:hover{transform:translateY(-3px)}
+.kid-world__clock{display:flex;align-items:center;flex-wrap:wrap;gap:20px;padding:18px 22px;border-radius:19px;
+ border:1px solid #365668;background:#122431;margin:20px 0}
+.kid-world__clock div:first-child{display:flex;flex-direction:column;gap:4px;min-width:210px}
+.kid-world__clock small{font-size:12px;color:#8ed6cc}.kid-world__clock h2{font-size:21px;margin:0}
+.kid-world__clock span{font-size:12px;color:#bbc5d8}
+.kid-world__clock button,.kid-world__filters button{border-radius:12px;padding:11px 15px;color:#ecf2ff;
+ background:#263651;border:1px solid #4b6482;font-weight:800}
+.kid-world__progress{height:11px;min-width:125px;max-width:310px;flex:1;background:#374359;border-radius:20px;overflow:hidden}
+.kid-world__progress i{display:block;height:100%;border-radius:20px;background:linear-gradient(90deg,#7fd9c2,#ffdb8c)}
+.kid-world__search{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px}
+.kid-world__search h2{margin:0;font-size:24px}
+.kid-world__search input,.kid-world__form input,.kid-world__form select,.kid-world__settings select{
+ background:#151f31;color:#fff;padding:12px 14px;min-height:46px;border:1px solid #536a89;border-radius:12px;font:inherit;max-width:100%}
+.kid-world__search input{width:min(100%,350px)}
+.kid-world__filters{display:flex;flex-wrap:wrap;gap:8px;margin:19px 0 25px}
+.kid-world__filters button.active,.kid-world__filters button:focus-visible{background:#ffdc96;color:#24233d;border-color:#ffdc96}
+.kid-shelf{margin:25px 0}.kid-shelf>header{display:flex;align-items:baseline;flex-wrap:wrap;gap:15px;margin-bottom:14px}
+.kid-shelf h2{margin:0;font-size:22px}.kid-shelf header p{font-size:12px;color:#abb6d0;margin:0}
+.kid-shelf__track{display:flex;gap:13px;overflow-x:auto;padding:4px 3px 15px;scrollbar-width:thin}
+.kid-shelf__track .kid-card{flex:0 0 clamp(160px,18vw,240px)}
+.kid-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:15px}
+.kid-card{display:flex;flex-direction:column;gap:7px;text-align:right;background:#172138;color:#f4f5ff;border:2px solid transparent;
+ border-radius:17px;padding:8px;overflow:hidden;min-width:0;transition:transform .2s,border-color .2s}
+.kid-card:hover,.kid-card:focus-visible{border-color:#ffdc96;outline:none;transform:translateY(-3px)}
+.kid-card__image{width:100%;aspect-ratio:16/10;border-radius:12px;overflow:hidden;background:#2f3e5c;display:grid;place-items:center}
+.kid-card__image img{width:100%;height:100%;object-fit:cover}.kid-card__image b{font-size:44px;color:#ffdc96}
+.kid-card strong{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kid-card small{color:#b7c5dc;font-size:12px;margin-bottom:3px}
+.kid-world__expired,.kid-world__empty{padding:25px;border:1px solid #5b648b;background:#25253f;
+ border-radius:18px;color:#efe9ff;margin:20px 0}
+.kid-world__parent{margin-top:35px;padding:23px;border-radius:22px;border:1px solid #39495f;background:#111927}
+.kid-world__parent>h2{font-size:21px;margin:0}.kid-world__parent>p{font-size:13px;color:#a9b5c9;line-height:1.8}
+.kid-world__form{display:grid;grid-template-columns:minmax(140px,2fr) repeat(2,minmax(110px,1fr)) auto;align-items:end;gap:12px}
+.kid-world__form label,.kid-world__settings label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700}
+.kid-world__form button,.kid-world__settings button{border:1px solid #ffdb93;background:#ffdb93;color:#2b2230;
+ padding:11px 17px;min-height:46px;font-weight:800;border-radius:12px}
+.kid-world__form button:disabled{opacity:.4}
+.kid-world__settings{display:flex;flex-wrap:wrap;align-items:center;gap:17px;padding:20px 0 0;border-top:1px solid #39495f;margin-top:18px}
+.kid-world__settings label:has(input[type=checkbox]){flex-direction:row;align-items:center}
+.kid-world__settings input[type=checkbox]{width:20px;height:20px}
+.kid-world__settings button:last-child{background:#36232d;color:#ffc1c7;border-color:#68404c}
+@media(max-width:880px){.kid-world__form{grid-template-columns:1fr 1fr}.kid-world__form label:first-child{grid-column:1/-1}}
+@media(max-width:620px){.kid-world{padding:12px 12px 85px}.kid-world__banner{padding:25px 17px}
+.kid-world__banner:after{left:0;font-size:120px;top:3px}.kid-world__clock{padding:15px;gap:12px}
+.kid-world__clock h2{font-size:18px}.kid-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.kid-world__parent{padding:15px}.kid-world__form{grid-template-columns:1fr}
+.kid-world__form label:first-child{grid-column:auto}.kid-shelf__track .kid-card{flex-basis:160px}
+.kid-world__profile-heading h2{font-size:19px}.kid-profile{min-height:112px;min-width:104px}}
+body.tv-mode .kid-card:focus-visible,body.tv-mode .kid-profile:focus-visible,body.tv-mode .kid-world__filters button:focus-visible{
+ outline:4px solid #ffdd95;outline-offset:3px}
