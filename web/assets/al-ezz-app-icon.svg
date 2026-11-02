@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="العز TV">
+<defs><linearGradient id="back" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#202432"/><stop offset=".55" stop-color="#0A0E17"/><stop offset="1" stop-color="#050609"/></linearGradient><linearGradient id="gold" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#FFF0BB"/><stop offset=".43" stop-color="#EBC77D"/><stop offset="1" stop-color="#B97B30"/></linearGradient><linearGradient id="screen" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#19243B"/><stop offset="1" stop-color="#0A101B"/></linearGradient><filter id="glow"><feGaussianBlur stdDeviation="13"/></filter></defs>
+<rect width="512" height="512" rx="116" fill="url(#back)"/>
+<circle cx="400" cy="115" r="110" fill="#EBC77D" opacity=".10" filter="url(#glow)"/>
+<rect x="71" y="116" width="370" height="276" rx="67" fill="#04060A" stroke="#6F5631" stroke-width="6"/>
+<rect x="84" y="129" width="344" height="250" rx="54" fill="url(#screen)" stroke="url(#gold)" stroke-width="13"/>
+<path d="M174 210 Q174 182 210 182 H305 Q332 182 332 210 V282 Q332 307 307 307 H210 Q174 307 174 276 Z" fill="url(#gold)"/>
+<path d="M229 202 L229 291 L303 246.5 Z" fill="#101720"/>
+<path d="M219 399 H293" stroke="url(#gold)" stroke-width="15" stroke-linecap="round"/>
+<circle cx="396" cy="159" r="10" fill="#FFDC9A"/>
+</svg>
