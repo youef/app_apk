@@ -240,8 +240,8 @@
          ...(url?{stream_url:url,stream_variants:check?.variants||[]}:{}),
          ...(source?{source_id:source}:{})};
        if(existing){
-         if(publication)Object.assign(data,playable?
-           {status:"published",rights_status:"approved",license_reference:license}:{status:"published"});
+         if(publication&&playable)Object.assign(data,{status:"published",rights_status:"approved",license_reference:license});
+         else if(publication)Object.assign(data,{status:"published"});
          await patch("aseel_episodes",existing.id,data);updated++;duplicate++;
        }else{
          await insert("aseel_episodes",{season_id:season.id,number:Number(item.number),...data,
