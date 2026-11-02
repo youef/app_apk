@@ -15,7 +15,7 @@
     series: "id,title_ar,title_original,description,poster_url,backdrop_url,release_year,category_id,quality,is_kids,age_rating,featured,display_order,status,rights_status,rights_holder,license_reference,country_code,language_code",
     seasons: "id,series_id,number,title_ar",
     episodes: "id,season_id,number,title_ar,description,poster_url,duration_minutes,stream_url,stream_variants,youtube_url,status,rights_status",
-    channels: "id,title_ar,description,poster_url,stream_url,category_id,is_kids,country_code,language_code,youtube_url,playback_mode,official_url,age_rating,display_order",
+    channels: "id,title_ar,description,poster_url,stream_url,category_id,is_kids,country_code,language_code,youtube_url,playback_mode,age_rating,display_order",
     youtube: "id,youtube_url,title_ar,channel_name,language_code,topic,age_rating,is_kids,sort_order,status",
     collections: "id,title_ar,slug,description,display_order,is_active",
     collection_items: "id,collection_id,movie_id,series_id,channel_id,episode_id,display_order"
@@ -239,11 +239,16 @@
       s.episodeCount = s.seasons.reduce(function (n, season) { return n + season.episodes.length; }, 0);
     });
 
-    var channels = (raw.channels || []).map(function (r) {
+    // Only playable stream channels belong in the viewer; legacy official-link
+    // placeholders are retained in the database but never shown as broadcasts.
+    var channels = (raw.channels || []).filter(function (r) {
+      return r.playback_mode !== "official_link" &&
+        !!(r.stream_url && /^https:\/\//i.test(r.stream_url));
+    }).map(function (r) {
       var item = base("channel", r);
       item.live = true;
-      item.playback = r.playback_mode || "stream";
-      item.official = r.official_url || null;
+      item.playback = "stream";
+      item.official = null;
       return item;
     });
 
