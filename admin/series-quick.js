@@ -1,0 +1,260 @@
+/* AL EZZ TV — Quick Series Studio. Admin-only atomic RPC, no service-role keys. */
+(function(){
+"use strict";
+var cfg=window.ALEZZ_ADMIN_CONFIG;
+var $=function(id){return document.getElementById(id);};
+var session=null, series=[], existingSeasons=[], existingEpisodeMax={}, groups=[], activeSeason=1, saving=false;
+var urlPattern=/^https:\/\/[^\s]+\.(m3u8|mp4)(\?[^\s]*)?$/i;
+var qualities=["AUTO","SD","HD","FHD","4K","480P","720P","1080P","2160P"];
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+function message(text,error){
+ var node=$("result");node.className="result"+(error?" error":"");node.textContent=text;
+ if(error)node.scrollIntoView({behavior:"smooth",block:"center"});
+}
+function gateError(text){
+ $("loading").classList.add("hidden");$("authError").classList.remove("hidden");
+ $("authError").textContent=text+" — افتح لوحة الإدارة وسجّل الدخول ثم عُد لهذه الصفحة.";
+}
+function readSession(){
+ try{var v=JSON.parse(localStorage.getItem(cfg.storagePrefix+"session")||"null");
+ return v&&v.access_token&&v.refresh_token?v:null;}catch(e){return null;}
+}
+async function refresh(){
+ if(!session||!session.refresh_token)return false;
+ var res=await fetch(cfg.supabaseUrl+"/auth/v1/token?grant_type=refresh_token",{
+ method:"POST",headers:{"apikey":cfg.publishableKey,"Content-Type":"application/json"},
+ body:JSON.stringify({refresh_token:session.refresh_token})});
+ if(!res.ok)return false;
+ var data=await res.json();
+ if(!data.access_token)return false;
+ session=Object.assign({},session,{
+ access_token:data.access_token,
+ refresh_token:data.refresh_token||session.refresh_token,
+ expires_at:Date.now()+(Number(data.expires_in)||3600)*1000
+ });
+ localStorage.setItem(cfg.storagePrefix+"session",JSON.stringify(session));
+ return true;
+}
+async function rest(path,options,attempt){
+ options=options||{};attempt=attempt||0;
+ var res=await fetch(cfg.supabaseUrl+"/rest/v1/"+path,{
+ method:options.method||"GET",
+ cache:"no-store",
+ headers:{"apikey":cfg.publishableKey,"Authorization":"Bearer "+session.access_token,
+ "Content-Type":"application/json","Prefer":"return=representation"},
+ body:options.body===undefined?undefined:JSON.stringify(options.body)});
+ if(res.status===401&&attempt===0&&await refresh())return rest(path,options,1);
+ var content=await res.text(),body=null;
+ try{body=content?JSON.parse(content):null;}catch(e){body=content;}
+ if(!res.ok)throw new Error((body&&body.message)||"HTTP "+res.status);
+ return body;
+}
+async function verifyAdmin(){
+ if(!session||!session.access_token)throw new Error("لم يتم العثور على جلسة");
+ if(session.expires_at&&Date.now()>session.expires_at-60000 && !await refresh())
+ throw new Error("انتهت الجلسة");
+ var me=await fetch(cfg.supabaseUrl+"/auth/v1/user",{
+ headers:{"apikey":cfg.publishableKey,"Authorization":"Bearer "+session.access_token}});
+ if(!me.ok)throw new Error("سجّل الدخول من جديد");
+ var user=await me.json();
+ if(!user.id)throw new Error("حساب غير صالح");
+ var list=await rest("aseel_admins?select=user_id,active&user_id=eq."+encodeURIComponent(user.id)+"&limit=1");
+ if(!Array.isArray(list)||!list.some(function(a){return a.active&&a.user_id===user.id;}))
+ throw new Error("الحساب لا يملك صلاحية الإدارة");
+}
+function groupBySeason(number){
+ return groups.filter(function(g){return g.season===number;})[0]||null;
+}
+function nextEpisode(number){
+ var g=groupBySeason(number),m=Number(existingEpisodeMax[number])||0;
+ if(g)g.episodes.forEach(function(e){m=Math.max(m,e.number||0);});
+ return m+1;
+}
+function startGroup(number){
+ var g=groupBySeason(number);
+ if(!g){
+  g={season:number,episodes:[{number:nextEpisode(number),url:"",quality:"HD"}]};
+  groups.push(g);
+ }
+ activeSeason=number;render();
+}
+function addEpisode(){
+ var g=groupBySeason(activeSeason);
+ if(!g){startGroup(activeSeason);return;}
+ g.episodes.push({number:nextEpisode(activeSeason),url:"",quality:"HD"});render();
+}
+function addSeason(){
+ var mx=0;
+ groups.forEach(function(g){mx=Math.max(mx,g.season);});
+ existingSeasons.forEach(function(se){mx=Math.max(mx,se.number);});
+ if(mx>=50){message("الحد الأقصى 50 موسمًا.",true);return;}
+ startGroup(mx+1);
+}
+function updateExistingSeasons(){
+ var wrap=$("existingSeasonWrap"),list=$("existingSeasonSelect");
+ if(!$("seriesSelect").value ||!existingSeasons.length){wrap.classList.add("hidden");return;}
+ wrap.classList.remove("hidden");
+ list.replaceChildren();
+ existingSeasons.forEach(function(se){
+ var opt=document.createElement("option");opt.value=String(se.number);
+ opt.textContent="الموسم "+se.number+" — بعد الحلقة "+(existingEpisodeMax[se.number]||0);
+ list.append(opt);
+ });
+ list.value=String(activeSeason);
+}
+function render(){
+ var host=$("seasonGroups");host.replaceChildren();
+ groups.sort(function(a,b){return a.season-b.season;});
+ groups.forEach(function(g){
+ var card=document.createElement("section");
+ card.className="season";card.dataset.season=g.season;
+ card.style.borderColor=g.season===activeSeason?"#e8c367":"#49516a";
+ var rows=g.episodes.map(function(e,i){
+ var qOptions=qualities.map(function(q){return '<option value="'+q+'"'+(e.quality===q?' selected':'')+'>'+esc(q)+'</option>';}).join("");
+ return '<div class="episode" data-season="'+g.season+'" data-index="'+i+'">'+
+ '<span class="episode-label">الحلقة '+e.number+'</span>'+
+ '<label>رابط التشغيل<input data-field="url" type="url" value="'+esc(e.url)+'" placeholder="https://…/episode.m3u8" required></label>'+
+ '<label>الجودة<select data-field="quality">'+qOptions+'</select></label>'+
+ '<button class="danger" data-remove-episode="'+i+'" type="button" aria-label="حذف الحلقة '+e.number+'">حذف</button>'+
+ '</div>';
+ }).join("");
+ card.innerHTML='<div class="season-head"><h3>الموسم '+g.season+'</h3>'+
+ '<div class="actions"><button class="ghost" data-activate="'+g.season+'" type="button">'+
+ (g.season===activeSeason?"الموسم الحالي":"إضافة حلقات هنا")+'</button>'+
+ '<button class="danger" data-remove-season="'+g.season+'" type="button">إزالة من الدفعة</button></div></div>'+rows;
+ host.append(card);
+ });
+ updateCounter();
+ updateExistingSeasons();
+}
+function updateCounter(){
+ var n=groups.reduce(function(total,g){return total+g.episodes.length;},0);
+ $("counter").textContent=groups.length+" موسم في الدفعة • "+n+" حلقة";
+}
+async function loadSeries(){
+ series=await rest("aseel_series?select=id,title_ar&order=title_ar.asc&limit=700");
+ var select=$("seriesSelect"),selected=select.value;
+ select.replaceChildren();
+ var op=document.createElement("option");op.value="";op.textContent="+ مسلسل جديد";select.append(op);
+ series.forEach(function(s){var o=document.createElement("option");o.value=s.id;o.textContent=s.title_ar;select.append(o);});
+ select.value=selected&&series.some(function(s){return s.id===selected;})?selected:"";
+}
+async function loadExisting(){
+ existingSeasons=[];existingEpisodeMax={};groups=[];activeSeason=1;
+ var id=$("seriesSelect").value;
+ $("seriesTitleWrap").classList.toggle("hidden",!!id);
+ $("seriesTitle").disabled=!!id;
+ if(id){
+  existingSeasons=await rest("aseel_seasons?select=id,number&series_id=eq."+encodeURIComponent(id)+"&order=number.asc&limit=100");
+  if(existingSeasons.length){
+   var ids=existingSeasons.map(function(x){return x.id;});
+   var episodes=await rest("aseel_episodes?select=season_id,number&season_id=in.("+ids.join(",")+")&limit=3000");
+   existingSeasons.forEach(function(se){existingEpisodeMax[se.number]=0;});
+   episodes.forEach(function(ep){
+    var se=existingSeasons.filter(function(x){return x.id===ep.season_id;})[0];
+    if(se)existingEpisodeMax[se.number]=Math.max(existingEpisodeMax[se.number]||0,ep.number||0);
+   });
+   activeSeason=existingSeasons[existingSeasons.length-1].number;
+  }
+  $("seriesHint").textContent="اختر الموسم الحالي أو أضف موسمًا جديدًا. ستُضاف الحلقات بأرقام تالية للحلقات الموجودة دون تكرار.";
+ }else{
+  $("seriesHint").textContent="اكتب اسم مسلسل جديد، ثم ألصق روابط الحلقات. لا تحتاج إلى تعبئة وصف أو صور أو أرقام حلقات.";
+ }
+ startGroup(activeSeason);updateExistingSeasons();
+}
+function wire(){
+ $("seriesSelect").addEventListener("change",function(){loadExisting().catch(function(e){message(e.message,true);});});
+ $("existingSeasonSelect").addEventListener("change",function(){
+  var n=Number(this.value);
+  if(n>0)startGroup(n);
+ });
+ $("addSeason").addEventListener("click",addSeason);
+ $("addEpisode").addEventListener("click",addEpisode);
+ $("seasonGroups").addEventListener("input",function(ev){
+  var row=ev.target.closest(".episode");if(!row)return;
+  var g=groupBySeason(Number(row.dataset.season)),e=g&&g.episodes[Number(row.dataset.index)];
+  if(e&&ev.target.dataset.field)e[ev.target.dataset.field]=ev.target.value;
+ });
+ $("seasonGroups").addEventListener("change",function(ev){
+  var row=ev.target.closest(".episode");if(!row)return;
+  var g=groupBySeason(Number(row.dataset.season)),e=g&&g.episodes[Number(row.dataset.index)];
+  if(e&&ev.target.dataset.field)e[ev.target.dataset.field]=ev.target.value;
+ });
+ $("seasonGroups").addEventListener("click",function(ev){
+  var btn=ev.target.closest("button");if(!btn)return;
+  var n=btn.dataset.activate,rem=btn.dataset.removeSeason,idx=btn.dataset.removeEpisode;
+  if(n){activeSeason=Number(n);render();return;}
+  if(rem){groups=groups.filter(function(g){return g.season!==Number(rem);});
+   if(!groups.length)startGroup(Number(rem));else{activeSeason=groups[groups.length-1].season;render();}
+   return;
+  }
+  if(idx!==undefined){
+   var card=btn.closest(".season"),g=groupBySeason(Number(card.dataset.season));
+   if(g){g.episodes.splice(Number(idx),1);if(!g.episodes.length){g.episodes.push({number:nextEpisode(g.season),url:"",quality:"HD"});}
+    render();}
+  }
+ });
+ $("addBulk").addEventListener("click",function(){
+  var input=$("bulkLinks").value.trim();
+  if(!input){message("الصق روابط الحلقات أولًا.",true);return;}
+  var lines=input.split(/\r?\n/).map(function(x){return x.trim();}).filter(Boolean);
+  if(lines.length>150){message("الحد الأقصى 150 حلقة للدفعة.",true);return;}
+  var group=groupBySeason(activeSeason);
+  if(!group){startGroup(activeSeason);group=groupBySeason(activeSeason);}
+  if(group.episodes.length===1&&!group.episodes[0].url)group.episodes=[];
+  var standard=$("bulkQuality").value;
+  for(var i=0;i<lines.length;i++){
+   var pair=lines[i].split("|"),url=pair[0].trim(),qual=(pair[1]||standard).trim().toUpperCase();
+   if(!urlPattern.test(url)||qualities.indexOf(qual)<0){message("السطر "+(i+1)+" يحتوي على رابط أو جودة غير صالحة.",true);return;}
+   group.episodes.push({number:nextEpisode(activeSeason),url:url,quality:qual});
+  }
+  $("bulkLinks").value="";$("result").textContent="";render();
+ });
+ $("save").addEventListener("click",saveAll);
+}
+async function saveAll(){
+ if(saving)return;
+ var selected=$("seriesSelect").value, title=$("seriesTitle").value.trim();
+ if(!selected && title.length<2){message("اكتب اسم المسلسل (حرفان على الأقل).",true);return;}
+ var data=[],duplicates={};
+ for(var i=0;i<groups.length;i++){
+  var g=groups[i];
+  for(var j=0;j<g.episodes.length;j++){
+   var e=g.episodes[j],url=String(e.url||"").trim();
+   if(!urlPattern.test(url)){message("أدخل رابط HTTPS بصيغة MP4 أو HLS للموسم "+g.season+" الحلقة "+e.number+".",true);return;}
+   if(duplicates[g.season+":"+e.number]){message("هناك رقم حلقة مكرر في الموسم "+g.season+".",true);return;}
+   duplicates[g.season+":"+e.number]=true;
+   data.push({season:g.season,number:e.number,url:url,quality:e.quality});
+  }
+ }
+ if(!data.length||data.length>150){message("أضف بين 1 و150 حلقة في الدفعة.",true);return;}
+ saving=true;$("save").disabled=true;$("save").textContent="جارٍ حفظ الكل…";
+ $("result").textContent="";
+ try{
+  var result=await rest("rpc/aseel_quick_publish_series",{method:"POST",body:{
+   p_series_id:selected||null,p_title:selected?null:title,p_episodes:data,p_poster_url:null
+  }});
+  if(!result||!result.series_id)throw new Error("لم تصل نتيجة مؤكدة من قاعدة البيانات.");
+  message("تم الحفظ والنشر: "+result.episodes_added+" حلقة جديدة، "+result.episodes_updated+
+   " محدّثة، "+result.seasons_added+" مواسم جديدة. جميع العلاقات محفوظة.");
+  await loadSeries();$("seriesSelect").value=result.series_id;
+  $("seriesTitle").value="";$("bulkLinks").value="";
+  await loadExisting();
+ }catch(e){message(e.message||"تعذر الحفظ، لم تُعتمد الدفعة.",true);}
+ finally{saving=false;$("save").disabled=false;$("save").textContent="حفظ ونشر الكل";}
+}
+async function boot(){
+ session=readSession();
+ if(!session){gateError("يجب تسجيل الدخول كمسؤول");return;}
+ try{
+  await verifyAdmin();
+  await loadSeries();
+  var id=new URLSearchParams(location.search).get("series");
+  if(id&&series.some(function(s){return s.id===id;}))$("seriesSelect").value=id;
+  wire();
+  await loadExisting();
+  $("loading").classList.add("hidden");$("studio").classList.remove("hidden");
+ }catch(e){gateError(e.message||"فشل التحقق");}
+}
+boot();
+})();
