@@ -55,6 +55,7 @@ jobs:
           node tests/movie-quick-smoke.cjs
           node tests/quality-picker-smoke.cjs
           node tests/universal-ui-smoke.cjs
+          node tests/web-routes-smoke.cjs
           node tests/kids-world-smoke.cjs
           node tests/cast-airplay-smoke.cjs
           node tests/importer-smoke.cjs
