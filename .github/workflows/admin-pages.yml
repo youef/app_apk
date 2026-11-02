@@ -39,6 +39,7 @@ jobs:
           node --check web/js/player.js
           node --check web/js/app.js
           node --check web/js/api.js
+          node --check web/js/live.js
           node --check admin/admin.js
           node --check admin/app.js
           node --check admin/studio.js
@@ -54,6 +55,7 @@ jobs:
           node tests/studio-smoke.cjs
           node tests/channel-catalog-smoke.cjs
           node tests/live-page-smoke.cjs
+          node tests/live-studio-smoke.cjs
           node tests/brand-fallback-smoke.cjs
           node tests/genre-classification-smoke.cjs
           node tests/discovery-smoke.cjs
@@ -68,6 +70,8 @@ jobs:
           test -f .nojekyll
           test -s web/index.html
           test -s web/js/live.js
+          test -s web/manifest.webmanifest
+          test -s web/assets/al-ezz-app-icon.svg
           test -s web/js/player.js
           test -s web/css/live.css
           test -s web/app.js
