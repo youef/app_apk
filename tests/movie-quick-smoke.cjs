@@ -14,7 +14,7 @@ assert(js.includes("errors.movie_quick_url"));
 assert(js.includes("picker.querySelectorAll("));
 assert(config.includes("movieCountries:"));
 assert(css.includes(".drawer--quick-movie"));
-assert(html.includes("admin.js?v=quick-movies-20261101"));
+assert(/<script src="admin\.js\?v=[a-z0-9-]+"><\/script>/.test(html),"Admin must version its active script for cache refresh");
 const match=js.match(/  function movieQuickLinkType\(value\) \{[\s\S]*?\n  \}/);
 assert(match,"missing URL classifier");
 const ctx={URL};vm.runInNewContext(match[0]+";result=movieQuickLinkType;",ctx);
