@@ -5,8 +5,11 @@ const json=(x,status=200)=>new Response(JSON.stringify(x),{status,headers:CORS})
 const defaultHosts=["archive.org","blender.org","mdn.github.io","developer.mozilla.org","media.w3.org"];
 function safe(input,hosts){
  try{const u=new URL(String(input||"")),h=u.hostname.toLowerCase();
- if(u.protocol!=="https:"||u.username||u.password||(u.port&&u.port!=="443")||u.href.length>2048||h.includes(":")||/^[0-9.]+$/.test(h)||["localhost","metadata.google.internal"].includes(h)||/\.(local|internal|localhost|test|invalid|onion)$/.test(h))return null;
- return hosts.some(x=>h===x||h.endsWith("."+x))?u:null;}catch{return null;}
+ if(u.protocol!=="https:"||u.username||u.password||(u.port&&u.port!=="443")||u.href.length>2048||h.includes(":")||/^[0-9.]+$/.test(h))return null;
+ // Only ordinary public DNS hostnames; no IP-literals, internal zones or credentials.
+ if(!/^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(h))return null;
+ if(/\.(?:local|localdomain|internal|localhost|test|invalid|onion|arpa|lan|home|corp|intranet|example)$/.test(h))return null;
+ return u;}catch{return null;}
 }
 const clean=x=>String(x||"").replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim();
 const att=(s,k)=>{const m=s.match(new RegExp("(?:\\s|^)"+k+"\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s>]+))","i"));return clean(m?.[1]||m?.[2]||m?.[3]||"");};
@@ -23,16 +26,60 @@ async function bytes(res,max){
  const out=new Uint8Array(size);let j=0;for(const p of parts){out.set(p,j);j+=p.length;}return out;
 }
 async function request(input,hosts,max=550000){
- let u=safe(input,hosts);if(!u)throw Error("HOST_NOT_VERIFIED");
+ let u=await approveDestination(input,hosts);
  for(let i=0;i<4;i++){
   const r=await fetch(u.href,{redirect:"manual",headers:{"User-Agent":"AlEzzTV-LinkInspector/1.0","Accept":"*/*",...(max<10000?{"Range":"bytes=0-2047"}:{})},signal:AbortSignal.timeout(8500)});
-  if(r.status>=300&&r.status<400){const loc=r.headers.get("location");const next=loc?safe(new URL(loc,u).href,hosts):null;await r.body?.cancel().catch(()=>{});if(!next)throw Error("REDIRECT_HOST_NOT_VERIFIED");u=next;continue;}
+  if(r.status>=300&&r.status<400){const loc=r.headers.get("location");const next=loc?new URL(loc,u).href:"";await r.body?.cancel().catch(()=>{});u=await approveDestination(next,hosts);continue;}
   if(!r.ok)throw Error("HTTP_"+r.status);
   if(Number(r.headers.get("content-length")||0)>max&&max>=10000)throw Error("PAGE_TOO_LARGE");
   return {url:u.href,type:r.headers.get("content-type")||"",data:await bytes(r,max)};
  }
  throw Error("REDIRECT_LIMIT");
 }
+// Public-host discovery is allowed for authenticated admins. It is NOT a rights approval.
+// An unverified host must resolve exclusively to globally routable addresses. Reject
+// DNS rebindings toward private services and re-check every redirect destination.
+const dnsCache=new Map();
+function publicAddress(value){
+ const ip=String(value||"").toLowerCase();
+ if(/^\d{1,3}(?:\.\d{1,3}){3}$/.test(ip)){
+  const p=ip.split(".").map(Number),[a,b,c]=p;
+  if(p.some(x=>x<0||x>255))return false;
+  return !(a===0||a===10||a===127||a>=224||a===169&&b===254||a===172&&b>=16&&b<=31||a===192&&(b===168||b===0)||a===198&&(b===18||b===19||b===51&&c===100)||a===203&&b===0&&c===113||a===100&&b>=64&&b<=127);
+ }
+ if(ip.includes(":"))return /^[23][0-9a-f:]+$/.test(ip)&&!/^2001:db8:/i.test(ip)&&!/^2001:0{0,3}10:/i.test(ip);
+ return false;
+}
+async function resolvePublic(host){
+ const now=Date.now(),cached=dnsCache.get(host);
+ if(cached&&cached.until>now)return cached.promise;
+ const promise=(async()=>{
+  const result=await Promise.all(["A","AAAA"].map(async type=>{
+   try{
+    const url="https://dns.google/resolve?name="+encodeURIComponent(host)+"&type="+type;
+    const resp=await fetch(url,{redirect:"error",headers:{Accept:"application/dns-json"},signal:AbortSignal.timeout(5000)});
+    if(!resp.ok)throw Error("DNS_HTTP_"+resp.status);
+    const doc=await resp.json();
+    if(doc.Status!==0&&doc.Status!==3)throw Error("DNS_LOOKUP_FAILED");
+    return (Array.isArray(doc.Answer)?doc.Answer:[]).filter(a=>a.type===(type==="A"?1:28)).map(a=>a.data);
+   }catch{return null;}
+  }));
+  if(result.every(x=>x===null))throw Error("DNS_VALIDATION_UNAVAILABLE");
+  const addresses=result.flatMap(x=>x||[]);
+  if(!addresses.length)throw Error("DNS_HAS_NO_PUBLIC_ADDRESS");
+  if(addresses.some(ip=>!publicAddress(ip)))throw Error("DNS_PRIVATE_ADDRESS_BLOCKED");
+  return true;
+ })();
+ dnsCache.set(host,{promise,until:now+15000});
+ try{return await promise;}catch(e){dnsCache.delete(host);throw e;}
+}
+async function approveDestination(url,hosts){
+ const u=safe(url,hosts);if(!u)throw Error("UNSAFE_HTTPS_URL");
+ const h=u.hostname.toLowerCase();
+ if(!hosts.some(known=>h===known||h.endsWith("."+known)))await resolvePublic(h);
+ return u;
+}
+
 const decode=r=>new TextDecoder().decode(r.data);
 function inspectPage(text,url,hosts){
  const metas={};for(const m of text.matchAll(/<meta\b[^>]*>/gi)){const t=m[0],k=att(t,"property")||att(t,"name");if(k)metas[k.toLowerCase()]=att(t,"content");}
@@ -95,8 +142,8 @@ Deno.serve(async req=>{
   const a=await fetch(API+"/rest/v1/aseel_admins?select=user_id&active=eq.true&user_id=eq."+encodeURIComponent(user.id),{headers:{apikey:KEY,authorization:auth},signal:AbortSignal.timeout(6000)});
   if(!a.ok||!(await a.json()).length)return json({error:"ADMIN_ONLY"},403);
   const b=await req.json(),hosts=await allowed(auth),target=safe(b.url,hosts);
-  if(!target)return json({error:"SOURCE_NOT_APPROVED",note:"يجب أن ينتمي الرابط لمصدر HTTPS موثّق في مصادر الحقوق."},400);
-  if(b.action==="discover"){
+  if(!target)return json({error:"UNSAFE_HTTPS_URL",note:"أدخل رابطًا عامًا يبدأ بـ HTTPS، وليس عنوان شبكة محلية أو IP.",status:"blocked"},400);
+  if(b.action==="discover"){await approveDestination(target.href,hosts);
    let page={title:"",description:"",poster:"",streams:[],pages:[]};
    if(!media(target.href)){const r=await request(target.href,hosts);if(!/text\/html|application\/xhtml/i.test(r.type))return json({error:"NOT_HTML"},422);page=inspectPage(decode(r),r.url,hosts);}
    const archived=await archiveList(target.href,hosts),listing=archived.length?archived:page.pages;
@@ -105,6 +152,7 @@ Deno.serve(async req=>{
    return json({type,title:page.title||"عمل جديد",description:page.description,poster_url:page.poster,items:items.slice(0,120),discovered:items.length});
   }
   if(b.action!=="inspect")return json({error:"ACTION_INVALID"},400);
+  await approveDestination(target.href,hosts);
   const direct=b.media_url?safe(b.media_url,hosts):null;let meta={title:"",description:"",poster:"",streams:[]};
   const links=[];if(direct&&media(direct.href))links.push(direct.href);
   if(media(target.href))links.push(target.href);

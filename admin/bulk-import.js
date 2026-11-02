@@ -8,7 +8,20 @@
   const session=savedSession();if(!session?.access_token)throw Error("يرجى تسجيل الدخول في لوحة الإدارة");
   const r=await fetch(url,{method:init.method||"GET",headers:{"apikey":cfg.publishableKey,"Authorization":"Bearer "+session.access_token,"Content-Type":"application/json",...(init.headers||{})},body:init.body,cache:"no-store"});
   const raw=await r.text();let data;try{data=raw?JSON.parse(raw):null;}catch{data={error:raw.slice(0,100)}}
-  if(!r.ok)throw Error(data?.error||data?.message||"HTTP "+r.status);return data;
+  if(!r.ok){
+   const code=String(data?.error||data?.message||"HTTP "+r.status);
+   const friendly={
+    UNSAFE_HTTPS_URL:"الرابط غير آمن: استخدم رابط HTTPS عامًا باسم نطاق صالح.",
+    DNS_PRIVATE_ADDRESS_BLOCKED:"تم رفض المصدر لأنه يشير إلى شبكة داخلية أو خاصة.",
+    DNS_VALIDATION_UNAVAILABLE:"تعذّر تأكيد عنوان الموقع عبر DNS الآمن. جرّب مصدرًا آخر أو أعد المحاولة.",
+    DNS_HAS_NO_PUBLIC_ADDRESS:"تعذّر العثور على عنوان إنترنت عام لهذا الموقع.",
+    NOT_HTML:"الرابط ليس صفحة HTML قابلة للفحص؛ جرّب الرابط المباشر للفيديو.",
+    PAGE_TOO_LARGE:"حجم الصفحة أكبر من حد الفحص الآمن.",
+    HTTP_403:"الموقع يمنع فحصه من الخادم (403).",
+    HTTP_429:"الموقع يحدّ من الطلبات المتكررة (429)."
+   };
+   throw Error(friendly[code]||data?.note||code);
+  }return data;
  }
  const edge=body=>call(cfg.supabaseUrl+"/functions/v1/aseel-batch-discover",{method:"POST",body:JSON.stringify(body)});
  const rest=(table,qs="",init={})=>call(cfg.supabaseUrl+"/rest/v1/"+table+(qs?"?"+qs:""),init);

@@ -7,6 +7,7 @@ on:
       - "admin/**"
       - "tests/**"
       - "supabase/functions/aseel-inspect-media/**"
+      - "supabase/functions/aseel-batch-discover/**"
       - "supabase/functions/aseel-link-health/**"
       - "supabase/migrations/**"
       - ".github/workflows/admin-pages.yml"
@@ -39,8 +40,10 @@ jobs:
           node --check admin/app.js
           node --check admin/studio.js
           node --check admin/importer.js
+          node --check admin/bulk-import.js
           node --check admin/config.js
           node tests/importer-smoke.cjs
+          node tests/bulk-domain-smoke.cjs
           node tests/studio-smoke.cjs
           node tests/channel-catalog-smoke.cjs
           node tests/live-page-smoke.cjs
@@ -64,6 +67,8 @@ jobs:
           test -s admin/index.html
           test -s admin/app.js
           test -s admin/importer.js
+          test -s admin/bulk-import.html
+          test -s admin/bulk-import.js
           test -s admin/importer.css
           test -s web/js/legacy-polyfills.js
           test -s web/css/app-legacy.css
