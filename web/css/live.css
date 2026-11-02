@@ -99,3 +99,97 @@
 .live-discovery .browse-panel{margin:0;padding:15px 17px}
 .live-discovery .browse-panel__head h2{font-size:20px}
 @media(max-width:650px){.live-discovery{margin-bottom:14px}.live-discovery .browse-panel{margin:0}}
+
+
+/* AL EZZ TV — Living-room broadcast studio refresh.
+   Layout tuned for Safari/iPadOS, Android TV remotes, laptops and compact phones. */
+.live-viewer{position:sticky;top:calc(var(--topbar-h,80px) + 14px)}
+.live-stage{background:linear-gradient(140deg,#05060b,#0d1220)}
+.live-stage:focus-within{outline:2px solid rgba(231,194,124,.75);outline-offset:-2px}
+.live-channel-hud[hidden],.live-quality-menu[hidden]{display:none!important}
+.live-channel-hud{
+  position:absolute;inset-inline-start:20px;top:18px;z-index:7;
+  max-width:calc(100% - 160px);padding:12px 17px;
+  color:#fff;font-size:clamp(12px,1.45vw,18px);font-weight:800;
+  background:rgba(5,8,15,.92);border:1px solid rgba(231,194,124,.58);
+  border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,.55);
+  text-overflow:ellipsis;overflow:hidden;white-space:nowrap;
+}
+.live-guide__star{color:#f3ce88;font-size:19px;line-height:1}
+.live-guide__indicator{display:flex;align-items:center;gap:6px}
+.live-favorites-filter{
+  display:inline-flex;align-items:center;justify-content:center;align-self:flex-start;
+  margin:0 18px 12px;min-height:40px;padding:8px 15px;
+  border:1px solid rgba(231,194,124,.28);border-radius:11px;
+  background:rgba(231,194,124,.07);color:#e2c78c;
+  font-size:12px;font-weight:800;transition:background .2s,box-shadow .2s;
+}
+.live-favorites-filter[aria-pressed="true"]{background:#e7c27c;color:#221711}
+.live-favorites-filter:hover{background:rgba(231,194,124,.18)}
+.live-quality-wrap{position:relative;display:flex}
+.live-quality-menu{
+  position:absolute;bottom:calc(100% + 10px);inset-inline-start:0;z-index:9;
+  min-width:172px;max-height:45vh;overflow:auto;display:grid;gap:3px;
+  padding:7px;border:1px solid rgba(231,194,124,.46);
+  border-radius:12px;background:rgba(10,13,21,.98);
+  box-shadow:0 20px 45px rgba(0,0,0,.66);
+}
+.live-quality-option{
+  border:1px solid transparent;background:transparent;border-radius:8px;
+  text-align:start;padding:11px 12px;min-height:44px;width:100%;
+  color:#f4f1ea;font-size:13px;font-weight:750;cursor:pointer;
+}
+.live-quality-option.is-selected{border-color:rgba(231,194,124,.65);background:rgba(231,194,124,.19);color:#f6d995}
+.live-quality-option:hover,.live-quality-option:focus-visible{outline:2px solid #e7c27c;outline-offset:1px;background:rgba(231,194,124,.16)}
+.live-control:focus-visible,.live-outline:focus-visible,.live-favorites-filter:focus-visible,.live-guide__item:focus-visible{
+  outline:3px solid #f0ce85;outline-offset:2px;
+}
+.live-guide__item{min-height:68px;content-visibility:auto;contain-intrinsic-size:auto 71px}
+.live-guide__thumb{width:65px;height:46px}
+.live-guide__copy strong{font-size:13px}
+.live-guide__item.is-selected{box-shadow:inset 3px 0 0 #e7c27c}
+.live-toolbar{padding-bottom:18px}
+.live-control{min-height:44px}
+.live-help{border-top-color:rgba(231,194,124,.10)}
+.live-stage__badge{user-select:none}
+@media (min-width:1550px) {
+  .live-layout{grid-template-columns:minmax(0,1.65fr) minmax(350px,.68fr)}
+  .live-guide{max-height:min(860px,calc(100dvh - 155px))}
+  .live-guide__item{min-height:73px}
+}
+@media (min-width:850px) and (max-width:1180px) {
+  .live-layout{grid-template-columns:minmax(0,1.18fr) minmax(285px,.82fr);gap:14px}
+  .live-guide{max-height:min(710px,calc(100dvh - 130px));min-height:460px}
+  .live-toolbar{padding-inline:14px}
+  .live-control{padding-inline:10px}
+}
+@media (max-width:849px) {
+  .live-layout{grid-template-columns:1fr}
+  .live-viewer{position:relative;top:auto}
+  .live-guide{max-height:560px;min-height:340px}
+  .live-heading__actions{gap:8px}
+  .live-discovery{margin-bottom:14px}
+}
+@media (max-width:600px) {
+  .live-page{padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right))}
+  .live-viewer,.live-guide{border-radius:15px}
+  .live-stage__badge{padding:5px 9px;font-size:10px}
+  .live-channel-hud{top:10px;inset-inline-start:10px;max-width:calc(100% - 115px);padding:7px 11px;font-size:11px}
+  .live-toolbar{gap:6px;padding:9px 10px 15px}
+  .live-control{font-size:11.5px;min-height:42px;padding:9px 10px}
+  .live-guide__head{padding:14px 14px 10px}
+  .live-guide__items{padding:0 8px 12px}
+  .live-guide__item{padding:8px 7px;min-height:63px}
+  .live-guide__thumb{width:57px;height:43px}
+  .live-now{padding:14px 13px 7px}
+  .live-status{padding-inline:13px}
+  .live-favorites-filter{margin-inline:12px}
+  .live-quality-menu{max-height:42vh}
+}
+@media (hover:none) and (pointer:coarse) {
+  .live-guide__item,.live-control,.live-outline,.live-favorites-filter{min-height:48px}
+  .live-guide__item{min-height:69px}
+}
+@media (prefers-reduced-motion:reduce) {
+  .live-guide__item,.live-control,.live-outline,.live-channel-hud{transition:none!important}
+}
