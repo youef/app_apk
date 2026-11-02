@@ -2498,6 +2498,12 @@
 
   /* ---------- delete modal ---------- */
   function openDelete(tableCfg, row) {
+    if (state.bulkBusy || state.deleteBusy) return;
+    state.deleteTargets = null;
+    state.deletePhrase = 'حذف';
+    var labelNode = $('#deleteConfirmLabel');
+    if (labelNode) labelNode.textContent = 'اكتب «حذف» للتأكيد';
+    $('#deleteConfirmInput').placeholder = 'حذف';
     state.deleteTarget = row;
     state.deleteTable = tableCfg;
     state.lastFocus = document.activeElement;
@@ -2527,6 +2533,8 @@
       $('#modalScrim').hidden = true;
     }, 220);
     state.deleteTarget = null;
+    state.deleteTargets = null;
+    state.deletePhrase = 'حذف';
     state.deleteTable = null;
     var previous = state.lastFocus;
     state.lastFocus = null;
@@ -2538,8 +2546,51 @@
   function confirmDelete() {
     var row = state.deleteTarget;
     var tableCfg = state.deleteTable;
-    if (!row || !tableCfg) return;
+    if (!row || !tableCfg || state.deleteBusy) return;
+    if ($('#deleteConfirmInput').value.trim() !== state.deletePhrase) return;
     var button = $('#deleteConfirmBtn');
+    if (state.deleteTargets) {
+      if (state.bulkBusy || !state.adminVerified) return;
+      var selected = state.deleteTargets.slice();
+      state.deleteBusy = true;
+      state.bulkBusy = true;
+      button.disabled = true;
+      button.textContent = 'جارٍ الحذف والتحقق…';
+      syncBulkDeleteButton();
+      return deleteSelectedBatch(tableCfg.table, selected).then(function (report) {
+        var selection = tableCfg.table === 'aseel_channels' ? state.selectedChannels :
+          isMediaBulkTable(tableCfg) ? state.selectedMedia : state.selectedOther;
+        report.deletedIds.forEach(function (id) { delete selection[id]; });
+        var summary = 'تم حذف ' + report.deleted + ' من أصل ' + report.requested +
+          '، تعذّر حذف ' + report.failed + '.';
+        if (report.failed) summary += ' ' + report.errors.slice(0, 2).join('؛ ');
+        var target = tableCfg.table === 'aseel_channels' ? $('#bulkStatus') :
+          isMediaBulkTable(tableCfg) ? $('#mediaBulkStatus') : $('#otherBulkStatus');
+        if (target) target.textContent = summary;
+        if (report.deleted > 0) {
+          state.deleteBusy = false;
+          state.bulkBusy = false;
+          closeDeleteModal(true);
+          toast(summary, report.failed ? 'error' : 'success');
+          if (state.table === tableCfg) loadTable(tableCfg);
+        } else {
+          $('#deleteError').hidden = false;
+          $('#deleteError').textContent = summary;
+          toast(summary, 'error');
+          button.textContent = 'إعادة محاولة الحذف';
+        }
+      }).catch(function (err) {
+        $('#deleteError').hidden = false;
+        $('#deleteError').textContent = describeError(err);
+        toast(describeError(err), 'error');
+        button.textContent = 'إعادة محاولة الحذف';
+      }).finally(function () {
+        state.deleteBusy = false;
+        state.bulkBusy = false;
+        syncBulkDeleteButton();
+        if (!$('#deleteModal').hidden) button.disabled = false;
+      });
+    }
     state.deleteBusy = true;
     button.disabled = true;
     button.textContent = 'جارٍ الحذف…';
@@ -2872,7 +2923,7 @@
     $('#modalScrim').addEventListener('click', function () { closeDeleteModal(); });
     $('#deleteConfirmBtn').addEventListener('click', confirmDelete);
     $('#deleteConfirmInput').addEventListener('input', function () {
-      $('#deleteConfirmBtn').disabled = this.value.trim() !== 'حذف';
+      $('#deleteConfirmBtn').disabled = state.deleteBusy || this.value.trim() !== state.deletePhrase;
     });
 
     $('#globalSearch').addEventListener('input', function () {
