@@ -343,6 +343,7 @@
 
     close: function () {
       persist(true);
+      if (window.AlezzKids && window.AlezzKids.stop) window.AlezzKids.stop();
       clearStage();
       if ((document.fullscreenElement === el.root || document.webkitFullscreenElement === el.root) && document.exitFullscreen) {
         try { var done = document.exitFullscreen(); if (done && done.catch) done.catch(function () {}); } catch (e) {}
@@ -676,6 +677,11 @@
     });
     v.addEventListener("waiting", function () { show("playerSpinner", true); });
     v.addEventListener("canplay", function () { show("playerSpinner", false); });
+    setInterval(function () {
+      if (window.AlezzKids && window.AlezzKids.tick) {
+        window.AlezzKids.tick(!el.root.hidden && !v.paused && !v.ended && v.readyState >= 2);
+      }
+    }, 1000);
 
     $("playerClose").addEventListener("click", function () { Player.close(); });
     $("playerRetry").addEventListener("click", function () { if (current) startPlayback(current); });
