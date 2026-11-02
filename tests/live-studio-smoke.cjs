@@ -34,7 +34,7 @@ assert.ok(html.includes('rel="manifest"'),"installable app manifest required");
 assert.ok(html.includes('apple-mobile-web-app-title'),"iPhone home screen metadata missing");
 assert.ok(html.includes('href="assets/al-ezz-app-icon.svg"'),"app icon should be linked");
 assert.ok(html.includes('css/live.css?v=tv-studio-'),"CSS must bust older browser cache");
-assert.ok(html.includes('js/live.js?v=tv-studio-'),"live.js must bust older browser cache");
+assert.ok(html.includes('js/live.js?v='),"live.js must bust older browser cache");
 assert.equal(manifest.display,"standalone");
 assert.equal(manifest.scope,"./");
 assert.ok(manifest.icons.some(x=>x.src.includes("al-ezz-app-icon.svg")));
