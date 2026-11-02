@@ -11,6 +11,7 @@
     status: [['published', 'منشور'], ['draft', 'مسودة']],
     rights: [['pending', 'قيد المراجعة'], ['approved', 'تم التحقق من الحقوق'], ['rejected', 'مرفوض']],
     quality: [['SD', 'SD'], ['HD', 'HD'], ['FHD', 'FHD'], ['4K', '4K']],
+    genres: [["action","أكشن"],["adventure","مغامرات"],["animation","كرتون"],["anime","أنمي"],["biography","سيرة ذاتية"],["comedy","كوميديا"],["crime","جريمة"],["documentary","وثائقي"],["drama","دراما"],["education","تعليمي"],["family","عائلي"],["fantasy","فانتازيا"],["history","تاريخي"],["horror","رعب"],["kids","أطفال"],["mystery","غموض"],["nature","طبيعة"],["romance","رومانسي"],["scifi","خيال علمي"],["science","علوم"],["short","قصير"],["sports","رياضة"],["thriller","إثارة"],["war","حرب"],["western","ويسترن"],["music","موسيقي"],["classic","كلاسيكي"]],
     age: [['all', 'مناسب للجميع'], ['7+', '7+'], ['13+', '13+'], ['16+', '16+'], ['18+', '18+']],
     topic: [
       ['letters', 'الحروف'], ['numbers', 'الأرقام'], ['animals', 'الحيوانات'],
@@ -36,6 +37,8 @@
     description: { key: 'description', label: 'الوصف', type: 'textarea', group: 'basic', max: 2000, span: 2, rows: 4 },
     release_year: { key: 'release_year', label: 'سنة الإنتاج', type: 'number', group: 'basic', min: 1880, max: 2100, placeholder: '2024' },
     category_id: { key: 'category_id', label: 'التصنيف', type: 'select', group: 'basic', source: 'categories', emptyLabel: 'بدون تصنيف' },
+    genre_tags: { key: 'genre_tags', label: 'التصنيفات الإضافية', type: 'tags', group: 'basic', span: 2,
+      hint: 'تُكتشف الأنواع تلقائيًا عند الحفظ من العنوان والوصف والتصنيف. يمكنك تحديد أنواع إضافية أو تصحيحها يدويًا.' },
     duration_minutes: { key: 'duration_minutes', label: 'المدة (دقائق)', type: 'number', group: 'basic', min: 1, max: 99999 },
     language_code: { key: 'language_code', label: 'رمز اللغة', type: 'text', group: 'basic', max: 3, default: 'ar', placeholder: 'ar', hint: 'حرفان أو ثلاثة لاتينية: ar / en / tr' },
     country_code: { key: 'country_code', label: 'رمز الدولة', type: 'text', group: 'basic', max: 2, placeholder: 'SA', hint: 'حرفان لاتينيان: SA / TR / US' },
@@ -105,7 +108,7 @@
     statusFilter: { field: 'status', options: [['', 'الكل'], ['published', 'منشور'], ['draft', 'مسودة']] },
     publishGuard: true,
     fields: [
-      F.title_ar, F.title_original, F.description, F.release_year, F.category_id, F.duration_minutes,
+      F.title_ar, F.title_original, F.description, F.release_year, F.category_id, F.genre_tags, F.duration_minutes,
       F.language_code, F.country_code, F.age_rating, F.quality, F.poster_url, F.backdrop_url,
       F.stream_url, F.youtube_url, F.stream_variants, F.source_id, F.source_page_url,
       F.status, F.rights_status, F.rights_holder, F.license_reference, F.rights_expires_at,
@@ -132,7 +135,7 @@
     statusFilter: { field: 'status', options: [['', 'الكل'], ['published', 'منشور'], ['draft', 'مسودة']] },
     publishGuard: true,
     fields: [
-      F.title_ar, F.title_original, F.description, F.release_year, F.category_id,
+      F.title_ar, F.title_original, F.description, F.release_year, F.category_id, F.genre_tags,
       F.language_code, F.country_code, F.age_rating, F.quality, F.poster_url, F.backdrop_url,
       F.status, F.rights_status, F.rights_holder, F.license_reference, F.rights_expires_at,
       F.is_kids, F.featured, F.display_order

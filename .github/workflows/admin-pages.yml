@@ -50,6 +50,7 @@ jobs:
           node tests/channel-catalog-smoke.cjs
           node tests/live-page-smoke.cjs
           node tests/brand-fallback-smoke.cjs
+          node tests/genre-classification-smoke.cjs
           node tests/link-health-smoke.cjs
           node tests/media-bulk-smoke.cjs
           node tests/youtube-catalog-smoke.cjs

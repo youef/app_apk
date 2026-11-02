@@ -1,0 +1,17 @@
+"use strict";
+const fs=require("node:fs"),assert=require("node:assert/strict");
+const read=p=>fs.readFileSync(p,"utf8");
+const api=read("web/js/api.js"),app=read("web/js/app.js"),config=read("admin/config.js"),admin=read("admin/admin.js");
+assert(api.includes("genre_tags,auto_tags"));
+assert(api.includes("genreTags:"));
+assert(app.includes("function itemMatches(item,choice)"));
+assert(app.includes("function viewSeries(filterCat)"));
+assert(app.includes("مسلسلات تركية")&&app.includes("أفلام تركية"));
+assert(config.includes("genre_tags: {")&&config.includes("type: 'tags'"));
+assert((config.match(/F\.genre_tags/g)||[]).length>=2);
+assert(admin.includes("class: 'genre-tag-picker'"));
+assert(admin.includes("field.type === 'tags'"));
+const sql=read("supabase/migrations/20261101224000_aseel_multi_genre_auto_classification.sql");
+assert(sql.includes("aseel_episodes_auto_tags_trigger"));
+assert(sql.includes("aseel_refresh_episode_genres"));
+console.log("PASS: classifications and admin picker");

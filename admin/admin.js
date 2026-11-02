@@ -1797,6 +1797,9 @@
     if (tableCfg.table === 'aseel_home_collection_items') {
       form.append(el('p', { class: 'form-hint' }, 'اختر الصف ثم عنصرًا واحدًا فقط: فيلم أو مسلسل أو قناة أو حلقة.'));
     }
+    if (tableCfg.table === 'aseel_movies' || tableCfg.table === 'aseel_series') {
+      form.append(el('p', { class: 'form-hint' }, 'يُصنَّف العمل تلقائيًا عند الحفظ، والحلقات ترث تصنيفات المسلسل. أضف رمز بلد الإنتاج الصحيح للحصول على القوائم التركية والأجنبية وغيرها.'));
+    }
 
     cfg.fieldGroups.forEach(function (entry) {
       var group = entry[0];
@@ -1852,7 +1855,16 @@
     label.append(document.createTextNode(field.label));
     if (field.required) label.append(el('span', { class: 'req', 'aria-hidden': 'true' }, ' *'));
 
-    if (field.type === 'variants') {
+    if (field.type === 'tags') {
+      control = el('div', { class: 'genre-tag-picker', 'data-field': field.key });
+      cfg.options.genres.forEach(function(entry) {
+        var labelNode=el('label', { class: 'genre-tag-option' });
+        var checkbox=el('input', { type: 'checkbox', value: entry[0], 'aria-label': entry[1] });
+        checkbox.checked=Array.isArray(value)&&value.indexOf(entry[0])!==-1;
+        labelNode.append(checkbox,el('span',null,entry[1]));
+        control.append(labelNode);
+      });
+    } else if (field.type === 'variants') {
       control = buildVariantsEditor(field, value);
       wrap.dataset.field = field.key;
     } else if (field.type === 'select') {
@@ -1982,7 +1994,10 @@
       var control = form.elements.namedItem(field.key);
       var value = null;
 
-      if (field.type === 'variants') {
+      if (field.type === 'tags') {
+        var picker=form.querySelector('.genre-tag-picker[data-field="' + field.key + '"]');
+        value=picker ? $('input[type="checkbox"]:checked',picker).map(function(input){return input.value;}) : [];
+      } else if (field.type === 'variants') {
         var box = form.querySelector('.variants[data-field="' + field.key + '"]');
         var rows = box ? $$('.variant-row', box) : [];
         var variants = [];
