@@ -94,11 +94,69 @@ function inspectPage(text,url,hosts){
   const tag=m[0],url2=joined(att(tag.match(/^<a\b[^>]*>/i)?.[0]||"","href"),url,hosts);
   const n=seq(clean(tag)+" "+url2);if(url2&&n&&url2!==url&&!media(url2))pages.push({url:url2,title:clean(tag).slice(0,180),season:n[0],number:n[1]});
  }
- // JSON-LD's contentUrl usually names an explicit, public direct media file.
- for(const m of text.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)){
-  try{const walk=(v,n=0)=>{if(!v||typeof v!=="object"||n>4)return;if(Array.isArray(v)){v.slice(0,100).forEach(x=>walk(x,n+1));return;}if(v.contentUrl)add(v.contentUrl);if(v.video)walk(v.video,n+1);for(const k of ["@graph","episode","hasPart","itemListElement"])if(v[k])walk(v[k],n+1);};walk(JSON.parse(m[1]));}catch{}
+ // Parse full Schema.org TVSeries / TVSeason / TVEpisode trees without
+ // executing scripts or guessing playback URLs that the publisher did not expose.
+ let structuredTitle="",structuredPoster="",structuredDescription="",original="",year=null;
+ const structuredEpisodes=new Map();
+ const validNum=n=>{const v=Number(n);return Number.isInteger(v)&&v>0&&v<10000?v:0;};
+ const objectUrl=x=>typeof x==="string"?x:typeof x==="object"?(x?.url||x?.["@id"]||""):"";
+ const img=x=>joined(objectUrl(x),url,hosts);
+ function walk(node,depth=0,season=1){
+  if(!node||typeof node!=="object"||depth>9)return;
+  if(Array.isArray(node)){node.slice(0,160).forEach(x=>walk(x,depth+1,season));return;}
+  const kind=Array.isArray(node["@type"])?node["@type"].join(" "):String(node["@type"]||"");
+  const se=validNum(node.seasonNumber)||season;
+  const label=clean(node.name||node.headline||node.title||"").slice(0,250);
+  if(/TVSeries/i.test(kind)){
+   if(!structuredTitle)structuredTitle=label;
+   if(!structuredDescription)structuredDescription=clean(node.description||"").slice(0,1400);
+   if(!structuredPoster)structuredPoster=img(node.image||node.thumbnailUrl);
+   if(!original)original=clean(node.alternateName||"").slice(0,250);
+   if(!year)year=Number(String(node.datePublished||"").slice(0,4))||null;
+  }
+  if(node.contentUrl)add(node.contentUrl);
+  if(/TVEpisode/i.test(kind)||node.episodeNumber){
+   const link=joined(objectUrl(node.url||node.mainEntityOfPage||node.contentUrl),url,hosts);
+   const direct=joined(objectUrl(node.contentUrl||node.video?.contentUrl),url,hosts);
+   const ep=validNum(node.episodeNumber||node.position)||seq(label+" "+link)?.[1]||0;
+   const seasonNumber=validNum(node.partOfSeason?.seasonNumber||node.isPartOf?.seasonNumber)||se||1;
+   if(direct&&media(direct))add(direct);
+   if(ep&&(link||direct)&&(link||direct)!==url){
+    const key=seasonNumber+":"+ep;
+    structuredEpisodes.set(key,{url:link||direct,title:label||"الحلقة "+ep,season:seasonNumber,number:ep,
+      description:clean(node.description||"").slice(0,1400),poster_url:img(node.image||node.thumbnailUrl)||"",
+      media_url:direct&&media(direct)?direct:media(link)?link:undefined});
+   }
+  }
+  for(const field of ["@graph","episode","episodes","containsSeason","season","hasPart","itemListElement","item","mainEntity"]){
+   if(node[field]&&typeof node[field]==="object")walk(node[field],depth+1,se);
+  }
+  if(node.video&&typeof node.video==="object")walk(node.video,depth+1,se);
  }
- return {title,description,poster,streams:[...streams].slice(0,8),pages:[...new Map(pages.map(x=>[x.url,x])).values()].slice(0,120)};
+ for(const m of text.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)){
+  try{walk(JSON.parse(m[1]));}catch{}
+ }
+ // CMS episode cards often carry season / episode numbers in data attributes.
+ for(const m of text.matchAll(/<a\b[^>]*>[\s\S]*?<\/a>/gi)){
+  const opening=m[0].match(/^<a\b[^>]*>/i)?.[0]||"";
+  const link=joined(att(opening,"href")||att(opening,"data-href"),url,hosts);
+  const label=clean(m[0]).slice(0,180),parsed=seq(label+" "+link);
+  const ep=validNum(att(opening,"data-episode")||att(opening,"data-episode-number"))||parsed?.[1]||0;
+  const se=validNum(att(opening,"data-season")||att(opening,"data-season-number"))||parsed?.[0]||1;
+  if(!ep||!link||link===url)continue;
+  const key=se+":"+ep;
+  if(!structuredEpisodes.has(key))structuredEpisodes.set(key,{url:link,title:label||"الحلقة "+ep,season:se,number:ep,
+    media_url:media(link)?link:undefined,poster_url:joined(att(opening,"data-poster"),url,hosts)||""});
+ }
+ const found=new Map();
+ for(const item of pages.concat([...structuredEpisodes.values()])){
+  const key=item.season+":"+item.number;
+  if(!found.has(key)||(!found.get(key).media_url&&item.media_url))found.set(key,item);
+ }
+ return {title:title||structuredTitle,description:description||structuredDescription,poster:poster||structuredPoster,
+  original,year,streams:[...streams].slice(0,8),
+  pages:[...found.values()].sort((a,b)=>a.season-b.season||a.number-b.number).slice(0,120)};
+
 }
 async function archiveList(target,hosts){
  const u=new URL(target),match=u.pathname.match(/^\/details\/([^/]+)/);if(!u.hostname.endsWith("archive.org")||!match)return [];
@@ -146,17 +204,22 @@ Deno.serve(async req=>{
   if(b.action==="discover"){await approveDestination(target.href,hosts);
    let page={title:"",description:"",poster:"",streams:[],pages:[]};
    if(!media(target.href)){const r=await request(target.href,hosts);if(!/text\/html|application\/xhtml/i.test(r.type))return json({error:"NOT_HTML"},422);page=inspectPage(decode(r),r.url,hosts);}
-   const archived=await archiveList(target.href,hosts),listing=archived.length?archived:page.pages;
+    const archived=await archiveList(target.href,hosts);
+    const derived=page.pages.length?page.pages:page.streams.map(link=>{
+      const parts=seq(link);return parts?{url:link,media_url:link,title:"الحلقة "+parts[1],season:parts[0],number:parts[1]}:null;
+    }).filter(Boolean);
+    const listing=archived.length?archived:derived;
    const type=b.kind==="series"||(b.kind!=="movie"&&listing.length>1)?"series":"movie";
    const items=type==="series"?listing.length?listing:[{url:target.href,title:page.title,season:1,number:1}]:[{url:target.href,title:page.title||"فيلم جديد",season:1,number:1,media_url:media(target.href)?target.href:undefined}];
-   return json({type,title:page.title||"عمل جديد",description:page.description,poster_url:page.poster,items:items.slice(0,120),discovered:items.length});
+    return json({type,title:page.title||"عمل جديد",description:page.description,poster_url:page.poster,
+      title_original:page.original,release_year:page.year,items:items.slice(0,120),discovered:items.length});
   }
   if(b.action!=="inspect")return json({error:"ACTION_INVALID"},400);
   await approveDestination(target.href,hosts);
   const direct=b.media_url?safe(b.media_url,hosts):null;let meta={title:"",description:"",poster:"",streams:[]};
   const links=[];if(direct&&media(direct.href))links.push(direct.href);
   if(media(target.href))links.push(target.href);
-  else{const r=await request(target.href,hosts);if(!/text\/html|application\/xhtml/i.test(r.type))return json({ok:false,reason:"NOT_HTML"});meta=inspectPage(decode(r),r.url,hosts);links.push(...meta.streams);}
+   else{try{const r=await request(target.href,hosts);if(!/text\/html|application\/xhtml/i.test(r.type))return json({ok:false,reason:"NOT_HTML"});meta=inspectPage(decode(r),r.url,hosts);links.push(...meta.streams);}catch(e){if(!links.length)throw e;}}
   const tests=[];
   for(const link of [...new Set(links)].slice(0,8)){const v=await check(link,hosts);tests.push(v);if(tests.filter(x=>x.ok).length>=4)break;}
   const good=tests.filter(x=>x.ok);
