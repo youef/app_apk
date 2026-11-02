@@ -59,6 +59,7 @@ jobs:
           node tests/discovery-smoke.cjs
           node tests/link-health-smoke.cjs
           node tests/media-bulk-smoke.cjs
+          node tests/bulk-delete-smoke.cjs
           node tests/youtube-catalog-smoke.cjs
       - name: Verify branch-published website assets
         run: |
