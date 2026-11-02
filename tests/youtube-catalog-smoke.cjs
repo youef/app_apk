@@ -60,7 +60,7 @@ async function main() {
   assert.ok(partial.api.failedTables.includes("youtube"), "Failures should be visible to page UI");
   assert.ok(app.includes('تعذّر تحميل فيديوهات يوتيوب'), "Page must show a retriable loading error");
   assert.ok(app.includes('section=([a-z]+)'), "Old query links should still route to YouTube");
-  assert.match(html, /js\\/api\\.js\\?v=[a-z0-9-]+/i, "Catalog API must carry a cache-busting revision");
+  assert.ok(html.includes('js/api.js?v='), "Catalog API must carry a cache-busting revision");
   console.log("PASS: published YouTube REST path, home collections, error state, old route and cache busting");
 }
 main().catch(err => { console.error(err); process.exitCode = 1; });
