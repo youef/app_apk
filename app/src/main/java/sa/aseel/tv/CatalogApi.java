@@ -39,15 +39,9 @@ public final class CatalogApi {
             if(item==null)continue;
             boolean youtube=YouTubeLink.usable(item.optString("youtube_url",""));
             boolean direct=StreamQuality.isDirectUrl(item.optString("stream_url",""));
-            // Official outbound links are navigation, not rebroadcast licenses or video streams.
-            boolean official="aseel_channels".equals(table)
-                && "published".equals(item.optString("status",""))
-                && "pending".equals(item.optString("rights_status",""))
-                && "official_link".equals(item.optString("playback_mode",""))
-                && item.optString("official_url","").startsWith("https://")
-                && item.optString("stream_url","").isEmpty()
-                && item.optString("youtube_url","").isEmpty();
-            if(official){output.put(item);continue;}
+            // Legacy official-site placeholders are never offered as TV channels.
+            if("aseel_channels".equals(table) &&
+               "official_link".equals(item.optString("playback_mode","")))continue;
             if(!youtube&&!direct)continue;
             if("aseel_channels".equals(table)){
                 String mode=item.optString("playback_mode","stream");
