@@ -1,0 +1,20 @@
+/* AL EZZ TV — native AirPlay and Google Cast UI, works from desktop, phone and TV remotes. */
+.cast-launcher{display:inline-block;box-sizing:border-box;flex:0 0 44px;
+ min-width:44px;min-height:44px;width:44px;height:44px;padding:5px;
+ cursor:pointer;background:#1a2130;border:1px solid rgba(242,211,149,.42);
+ border-radius:12px;color:#f6deb1;fill:currentColor;
+ --connected-color:#ffd58a;--disconnected-color:#ebebee}
+.cast-launcher:hover,.cast-launcher:focus-visible{background:#3d3540;border-color:#ffda90;outline:2px solid #ffda90;outline-offset:2px}
+.cast-launcher[hidden],.cast-airplay[hidden],.cast-status[hidden]{display:none!important}
+.cast-airplay{min-height:44px;font-size:13px;font-weight:850;white-space:nowrap;
+ color:#e6f2ff;background:#223348;border:1px solid #6e8ca9;border-radius:12px;
+ padding:8px 14px;cursor:pointer}
+.cast-airplay:hover,.cast-airplay:focus-visible{border-color:#ffdb91;background:#323c54;outline:2px solid #ffdb91;outline-offset:1px}
+.cast-status{display:inline-flex;align-items:center;max-width:min(240px,100%);font-size:11px;
+ line-height:1.45;color:#a8e5cf;border:1px solid #4b8d76;background:#173a31;
+ border-radius:12px;padding:6px 9px;white-space:normal;text-align:center}
+.live-toolbar .cast-launcher{background:#1d2538;border-color:#455772}
+.player__controls .cast-launcher{vertical-align:middle}
+@media(max-width:700px){.cast-status{max-width:155px;font-size:10px}
+ .cast-launcher{flex-basis:42px;width:42px;height:42px;min-width:42px;min-height:42px}
+ .cast-airplay{min-height:42px;padding:8px 12px}}
