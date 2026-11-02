@@ -27,6 +27,8 @@ const fetchMock=async (input)=>{
  }
  if(u.hostname==="public.example.net"&&u.pathname==="/movie")return responses(page,200,"text/html");
  if(u.hostname==="public.example.net"&&u.pathname==="/show")return responses(seriesPage,200,"text/html");
+ if(u.hostname==="public.example.net"&&u.pathname==="/seasons")return responses('<html><title>الحلقات</title><a href="/season-3">الموسم 3</a></html>',200,"text/html");
+ if(u.hostname==="public.example.net"&&u.pathname==="/season-3")return responses('<html><title>الموسم الثالث</title><a href="/s03e01">الموسم 3 الحلقة 1</a><a href="/s03e02">الموسم 3 الحلقة 2</a></html>',200,"text/html");
  if(u.hostname==="public.example.net"&&u.pathname==="/redirect")return new Response(null,{status:302,headers:{location:"http://127.0.0.1/secret"}});
  if(u.hostname==="cdn.sample.org")return responses(new Uint8Array([0,0,0,16,102,116,121,112,105,115,111,109]),206,"video/mp4");
  throw Error("Unexpected outbound URL: "+url);
@@ -52,7 +54,12 @@ async function run(action,url,extra={}){
  assert.equal(structured.data.items[0].season,2);
  assert.equal(structured.data.items[0].number,1);
  assert.equal(structured.data.items[1].media_url,"https://cdn.sample.org/s2e2.mp4");
-  const check=await run("inspect","https://public.example.net/movie");
+  const seasonLinks=await run("discover","https://public.example.net/seasons",{kind:"series"});
+ assert.equal(seasonLinks.status,200,JSON.stringify(seasonLinks.data));
+ assert.equal(seasonLinks.data.items.length,2,"linked season episodes should be discovered");
+ assert.equal(seasonLinks.data.items[0].season,3);
+ assert.equal(seasonLinks.data.items[1].number,2);
+ const check=await run("inspect","https://public.example.net/movie");
  assert.equal(check.status,200,JSON.stringify(check.data));
  assert.equal(check.data.ok,true,JSON.stringify(check.data));
  assert.equal(check.data.stream_url,"https://cdn.sample.org/episode-1.mp4");
