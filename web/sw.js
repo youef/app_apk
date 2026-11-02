@@ -1,5 +1,5 @@
 /* Al Ezz TV — cache app shell only, never streamed video or external APIs. */
-var CACHE="alezz-shell-cast-airplay-20261102-v1";
+var CACHE="alezz-shell-direct-streams-20261102-v2";
 var BASE=self.registration.scope;
 var FILES=[
  "./","./index.html","./manifest.webmanifest","./alizz-tv-transparent.png",
