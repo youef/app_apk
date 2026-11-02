@@ -229,7 +229,8 @@
         duration: e.duration_minutes || null,
         stream: e.stream_url || "",
         variants: Array.isArray(e.stream_variants) ? e.stream_variants : [],
-        youtubeId: e.youtube_url ? youtubeId(e.youtube_url) : ""
+        youtubeId: e.youtube_url ? youtubeId(e.youtube_url) : "",
+        rightsStatus: e.rights_status || "pending"
       });
     });
 
