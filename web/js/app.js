@@ -602,8 +602,8 @@
       .map(function(x){
         var common=0;
         (x.genreTags||[]).forEach(function(tag){if(tags.indexOf(tag)!==-1)common++;});
-        return {item:x,score:common*5+(item.country&&item.country===x.country?3:0)+
-          (item.categoryId&&item.categoryId===x.categoryId?2:0)};
+        return {item:x,score:common*5+(!!item.country&&item.country===x.country?3:0)+
+          (!!item.categoryId&&item.categoryId===x.categoryId?2:0)};
       }).filter(function(x){return x.score>0;});
     matched.sort(function(a,b){return b.score-a.score;});
     var items=matched.slice(0,9).map(function(x){return x.item;});
