@@ -16,8 +16,12 @@
   var hideTimer = null;
   var saveTimer = null;
   var scrubbing = false;
-  var qualities = [];
+  var qualitySources = [];
+  var hlsLevels = [];
   var activeQuality = "auto";
+  var activeSourceIndex = 0;
+  var activeStreamUrl = "";
+  var preferredQuality = "auto";
   var youtubeFrame = null;
 
   function $(id) { return document.getElementById(id); }
@@ -60,8 +64,8 @@
   function wake() {
     setChromeIdle(false);
     clearTimeout(hideTimer);
-    if (!el.video.paused) {
-      hideTimer = setTimeout(function () { setChromeIdle(true); }, 3200);
+    if (!el.video.paused && !qualityMenuOpen()) {
+      hideTimer = setTimeout(function () { if (!qualityMenuOpen()) setChromeIdle(true); }, 3200);
     }
   }
 
@@ -161,6 +165,8 @@
     return loadHlsScript().then(function (Hls) {
       if (Hls && Hls.isSupported()) {
         hls = new Hls({ enableWorker: true, lowLatencyMode: !!current.live, backBufferLength: 60 });
+        var instance = hls;
+        hls.on(Hls.Events.MANIFEST_PARSED, function () { updateHlsLevels(instance); });
         hls.loadSource(url);
         hls.attachMedia(v);
         hls.on(Hls.Events.ERROR, function (_e, data) {
@@ -205,10 +211,11 @@
     $("playerSubtitle").textContent = item.subtitle || "";
     $("playerBadges").innerHTML = buildBadges(item);
     el.root.classList.remove("is-idle");
+    configureQualities(item);
 
     if (item.youtubeId) { playYoutube(item.youtubeId, item.title); return; }
 
-    var url = item.stream || "";
+    var url = activeStreamUrl || item.stream || "";
     if (!url) { fail("لا يوجد رابط تشغيل مسجّل لهذا العنصر."); return; }
 
     bindSubtitleTrack(item);
@@ -276,6 +283,11 @@
       current = null;
       nextItem = null;
       activeQuality = "auto";
+      activeSourceIndex = 0;
+      activeStreamUrl = "";
+      hlsLevels = [];
+      qualitySources = [];
+      closeQualityMenu();
     },
 
     /* open an episode's series queue */
@@ -315,21 +327,202 @@
     }
   }
 
-  function cycleQuality() {
-    if (!qualities.length) { toast("لا توجد جودات بديلة لهذا المصدر"); return; }
-    var idx = qualities.findIndex(function (q) { return q.label === activeQuality; });
-    var next = qualities[(idx + 1) % qualities.length];
-    activeQuality = next.label;
-    $("btnQuality").textContent = next.label === "auto" ? "تلقائي" : next.label;
-    if (next.url) {
-      var at = el.video.currentTime;
-      var wasPlaying = !el.video.paused;
-      clearStage();
-      if (/\.m3u8(\?|#|$)/i.test(next.url)) attachHls(next.url);
-      else attachNative(next.url);
-      el.video.addEventListener("loadedmetadata", function () { el.video.currentTime = at; if (wasPlaying) el.video.play(); }, { once: true });
+  /* Sources are explicit episode variants; HLS levels come from the live manifest.
+     Never invent a quality that the selected stream does not actually advertise. */
+  function isPlayableUrl(url) {
+    return /^https:\/\/[^\s]+/i.test(url || "") &&
+      /\.(m3u8|mp4)([?#]|$)/i.test(url || "");
+  }
+  function qualityMenuOpen() {
+    var menu = $("playerQualityMenu");
+    return !!(menu && !menu.hidden);
+  }
+  function closeQualityMenu() {
+    var menu = $("playerQualityMenu");
+    if (menu) menu.hidden = true;
+    var button = $("btnQuality");
+    if (button) button.setAttribute("aria-expanded", "false");
+  }
+  function labelForQuality(label) {
+    return label === "auto" ? "تلقائي" : label;
+  }
+  function configureQualities(item) {
+    qualitySources = [];
+    hlsLevels = [];
+    activeQuality = "auto";
+    activeSourceIndex = 0;
+    activeStreamUrl = item.stream || "";
+    preferredQuality = String(Store.pref("preferredPlaybackQuality", "auto") || "auto");
+    if (isPlayableUrl(item.stream)) {
+      qualitySources.push({ url: item.stream, label: "الأصل" });
     }
-    toast("الجودة: " + (next.label === "auto" ? "تلقائي" : next.label));
+    (Array.isArray(item.variants) ? item.variants : []).forEach(function (entry) {
+      var url = entry && String(entry.url || "").trim();
+      var label = entry && String(entry.label || "").trim().slice(0, 36);
+      if (!isPlayableUrl(url)) return;
+      var match = qualitySources.filter(function (source) { return source.url === url; })[0];
+      if (match) { if (label) match.label = label; }
+      else if (qualitySources.length < 9) {
+        qualitySources.push({ url: url, label: label || "مصدر " + (qualitySources.length + 1) });
+      }
+    });
+    if (qualitySources.length && preferredQuality !== "auto") {
+      for (var i = 0; i < qualitySources.length; i++) {
+        if (qualitySources[i].label.toLowerCase() === preferredQuality.toLowerCase()) {
+          activeSourceIndex = i;
+          activeQuality = "source:" + i;
+          activeStreamUrl = qualitySources[i].url;
+          break;
+        }
+      }
+    }
+    closeQualityMenu();
+    renderQualityMenu();
+  }
+  function qualityOptions() {
+    var out = [{ id: "auto", label: "تلقائي", hint: "أفضل جودة حسب الاتصال" }];
+    qualitySources.forEach(function (src, i) {
+      // A source whose URL has already appeared is de-duplicated in configureQualities.
+      out.push({ id: "source:" + i, label: src.label, hint: "رابط متاح" });
+    });
+    hlsLevels.forEach(function (level) {
+      out.push({ id: "level:" + level.index, label: level.label, hint: "جودة HLS" });
+    });
+    return out;
+  }
+  function activeQualityLabel() {
+    if (activeQuality.indexOf("source:") === 0) {
+      var src = qualitySources[activeSourceIndex];
+      return src ? src.label : "تلقائي";
+    }
+    if (activeQuality.indexOf("level:") === 0) {
+      var match = hlsLevels.filter(function (level) {
+        return "level:" + level.index === activeQuality;
+      })[0];
+      return match ? match.label : "تلقائي";
+    }
+    return "تلقائي";
+  }
+  function renderQualityMenu() {
+    var menu = $("playerQualityMenu");
+    var button = $("btnQuality");
+    if (!menu || !button) return;
+    var options = qualityOptions();
+    menu.innerHTML = "";
+    options.forEach(function (option) {
+      var row = document.createElement("button");
+      var selected = option.id === activeQuality;
+      row.type = "button";
+      row.className = "player__quality-option" + (selected ? " is-selected" : "");
+      row.setAttribute("role", "menuitemradio");
+      row.setAttribute("aria-checked", selected ? "true" : "false");
+      var label = document.createElement("span");
+      label.textContent = option.label;
+      var hint = document.createElement("small");
+      hint.textContent = option.hint;
+      row.appendChild(label);
+      row.appendChild(hint);
+      row.addEventListener("click", function () { selectQuality(option.id); });
+      menu.appendChild(row);
+    });
+    button.textContent = "الجودة: " + activeQualityLabel();
+    button.disabled = !current || !!current.youtubeId || options.length < 2;
+    button.setAttribute("aria-label", "تحديد جودة الفيديو. " + activeQualityLabel());
+  }
+  function switchQualitySource(url) {
+    if (!isPlayableUrl(url)) { toast("رابط الجودة غير صالح", "err"); return; }
+    var position = el.video.currentTime || 0;
+    var playing = !el.video.paused;
+    activeStreamUrl = url;
+    clearStage();
+    show("playerSpinner", true);
+    bindSubtitleTrack(current);
+    el.video.addEventListener("loadedmetadata", function () {
+      if (position > 1 && isFinite(el.video.duration) && position < el.video.duration) {
+        try { el.video.currentTime = position; } catch (e) {}
+      }
+      if (playing && el.video.paused) {
+        var p = el.video.play();
+        if (p && p.catch) p.catch(function () {});
+      } else if (!playing) el.video.pause();
+    }, { once: true });
+    hlsLevels = [];
+    if (/\.m3u8([?#]|$)/i.test(url)) {
+      attachHls(url).then(function (ok) {
+        if (!ok) fail("هذه الجودة لا تعمل على هذا الجهاز، جرّب جودة أخرى.");
+      });
+    } else attachNative(url);
+  }
+  function selectQuality(id) {
+    if (!current || current.youtubeId) return;
+    closeQualityMenu();
+    if (id === "auto") {
+      activeQuality = "auto";
+      preferredQuality = "auto";
+      Store.setPref("preferredPlaybackQuality", "auto");
+      if (activeSourceIndex !== 0 && qualitySources[0]) {
+        activeSourceIndex = 0;
+        switchQualitySource(qualitySources[0].url);
+      } else if (hls) {
+        hls.currentLevel = -1;
+      }
+    } else if (id.indexOf("source:") === 0) {
+      var index = Number(id.slice(7));
+      if (!qualitySources[index]) return;
+      activeQuality = id;
+      preferredQuality = qualitySources[index].label;
+      Store.setPref("preferredPlaybackQuality", preferredQuality);
+      if (activeSourceIndex !== index) {
+        activeSourceIndex = index;
+        switchQualitySource(qualitySources[index].url);
+      } else if (hls) hls.currentLevel = -1;
+    } else if (id.indexOf("level:") === 0 && hls) {
+      var levelIndex = Number(id.slice(6));
+      var chosen = hlsLevels.filter(function (q) { return q.index === levelIndex; })[0];
+      if (!chosen) return;
+      activeQuality = id;
+      preferredQuality = chosen.label;
+      Store.setPref("preferredPlaybackQuality", preferredQuality);
+      hls.currentLevel = levelIndex;
+    } else return;
+    renderQualityMenu();
+    toast("الجودة: " + activeQualityLabel());
+    wake();
+  }
+  function updateHlsLevels(instance) {
+    if (instance !== hls || !current) return;
+    var seen = {};
+    hlsLevels = [];
+    (instance.levels || []).forEach(function (level, index) {
+      var label = level.height ? level.height + "p" :
+        level.bitrate ? (Math.round(level.bitrate / 100000) / 10) + " Mbps" : "مستوى " + (index + 1);
+      if (seen[label]) label += " (" + (index + 1) + ")";
+      seen[label] = true;
+      hlsLevels.push({ index: index, label: label, height: level.height || 0 });
+    });
+    hlsLevels.sort(function (a, b) { return b.height - a.height || a.index - b.index; });
+    if (activeQuality === "auto" && preferredQuality !== "auto") {
+      var match = hlsLevels.filter(function (q) {
+        return q.label.toLowerCase() === preferredQuality.toLowerCase();
+      })[0];
+      if (match) {
+        activeQuality = "level:" + match.index;
+        instance.currentLevel = match.index;
+      }
+    }
+    renderQualityMenu();
+  }
+  function toggleQualityMenu() {
+    var menu = $("playerQualityMenu");
+    if (!menu || $("btnQuality").disabled) return;
+    var open = menu.hidden;
+    menu.hidden = !open;
+    $("btnQuality").setAttribute("aria-expanded", open ? "true" : "false");
+    wake();
+    if (open) {
+      var selected = menu.querySelector(".is-selected");
+      if (selected) selected.focus();
+    }
   }
 
   function init() {
@@ -356,7 +549,7 @@
     $("playerClose").addEventListener("click", function () { Player.close(); });
     $("playerRetry").addEventListener("click", function () { if (current) startPlayback(current); });
     $("playerExternal").addEventListener("click", function () {
-      var url = current && (current.stream || (current.youtubeId ? "https://www.youtube.com/watch?v=" + current.youtubeId : ""));
+      var url = current && (activeStreamUrl || current.stream || (current.youtubeId ? "https://www.youtube.com/watch?v=" + current.youtubeId : ""));
       if (!url) return;
       if (window.AlezzNative && window.AlezzNative.openExternal) window.AlezzNative.openExternal(url);
       else window.open(url, "_blank", "noopener");
@@ -366,7 +559,10 @@
     $("btnBack10").addEventListener("click", function () { seek(-10); });
     $("btnFwd10").addEventListener("click", function () { seek(10); });
     $("btnFull").addEventListener("click", toggleFullscreen);
-    $("btnQuality").addEventListener("click", cycleQuality);
+    $("btnQuality").addEventListener("click", toggleQualityMenu);
+    document.addEventListener("click", function (event) {
+      if (qualityMenuOpen() && !event.target.closest(".player__quality-wrap")) closeQualityMenu();
+    });
     $("btnCaptions").addEventListener("click", toggleCaptions);
     $("nextPlay").addEventListener("click", playNext);
     $("btnMute").addEventListener("click", function () {
@@ -413,6 +609,20 @@
       if (el.root.hidden) return;
       var tag = (e.target.tagName || "").toLowerCase();
       if (tag === "input" || tag === "textarea") return;
+      if (qualityMenuOpen()) {
+        if (e.key === "Escape" || e.key === "Backspace") {
+          e.preventDefault(); closeQualityMenu(); $("btnQuality").focus(); return;
+        }
+        if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+          e.preventDefault();
+          var options = Array.prototype.slice.call($("playerQualityMenu").querySelectorAll("button"));
+          var selected = options.indexOf(document.activeElement);
+          var direction = e.key === "ArrowDown" ? 1 : -1;
+          if (options.length) options[(selected + direction + options.length) % options.length].focus();
+          return;
+        }
+        if (e.key === "ArrowLeft" || e.key === "ArrowRight") return;
+      }
       switch (e.key) {
         case " ":
         case "k": e.preventDefault(); togglePlay(); break;
