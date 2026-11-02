@@ -411,7 +411,7 @@
     if (playerNode && playerNode.parentNode && playerNode.parentNode.id === "watchPlayerSlot") {
       if (Player.isOpen()) Player.close();
       document.body.appendChild(playerNode);
-    } else if (route.name !== "watch" && Player.isOpen()) {
+    } else if (Player.isOpen()) {
       Player.close();
     }
     document.body.style.overflow = "";
@@ -521,6 +521,7 @@
   function parentSection(key) {
     var entry = findEpisode(key), item = entry ? entry.series : findItem(key);
     if (!item) return "home";
+    if (item.kids) return "kids";
     if (item.kind === "series") return "series";
     if (item.kind === "movie") return "movies";
     if (item.kind === "channel") return "live";
@@ -672,7 +673,7 @@
       if (!response.ok) throw Error("Metadata not available");
       return response.json();
     }).then(function(data) {
-      if (!section.isConnected || parseHash().name !== "title" || parseHash().arg !== item.key ||
+      if (!section.parentNode || parseHash().name !== "title" || parseHash().arg !== item.key ||
           !Array.isArray(data.seasons)) return;
       var parts = [];
       data.seasons.forEach(function(season) {
@@ -1054,7 +1055,8 @@
       var openSearchPanel = !$("searchPanel").hidden;
 
       if (e.key === "Escape") {
-        if (parseHash().name === "watch" && Player.isOpen()) { leaveWatch(); return; }
+        if (parseHash().name === "watch") { leaveWatch(); return; }
+        if (parseHash().name === "title") { closeDetail(); return; }
         if (openSheet) { closeDetail(); return; }
         if (openSearchPanel) { closeSearch(); return; }
         if (Player.isOpen()) { Player.close(); return; }

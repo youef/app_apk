@@ -804,6 +804,7 @@
         case "Escape":
           if (document.body.classList.contains("watch-route") && window.Alezz && window.Alezz.leaveWatch) window.Alezz.leaveWatch();
           else Player.close();
+          e.stopImmediatePropagation();
           break;
         case "n": if (nextItem) playNext(); break;
       }
