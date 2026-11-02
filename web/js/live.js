@@ -51,8 +51,11 @@
     node.classList.toggle("is-error", !!error);
   }
   function poster(channel) {
-    if (!channel || !https(channel.poster)) return '<span class="live-emblem">' + icon("tv") + '</span>';
-    return '<img src="' + esc(channel.poster) + '" alt="" loading="lazy" onerror="this.remove()">';
+    var cover = channel && https(channel.poster);
+    return '<span class="live-channel-art">' +
+      '<img class="live-channel-art__fallback" src="alizz-tv-transparent.png" alt="" loading="lazy" onerror="this.remove()">' +
+      (cover ? '<img class="live-channel-art__cover" src="' + esc(cover) + '" alt="" loading="lazy" onerror="this.remove()">' : "") +
+      '</span>';
   }
   function channelKind(channel) {
     return isOfficial(channel) ? "موقع الناشر" : !playable(channel) ? "رابط غير مدعوم" : "بث مباشر";

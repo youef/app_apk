@@ -83,3 +83,14 @@
 @media(max-width:1100px){.live-layout{grid-template-columns:minmax(0,1fr)}.live-guide{max-height:650px;min-height:390px}.live-heading h1{font-size:34px}}
 @media(max-width:650px){.live-page{padding:22px 12px 55px}.live-heading{padding:0 8px}.live-heading h1{font-size:29px}.live-heading p{font-size:12px}.live-layout{gap:14px}.live-viewer,.live-guide{border-radius:17px}.live-now{padding:14px 14px 8px}.live-now__copy h2{font-size:18px}.live-status{padding:0 14px;font-size:11px}.live-toolbar{padding:12px 13px;gap:7px}.live-control{padding:8px 10px;font-size:11px}.live-help{padding:12px 14px;font-size:10.5px}.live-stage__badge{top:10px;right:10px}.live-guide{max-height:610px}.live-poster img{max-height:43%;max-width:35%}.live-poster__text{letter-spacing:3px}.live-start{font-size:12px;padding:9px 15px;min-height:39px}.live-total{font-size:11px}}
 @media(prefers-reduced-motion:reduce){.live-eyebrow i,.live-now__pulse,.live-stage__badge i,.live-stage.is-loading:before{animation:none}}
+/* Show the full AL EZZ logo when a channel image is missing or cannot load. */
+.live-channel-art{display:block;position:relative;width:100%;height:100%;overflow:hidden}
+.live-channel-art img.live-channel-art__fallback,
+.live-channel-art img.live-channel-art__cover{
+  position:absolute;inset:0;width:100%;height:100%;max-width:100%;max-height:100%;
+  display:block;object-fit:contain;filter:drop-shadow(0 7px 18px rgba(0,0,0,.4));
+}
+.live-channel-art img.live-channel-art__cover{z-index:2}
+.live-poster .live-channel-art{width:42%;height:45%;z-index:1;flex:none}
+.live-guide__thumb .live-channel-art{width:100%;height:100%}
+@media(max-width:620px){.live-poster .live-channel-art{width:50%;height:48%}}

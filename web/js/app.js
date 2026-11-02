@@ -20,6 +20,7 @@
   var heroItems = [];
   var lastFocus = null;
   var kidsType = "channel", kidsCountry = "", kidsLanguage = "";
+  var DEFAULT_LOGO = "alizz-tv-transparent.png";
 
   /* ---------------------------------------------------------------- utils */
 
@@ -71,8 +72,13 @@
   function art(item, cls) {
     var label = item.category || kindLabel(item.kind);
     return '<div class="card__art ' + (cls || "") + '" style="background:' + artStyle(item) + '">' +
-      '<span class="art__ring"><span class="art__letter">' + esc(letterOf(item)) + "</span></span>" +
+      '<img class="art__logo" src="' + DEFAULT_LOGO + '" alt="" loading="lazy" decoding="async" onerror="this.remove()">' +
       '<span class="art__label">' + esc(label) + "</span></div>";
+  }
+
+  function heroFallback(item) {
+    return '<div class="hero__art" style="background:' + artStyle(item, true) + '">' +
+      '<img class="hero__fallback-logo" src="' + DEFAULT_LOGO + '" alt="" onerror="this.remove()"></div>';
   }
 
   function kindLabel(kind) {
@@ -170,11 +176,11 @@
 
   function heroHTML(item) {
     var backdrop = item.backdrop;
-    var media = backdrop
+    var media = heroFallback(item) + (backdrop
       ? '<div class="hero__media"><img src="' + esc(backdrop) + '" alt="" onerror="this.parentNode.remove()"></div>'
-      : '<div class="hero__art" style="background:' + artStyle(item, true) + '"></div>';
+      : "");
     var posterPanel = (!backdrop && item.poster)
-      ? '<div class="hero__poster"><img src="' + esc(item.poster) + '" alt="" onerror="this.parentNode.remove()"></div>'
+      ? '<div class="hero__poster">' + art(item) + '<img src="' + esc(item.poster) + '" alt="" onerror="this.remove()"></div>'
       : "";
 
     var chips = [];
@@ -530,12 +536,11 @@
     }
 
     return '<div class="detail__hero">' +
-      (backdrop ? '<img src="' + esc(backdrop) + '" alt="" onerror="this.remove()">' :
-        '<div class="hero__art" style="background:' + artStyle(item, true) + '"></div>') +
+      heroFallback(item) + (backdrop ? '<img src="' + esc(backdrop) + '" alt="" onerror="this.remove()">' : "") +
       '<button class="detail__close" data-close-sheet aria-label="إغلاق"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' +
       "</div>" +
       '<div class="detail__body"><div class="detail__head">' +
-      '<div class="detail__poster">' + (item.poster ? '<img src="' + esc(item.poster) + '" alt="" onerror="this.remove()">' : art(item)) + "</div>" +
+      '<div class="detail__poster">' + art(item) + (item.poster ? '<img src="' + esc(item.poster) + '" alt="" onerror="this.remove()">' : "") + "</div>" +
       '<div class="detail__info">' +
       '<p class="detail__kicker">' + esc(kindLabel(item.kind)) + (item.featured ? " · اختيار العز" : "") + "</p>" +
       '<h2 class="detail__title" id="sheetTitle">' + esc(item.title) + "</h2>" +
@@ -695,7 +700,7 @@
     var thumb = item.poster || item.backdrop;
     return '<button class="srow" data-key="' + esc(item.key) + '">' +
       '<span class="srow__thumb' + (item.live ? " srow__thumb--wide" : "") + '">' +
-      (thumb ? '<img loading="lazy" src="' + esc(thumb) + '" alt="" onerror="this.remove()">' : art(item)) + "</span>" +
+      art(item) + (thumb ? '<img loading="lazy" src="' + esc(thumb) + '" alt="" onerror="this.remove()">' : "") + "</span>" +
       "<span><b>" + esc(item.title) + "</b><small>" + esc(kindLabel(item.kind)) +
       (item.year ? " · " + item.year : "") + (item.quality ? " · " + item.quality : "") + "</small></span>" +
       "</button>";

@@ -695,3 +695,26 @@ body.tv-mode .footer{display:none}
   *,*::before,*::after{animation-duration:.001ms !important;transition-duration:.001ms !important}
   html{scroll-behavior:auto}
 }
+
+/* Complete AL EZZ brand logo and resilient poster fallback (2026-11-01). */
+.brand__mark--full{width:160px;height:56px;max-width:clamp(108px,12vw,170px);object-fit:contain;border-radius:0;box-shadow:none}
+.footer__brand .footer__logo{width:124px;height:56px;object-fit:contain;border-radius:0;opacity:1}
+.gate__mark{width:164px;height:90px;max-width:100%;object-fit:contain;border-radius:0;box-shadow:none}
+.card__media .art__logo,.srow__thumb .art__logo,.detail__poster .art__logo,.hero__poster .art__logo{
+  position:relative;inset:auto;width:min(76%,180px);height:auto;max-height:64%;
+  object-fit:contain;z-index:1;flex-shrink:0;
+  filter:drop-shadow(0 12px 24px rgba(0,0,0,.4));
+}
+.card__art .art__label{font-size:10px;letter-spacing:1px;color:rgba(244,241,234,.7)}
+.hero__fallback-logo{position:absolute;top:50%;inset-inline-end:9%;transform:translateY(-50%);width:clamp(150px,26vw,380px);max-height:70%;object-fit:contain;opacity:.55;filter:drop-shadow(0 16px 35px rgba(0,0,0,.4))}
+.hero__poster .card__art,.detail__poster .card__art{position:absolute;inset:0}
+.hero__poster > img,.detail__poster > img{position:absolute;inset:0;width:100%;height:100%;z-index:2;object-fit:cover}
+.detail__poster{position:relative}
+.detail__hero .hero__art{z-index:0}
+.detail__hero .hero__fallback-logo{opacity:.55}
+.detail__hero > img{position:absolute;inset:0;z-index:1}
+.detail__hero:after{z-index:2;pointer-events:none}
+@media(max-width:620px){
+  .brand__mark--full{width:120px;height:44px;max-width:120px}
+  .hero__fallback-logo{inset-inline-end:5%;width:55%;opacity:.35}
+}
