@@ -126,11 +126,10 @@
     desc.textContent = (channel.category || "قناة تلفزيونية") + " • " + channelKind(channel);
     art.innerHTML = poster(channel);
     art.hidden = false;
+    // All channels are played inside Al Ezz TV. Do not offer browser exits.
     var external = $("liveOfficial");
-    external.hidden = !(isOfficial(channel) || https(channel.stream));
-    external.href = isOfficial(channel) ? https(channel.official) : https(channel.stream) || "#";
-    external.textContent = isOfficial(channel) ? "فتح موقع الناشر" : "فتح رابط البث";
-    $("liveStart").textContent = isOfficial(channel) ? "زيارة البث الرسمي" : "تشغيل الآن";
+    if (external) { external.hidden = true; external.removeAttribute("href"); }
+    $("liveStart").textContent = "تشغيل الآن";
     var direct = !isOfficial(channel);
     $("liveRetry").disabled = !direct;
     $("liveMute").disabled = !direct;
@@ -587,7 +586,10 @@
     state.keydown = null;
   }
   function render(catalog, initialCategory) {
-    state.channels = (catalog && catalog.channels) || [];
+    state.channels = ((catalog && catalog.channels) || []).filter(function (channel) {
+      return channel.playback === "stream" && !!https(channel.stream) &&
+        /\.(m3u8|mp4)(\?|$)/i.test(channel.stream);
+    });
     state.catalogCategories=(catalog && catalog.categories)||[];
     state.search = "";
     state.category = initialCategory || "";
