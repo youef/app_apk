@@ -2,10 +2,13 @@
 (function () {
   "use strict";
   var Explore=window.AlezzExplore;
+  var Store=window.AlezzStore;
   var state = {
     channels: [], shown: [], current: null, search: "", category: "",
     hls: null, dash: null, frame: null, request: 0, timeout: null, mounted: false,
-    hlsRecoveries: 0
+    hlsRecoveries: 0, favoritesOnly: false, favorites: [],
+    dial: "", dialTimer: null, qualityLevels: [], qualityChoice: -1,
+    lastChannelKey: null, startAt: 0, pipActive: false
   };
 
   function $(id) { return document.getElementById(id); }
@@ -33,7 +36,9 @@
       arrow: '<path d="m9 6 6 6-6 6"/>',
       external: '<path d="M13 4h7v7M20 4l-9 9M18 14v5H5V6h5"/>',
       search: '<circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/>',
-      tv: '<rect x="3" y="5" width="18" height="13" rx="3"/><path d="M8 21h8"/>'
+      tv: '<rect x="3" y="5" width="18" height="13" rx="3"/><path d="M8 21h8"/>',
+      star: '<path d="m12 2 3.2 6.5 7.2 1.1-5.2 5.1 1.2 7.2-6.4-3.4-6.4 3.4 1.2-7.2-5.2-5.1 7.2-1.1z"/>',
+      pip: '<rect x="3" y="4" width="18" height="16" rx="2"/><rect x="11" y="12" width="8" height="6" rx="1"/>'
     };
     return '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
       (shapes[name] || shapes.play) + '</svg>';
@@ -74,6 +79,7 @@
   }
   function sortedChannels() {
     return state.channels.filter(function (c) {
+      if (state.favoritesOnly && state.favorites.indexOf(c.key) === -1) return false;
       if (state.category && !Explore.matches(c,state.category)) return false;
       var query = state.search.trim().toLocaleLowerCase();
       return !query || (c.title + " " + c.category + " " + (c.country || "")).toLocaleLowerCase().indexOf(query) !== -1;
@@ -88,6 +94,29 @@
     if (count) count.textContent = state.shown.length + " قناة";
     var label = $("liveSearchClear");
     if (label) label.hidden = !state.search;
+    var filterButton = $("liveFavoritesFilter");
+    if (filterButton) {
+      filterButton.setAttribute("aria-pressed", state.favoritesOnly ? "true" : "false");
+      filterButton.textContent = state.favoritesOnly ? "★ المفضلة فقط" : "☆ عرض المفضلة";
+    }
+    markGuideSelection();
+  }
+  function markGuideSelection() {
+    var host = $("liveGuideItems");
+    if (!host) return;
+    var key = state.current && state.current.key;
+    Array.prototype.forEach.call(host.querySelectorAll("[data-live-key]"),function(button){
+      var selected = key === button.getAttribute("data-live-key");
+      button.classList.toggle("is-selected",selected);
+      button.setAttribute("aria-pressed",String(selected));
+    });
+    var favorite = $("liveFavorite");
+    if (favorite) {
+      var on = key && state.favorites.indexOf(key) >= 0;
+      favorite.textContent = on ? "★ في المفضلة" : "☆ أضف للمفضلة";
+      favorite.setAttribute("aria-pressed",String(!!on));
+      favorite.disabled = !key;
+    }
   }
   function displaySelection(channel) {
     var title = $("liveCurrentTitle"), desc = $("liveCurrentDesc"), art = $("livePoster");
@@ -228,7 +257,8 @@
     if (!same || autoplay) stopStream();
     state.current = channel;
     displaySelection(channel);
-    updateGuide();
+    markGuideSelection();
+    if (Store && Store.setPref) Store.setPref("lastLiveChannel", channel.key);
     if (isOfficial(channel)) {
       stateText("هذه القناة تُشاهد عبر موقع الناشر. لا يمكن تشغيل صفحة ويب كرابط فيديو.", false);
       if (autoplay) window.open(https(channel.official), "_blank", "noopener,noreferrer");
@@ -267,10 +297,17 @@
   function mount() {
     if (!$("livePage")) return;
     state.mounted = true;
+    state.favorites = (Store && Store.pref && Store.pref("liveFavorites",[])) || [];
+    if (!Array.isArray(state.favorites)) state.favorites = [];
+    state.favoritesOnly = false;
     updateGuide();
+    var last = Store && Store.pref ? Store.pref("lastLiveChannel","") : "";
     var first = null;
+    for (var a=0; a<state.shown.length; a++) {
+      if (state.shown[a].key === last && playable(state.shown[a])) {first = state.shown[a];break;}
+    }
     for (var i = 0; i < state.shown.length; i++) {
-      if (!isOfficial(state.shown[i]) && playable(state.shown[i])) { first = state.shown[i]; break; }
+      if (!first && !isOfficial(state.shown[i]) && playable(state.shown[i])) { first = state.shown[i]; break; }
     }
     first = first || state.shown[0];
     if (first) select(first, false);
@@ -290,6 +327,18 @@
     });
     $("liveSearchClear").addEventListener("click", function () {
       state.search = ""; $("liveSearch").value = ""; updateGuide(); $("liveSearch").focus();
+    });
+    $("liveFavoritesFilter").addEventListener("click", function () {
+      state.favoritesOnly = !state.favoritesOnly;
+      updateGuide();
+    });
+    $("liveFavorite").addEventListener("click", function () {
+      if (!state.current) return;
+      var key = state.current.key, at = state.favorites.indexOf(key);
+      if (at < 0) state.favorites.push(key); else state.favorites.splice(at,1);
+      state.favorites = state.favorites.slice(0,150);
+      if (Store && Store.setPref) Store.setPref("liveFavorites",state.favorites);
+      if (state.favoritesOnly) updateGuide(); else markGuideSelection();
     });
     function chooseLiveCategory(value) {
       state.category=value||"";
@@ -366,6 +415,7 @@
     state.mounted = false;
     stopStream();
     if (state.keydown) document.removeEventListener("keydown", state.keydown);
+    clearTimeout(state.dialTimer);state.dialTimer=null;state.dial="";
     state.keydown = null;
   }
   function render(catalog, initialCategory) {
