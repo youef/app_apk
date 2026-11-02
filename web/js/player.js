@@ -28,6 +28,7 @@
   var preferredQuality = "auto";
   var youtubeFrame = null;
   var playbackToken = 0;
+  var fitMode = Store.pref("videoFit", "contain") === "cover" ? "cover" : "contain";
 
   function $(id) { return document.getElementById(id); }
 
@@ -326,6 +327,7 @@
 
       el.root.hidden = false;
       document.body.style.overflow = "hidden";
+      updateFit();
       startPlayback(current);
 
       show("playerQuickNext", !!nextItem);
@@ -342,7 +344,12 @@
     close: function () {
       persist(true);
       clearStage();
+      if ((document.fullscreenElement === el.root || document.webkitFullscreenElement === el.root) && document.exitFullscreen) {
+        try { var done = document.exitFullscreen(); if (done && done.catch) done.catch(function () {}); } catch (e) {}
+      }
+      el.root.classList.remove("is-immersive");
       el.root.hidden = true;
+      syncFullscreen();
       document.body.style.overflow = "";
       current = null;
       nextItem = null;
@@ -388,14 +395,63 @@
     wake();
   }
 
-  function toggleFullscreen() {
-    var root = el.root;
-    if (!document.fullscreenElement) {
-      if (root.requestFullscreen) root.requestFullscreen().catch(function () {});
-      else if (root.webkitRequestFullscreen) root.webkitRequestFullscreen();
-    } else if (document.exitFullscreen) {
-      document.exitFullscreen().catch(function () {});
+  function updateFit() {
+    el.root.classList.toggle("is-cropped", fitMode === "cover");
+    el.video.style.objectFit = fitMode;
+    var button = $("btnFit");
+    if (button) {
+      button.textContent = fitMode === "cover" ? "احتواء الصورة" : "ملء الصورة";
+      button.title = fitMode === "cover" ? "عرض الصورة دون قص" : "تكبير الصورة مع احتمال قص الأطراف";
+      button.setAttribute("aria-pressed", String(fitMode === "cover"));
     }
+  }
+  function toggleFit() {
+    fitMode = fitMode === "contain" ? "cover" : "contain";
+    Store.setPref("videoFit", fitMode);
+    updateFit();
+    wake();
+  }
+  function syncFullscreen() {
+    var full = document.fullscreenElement || document.webkitFullscreenElement;
+    var isOn = !!full || el.root.classList.contains("is-immersive");
+    el.root.classList.toggle("is-fullscreen", isOn);
+    $("btnFull").setAttribute("aria-pressed", String(isOn));
+    $("btnFull").title = isOn ? "الخروج من ملء الشاشة" : "ملء الشاشة";
+  }
+  function fallbackFullscreen() {
+    if (!el.video.hidden && el.video.webkitEnterFullscreen) {
+      try { el.video.webkitEnterFullscreen(); return; } catch (e) {}
+    }
+    el.root.classList.toggle("is-immersive");
+    syncFullscreen();
+    wake();
+  }
+
+  function toggleFullscreen() {
+    var root = el.root, fullscreen = document.fullscreenElement || document.webkitFullscreenElement;
+    if (fullscreen) {
+      var exit = document.exitFullscreen || document.webkitExitFullscreen;
+      if (exit) {
+        try { var stopped = exit.call(document); if (stopped && stopped.catch) stopped.catch(function () {}); }
+        catch (e) { syncFullscreen(); }
+      }
+      return;
+    }
+    if (root.classList.contains("is-immersive")) {
+      root.classList.remove("is-immersive"); syncFullscreen(); return;
+    }
+    // Safari iPhone uses native video fullscreen rather than document-element fullscreen.
+    if (/iPhone|iPod/i.test(navigator.userAgent || "") && !el.video.hidden && el.video.webkitEnterFullscreen) {
+      try { el.video.webkitEnterFullscreen(); return; } catch (e) {}
+    }
+    var enter = root.requestFullscreen || root.webkitRequestFullscreen || root.msRequestFullscreen;
+    if (enter) {
+      try {
+        var started = enter.call(root);
+        if (started && started.catch) started.catch(fallbackFullscreen);
+      } catch (e) { fallbackFullscreen(); }
+    } else fallbackFullscreen();
+    syncFullscreen();
   }
 
   /* Sources are explicit episode variants; HLS levels come from the live manifest.
@@ -604,6 +660,7 @@
     var v = el.video;
 
     v.setAttribute("webkit-playsinline", "");
+    v.setAttribute("playsinline", "");
     v.setAttribute("x-webkit-airplay", "allow");
     v.addEventListener("timeupdate", function () { if (!scrubbing) updateScrub(); persist(false); updateNextPrompt(); });
     v.addEventListener("playing", function () { show("playerSpinner", false); setPlayIcon(true); wake(); });
@@ -633,6 +690,7 @@
     $("btnBack10").addEventListener("click", function () { seek(-10); });
     $("btnFwd10").addEventListener("click", function () { seek(10); });
     $("btnFull").addEventListener("click", toggleFullscreen);
+    $("btnFit").addEventListener("click", toggleFit);
     $("btnQuality").addEventListener("click", toggleQualityMenu);
     document.addEventListener("click", function (event) {
       if (qualityMenuOpen() && !event.target.closest(".player__quality-wrap")) closeQualityMenu();
@@ -684,6 +742,9 @@
     scrub.addEventListener("pointerup", endScrub);
     scrub.addEventListener("pointercancel", function () { scrubbing = false; });
 
+    el.stage.addEventListener("dblclick", function (event) {
+      if (event.target === v || event.target === el.stage || event.target.id === "playerVeil") toggleFullscreen();
+    });
     el.root.addEventListener("mousemove", wake);
     el.root.addEventListener("touchstart", wake, { passive: true });
 
@@ -715,15 +776,18 @@
         case "m": v.muted = !v.muted; break;
         case "c": toggleCaptions(); break;
         case "f": toggleFullscreen(); break;
+        case "z": toggleFit(); break;
         case "Escape": Player.close(); break;
         case "n": if (nextItem) playNext(); break;
       }
       wake();
     });
 
-    document.addEventListener("fullscreenchange", function () {
-      el.root.classList.toggle("is-fullscreen", !!document.fullscreenElement);
-    });
+    document.addEventListener("fullscreenchange", syncFullscreen);
+    document.addEventListener("webkitfullscreenchange", syncFullscreen);
+    v.addEventListener("webkitbeginfullscreen", syncFullscreen);
+    v.addEventListener("webkitendfullscreen", syncFullscreen);
+    updateFit();
 
     window.addEventListener("beforeunload", function () { persist(true); });
   }

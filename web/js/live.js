@@ -453,12 +453,41 @@
     $("livePrev").addEventListener("click", function () { navigate(-1); });
     $("liveNext").addEventListener("click", function () { navigate(1); });
     $("liveFullscreen").addEventListener("click", function () {
-      var stage = $("liveStage");
-      if (document.fullscreenElement) { if (document.exitFullscreen) document.exitFullscreen(); }
-      else if (stage.requestFullscreen) {
-        var p = stage.requestFullscreen(); if (p && p.catch) p.catch(function () {});
-      } else if ($("liveVideo") && $("liveVideo").webkitEnterFullscreen) $("liveVideo").webkitEnterFullscreen();
+      var stage = $("liveStage"), video = $("liveVideo");
+      var fullscreen = document.fullscreenElement || document.webkitFullscreenElement;
+      if (fullscreen) {
+        var exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exit) { try { var out = exit.call(document); if (out && out.catch) out.catch(function () {}); } catch (e) {} }
+        return;
+      }
+      if (stage.classList.contains("is-immersive")) { stage.classList.remove("is-immersive"); return; }
+      function fallback() {
+        if (video && !video.hidden && video.webkitEnterFullscreen) {
+          try { video.webkitEnterFullscreen(); return; } catch (e) {}
+        }
+        stage.classList.add("is-immersive");
+      }
+      if (/iPhone|iPod/i.test(navigator.userAgent || "") && video && !video.hidden && video.webkitEnterFullscreen) {
+        try { video.webkitEnterFullscreen(); return; } catch (e) {}
+      }
+      var enter = stage.requestFullscreen || stage.webkitRequestFullscreen;
+      if (enter) {
+        try { var started = enter.call(stage); if (started && started.catch) started.catch(fallback); }
+        catch (e) { fallback(); }
+      } else fallback();
     });
+    $("liveFit").addEventListener("click", function () {
+      var stage = $("liveStage"), fit = !stage.classList.contains("is-cropped");
+      stage.classList.toggle("is-cropped", fit);
+      $("liveFit").textContent = fit ? "احتواء الصورة" : "ملء الصورة";
+      $("liveFit").setAttribute("aria-pressed", String(fit));
+      Store.setPref("videoFit", fit ? "cover" : "contain");
+    });
+    if (Store.pref("videoFit","contain") === "cover") {
+      $("liveStage").classList.add("is-cropped");
+      $("liveFit").textContent = "احتواء الصورة";
+      $("liveFit").setAttribute("aria-pressed","true");
+    }
     $("liveMute").addEventListener("click", function () {
       var video = $("liveVideo"); video.muted = !video.muted;
       $("liveMute").setAttribute("aria-pressed", String(video.muted));
@@ -589,7 +618,8 @@
       '<div class="live-quality-wrap"><button id="liveQuality" type="button" class="live-control" aria-haspopup="menu" aria-expanded="false" aria-controls="liveQualityMenu" disabled>الجودة: تلقائي</button><div id="liveQualityMenu" class="live-quality-menu" role="menu" hidden></div></div>' +
       '<button id="livePip" type="button" class="live-control" title="نافذة عائمة" aria-label="عرض القناة في نافذة عائمة">' + icon("pip") + ' نافذة عائمة</button>' +
       '<button id="liveMute" type="button" class="live-control live-control--icon" aria-pressed="false" title="كتم الصوت">' + icon("volume") + '</button>' +
-      '<button id="liveFullscreen" type="button" class="live-control live-control--icon" title="ملء الشاشة">' + icon("expand") + '</button></div>' +
+      '<button id="liveFit" type="button" class="live-control" aria-pressed="false" title="ملء الصورة مع احتمال قص الأطراف">ملء الصورة</button>' +
+      '<button id="liveFullscreen" type="button" class="live-control live-control--icon" title="ملء الشاشة" aria-label="ملء الشاشة">' + icon("expand") + '</button></div>' +
       '<a id="liveOfficial" class="live-official" target="_blank" rel="noopener noreferrer" hidden>' + icon("external") + ' فتح المصدر الرسمي</a>' +
       '<p class="live-help">البث متاح وفق المصدر وبلد المشاهدة. قد يرفض بعض الناشرين تشغيله داخل المتصفح (CORS)، كما أن iPhone وiPad يتحكمان تلقائيًا في جودات HLS الأصلية.</p>' +
       '</div><aside class="live-guide" aria-label="دليل القنوات">' +
