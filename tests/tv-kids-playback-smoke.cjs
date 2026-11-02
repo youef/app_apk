@@ -14,7 +14,10 @@ test("kids videos requested from published youtube table",home.includes('catalog
 test("kids and published flags enforced",home.includes("status=eq.published&is_kids=eq.true"));
 test("youtube url validated before listing",home.includes('YouTubeLink.usable(value(clip,"youtube_url"))'));
 test("youtube section exists",home.includes('"youtube".equals(section)'));
-test("kids section explicitly shows youtube shelf",home.includes('shelf("مقاطع يوتيوب للأطفال"'));
+test("kids world has no embedded YouTube shelf",!home.includes('shelf("مقاطع يوتيوب للأطفال"'));
+test("kids TV streams require approved direct playback",home.includes("private boolean kidsDirect(")&&home.includes('grid("محتوى أطفال ملائم للشاشة",kids)'));
+test("kids TV has age and time settings",home.includes("kidsAge=6,kidsDailyMinutes=60")&&home.includes('putInt("minutes",minutes)'));
+test("native playback enforces kids daily limit",player.includes("kidsClock")&&player.includes("seconds>=kidsMinutes*60"));
 test("cards use official YouTube thumbnails",home.includes('https://i.ytimg.com/vi/'));
 test("youtube opens official embed activity",home.includes("new Intent(this,YouTubeActivity.class)"));
 test("YouTube stays in the application",!youtube.includes("LegacyYoutubeBridge.open(this")&&!youtube.includes("openOfficialPlayer()"));
