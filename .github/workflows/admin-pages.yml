@@ -47,6 +47,7 @@ jobs:
           node --check admin/config.js
           node --check admin/series-quick.js
           node tests/series-quick-smoke.cjs
+          node tests/movie-quick-smoke.cjs
           node tests/quality-picker-smoke.cjs
           node tests/importer-smoke.cjs
           node tests/bulk-domain-smoke.cjs

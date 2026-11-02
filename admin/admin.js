@@ -1786,8 +1786,16 @@
   }
 
   function buildDrawerForm(tableCfg, row) {
-    $('#drawerTitle').textContent = (row ? 'تعديل ' : 'إضافة ') + tableCfg.singular;
+    var quickMovie = tableCfg.table === 'aseel_movies' && !row;
+    $('#drawerTitle').textContent = quickMovie ? 'إضافة فيلم بسرعة' : (row ? 'تعديل ' : 'إضافة ') + tableCfg.singular;
     $('#drawerKicker').textContent = tableCfg.label;
+    $('#drawer').classList.toggle('drawer--quick-movie', quickMovie);
+    var caption = $('#drawerSave .btn-label');
+    if (caption) caption.textContent = quickMovie ? 'حفظ الفيلم' : 'حفظ';
+    var note = $('.drawer-note');
+    if (note) note.textContent = quickMovie
+      ? 'يُحفظ الفيلم في قاعدة البيانات؛ لا يُعرض للجمهور قبل اعتماد الحقوق والنشر.'
+      : 'يُحفظ السجل مباشرة في قاعدة البيانات.';
     $('#drawerError').hidden = true;
     $('#drawerError').textContent = '';
 
@@ -1797,7 +1805,12 @@
     if (tableCfg.table === 'aseel_home_collection_items') {
       form.append(el('p', { class: 'form-hint' }, 'اختر الصف ثم عنصرًا واحدًا فقط: فيلم أو مسلسل أو قناة أو حلقة.'));
     }
-    if (tableCfg.table === 'aseel_movies' || tableCfg.table === 'aseel_series') {
+    if (tableCfg.table === 'aseel_movies' && !row) {
+      buildQuickMovieForm(tableCfg, form);
+      updatePreview();
+      return;
+    }
+    if (tableCfg.table === 'aseel_series') {
       form.append(el('p', { class: 'form-hint' }, 'يُصنَّف العمل تلقائيًا عند الحفظ، والحلقات ترث تصنيفات المسلسل. أضف رمز بلد الإنتاج الصحيح للحصول على القوائم التركية والأجنبية وغيرها.'));
     }
 
@@ -1819,6 +1832,90 @@
     });
 
     updatePreview();
+  }
+
+
+  /* New-movie form: one link works for native MP4/HLS or official YouTube. */
+  function movieQuickLinkType(value) {
+    try {
+      var u = new URL(String(value || '').trim());
+      if (u.protocol !== 'https:' || !u.hostname || u.username || u.password) return '';
+      var host = u.hostname.toLowerCase();
+      if (host === 'youtu.be' || host === 'youtube.com' || host === 'www.youtube.com' ||
+          host === 'm.youtube.com' || host === 'www.youtube-nocookie.com') {
+        var parts = u.pathname.split('/').filter(Boolean);
+        var id = host === 'youtu.be' ? (parts.length === 1 ? parts[0] : '') :
+          u.pathname === '/watch' ? u.searchParams.get('v') :
+          ((parts[0] === 'embed' || parts[0] === 'live' || parts[0] === 'shorts') && parts.length === 2 ? parts[1] : '');
+        return /^[A-Za-z0-9_-]{11}$/.test(id || '') ? 'youtube' : '';
+      }
+      return /\\.(?:mp4|m3u8)$/i.test(u.pathname) ? 'stream' : '';
+    } catch (err) { return ''; }
+  }
+
+  function buildQuickMovieForm(tableCfg, form) {
+    var simple = el('section', { class: 'movie-quick' });
+    simple.append(el('p', { class: 'movie-quick-intro' }, 'اسم الفيلم + رابط المشاهدة. الباقي اختياري.'));
+    var grid = el('div', { class: 'form-grid movie-quick-grid' });
+    var primary = ['title_ar', 'poster_url', 'quality', 'country_code'];
+    var fields = {};
+    tableCfg.fields.forEach(function (field) { fields[field.key] = field; });
+
+    grid.append(buildField(Object.assign({}, fields.title_ar, {
+      label: 'اسم الفيلم', placeholder: 'اكتب اسم الفيلم', required: true, span: 2
+    }), null));
+
+    var linkWrap = el('div', { class: 'field field--wide movie-quick-link', dataset: { field: 'movie_quick_url' } });
+    linkWrap.append(el('label', { for: 'movieQuickUrl' }, 'رابط تشغيل الفيلم'));
+    var quickUrl = el('input', { id: 'movieQuickUrl', name: 'movie_quick_url', type: 'url',
+      placeholder: 'https://example.com/movie.mp4', 'aria-label': 'رابط تشغيل الفيلم' });
+    quickUrl.setAttribute('inputmode', 'url');
+    linkWrap.append(quickUrl,
+      el('p', { class: 'field-hint' }, 'MP4 أو M3U8 مباشر، أو رابط يوتيوب رسمي.'),
+      el('p', { class: 'field-msg', id: 'e_movie_quick_url' }));
+    grid.append(linkWrap);
+
+    grid.append(buildField(Object.assign({}, fields.poster_url, {
+      label: 'صورة الفيلم (اختياري)', hint: 'بدون صورة؟ يظهر شعار العز تلقائيًا.'
+    }), null));
+    grid.append(buildField(Object.assign({}, fields.quality, {
+      label: 'الجودة', default: 'HD'
+    }), null));
+    grid.append(buildField(Object.assign({}, fields.country_code, {
+      label: 'بلد الإنتاج (اختياري)', type: 'select', options: 'movieCountries',
+      hint: 'لتصنيف العمل تركي أو أجنبي أو عربي حسب البلد.'
+    }), null));
+
+    simple.append(grid);
+    simple.append(el('p', { class: 'movie-quick-tip' }, '✓ تصنيفات النوع تكتشف تلقائيًا من بيانات الفيلم.'));
+    form.append(simple);
+
+    var extras = el('details', { class: 'movie-quick-extra', id: 'movieQuickExtra' });
+    extras.append(el('summary', null, 'خيارات إضافية: الوصف، التصنيف، الجودات، الحقوق والنشر'));
+    extras.append(el('p', { class: 'movie-quick-extra-hint' },
+      'استخدم الخيارات المتقدمة فقط عند الحاجة؛ النشر يتطلب حقوقًا معتمدة.'));
+    cfg.fieldGroups.forEach(function (entry) {
+      var fieldsInGroup = tableCfg.fields.filter(function (f) {
+        return f.group === entry[0] && primary.indexOf(f.key) === -1;
+      });
+      if (!fieldsInGroup.length) return;
+      var section = el('fieldset', { class: 'form-group' });
+      section.append(el('legend', null, entry[1]));
+      var items = el('div', { class: 'form-grid' });
+      fieldsInGroup.forEach(function (field) { items.append(buildField(field, null)); });
+      section.append(items);
+      extras.append(section);
+    });
+    form.append(extras);
+    quickUrl.addEventListener('input', function () {
+      var link = quickUrl.value.trim(), type = movieQuickLinkType(link);
+      var direct = form.elements.namedItem('stream_url'), youtube = form.elements.namedItem('youtube_url');
+      if (direct) direct.value = type === 'stream' ? link : '';
+      if (youtube) youtube.value = type === 'youtube' ? link : '';
+      linkWrap.classList.toggle('is-invalid', !!link && !type);
+      var msg = $('#e_movie_quick_url');
+      if (msg) msg.textContent = link && !type ? 'الرابط يجب أن يكون MP4 أو M3U8 مباشرًا أو يوتيوب صالحًا.' : '';
+    });
   }
 
   function initialValue(field, row) {
@@ -2042,6 +2139,25 @@
       payload[field.key] = value;
     });
 
+    if (tableCfg.table === 'aseel_movies' && !state.editing) {
+      var quickUrlInput = $('#movieQuickUrl');
+      if (quickUrlInput) {
+        var link = quickUrlInput.value.trim();
+        var type = movieQuickLinkType(link);
+        if (!link && !payload.stream_url && !payload.youtube_url) {
+          errors.movie_quick_url = 'أدخل رابط تشغيل الفيلم أولًا.';
+        } else if (link && !type) {
+          errors.movie_quick_url = 'استخدم رابط MP4 / M3U8 مباشرًا أو فيديو يوتيوب صالحًا.';
+        } else if (type === 'stream') {
+          payload.stream_url = link;
+          payload.youtube_url = null;
+        } else if (type === 'youtube') {
+          payload.youtube_url = link;
+          payload.stream_url = null;
+        }
+      }
+    }
+
     /* normalise a few well-known columns */
     if (payload.country_code && !/^[A-Za-z]{2}$/.test(payload.country_code)) {
       errors.country_code = 'رمز الدولة يجب أن يكون حرفين لاتينيين مثل SA أو TR.';
@@ -2102,6 +2218,8 @@
     Object.keys(errors).forEach(function (key) {
       var field = form.querySelector('.field[data-field="' + key + '"]');
       if (!field) return;
+      var disclosure = field.closest('details');
+      if (disclosure) disclosure.open = true;
       field.classList.add('is-invalid');
       var msg = $('.field-msg', field);
       if (msg) msg.textContent = errors[key];
