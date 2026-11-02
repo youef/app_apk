@@ -30,9 +30,9 @@
   ],
   "shortcuts": [
     {
-      "name": "البث المباشر",
-      "short_name": "قنوات",
-      "url": "./#/live"
+      "name": "الأفلام",
+      "short_name": "أفلام",
+      "url": "./#/movies"
     },
     {
       "name": "المسلسلات",
@@ -40,9 +40,20 @@
       "url": "./#/series"
     },
     {
-      "name": "الأفلام",
-      "short_name": "أفلام",
-      "url": "./#/movies"
+      "name": "البث المباشر",
+      "short_name": "مباشر",
+      "url": "./#/live"
+    },
+    {
+      "name": "عالم الأطفال",
+      "short_name": "أطفال",
+      "url": "./#/kids"
+    },
+    {
+      "name": "الفيديو",
+      "short_name": "فيديو",
+      "url": "./#/youtube"
     }
-  ]
+  ],
+  "id": "./"
 }
