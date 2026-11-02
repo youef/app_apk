@@ -15,7 +15,7 @@
     series: "id,title_ar,title_original,description,poster_url,backdrop_url,release_year,category_id,quality,is_kids,age_rating,featured,display_order,status,rights_status,rights_holder,license_reference,country_code,language_code,genre_tags,auto_tags",
     seasons: "id,series_id,number,title_ar",
     episodes: "id,season_id,number,title_ar,description,poster_url,duration_minutes,stream_url,stream_variants,youtube_url,status,rights_status,genre_tags,auto_tags",
-    channels: "id,title_ar,description,poster_url,stream_url,category_id,is_kids,country_code,language_code,youtube_url,playback_mode,age_rating,display_order,genre_tags,auto_tags",
+    channels: "id,title_ar,description,poster_url,stream_url,category_id,is_kids,country_code,language_code,youtube_url,official_url,source_id,playback_mode,age_rating,display_order,genre_tags,auto_tags",
     youtube: "id,youtube_url,title_ar,channel_name,language_code,topic,age_rating,is_kids,sort_order,status",
     collections: "id,title_ar,slug,description,display_order,is_active",
     collection_items: "id,collection_id,movie_id,series_id,channel_id,episode_id,display_order"
@@ -242,16 +242,22 @@
       s.episodeCount = s.seasons.reduce(function (n, season) { return n + season.episodes.length; }, 0);
     });
 
-    // Only playable stream channels belong in the viewer; legacy official-link
-    // placeholders are retained in the database but never shown as broadcasts.
+    // Show public HLS broadcasts plus explicitly curated official watch pages.
+    // Official-link entries never pretend to be playable video streams; the
+    // user's browser opens the broadcaster's own site when selected.
+    var OFFICIAL_ARAB_SOURCE = "6c6b45a3-c4b2-419a-9139-9d9522a5272d";
     var channels = (raw.channels || []).filter(function (r) {
-      return r.playback_mode !== "official_link" &&
-        !!(r.stream_url && /^https:\/\//i.test(r.stream_url));
+      var isOfficial = r.playback_mode === "official_link" &&
+        r.source_id === OFFICIAL_ARAB_SOURCE && !r.stream_url && !r.youtube_url &&
+        !!(r.official_url && /^https:\/\//i.test(r.official_url));
+      return isOfficial || (r.playback_mode !== "official_link" &&
+        !!(r.stream_url && /^https:\/\//i.test(r.stream_url)));
     }).map(function (r) {
       var item = base("channel", r);
-      item.live = true;
-      item.playback = "stream";
-      item.official = null;
+      var isOfficial = r.playback_mode === "official_link";
+      item.live = !isOfficial;
+      item.playback = isOfficial ? "official_link" : "stream";
+      item.official = isOfficial ? r.official_url : null;
       return item;
     });
 
