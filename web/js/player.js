@@ -271,10 +271,22 @@
     el.root.classList.remove("is-idle");
     configureQualities(item);
 
-    if (item.youtubeId) { playYoutube(item.youtubeId, item.title); return; }
+    if (item.youtubeId) {
+      if (window.AlezzCast) window.AlezzCast.detach("player");
+      playYoutube(item.youtubeId, item.title); return;
+    }
 
     var url = activeStreamUrl || item.stream || "";
-    if (!url) { fail("لا يوجد رابط تشغيل مسجّل لهذا العنصر."); return; }
+    if (!url) {
+      if (window.AlezzCast) window.AlezzCast.detach("player");
+      fail("لا يوجد رابط تشغيل مسجّل لهذا العنصر."); return;
+    }
+    // Child-profile casting is disabled: the remote device cannot enforce the local viewing limit.
+    el.video.disableRemotePlayback=!!item.kids;
+    el.video.setAttribute("x-webkit-airplay",item.kids?"deny":"allow");
+    if (window.AlezzCast) window.AlezzCast.bind("player",el.video,Object.assign({},item,{stream:url}),{
+      cast:"playerCast",airplay:"playerAirPlay",status:"playerCastStatus"
+    });
 
     bindSubtitleTrack(item);
     show("playerSpinner", true);
@@ -343,6 +355,7 @@
 
     close: function () {
       persist(true);
+      if (window.AlezzCast) window.AlezzCast.detach("player");
       if (window.AlezzKids && window.AlezzKids.stop) window.AlezzKids.stop();
       clearStage();
       if ((document.fullscreenElement === el.root || document.webkitFullscreenElement === el.root) && document.exitFullscreen) {
@@ -382,6 +395,7 @@
   }
 
   function seek(delta) {
+    if (window.AlezzCast && window.AlezzCast.seekBy(delta)) return;
     var v = el.video;
     if (!v.duration) return;
     v.currentTime = Math.max(0, Math.min(v.duration - 1, v.currentTime + delta));
@@ -390,6 +404,7 @@
   }
 
   function togglePlay() {
+    if (window.AlezzCast && window.AlezzCast.playPause()) return;
     var v = el.video;
     if (v.paused) { var p = v.play(); if (p && p.catch) p.catch(function () {}); }
     else v.pause();
