@@ -141,6 +141,7 @@
   }
 
   function stopStream() {
+    if (window.AlezzCast) window.AlezzCast.detach("live");
     state.request++;
     clearTimeout(state.timeout); state.timeout = null;
     if (state.hls) { try { state.hls.destroy(); } catch (e) {} state.hls = null; }
@@ -295,6 +296,10 @@
     stateText("جارٍ الاتصال بمصدر القناة…", false);
     var url = https(channel.stream), type = mediaType(url);
     if (!url || !type) { error("لا يوجد رابط فيديو مباشر صالح لهذه القناة. افتح المصدر الرسمي إن توفر."); return; }
+    if (window.AlezzCast) window.AlezzCast.bind("live",video,{
+      stream:url,title:channel.title,subtitle:"بث مباشر • العز TV",poster:channel.poster,live:true,kids:channel.kids,
+      youtubeId:channel.youtubeId
+    },{cast:"liveCast",airplay:"liveAirPlay",status:"liveCastStatus"});
     state.timeout = setTimeout(function () {
       if (ticket === state.request && stage && !stage.classList.contains("is-playing"))
         error("تأخر بدء البث. قد يكون المصدر محجوبًا، أو غير متاح في بلدك، أو يمنع التشغيل عبر المتصفح.");
@@ -599,7 +604,7 @@
       '<div class="live-discovery" id="liveFilters">' + categoryButtons + '</div>' +
       '<div class="live-layout"><div class="live-viewer">' +
       '<div class="live-stage" id="liveStage">' +
-      '<video id="liveVideo" controls playsinline webkit-playsinline preload="none" aria-label="مشغل البث المباشر"></video>' +
+      '<video id="liveVideo" controls playsinline webkit-playsinline x-webkit-airplay="allow" preload="none" aria-label="مشغل البث المباشر"></video>' +
       '<div class="live-channel-hud" id="liveChannelHud" aria-live="off" hidden></div>' +
       '<div class="live-poster" id="livePoster"><span class="live-poster__glow"></span><span class="live-emblem">' +
         icon("tv") + '</span><span class="live-poster__text">AL EZZ <b>LIVE</b></span></div>' +
@@ -619,6 +624,9 @@
       '<button id="livePip" type="button" class="live-control" title="نافذة عائمة" aria-label="عرض القناة في نافذة عائمة">' + icon("pip") + ' نافذة عائمة</button>' +
       '<button id="liveMute" type="button" class="live-control live-control--icon" aria-pressed="false" title="كتم الصوت">' + icon("volume") + '</button>' +
       '<button id="liveFit" type="button" class="live-control" aria-pressed="false" title="ملء الصورة مع احتمال قص الأطراف">ملء الصورة</button>' +
+      '<google-cast-launcher id="liveCast" class="cast-launcher" title="Google Cast" aria-label="الإرسال إلى Google Cast" hidden></google-cast-launcher>' +
+      '<button id="liveAirPlay" type="button" class="live-control cast-airplay" aria-label="اختيار شاشة AirPlay" hidden>AirPlay</button>' +
+      '<span id="liveCastStatus" class="cast-status" role="status" aria-live="polite" hidden></span>' +
       '<button id="liveFullscreen" type="button" class="live-control live-control--icon" title="ملء الشاشة" aria-label="ملء الشاشة">' + icon("expand") + '</button></div>' +
       '<a id="liveOfficial" class="live-official" target="_blank" rel="noopener noreferrer" hidden>' + icon("external") + ' فتح المصدر الرسمي</a>' +
       '<p class="live-help">البث متاح وفق المصدر وبلد المشاهدة. قد يرفض بعض الناشرين تشغيله داخل المتصفح (CORS)، كما أن iPhone وiPad يتحكمان تلقائيًا في جودات HLS الأصلية.</p>' +
