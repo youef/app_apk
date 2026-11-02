@@ -797,3 +797,68 @@ body.tv-mode .browse-pill:focus-visible,body.tv-mode .browse-select select:focus
 @media(max-width:650px){.browse-shortcuts{padding:20px 14px 8px}.browse-panel{margin:14px 12px 21px;padding:14px 12px;border-radius:13px}
 .browse-panel__controls{grid-template-columns:repeat(2,minmax(0,1fr))}.browse-shortcut{flex-basis:141px;min-height:94px}}
 @media(max-width:365px){.browse-panel__controls{grid-template-columns:1fr}}
+
+
+/* AL EZZ TV — cross-device interaction and theatre-player refinements. */
+:root{color-scheme:dark}
+html{scroll-padding-top:calc(var(--topbar-h) + 18px)}
+body{-webkit-tap-highlight-color:transparent;overscroll-behavior-x:none}
+button,a,[role="button"]{touch-action:manipulation}
+button:focus-visible,a:focus-visible,[role="button"]:focus-visible{
+  outline:3px solid var(--gold);outline-offset:3px
+}
+#video{max-height:100dvh;min-height:0;object-fit:contain}
+.player__stage{min-height:0;max-height:100dvh}
+.player__chrome{padding-bottom:max(0px,env(safe-area-inset-bottom))}
+.player__top{padding-top:max(18px,env(safe-area-inset-top))}
+.player__controls{min-width:0}
+.player__time{white-space:nowrap}
+.player__controls .chipbtn{white-space:nowrap}
+.player__bottom{padding-bottom:max(18px,env(safe-area-inset-bottom))}
+.player__quality-menu{-webkit-overflow-scrolling:touch}
+@media(max-width:1024px){
+  .view{min-width:0}
+  .nav{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+  .nav__link{min-height:45px}
+  .card__media img{content-visibility:auto}
+  .player__controls{gap:8px}
+}
+@media(min-width:680px) and (max-width:1180px) {
+  .grid{grid-template-columns:repeat(auto-fill,minmax(154px,1fr))}
+  .hero__body{max-width:75%}
+  .player__top{padding:18px 26px}
+  .player__bottom{padding-inline:26px}
+}
+@media(max-width:620px) {
+  .topbar{padding-inline:max(10px,env(safe-area-inset-left));min-height:var(--topbar-h)}
+  .view{padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+  .brand__mark--full{width:min(120px,30vw)}
+  .player__top{padding:calc(12px + env(safe-area-inset-top)) 12px 12px}
+  .player__title strong{font-size:14px}
+  .player__title span{font-size:11px}
+  .player__bottom{padding:10px 10px calc(14px + env(safe-area-inset-bottom))}
+  .player__controls{flex-wrap:wrap;justify-content:center;row-gap:10px}
+  .player__spacer{flex-basis:100%;height:0;display:none}
+  .player__time{order:0;margin-inline:4px}
+  .player__quality-wrap{order:1}
+  #btnCaptions{order:2}
+  #btnFull{order:3}
+  .player__quality-menu{inset-inline-end:0;bottom:calc(100% + 10px)}
+  .player__center{pointer-events:none}
+  .player__bigplay{pointer-events:auto;width:68px;height:68px}
+}
+@media(max-height:430px) and (orientation:landscape){
+  .player__top{padding:8px 16px}
+  .player__bottom{padding:5px 16px 9px}
+  .player__controls{margin-top:2px}
+  .scrub{height:16px}
+  .player__center{display:none}
+}
+@media(hover:none){
+  .chipbtn,.iconbtn,.player__controls button{min-height:42px}
+  .player__quality-option{min-height:48px}
+}
+@media(min-width:1200px) and (pointer:coarse){
+  .nav__link{min-height:50px}
+  .card:focus-visible{transform:scale(1.045);outline:3px solid var(--gold)}
+}
