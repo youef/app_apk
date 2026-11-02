@@ -1849,7 +1849,7 @@
           ((parts[0] === 'embed' || parts[0] === 'live' || parts[0] === 'shorts') && parts.length === 2 ? parts[1] : '');
         return /^[A-Za-z0-9_-]{11}$/.test(id || '') ? 'youtube' : '';
       }
-      return /\\.(?:mp4|m3u8)$/i.test(u.pathname) ? 'stream' : '';
+      return /\.(?:mp4|m3u8)$/i.test(u.pathname) ? 'stream' : '';
     } catch (err) { return ''; }
   }
 
