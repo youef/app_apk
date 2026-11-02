@@ -338,7 +338,7 @@
       if (!options.restart && saved && saved.t > 5) current.resumeAt = saved.t;
 
       el.root.hidden = false;
-      document.body.style.overflow = "hidden";
+      document.body.style.overflow = document.body.classList.contains("watch-route") ? "" : "hidden";
       updateFit();
       startPlayback(current);
 
@@ -698,7 +698,10 @@
       }
     }, 1000);
 
-    $("playerClose").addEventListener("click", function () { Player.close(); });
+    $("playerClose").addEventListener("click", function () {
+      if (document.body.classList.contains("watch-route") && window.Alezz && window.Alezz.leaveWatch) window.Alezz.leaveWatch();
+      else Player.close();
+    });
     $("playerRetry").addEventListener("click", function () { if (current) startPlayback(current); });
     $("playerExternal").addEventListener("click", function () {
       var url = current && (activeStreamUrl || current.stream || (current.youtubeId ? "https://www.youtube.com/watch?v=" + current.youtubeId : ""));
@@ -798,7 +801,10 @@
         case "c": toggleCaptions(); break;
         case "f": toggleFullscreen(); break;
         case "z": toggleFit(); break;
-        case "Escape": Player.close(); break;
+        case "Escape":
+          if (document.body.classList.contains("watch-route") && window.Alezz && window.Alezz.leaveWatch) window.Alezz.leaveWatch();
+          else Player.close();
+          break;
         case "n": if (nextItem) playNext(); break;
       }
       wake();

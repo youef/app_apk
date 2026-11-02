@@ -404,13 +404,18 @@
   }
 
   function render(preserveScroll) {
-    var y = window.scrollY;
-    var route = parseHash();
-    var html = "";
-
+    var y = window.scrollY, route = parseHash(), html = "";
     if (!catalog) { view.innerHTML = skeletonHTML(); return; }
     if (Live) Live.destroy();
-
+    var playerNode = $("player");
+    if (playerNode && playerNode.parentNode && playerNode.parentNode.id === "watchPlayerSlot") {
+      if (Player.isOpen()) Player.close();
+      document.body.appendChild(playerNode);
+    } else if (route.name !== "watch" && Player.isOpen()) {
+      Player.close();
+    }
+    document.body.style.overflow = "";
+    document.body.classList.toggle("watch-route", route.name === "watch");
     switch (route.name) {
       case "movies": html = viewMovies(route.arg); break;
       case "series": html = viewSeries(route.arg); break;
@@ -418,27 +423,39 @@
       case "kids": html = viewKids(route.arg); break;
       case "youtube": html = viewYoutube(route.arg); break;
       case "mylist": html = viewMyList(route.arg); break;
-      case "title": html = viewHome(); break;
-      case "search": html = viewHome(); break;
+      case "title": html = viewDetail(route.arg); break;
+      case "watch": html = viewWatch(route.arg); break;
       default: html = viewHome();
     }
-
-    var unified=/^(movies|series|live|kids|youtube|mylist)$/.test(route.name);
-    view.className="view"+(unified?" is-experience experience--"+route.name:"");
-    view.innerHTML=route.name==="kids"?html:(unified?experienceHeader(route.name)+html:html);
-    document.body.classList.toggle("kids-world-active",route.name==="kids");
-    setNav(route.name);
+    var unified = /^(movies|series|live|kids|youtube|mylist)$/.test(route.name);
+    view.className = "view" + (unified ? " is-experience experience--" + route.name : "") +
+      (route.name === "title" ? " view--detail" : "") +
+      (route.name === "watch" ? " view--watch" : "");
+    view.innerHTML = route.name === "kids" ? html : (unified ? experienceHeader(route.name) + html : html);
+    document.body.classList.toggle("kids-world-active", route.name === "kids");
+    setNav(route.name === "title" || route.name === "watch" ? parentSection(route.arg) : route.name);
     if (preserveScroll) window.scrollTo(0, y); else window.scrollTo(0, 0);
     startHeroRotation();
     wireRails();
     if (route.name === "live" && Live) Live.mount();
     if (route.name === "kids" && Kids) Kids.mount(catalog,function(){render(true);});
-    if (route.name === "title" && route.arg) {
-      setTimeout(function () { openDetail(route.arg); }, 50);
+    if (route.name === "title") {
+      var item = findItem(route.arg);
+      if (item && item.kind === "series") showUnavailableEpisodes(item);
+    }
+    if (route.name === "watch" && playerNode) {
+      var slot = $("watchPlayerSlot");
+      if (slot) {
+        slot.appendChild(playerNode);
+        if (Player.isOpen()) Player.close();
+        var episode = findEpisode(route.arg);
+        if (episode) playEpisode(route.arg);
+        else playItem(findItem(route.arg));
+      }
     }
   }
 
-  function setNav(name) {
+    function setNav(name) {
     var map = { home: "home", movies: "movies", series: "series", live: "live", kids: "kids", youtube: "youtube", mylist: "mylist" };
     var active = map[name] || "home";
     Array.prototype.forEach.call(document.querySelectorAll(".nav__link"), function (a) {
@@ -490,16 +507,64 @@
     return m ? m.item : null;
   }
 
-  function sourceLabel(item) {
-    if (item.kind === "channel" && item.playback === "official_link") return "رابط جهة البث الرسمية (تنقل خارجي)";
-    if (item.youtubeId) return "YouTube (تضمين رسمي)";
-    if (item.live) return "بث مباشر من الناشر";
-    if (item.stream && /\.mp4/i.test(item.stream)) return "ملف MP4 مباشر";
-    if (item.stream && /\.m3u8/i.test(item.stream)) return "بث HLS";
-    return item.stream ? "مصدر خارجي" : "غير متوفر";
+  function findEpisode(key) {
+    if (!catalog || !catalog.series) return null;
+    for (var i = 0; i < catalog.series.length; i++) {
+      var series = catalog.series[i], all = seriesEpisodes(series);
+      for (var j = 0; j < all.length; j++) {
+        if (all[j].key === key) return { series: series, episode: all[j], list: all, index: j };
+      }
+    }
+    return null;
   }
 
-  function detailHTML(item) {
+  function parentSection(key) {
+    var entry = findEpisode(key), item = entry ? entry.series : findItem(key);
+    if (!item) return "home";
+    if (item.kind === "series") return "series";
+    if (item.kind === "movie") return "movies";
+    if (item.kind === "channel") return "live";
+    if (item.kind === "youtube") return "youtube";
+    return item.kids ? "kids" : "home";
+  }
+  function detailLink(key) { return "#/title/" + encodeURIComponent(key); }
+  function watchLink(key) { return "#/watch/" + encodeURIComponent(key); }
+
+  function viewDetail(key) {
+    var item = findItem(key);
+    if (!item) return '<div class="route-empty"><h1>هذا العمل غير متاح الآن</h1><a href="#/home" class="btn btn--gold">الرئيسية</a></div>';
+    return '<article class="title-page" id="titlePage"><div class="title-page__breadcrumb">' +
+      '<a href="#/' + parentSection(key) + '" data-detail-back>← العودة للمكتبة</a></div>' +
+      detailHTML(item) + '</article>';
+  }
+  function viewWatch(key) {
+    var entry = findEpisode(key), item = entry ? entry.series : findItem(key);
+    if (!item) return '<div class="route-empty"><h1>الفيديو غير متاح الآن</h1><a href="#/home">الرئيسية</a></div>';
+    var title = entry ? (item.title + " — " + entry.episode.title) : item.title;
+    var back = detailLink(item.key), all = entry ? entry.list : [];
+    var epLinks = all.length ? '<section class="watch-episodes"><div class="watch-section-head"><h2>حلقات المسلسل</h2><a href="' + back + '">كل التفاصيل</a></div>' +
+      '<div class="watch-episodes__list">' + all.map(function(ep) {
+        return '<a class="watch-episode' + (ep.key === key ? ' is-current' : '') + '" href="' + watchLink(ep.key) + '">' +
+          '<span>الحلقة ' + esc(ep.number || "") + '</span><strong>' + esc(ep.title) + '</strong></a>';
+      }).join("") + '</div></section>' : "";
+    return '<div class="watch-page" id="watchPage"><nav class="watch-breadcrumb" aria-label="العودة">' +
+      '<a href="' + back + '" data-watch-back>← ' + esc(item.title) + '</a></nav>' +
+      '<div class="watch-player-slot" id="watchPlayerSlot"></div>' +
+      '<div class="watch-page__below"><div class="watch-page__heading"><div><span>العز TV · مشاهدة</span><h1>' +
+      esc(title) + '</h1></div><a class="watch-page__details" href="' + back + '">تفاصيل العمل</a></div>' +
+      epLinks + '</div></div>';
+  }
+
+  function sourceLabel(item) {
+    if (item.kind === "channel" && item.playback === "official_link") return "الموقع الرسمي";
+    if (item.youtubeId) return "فيديو رسمي";
+    if (item.live) return "بث مباشر";
+    if (item.stream && /\\.mp4/i.test(item.stream)) return "MP4";
+    if (item.stream && /\\.m3u8/i.test(item.stream)) return "HLS";
+    return item.stream ? "مصدر مباشر" : "غير متوفر";
+  }
+
+    function detailHTML(item) {
     var fav = Store.isFavorite(item.key);
     var backdrop = item.backdrop;
     var canPlay = !!(item.stream || item.youtubeId || (item.seasons && item.episodeCount));
@@ -541,7 +606,7 @@
 
     return '<div class="detail__hero">' +
       heroFallback(item) + (backdrop ? '<img src="' + esc(backdrop) + '" alt="" onerror="this.remove()">' : "") +
-      '<button class="detail__close" data-close-sheet aria-label="إغلاق"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' +
+      '' +
       "</div>" +
       '<div class="detail__body"><div class="detail__head">' +
       '<div class="detail__poster">' + art(item) + (item.poster ? '<img src="' + esc(item.poster) + '" alt="" onerror="this.remove()">' : "") + "</div>" +
@@ -589,69 +654,63 @@
   }
 
   function showUnavailableEpisodes(item) {
-    if (!item || item.kind !== "series") return;
-    var panel = $("sheetPanel"), host = panel && panel.querySelector(".detail__body");
+    if (!item || item.kind !== "series" || parseHash().name !== "title") return;
+    var host = $("titlePage") && $("titlePage").querySelector(".detail__body");
     if (!host) return;
     var section = document.createElement("section");
     section.className = "eps eps--outline";
-    section.innerHTML = '<h3>بيانات بقية الحلقات</h3><p class="search__hint">جارٍ تحميل تفاصيل الحلقات...</p>';
+    section.innerHTML = '<h3>حلقات إضافية</h3><p class="search__hint">جارٍ تحميل بيانات الحلقات…</p>';
     host.appendChild(section);
     var seen = {};
     (item.seasons || []).forEach(function(season) {
       (season.episodes || []).forEach(function(ep) { seen[season.number + ":" + ep.number] = true; });
     });
+    if (!item.id || !CFG.supabaseUrl || !CFG.publishableKey) { section.remove(); return; }
     fetch(CFG.supabaseUrl + "/functions/v1/aseel-series-outline?series_id=" + encodeURIComponent(item.id), {
-      headers: { apikey: CFG.publishableKey, Accept: "application/json" },
-      cache: "no-store"
+      headers: { apikey: CFG.publishableKey, Accept: "application/json" }, cache: "no-store"
     }).then(function(response) {
       if (!response.ok) throw Error("Metadata not available");
       return response.json();
     }).then(function(data) {
-      if (!section.parentNode || $("sheet").hidden || !Array.isArray(data.seasons)) return;
+      if (!section.isConnected || parseHash().name !== "title" || parseHash().arg !== item.key ||
+          !Array.isArray(data.seasons)) return;
       var parts = [];
       data.seasons.forEach(function(season) {
-        var eps = (season.episodes || []).filter(function(ep) {
-          return !seen[season.number + ":" + ep.number];
-        });
+        var eps = (season.episodes || []).filter(function(ep) { return !seen[season.number + ":" + ep.number]; });
         if (!eps.length) return;
         parts.push('<h4>' + esc(season.title || "الموسم " + season.number) + '</h4>');
         eps.forEach(function(ep) {
           parts.push('<article class="outline-episode"><strong>' + esc(ep.title || "الحلقة " + ep.number) +
-            '</strong><p>' + esc(ep.description || "تتوفر بيانات الحلقة، لكن التشغيل لم يُعتمد بعد.") +
-            '</p><small>التشغيل غير متاح حاليًا</small></article>');
+            '</strong><p>' + esc(ep.description || "بيانات الحلقة موجودة، والتشغيل لم يُعتمد بعد.") +
+            '</p><small>التشغيل غير متاح</small></article>');
         });
       });
       if (!parts.length) { section.remove(); return; }
-      section.innerHTML = '<h3>حلقات لم يكتمل تشغيلها</h3>' + parts.join("");
+      section.innerHTML = '<h3>حلقات لم يُعتمد تشغيلها</h3>' + parts.join("");
     }).catch(function() {
-      if (section.parentNode) section.innerHTML =
-        '<h3>بيانات الحلقات</h3><p class="search__hint">تعذر تحميل تفاصيل الحلقات الآن.</p>';
+      if (section.isConnected) section.innerHTML =
+        '<h3>الحلقات الإضافية</h3><p class="search__hint">تعذر تحميل بيانات بعض الحلقات.</p>';
     });
   }
 
   function openDetail(key) {
     var item = findItem(key);
     if (!item) { toast("هذا العنصر لم يعد متوفرًا", "err"); return; }
-    lastFocus = document.activeElement;
-    var sheet = $("sheet");
-    $("sheetPanel").innerHTML = detailHTML(item);
-    sheet.hidden = false;
-    document.body.style.overflow = "hidden";
-    $("sheetPanel").scrollTop = 0;
-    var closeBtn = sheet.querySelector("[data-close-sheet]");
-    if (closeBtn) closeBtn.focus({ preventScroll: true });
-    if (item.kind === "series") showUnavailableEpisodes(item);
+    if (!$("searchPanel").hidden) closeSearch();
+    location.hash = detailLink(key);
   }
-
   function closeDetail() {
-    var sheet = $("sheet");
-    if (sheet.hidden) return;
-    sheet.hidden = true;
-    document.body.style.overflow = "";
-    if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll: true });
+    var route = parseHash();
+    if (route.name === "title") location.hash = "#/" + parentSection(route.arg);
+  }
+  function leaveWatch() {
+    if (parseHash().name !== "watch") { Player.close(); return; }
+    var route = parseHash(), entry = findEpisode(route.arg);
+    var item = entry ? entry.series : findItem(route.arg);
+    location.hash = item ? detailLink(item.key) : "#/home";
   }
 
-  /* ---------------------------------------------------------------- play */
+    /* ---------------------------------------------------------------- play */
 
   function nextEpisodeOf(item) {
     if (!item || item.kind !== "series") return null;
@@ -680,6 +739,10 @@
       return;
     }
 
+    if (parseHash().name !== "watch" || parseHash().arg !== item.key) {
+      location.hash = watchLink(item.key);
+      return;
+    }
     var payload = {
       key: item.key, kind: item.kind, title: item.title, subtitle: kindLabel(item.kind) + (item.year ? " · " + item.year : ""),
       poster: item.poster, art: artStyle(item), stream: item.stream, youtubeId: item.youtubeId,
@@ -694,7 +757,6 @@
     var saved = Store.progress(item.key);
     if (!opts.restart && saved && saved.t > 5) payload.resumeAt = saved.t;
     Player.open(payload, { next: opts.next || null });
-    closeDetail();
   }
 
   function playEpisode(epKey) {
@@ -708,6 +770,10 @@
       if (series === s) list = seriesEpisodes(s);
     });
     if (!episode) return;
+    if (parseHash().name !== "watch" || parseHash().arg !== epKey) {
+      location.hash = watchLink(epKey);
+      return;
+    }
     var idx = list.indexOf(episode);
     var next = list[idx + 1] || null;
     var payload = {
@@ -729,7 +795,6 @@
       poster: next.poster || series.poster, stream: next.stream, variants: next.variants || [],
       youtubeId: next.youtubeId, art: artStyle(series)
     } : null, onNext: next ? function () { playEpisode(next.key); } : null });
-    closeDetail();
   }
 
   /* ---------------------------------------------------------------- search */
@@ -929,7 +994,7 @@
         var added = Store.toggleFavorite(key);
         toast(added ? "أُضيف إلى قائمتك" : "أُزيل من قائمتك");
         var item = findItem(key);
-        if (!$("sheet").hidden && item) $("sheetPanel").innerHTML = detailHTML(item);
+        if (parseHash().name === "title" && item) render(true);
         if (parseHash().name === "mylist") render();
         return;
       }
@@ -952,12 +1017,10 @@
         Array.prototype.forEach.call(seasonBtn.parentNode.children, function (b) { b.classList.remove("is-on"); });
         seasonBtn.classList.add("is-on");
         var seriesKey = parseHash().arg;
-        var host = $("epList");
-        if (host && catalog) {
-          catalog.series.forEach(function (s) {
-            s.seasons.forEach(function (season) {
-              if (season.id === sid) host.innerHTML = episodesHTML(season);
-            });
+        var host = $("epList"), currentSeries = findItem(seriesKey);
+        if (host && currentSeries && currentSeries.kind === "series") {
+          currentSeries.seasons.forEach(function (season) {
+            if (season.id === sid) host.innerHTML = episodesHTML(season);
           });
         }
         return;
@@ -991,6 +1054,7 @@
       var openSearchPanel = !$("searchPanel").hidden;
 
       if (e.key === "Escape") {
+        if (parseHash().name === "watch" && Player.isOpen()) { leaveWatch(); return; }
         if (openSheet) { closeDetail(); return; }
         if (openSearchPanel) { closeSearch(); return; }
         if (Player.isOpen()) { Player.close(); return; }
@@ -1067,6 +1131,7 @@
   window.Alezz = {
     toast: toast,
     openDetail: openDetail,
+    leaveWatch: leaveWatch,
     openSearch: openSearch,
     play: function (key) { playItem(findItem(key)); },
     setTvMode: setTvMode,
