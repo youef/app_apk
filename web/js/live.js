@@ -152,6 +152,7 @@
       video.hidden = false;
     }
     state.hlsRecoveries = 0;
+    resetLiveQuality();
   }
   function error(message) {
     clearTimeout(state.timeout);
@@ -195,6 +196,94 @@
     });
     return useScript[globalName];
   }
+  function closeLiveQuality() {
+    var menu = $("liveQualityMenu"),button = $("liveQuality");
+    if (menu) menu.hidden = true;
+    if (button) button.setAttribute("aria-expanded","false");
+  }
+  function resetLiveQuality() {
+    state.qualityLevels = [];
+    state.qualityChoice = -1;
+    closeLiveQuality();
+    renderLiveQuality();
+  }
+  function renderLiveQuality() {
+    var button = $("liveQuality"),menu = $("liveQualityMenu");
+    if (!button || !menu) return;
+    var available = !!(state.hls && state.qualityLevels.length > 1);
+    button.disabled = !available;
+    var currentLevel = state.qualityLevels.filter(function (x) {
+      return x.index === state.qualityChoice;
+    })[0];
+    button.textContent = "الجودة: " + (currentLevel ? currentLevel.label : "تلقائي");
+    menu.replaceChildren();
+    if (!available) return;
+    [{index:-1,label:"تلقائي"}].concat(state.qualityLevels).forEach(function (level) {
+      var entry=document.createElement("button");
+      entry.type="button";
+      entry.className="live-quality-option"+(state.qualityChoice===level.index?" is-selected":"");
+      entry.setAttribute("role","menuitemradio");
+      entry.setAttribute("aria-checked",String(state.qualityChoice===level.index));
+      entry.textContent=level.label;
+      entry.addEventListener("click",function(){
+        if (state.hls) state.hls.currentLevel=level.index;
+        state.qualityChoice=level.index;
+        closeLiveQuality();
+        renderLiveQuality();
+        stateText("جودة البث: "+level.label,false);
+        if (button) button.focus();
+      });
+      menu.appendChild(entry);
+    });
+  }
+  function refreshHlsQuality(hls) {
+    if (hls !== state.hls || !hls.levels) return;
+    var seen={};
+    state.qualityLevels=hls.levels.map(function (level,index) {
+      var label=level.height?level.height+"p":
+        level.bitrate?Math.round(level.bitrate/1000)+" Kbps":"المستوى "+(index+1);
+      if (seen[label])label+=" ("+(index+1)+")";
+      seen[label]=true;
+      return {index:index,label:label,sort:level.height||level.bitrate||0};
+    }).sort(function (a,b) {return b.sort-a.sort;});
+    renderLiveQuality();
+  }
+  function showChannelHud(channel, override) {
+    var hud=$("liveChannelHud");
+    if (!hud) return;
+    clearTimeout(state.hudTimer);
+    var idx=state.shown.indexOf(channel);
+    if (idx<0)idx=state.channels.indexOf(channel);
+    var num=idx<0?"TV":String(idx+1).padStart(3,"0");
+    hud.textContent=(override||num)+"   "+(channel?channel.title:"");
+    hud.hidden=false;
+    state.hudTimer=setTimeout(function(){if(hud)hud.hidden=true;},2600);
+  }
+  function tuneChannelNumber() {
+    if (!state.dial) return;
+    var number=Number(state.dial);
+    state.dial="";
+    clearTimeout(state.dialTimer);
+    state.dialTimer=null;
+    var items=state.shown.length?state.shown:state.channels;
+    if (number>=1 && number<=items.length) select(items[number-1],true);
+    else stateText("لا توجد قناة بهذا الرقم في الدليل الحالي.",true);
+  }
+  function toggleLivePip() {
+    var video=$("liveVideo");
+    if (!video || video.hidden || !state.current) return;
+    try {
+      if (document.pictureInPictureElement && document.exitPictureInPicture) {
+        var exit=document.exitPictureInPicture();
+        if(exit&&exit.catch)exit.catch(function(){});
+      } else if (video.requestPictureInPicture) {
+        var request=video.requestPictureInPicture();
+        if(request&&request.catch)request.catch(function(){stateText("النافذة العائمة غير مدعومة أو منعها المتصفح.",true);});
+      } else if (video.webkitSupportsPresentationMode && video.webkitSupportsPresentationMode("picture-in-picture")) {
+        video.webkitSetPresentationMode(video.webkitPresentationMode==="picture-in-picture"?"inline":"picture-in-picture");
+      } else stateText("وضع النافذة العائمة غير متاح في هذا الجهاز.",false);
+    } catch (e) {stateText("تعذّر تشغيل النافذة العائمة.",true);}
+  }
   function startVideo(channel) {
     stopStream();
     var ticket = state.request, video = $("liveVideo"), stage = $("liveStage");
@@ -225,7 +314,11 @@
             maxBufferLength: 20, liveSyncDurationCount: 3
           });
           hls.on(Hls.Events.MEDIA_ATTACHED, function () { if (ticket === state.request) hls.loadSource(url); });
-          hls.on(Hls.Events.MANIFEST_PARSED, function () { requestPlay(video, ticket); });
+          hls.on(Hls.Events.MANIFEST_PARSED, function () {
+            if (ticket !== state.request) return;
+            refreshHlsQuality(hls);
+            requestPlay(video, ticket);
+          });
           hls.on(Hls.Events.ERROR, function (_event, detail) {
             if (ticket !== state.request || !detail || !detail.fatal) return;
             if (state.hlsRecoveries < 1 && detail.type === Hls.ErrorTypes.NETWORK_ERROR) {
@@ -257,6 +350,7 @@
     var same = state.current && state.current.key === channel.key;
     if (!same || autoplay) stopStream();
     state.current = channel;
+    showChannelHud(channel);
     displaySelection(channel);
     markGuideSelection();
     if (Store && Store.setPref) Store.setPref("lastLiveChannel", channel.key);
@@ -293,7 +387,8 @@
     if (!list.length) return;
     var at = -1;
     for (var i = 0; i < list.length; i++) if (state.current && list[i].key === state.current.key) { at = i; break; }
-    select(list[(at + direction + list.length) % list.length], true);
+    var target = at<0 ? (direction<0 ? list.length-1 : 0) : (at+direction+list.length)%list.length;
+    select(list[target], true);
   }
   function mount() {
     if (!$("livePage")) return;
@@ -369,6 +464,27 @@
       $("liveMute").setAttribute("aria-pressed", String(video.muted));
       $("liveMute").title = video.muted ? "إلغاء كتم الصوت" : "كتم الصوت";
     });
+    $("liveQuality").addEventListener("click", function () {
+      var menu=$("liveQualityMenu");
+      if(!menu || $("liveQuality").disabled)return;
+      var opening=menu.hidden;
+      menu.hidden=!opening;
+      $("liveQuality").setAttribute("aria-expanded",String(opening));
+      if(opening) {
+        var active=menu.querySelector(".is-selected");
+        if(active)active.focus();
+      }
+    });
+    $("liveQualityMenu").addEventListener("keydown",function(event){
+      if(event.key==="Escape"){event.preventDefault();closeLiveQuality();$("liveQuality").focus();}
+      if(event.key==="ArrowUp"||event.key==="ArrowDown"){
+        event.preventDefault();
+        var options=Array.prototype.slice.call(this.querySelectorAll("button"));
+        var at=options.indexOf(document.activeElement);
+        if(options.length)options[(at+(event.key==="ArrowDown"?1:-1)+options.length)%options.length].focus();
+      }
+    });
+    $("livePip").addEventListener("click",toggleLivePip);
     $("liveGoLive").addEventListener("click", function () {
       var video = $("liveVideo");
       try { if (video.seekable.length) video.currentTime = Math.max(0, video.seekable.end(video.seekable.length - 1) - 1); } catch (e) {}
@@ -395,6 +511,22 @@
       if (!state.mounted || !state.current || !document.getElementById("livePage")) return;
       var target = event.target;
       if (target && /input|textarea|select/i.test(target.tagName)) return;
+      if (!$("liveQualityMenu").hidden) {
+        if(event.key==="Escape"){event.preventDefault();closeLiveQuality();$("liveQuality").focus();}
+        return;
+      }
+      if (!event.ctrlKey && !event.altKey && !event.metaKey && /^[0-9]$/.test(event.key)) {
+        event.preventDefault();
+        state.dial = (state.dial+event.key).slice(-3);
+        clearTimeout(state.dialTimer);
+        state.dialTimer=setTimeout(tuneChannelNumber,1150);
+        var hud=$("liveChannelHud");
+        if (hud) {hud.hidden=false;hud.textContent="القناة "+state.dial+" … اضغط Enter"; }
+        return;
+      }
+      if (event.key==="Enter" && state.dial) {
+        event.preventDefault();tuneChannelNumber();return;
+      }
       var rowButton = target && target.closest && target.closest("#liveGuideItems [data-live-key]");
       if (rowButton && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
         event.preventDefault();
@@ -417,6 +549,7 @@
     stopStream();
     if (state.keydown) document.removeEventListener("keydown", state.keydown);
     clearTimeout(state.dialTimer);state.dialTimer=null;state.dial="";
+    clearTimeout(state.hudTimer);state.hudTimer=null;closeLiveQuality();
     state.keydown = null;
   }
   function render(catalog, initialCategory) {
