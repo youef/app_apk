@@ -13,14 +13,15 @@
 <meta name="description" content="العز TV: منصة عربية للأفلام والمسلسلات والقنوات المباشرة وعالم الأطفال، بواجهة سينمائية تعمل على الويب والتلفزيون الذكي.">
 <link rel="icon" href="assets/al-ezz-app-icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="alizz-tv-transparent.png">
-<link rel="manifest" href="manifest.webmanifest">
+<link rel="manifest" href="manifest.webmanifest?v=universal-20261102">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap">
 <link rel="preload" href="css/app.css" as="style">
-<link rel="stylesheet" href="css/app.css?v=metadata-series-20261102-v1">
+<link rel="stylesheet" href="css/app.css?v=quality-select-universal-20261102-1">
 <link rel="stylesheet" href="css/live.css?v=tv-studio-20261102-1">
+<link rel="stylesheet" href="css/unified.css?v=universal-20261102-1">
 <script>
 (function () {
   try {
@@ -59,6 +60,9 @@
   </nav>
 
   <div class="topbar__actions">
+    <button class="iconbtn app-install-trigger" type="button" data-install-app aria-label="تثبيت العز TV" title="تثبيت العز TV">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4M4 17v3h16v-3"/></svg>
+    </button>
     <button class="iconbtn" id="searchBtn" aria-label="بحث" title="بحث (S)">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
     </button>
@@ -92,7 +96,26 @@
     <a href="#/home">الرئيسية</a><a href="#/movies">أفلام</a><a href="#/series">مسلسلات</a><a href="#/live">مباشر</a><a href="../admin/">الاستوديو</a>
   </div>
 </footer>
-
+<nav class="app-dock" aria-label="التنقل بين أقسام العز TV">
+  <a href="#/home" data-dock="home"><span aria-hidden="true">⌂</span><small>الرئيسية</small></a>
+  <a href="#/movies" data-dock="movies"><span aria-hidden="true">▣</span><small>أفلام</small></a>
+  <a href="#/series" data-dock="series"><span aria-hidden="true">▤</span><small>مسلسلات</small></a>
+  <a href="#/live" data-dock="live"><span aria-hidden="true">◉</span><small>مباشر</small></a>
+  <a href="#/kids" data-dock="kids"><span aria-hidden="true">★</span><small>أطفال</small></a>
+  <a href="#/youtube" data-dock="youtube"><span aria-hidden="true">▶</span><small>فيديو</small></a>
+</nav>
+<div class="install-guide" id="installGuide" role="dialog" aria-modal="true" aria-labelledby="installGuideTitle" hidden>
+ <div class="install-guide__shade" data-dismiss-install></div>
+ <div class="install-guide__panel">
+  <button class="install-guide__close" data-dismiss-install aria-label="إغلاق">×</button>
+  <img src="assets/al-ezz-app-icon.svg" width="72" height="72" alt="">
+  <span class="install-guide__eyebrow">العز TV · تطبيق على جهازك</span>
+  <h2 id="installGuideTitle">ثبّت العز TV على الشاشة الرئيسية</h2>
+  <p id="installGuideSteps">يمكنك فتح العز TV من الشاشة الرئيسية بواجهة مستقلة عن علامات تبويب المتصفح.</p>
+  <p class="install-guide__note">المكتبة والأفلام والمسلسلات والبث المباشر تحتاج اتصالًا بالإنترنت ومصادر متاحة.</p>
+  <button class="btn btn--gold" data-dismiss-install>فهمت</button>
+ </div>
+</div>
 <!-- ============ detail sheet ============ -->
 <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
   <div class="sheet__scrim" data-close-sheet></div>
@@ -227,6 +250,7 @@
 <script src="js/store.js"></script>
 <script src="js/player.js?v=quality-select-universal-20261102-1"></script>
 <script src="js/live.js?v=tv-studio-20261102-1"></script>
-<script src="js/app.js?v=metadata-series-20261102-v1"></script>
+<script src="js/app.js?v=quality-select-universal-20261102-1"></script>
+<script src="js/install.js?v=universal-20261102-1"></script>
 </body>
 </html>
