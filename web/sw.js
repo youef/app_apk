@@ -1,11 +1,11 @@
 /* Al Ezz TV — cache app shell only, never streamed video or external APIs. */
-var CACHE="alezz-shell-kids-20261102-v1";
+var CACHE="alezz-shell-cast-airplay-20261102-v1";
 var BASE=self.registration.scope;
 var FILES=[
  "./","./index.html","./manifest.webmanifest","./alizz-tv-transparent.png",
  "./assets/al-ezz-app-icon.svg","./css/app.css","./css/unified.css","./css/live.css",
  "./js/legacy-polyfills.js","./js/config.js","./js/api.js","./js/explore.js",
- "./js/store.js","./js/app.js","./js/player.js","./js/live.js","./js/kids.js","./js/install.js","./css/kids.css",
+ "./js/store.js","./js/app.js","./js/player.js","./js/live.js","./js/kids.js","./js/cast.js","./js/install.js","./css/kids.css","./css/cast.css",
  "./data/snapshot.json"
 ];
 self.addEventListener("install",function(event){
