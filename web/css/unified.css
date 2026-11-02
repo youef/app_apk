@@ -1,0 +1,115 @@
+/* Al Ezz TV — shared cinematic design for phones, tablets, TV and desktop */
+:root{--ux-border:rgba(235,207,158,.16);--ux-gold:#e7c27c}
+.experience-hero{position:relative;isolation:isolate;margin:20px var(--pad-x) 0;
+ min-height:clamp(235px,31vw,410px);display:flex;align-items:flex-end;overflow:hidden;
+ border-radius:24px;border:1px solid var(--ux-border);background:#101522;
+ box-shadow:0 18px 65px rgba(0,0,0,.42)}
+.experience-hero__art{position:absolute;inset:0;z-index:-1}
+.experience-hero__art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 35%;opacity:.62}
+.experience-hero__art:after{content:"";position:absolute;inset:0;
+ background:linear-gradient(0deg,rgba(6,8,14,.96),rgba(6,8,14,.3) 85%),
+ linear-gradient(270deg,rgba(6,8,14,.65),transparent 80%)}
+.experience-hero__content{position:relative;padding:clamp(20px,4vw,50px);width:100%;max-width:820px}
+.experience-hero__eyebrow{display:inline-flex;align-items:center;gap:8px;color:#eed09a;letter-spacing:1.1px;font-weight:800;font-size:12px}
+.experience-hero__eyebrow span{font-size:19px}
+.experience-hero h1{margin:7px 0 5px;font-weight:900;font-size:clamp(32px,5.3vw,65px);line-height:1.22}
+.experience-hero p{color:#e0e0e8;font-size:clamp(13px,1.3vw,16px);line-height:1.85;max-width:610px;margin:6px 0 20px}
+.experience-hero__actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.experience-hero__actions .btn{min-height:44px;height:auto;padding:9px 20px;font-size:13px}
+.experience-hero__count{font-size:12px;color:#edcf98;padding:8px 12px;
+ background:rgba(3,5,8,.48);border-radius:20px;border:1px solid rgba(231,194,124,.15)}
+.experience-tabs{display:flex;gap:8px;margin:16px var(--pad-x) 12px;overflow-x:auto;padding:1px 0 10px}
+.experience-tabs__link{display:inline-flex;align-items:center;justify-content:center;min-width:78px;min-height:40px;
+ border-radius:12px;padding:8px 18px;flex-shrink:0;font-size:13px;font-weight:800;
+ border:1px solid var(--ux-border);background:rgba(255,255,255,.035);color:#c7ccda;transition:.2s}
+.experience-tabs__link:hover,.experience-tabs__link:focus-visible{color:#fff;background:rgba(231,194,124,.15)}
+.experience-tabs__link.is-active{background:linear-gradient(120deg,#e7c27c,#c99a45);border-color:transparent;color:#17110b}
+.is-experience>.pagehead,.is-experience>.series-page>.pagehead{display:none}
+.is-experience .experience-shelf-title{margin:20px var(--pad-x) 2px}
+.experience-shelf-title h2{font-size:clamp(19px,2.3vw,27px);margin:0;font-weight:800}
+.experience-shelf-title p{font-size:12px;color:var(--muted);margin:4px 0 0}
+.is-experience .section{margin-block:22px 28px}
+.is-experience .grid{gap:clamp(12px,1.8vw,26px)}
+.is-experience .card{border-radius:17px;border-color:rgba(255,255,255,.095);
+ box-shadow:0 10px 27px rgba(0,0,0,.18);transition:transform .22s ease,border-color .22s ease,box-shadow .22s ease}
+.is-experience .card:hover,.is-experience .card:focus-visible{border-color:rgba(231,194,124,.55);
+ transform:translateY(-5px);box-shadow:0 18px 42px rgba(0,0,0,.5)}
+.is-experience .classified-filters,.is-experience .browse-panel{border-color:var(--ux-border)}
+.is-experience .filter,.is-experience .browse-pill{min-height:40px}
+.is-experience .series-spotlight{margin:6px var(--pad-x) 22px;min-height:310px}
+.is-experience .series-metrics,.is-experience .series-library-head{padding:0 var(--pad-x)}
+.kids-filters{display:flex;flex-wrap:wrap;gap:11px;margin:16px var(--pad-x) 22px;
+ padding:15px;border:1px solid var(--ux-border);background:rgba(255,255,255,.035);border-radius:17px}
+.kids-filter{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:800;color:#d8c6a5;flex:1;min-width:130px}
+.kids-filter select{width:100%;background:#111722;border:1px solid var(--ux-border);border-radius:11px;
+ min-height:44px;color:#f4f1ea;padding:10px;font:inherit;outline-offset:2px}
+.is-experience .live-page{padding-top:8px}
+.is-experience .live-heading{padding:12px 0 4px}
+.is-experience .live-heading h1{font-size:clamp(21px,2.8vw,31px)}
+.is-experience .live-layout{min-width:0}
+.is-experience .live-viewer,.is-experience .live-guide{border-radius:18px;overflow:hidden}
+.is-experience .live-control{border-radius:11px}
+#player,#playerStage{width:100%;height:100%;height:100dvh;max-height:none}
+#video{height:100%;height:100dvh;max-height:none;width:100%;object-fit:contain}
+.player.is-cropped #video{object-fit:cover}
+.player.is-immersive{position:fixed;inset:0;z-index:10000;background:#000}
+.player .player__chrome{z-index:2}
+.player .player__bottom{padding-bottom:max(18px,env(safe-area-inset-bottom))}
+#btnFit{white-space:nowrap;min-height:42px;border:1px solid rgba(231,194,124,.4);background:rgba(231,194,124,.1)}
+#btnFit[aria-pressed=true]{background:var(--gold);color:#17110b}
+.player__next{z-index:12}.player__quick-next,.player__youtube-next{z-index:13}
+.live-stage video{width:100%;height:100%;object-fit:contain;background:#000}
+.live-stage.is-cropped video{object-fit:cover}
+.live-stage.is-immersive{position:fixed!important;inset:0!important;width:100vw!important;
+ height:100vh!important;height:100dvh!important;max-height:none!important;aspect-ratio:auto!important;
+ border-radius:0!important;z-index:9999!important;background:#000}
+.live-stage:fullscreen,.live-stage:-webkit-full-screen{width:100vw;height:100vh;height:100dvh;max-height:none;border-radius:0}
+.app-install-trigger{border:1px solid rgba(231,194,124,.26);background:rgba(231,194,124,.08);color:var(--gold)}
+.app-dock{display:none}
+.install-guide[hidden]{display:none!important}
+.install-guide{position:fixed;inset:0;z-index:20000;display:grid;place-items:center;padding:20px;direction:rtl}
+.install-guide__shade{position:absolute;inset:0;background:rgba(1,2,4,.87);backdrop-filter:blur(16px)}
+.install-guide__panel{position:relative;z-index:1;width:min(100%,460px);padding:28px;border-radius:26px;
+ background:linear-gradient(155deg,#1a2030,#0b0d15);border:1px solid rgba(231,194,124,.35);
+ box-shadow:0 20px 80px rgba(0,0,0,.65);display:flex;align-items:flex-start;flex-direction:column;gap:11px}
+.install-guide__panel>img{border-radius:17px}
+.install-guide__eyebrow{font-size:11px;color:var(--gold);font-weight:800}
+.install-guide__panel h2{font-size:24px;line-height:1.35;margin:0}
+.install-guide__panel p{font-size:14px;color:#cdd0da;line-height:1.95;margin:0}
+.install-guide__panel .install-guide__note{font-size:12px;color:var(--muted)}
+.install-guide__close{position:absolute;top:14px;left:17px;font-size:30px;width:40px;height:40px;
+ border-radius:50%;background:rgba(255,255,255,.08)}
+.install-guide__panel>.btn{align-self:stretch;text-align:center;justify-content:center;margin-top:8px}
+@media(max-width:1000px){.experience-hero{margin-top:14px;min-height:280px}.experience-hero__content{padding:25px}}
+@media(max-width:690px){
+ .experience-hero{margin:10px 12px 0;border-radius:17px;min-height:280px}
+ .experience-hero__content{padding:18px}.experience-hero h1{font-size:33px}
+ .experience-hero__actions .btn{font-size:12px;padding:9px 12px}
+ .experience-tabs{margin:12px 12px 2px;gap:6px}.experience-tabs__link{padding:7px 13px;min-width:65px}
+ .is-experience .experience-shelf-title{margin:16px 15px 2px}
+ .is-experience .series-spotlight{margin:4px 12px 20px}
+ .is-experience .kids-filters{margin-inline:12px}
+ .is-experience .live-page{padding:4px 12px 90px}
+ .view{padding-bottom:calc(94px + env(safe-area-inset-bottom))}
+ .app-dock{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:55;
+ align-items:stretch;justify-content:space-around;min-height:68px;
+ padding:6px 5px calc(6px + env(safe-area-inset-bottom));
+ background:rgba(9,12,20,.96);border-top:1px solid rgba(231,194,124,.22);
+ -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px)}
+ .app-dock a{min-width:0;flex:1;color:#a3a8b6;display:flex;align-items:center;flex-direction:column;
+ justify-content:center;gap:1px;border-radius:12px;font-size:11px;min-height:48px}
+ .app-dock a span{font-size:23px;font-weight:800;height:27px;line-height:27px}
+ .app-dock a small{font-size:10px;font-weight:700}
+ .app-dock a.is-active{color:var(--gold);background:rgba(231,194,124,.1)}
+ .app-dock a:focus-visible{outline:2px solid var(--gold)}
+ .player__controls{gap:6px!important}#btnFit{font-size:11px;padding:0 9px}
+}
+@media(max-width:420px){.app-dock a small{font-size:9px}.install-guide__panel{padding:22px}}
+@media(max-height:480px) and (orientation:landscape){.app-dock{display:none}.player .player__bottom{padding-bottom:8px}}
+body.tv-mode .app-dock{display:none!important}
+body.tv-mode .experience-hero{min-height:390px}
+body.tv-mode .experience-tabs__link{font-size:17px;min-height:52px;min-width:124px}
+body.tv-mode .experience-hero__actions .btn{min-height:60px;font-size:17px}
+body.tv-mode .experience-tabs__link:focus-visible{outline:4px solid var(--gold);outline-offset:3px}
+@media(display-mode:standalone){.topbar{background:rgba(5,7,11,.88)}}
+@media(prefers-reduced-motion:reduce){.experience-hero,.experience-tabs__link,.app-dock a{transition:none!important}}
