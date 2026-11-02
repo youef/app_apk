@@ -27,25 +27,86 @@
  const rest=(table,qs="",init={})=>call(cfg.supabaseUrl+"/rest/v1/"+table+(qs?"?"+qs:""),init);
  const eq=v=>"eq."+encodeURIComponent(v);
  
+
+ const allowedGenres=["action","adventure","animation","anime","biography","comedy","crime","documentary","drama","education","family","fantasy","history","horror","kids","mystery","nature","romance","scifi","science","short","sports","thriller","war","western","music","classic"];
+ let sourceIds=new Set(),categoryOptions=[];
+ const text=id=>($(id)?.value||"").trim();
+ function https(input){try{const u=new URL(String(input||"").trim());return u.protocol==="https:"?u.href:"";}catch{return "";}}
+ function guessGenres(haystack){
+   const s=String(haystack||"").toLowerCase(),out=[];
+   const tests=[["drama",/دراما|درامي|\bdrama\b/],["romance",/رومانسي|رومانسية|عشق|حب|\bromance\b/],
+     ["action",/أكشن|اكشن|\baction\b/],["thriller",/تشويق|إثارة|\bthriller\b/],
+     ["crime",/جريمة|جرائم|\bcrime\b/],["comedy",/كوميديا|كوميدي|\bcomedy\b/],
+     ["horror",/رعب|\bhorror\b/],["anime",/أنمي|انمي|\banime\b/],
+     ["animation",/كرتون|الرسوم المتحركة|\banimation\b/],["documentary",/وثائقي|\bdocumentary\b/],
+     ["history",/تاريخي|\bhistorical\b/],["family",/عائلي|\bfamily\b/],
+     ["scifi",/خيال علمي|\bsci.?fi\b/]];
+   tests.forEach(x=>{if(x[1].test(s))out.push(x[0]);});return out;
+ }
+ function parseGenres(){
+   return [...new Set(text("batchGenres").toLowerCase().split(/[,\s،]+/).filter(x=>allowedGenres.includes(x)))].slice(0,12);
+ }
+ function bestCategory(genres){
+   const preferred={"drama":["دراما"],"romance":["رومانسي"],"comedy":["كوميديا"],"anime":["أنيمي"],"action":["أكشن"],"crime":["جريمة"],"documentary":["أفلام وثائقية"],"horror":["رعب"],"family":["عائلي"],"thriller":["إثارة"]};
+   for(const genre of genres)for(const name of preferred[genre]||[]){
+     const item=categoryOptions.find(c=>c.name_ar===name);if(item)return item.id;
+   }return "";
+ }
+ function populateWork(){
+   if(!batch)return;
+   $("batchTitle").value=batch.title||"";
+   $("batchOriginal").value=batch.title_original||"";
+   $("batchYear").value=batch.release_year&&batch.release_year>=1880&&batch.release_year<=2100?batch.release_year:"";
+   const description=batch.description||"";
+   $("batchDescription").value=description;
+   $("batchPosterUrl").value=https(batch.poster_url)||"";
+   $("batchBackdropUrl").value=https(batch.backdrop_url||batch.poster_url)||"";
+   let country=String(batch.country_code||"").toUpperCase();
+   if(!country&&/(?:التركي|التركية|turkish|türk|çirkin)/i.test((batch.title||"")+" "+description))country="TR";
+   $("batchCountry").value=country;
+   $("batchLanguage").value=batch.language_code||"";
+   const genres=(batch.genre_tags||[]).length?batch.genre_tags:guessGenres((batch.title||"")+" "+description);
+   $("batchGenres").value=genres.join(", ");
+   $("batchCategory").value=bestCategory(genres);
+ }
+ function metadata(){
+   const year=Number(text("batchYear")),poster=text("batchPosterUrl"),backdrop=text("batchBackdropUrl");
+   if(poster&&!https(poster))throw Error("رابط البوستر يجب أن يبدأ بـ HTTPS");
+   if(backdrop&&!https(backdrop))throw Error("رابط الخلفية يجب أن يبدأ بـ HTTPS");
+   if(text("batchYear")&&(!Number.isInteger(year)||year<1880||year>2100))throw Error("سنة الإصدار غير صحيحة");
+   const genres=parseGenres(),title=(text("batchTitle")||batch?.title||"").slice(0,250);
+   if(!title)throw Error("اسم المسلسل أو الفيلم مطلوب");
+   return {title_ar:title,title_original:text("batchOriginal").slice(0,250)||null,
+     description:text("batchDescription").slice(0,2000)||null,
+     release_year:text("batchYear")?year:null,
+     poster_url:https(poster)||null,backdrop_url:https(backdrop)||https(poster)||null,
+     country_code:text("batchCountry")||null,language_code:text("batchLanguage")||null,
+     category_id:text("batchCategory")||null,genre_tags:genres};
+ }
  function previewBatch(){
   const panel=$("batchOverview");if(!panel)return;
   panel.hidden=!batch;if(!batch)return;
-  const poster=$("batchPoster"),src=batch.poster_url||"";
-  poster.hidden=!(src.indexOf("https://")===0);
-  if(!poster.hidden)poster.src=src;else poster.removeAttribute("src");
-  $("batchPreviewTitle").textContent=batch.title||"مسلسل بلا عنوان";
-  $("batchPreviewDescription").textContent=batch.description||"لا يوجد وصف في الصفحة؛ يمكن إضافته من لوحة الإدارة.";
+  const poster=$("batchPoster"),src=https(text("batchPosterUrl")||batch.poster_url||"");
+  poster.hidden=!src;
+  if(src&&poster.src!==src)poster.src=src;else if(!src)poster.removeAttribute("src");
+  $("batchPreviewTitle").textContent=text("batchTitle")||batch.title||"عمل بلا عنوان";
+  $("batchPreviewDescription").textContent=text("batchDescription")||batch.description||
+     "لم يوفر المصدر وصفًا؛ يمكن إدخاله يدويًا.";
   const count=new Set(items.map(item=>item.season||1)).size;
-  $("batchPreviewMeta").textContent=(batch.title_original?batch.title_original+" · ":"")+
-    (batch.release_year?batch.release_year+" · ":"")+count+" موسم · "+items.length+" حلقة";
+  $("batchPreviewMeta").textContent=(text("batchOriginal")?text("batchOriginal")+" · ":"")+
+     (text("batchYear")?text("batchYear")+" · ":"")+
+     (text("batchCountry")?text("batchCountry")+" · ":"")+
+     count+" موسم · "+items.length+" حلقة";
  }
- const status=()=>{previewBatch();const tested=items.filter(x=>x.result).length;$("countAll").textContent=items.length;$("countGood").textContent=items.filter(x=>x.result?.ok).length;$("countBad").textContent=items.filter(x=>x.result&&!x.result.ok).length;$("countSaved").textContent=saved;$("batchProgress").style.width=(items.length?Math.round(100*tested/items.length):0)+"%";$("batchDiscover").disabled=busy||!authenticated;$("batchVerify").disabled=busy||!items.length;$("batchCancel").disabled=!busy;$("batchSave").disabled=busy||!items.some(x=>x.result?.ok&&!x.saved);$("batchExport").disabled=!items.length;
+ const status=()=>{previewBatch();const tested=items.filter(x=>x.result).length;$("countAll").textContent=items.length;$("countGood").textContent=items.filter(x=>x.result?.ok).length;$("countBad").textContent=items.filter(x=>x.result&&!x.result.ok).length;$("countSaved").textContent=saved;$("batchProgress").style.width=(items.length?Math.round(100*tested/items.length):0)+"%";$("batchDiscover").disabled=busy||!authenticated;$("batchVerify").disabled=busy||!items.length;$("batchCancel").disabled=!busy;$("batchSave").disabled=busy||!batch||!items.some(x=>x.checked!==false&&!x.saved&&(x.result?.ok||$("batchIncludeUnverified").checked));$("batchExport").disabled=!items.length;
   const tbody=$("batchRows");tbody.replaceChildren();
   if(!items.length){const t=document.createElement("tr"),c=document.createElement("td");c.colSpan=6;c.textContent="لم يتم اكتشاف عناصر";t.append(c);tbody.append(t);}
   for(const [i,x] of items.entries()){
    const tr=document.createElement("tr");if(x.result&&!x.result.ok)tr.className="failed";
-   const td=document.createElement("td"),cb=document.createElement("input");cb.type="checkbox";cb.checked=x.checked!==false;cb.disabled=!x.result?.ok||x.saved;cb.onchange=()=>x.checked=cb.checked;td.append(cb);tr.append(td);
-   const t=document.createElement("td");t.textContent=x.result?.title||x.title||batch?.title||"غير معنون";tr.append(t);
+   const td=document.createElement("td"),cb=document.createElement("input");cb.type="checkbox";cb.checked=x.checked!==false;cb.disabled=x.saved;cb.onchange=()=>x.checked=cb.checked;td.append(cb);tr.append(td);
+   const t=document.createElement("td"),name=document.createElement("input");name.type="text";name.maxLength=250;name.className="batch-edit-title";
+   name.setAttribute("aria-label","عنوان الحلقة "+(x.number||""));name.value=x.title||x.result?.title||"الحلقة "+(x.number||"");
+   name.disabled=x.saved;name.addEventListener("change",()=>{x.title=name.value.trim();});t.append(name);tr.append(t);
    const s=document.createElement("td");s.textContent=batch?.type==="series"?"الموسم "+x.season+"، الحلقة "+x.number:"فيلم";tr.append(s);
    const l=document.createElement("td"),a=document.createElement("a");a.href=x.url;a.target="_blank";a.rel="noopener noreferrer";a.textContent="فتح الرابط";l.append(a);tr.append(l);
    const uCell=document.createElement("td"),u=document.createElement("input");
@@ -55,14 +116,19 @@
    u.addEventListener("change",()=>{x.media_url=u.value.trim()||undefined;x.result=null;
      status();msg("تغير الرابط؛ اضغط «افحص روابط التشغيل» للتأكد من صلاحيته.");});
    uCell.append(u);tr.append(uCell);
-   const c=document.createElement("td");c.textContent=x.saved?"✓ محفوظ":!x.result?"بانتظار الفحص":x.result.ok?"✓ مؤكد: "+(x.result.checks?.find(v=>v.ok)?.format||"صالح"):"✗ "+(x.result.reason||x.result.error||"رابط غير صالح");tr.append(c);tbody.append(tr);
+   const c=document.createElement("td");
+   c.textContent=x.saved?(x.savedMode==="published"?"✓ منشور":"✓ محفوظ كمسودة"):
+     !x.result?"بانتظار الفحص":x.result.ok?"✓ جاهز: "+(x.result.checks?.find(v=>v.ok)?.format||"فيديو"):
+     "معلومات فقط — "+(x.result.reason||x.result.error||"رابط غير متحقق");
+   if(x.result&&!x.result.ok)tr.classList.add("is-metadata");
+   tr.append(c);tbody.append(tr);
   }
  };
  async function discover(){
   if(busy||!authenticated)return;
   let url;try{url=new URL($("batchUrl").value.trim());if(url.protocol!=="https:")throw Error();}catch{return msg("أدخل رابط HTTPS صحيحًا","error");}
   busy=true;batch=null;items=[];saved=0;status();msg("يتم اكتشاف مواسم المسلسل وحلقاته...");
-  try{batch=await edge({action:"discover",url:url.href,kind:$("batchKind").value});items=(batch.items||[]).map(x=>({...x,checked:true,saved:false}));$("batchTitle").value=batch.title||"";
+  try{batch=await edge({action:"discover",url:url.href,kind:$("batchKind").value});items=(batch.items||[]).map(x=>({...x,checked:true,saved:false}));populateWork();
      busy=false;status();msg("تم جلب بيانات المسلسل و"+items.length+" حلقة. يتم فحص التشغيل تلقائيًا...","success");
      if(items.length)await verify();else msg("تم جلب البيانات ولكن الصفحة لا تُظهر حلقات قابلة للاكتشاف؛ جرّب رابط المواسم أو مصدرًا آخر.","error");}
   catch(e){msg("فشل الاكتشاف: "+e.message,"error");}finally{busy=false;status();}
@@ -106,6 +172,16 @@
   busy=false;status();msg("حُفظ "+created+"، مكرر "+duplicates+"، أخطاء "+errors.length+(errors.length?": "+errors.slice(0,2).join("؛ "):""),errors.length?"error":"success");
  }
  function csv(){const quote=x=>'"'+String(x??"").replace(/"/g,'""')+'"';const lines=[["title","season","episode","source_page","stream","working","saved","error"].map(quote).join(",")];for(const x of items)lines.push([x.result?.title||x.title,x.season,x.number,x.url,x.result?.stream_url||"",!!x.result?.ok,!!x.saved,x.result?.reason||""].map(quote).join(","));const blob=new Blob(["\ufeff"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="al-ezz-import-check.csv";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
- $("batchDiscover").onclick=discover;$("batchVerify").onclick=verify;$("batchSave").onclick=save;$("batchExport").onclick=csv;$("batchCancel").onclick=()=>{stopped=true;msg("سيُوقف الفحص بعد إكمال الطلبات الجارية.");};
- (async()=>{try{const sess=savedSession();if(!sess?.user_id)throw Error("سجل الدخول أولًا من صفحة الإدارة");const rs=await rest("aseel_admins","select=active&user_id="+eq(sess.user_id));if(!rs?.some(x=>x.active))throw Error("ليس لديك صلاحية إدارة نشطة");authenticated=true;const data=await rest("aseel_content_sources","select=id,title,verified,license_reference&verified=eq.true&limit=200");for(const source of data||[]){if(!source.license_reference)continue;const opt=document.createElement("option");opt.value=source.id;opt.textContent=source.title;$("batchSource").append(opt);}msg("تم التحقق من دخول المسؤول. الصق رابطًا للبدء.","success");}catch(e){msg("فشل فتح الاستيراد: "+e.message,"error");}status();})();
+ ["batchTitle","batchOriginal","batchYear","batchCountry","batchDescription","batchPosterUrl","batchGenres"].forEach(id=>{
+   $(id).addEventListener("input",previewBatch);
+  });
+  $("batchIncludeUnverified").addEventListener("change",status);
+  $("batchGenres").addEventListener("change",()=>{if(!text("batchCategory"))$("batchCategory").value=bestCategory(parseGenres());});
+  $("batchDiscover").onclick=discover;$("batchVerify").onclick=verify;$("batchSave").onclick=save;$("batchExport").onclick=csv;$("batchCancel").onclick=()=>{stopped=true;msg("سيُوقف الفحص بعد إكمال الطلبات الجارية.");};
+ (async()=>{try{const sess=savedSession();if(!sess?.user_id)throw Error("سجل الدخول أولًا من صفحة الإدارة");const rs=await rest("aseel_admins","select=active&user_id="+eq(sess.user_id));if(!rs?.some(x=>x.active))throw Error("ليس لديك صلاحية إدارة نشطة");authenticated=true;const data=await rest("aseel_content_sources","select=id,title,verified,license_reference&verified=eq.true&limit=200");
+    for(const source of data||[]){if(!source.license_reference)continue;sourceIds.add(source.id);
+      const opt=document.createElement("option");opt.value=source.id;opt.textContent=source.title;$("batchSource").append(opt);}
+    categoryOptions=await rest("aseel_categories","select=id,name_ar&published=eq.true&limit=500");
+    for(const cat of categoryOptions||[]){const opt=document.createElement("option");opt.value=cat.id;opt.textContent=cat.name_ar;$("batchCategory").append(opt);}
+    msg("تم التحقق من دخول المسؤول. الصق رابطًا للبدء.","success");}catch(e){msg("فشل فتح الاستيراد: "+e.message,"error");}status();})();
 })();
