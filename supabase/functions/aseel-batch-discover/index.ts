@@ -148,13 +148,26 @@ function inspectPage(text,url,hosts){
   if(!structuredEpisodes.has(key))structuredEpisodes.set(key,{url:link,title:label||"الحلقة "+ep,season:se,number:ep,
     media_url:media(link)?link:undefined,poster_url:joined(att(opening,"data-poster"),url,hosts)||""});
  }
+ // Follow a small set of explicitly linked season pages at the same host.
+ // This is HTML discovery only — no headless login, playback interception or DRM.
+ const seasonPages=[];
+ for(const m of text.matchAll(/<a\b[^>]*>[\s\S]*?<\/a>/gi)){
+  const open=m[0].match(/^<a\b[^>]*>/i)?.[0]||"",label=clean(m[0]);
+  const link=joined(att(open,"href")||att(open,"data-href"),url,hosts);
+  if(!link||link===url||media(link)||new URL(link).hostname!==new URL(url).hostname)continue;
+  const labelAndUrl=label+" "+link;
+  if(/(?:الموسم|season)[\s/:_.-]*(?:\d{1,2}|الأول|الثاني|الثالث|الرابع|الخامس)/i.test(labelAndUrl) &&
+     !/(?:الحلقة|episode|ep)[\s/:_.-]*\d{1,3}/i.test(labelAndUrl) && !seasonPages.includes(link)){
+    seasonPages.push(link);
+  }
+ }
  const found=new Map();
  for(const item of pages.concat([...structuredEpisodes.values()])){
   const key=item.season+":"+item.number;
   if(!found.has(key)||(!found.get(key).media_url&&item.media_url))found.set(key,item);
  }
  return {title:title||structuredTitle,description:description||structuredDescription,poster:poster||structuredPoster,
-  original,year,streams:[...streams].slice(0,8),
+  original,year,seasonPages:seasonPages.slice(0,8),streams:[...streams].slice(0,8),
   pages:[...found.values()].sort((a,b)=>a.season-b.season||a.number-b.number).slice(0,120)};
 
 }
@@ -204,13 +217,27 @@ Deno.serve(async req=>{
   if(b.action==="discover"){await approveDestination(target.href,hosts);
    let page={title:"",description:"",poster:"",streams:[],pages:[]};
    if(!media(target.href)){const r=await request(target.href,hosts);if(!/text\/html|application\/xhtml/i.test(r.type))return json({error:"NOT_HTML"},422);page=inspectPage(decode(r),r.url,hosts);}
+    if(b.kind!=="movie"&&page.seasonPages?.length){
+      const host=new URL(target.href).hostname,more=await Promise.allSettled(page.seasonPages.slice(0,8).map(async link=>{
+        if(new URL(link).hostname!==host)return [];
+        const response=await request(link,hosts,550000);
+        if(!/text\/html|application\/xhtml/i.test(response.type))return [];
+        return inspectPage(decode(response),response.url,hosts).pages;
+      }));
+      const seen=new Map();
+      for(const item of page.pages.concat(...more.filter(x=>x.status==="fulfilled").map(x=>x.value))){
+        const key=item.season+":"+item.number;
+        if(!seen.has(key)||(!seen.get(key).media_url&&item.media_url))seen.set(key,item);
+      }
+      page.pages=[...seen.values()].sort((a,b)=>a.season-b.season||a.number-b.number).slice(0,120);
+    }
     const archived=await archiveList(target.href,hosts);
     const derived=page.pages.length?page.pages:page.streams.map(link=>{
       const parts=seq(link);return parts?{url:link,media_url:link,title:"الحلقة "+parts[1],season:parts[0],number:parts[1]}:null;
     }).filter(Boolean);
     const listing=archived.length?archived:derived;
    const type=b.kind==="series"||(b.kind!=="movie"&&listing.length>1)?"series":"movie";
-   const items=type==="series"?listing.length?listing:[{url:target.href,title:page.title,season:1,number:1}]:[{url:target.href,title:page.title||"فيلم جديد",season:1,number:1,media_url:media(target.href)?target.href:undefined}];
+   const items=type==="series"?listing:[{url:target.href,title:page.title||"فيلم جديد",season:1,number:1,media_url:media(target.href)?target.href:undefined}];
     return json({type,title:page.title||"عمل جديد",description:page.description,poster_url:page.poster,
       title_original:page.original,release_year:page.year,items:items.slice(0,120),discovered:items.length});
   }
