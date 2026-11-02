@@ -425,6 +425,6 @@
     $('posterPreview').onerror=()=>{$('posterPreview').hidden=true;};
     $('metaPoster').onchange=()=>{const v=$('metaPoster').value.trim();if(v.startsWith('https://')){$('posterPreview').hidden=false;$('posterPreview').src=v;}else $('posterPreview').hidden=true;};
   }
-  async function init(){wire();try{const result=await API('init');app.csrf=result.csrf;updateStatus(result);refreshLibrary();setInterval(refreshLibrary,2500);activity('الموقع جاهز. الصق رابط فيلم أو مسلسل لبدء الاكتشاف.','success');}catch(error){activity(error.message,'error');toast(error.message,'error');}}
+  async function init(){wire();try{const result=await API('init');app.csrf=result.csrf;updateStatus(result);refreshLibrary();setInterval(()=>{if(document.visibilityState==='visible')refreshLibrary();},8000);activity('الموقع جاهز. الصق رابط فيلم أو مسلسل لبدء الاكتشاف.','success');}catch(error){activity(error.message,'error');toast(error.message,'error');}}
   init();
 })();
