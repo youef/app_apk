@@ -373,7 +373,9 @@
     if (shown.length) return content + '<div class="grid grid--wide">' +
       shown.map(function(x) { return cardHTML(x, {wide:true}); }).join("") + '</div>';
     if (Api.failedTables && Api.failedTables.indexOf("youtube") !== -1)
-      return content + emptyHTML("تعذّر تحميل الفيديوهات. أعد المحاولة بعد التحقق من الاتصال.");
+      return content + '<div class="empty"><strong>تعذّر تحميل فيديوهات يوتيوب</strong>' +
+        '<p>تعذّر الوصول إلى مكتبة المقاطع. تحقق من الاتصال وأعد المحاولة.</p>' +
+        '<button type="button" class="btn btn--gold" onclick="location.reload()">تحديث المكتبة</button></div>';
     return content + emptyHTML("لا توجد فيديوهات منشورة الآن.");
   }
 
