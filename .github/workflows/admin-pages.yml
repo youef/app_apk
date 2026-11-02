@@ -40,6 +40,7 @@ jobs:
           node --check web/js/app.js
           node --check web/js/api.js
           node --check web/js/live.js
+          node --check web/js/kids.js
           node --check web/js/install.js
           node --check web/sw.js
           node --check admin/admin.js
@@ -53,6 +54,7 @@ jobs:
           node tests/movie-quick-smoke.cjs
           node tests/quality-picker-smoke.cjs
           node tests/universal-ui-smoke.cjs
+          node tests/kids-world-smoke.cjs
           node tests/importer-smoke.cjs
           node tests/bulk-domain-smoke.cjs
           node tests/bulk-metadata-smoke.cjs
