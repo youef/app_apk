@@ -425,6 +425,7 @@
       case "kids": html = viewKids(route.arg); break;
       case "youtube": html = viewYoutube(route.arg); break;
       case "mylist": html = viewMyList(route.arg); break;
+      case "downloads": html = viewDownloads(); break;
       case "title": html = viewDetail(route.arg); break;
       case "watch": html = viewWatch(route.arg); break;
       default: html = viewHome();
@@ -445,6 +446,12 @@
       var item = findItem(route.arg);
       if (item && item.kind === "series") showUnavailableEpisodes(item);
     }
+    if(route.name==="downloads"&&navigator.storage&&navigator.storage.estimate){
+      navigator.storage.estimate().then(function(est){
+        var host=$("offlineSpace");if(host&&est.quota)
+          host.textContent="مساحة الموقع: "+window.AlezzOffline.formatBytes(est.usage||0)+" / "+window.AlezzOffline.formatBytes(est.quota);
+      }).catch(function(){});
+    }
     if (route.name === "watch" && playerNode) {
       var slot = $("watchPlayerSlot");
       if (slot) {
@@ -458,7 +465,7 @@
   }
 
     function setNav(name) {
-    var map = { home: "home", movies: "movies", series: "series", live: "live", kids: "kids", youtube: "youtube", mylist: "mylist" };
+    var map = { home: "home", movies: "movies", series: "series", live: "live", kids: "kids", youtube: "youtube", mylist: "mylist", downloads: "downloads" };
     var active = map[name] || "home";
     Array.prototype.forEach.call(document.querySelectorAll(".nav__link"), function (a) {
       var selected = a.getAttribute("data-nav") === active;
@@ -505,6 +512,12 @@
   function findItem(key) {
     if (!catalog) return null;
     if (catalog.byKey[key]) return catalog.byKey[key];
+    if (window.AlezzOffline && window.AlezzOffline.get(key)) {
+      var rec = window.AlezzOffline.get(key);
+      return { key:key,kind:rec.kind,title:rec.title,poster:rec.poster,
+        stream:window.AlezzOffline.virtualURL(key),variants:[],youtubeId:"",live:false,
+        offlinePermitted:true,rights:{status:"approved"},parentKey:rec.parentKey };
+    }
     var m = continueWatching().filter(function (e) { return e.item.key === key; })[0];
     return m ? m.item : null;
   }
@@ -533,6 +546,47 @@
   function detailLink(key) { return "#/title/" + encodeURIComponent(key); }
   function watchLink(key) { return "#/watch/" + encodeURIComponent(key); }
 
+
+  function offlineItem(item,parent) {
+    if(!item)return null;
+    var episode=item.kind==="episode", saved=!!(window.AlezzOffline&&window.AlezzOffline.get(item.key));
+    var licensed=episode ? !!(item.rightsStatus==="approved"&&parent&&parent.rights&&parent.rights.status==="approved") :
+      !!(item.rights&&item.rights.status==="approved");
+    return {key:item.key,kind:item.kind,
+      title:episode&&parent?parent.title+" — "+item.title:item.title,
+      poster:item.poster||(parent&&parent.poster)||"",parentKey:episode&&parent?parent.key:"",
+      stream:item.stream,variants:item.variants||[],youtubeId:item.youtubeId,live:!!item.live,
+      offlinePermitted:licensed||saved};
+  }
+  function offlineButton(item,parent,cls) {
+    if(!item||!window.AlezzOffline||(item.kind!=="movie"&&item.kind!=="episode"))return "";
+    var saved=window.AlezzOffline.get(item.key);
+    var eligible=!!(saved||window.AlezzOffline.canSave(offlineItem(item,parent)));
+    return '<button type="button" class="'+(cls||"btn btn--ghost")+' offline-download" data-offline-save="'+esc(item.key)+'"'+
+      (eligible?"":' disabled title="الحفظ متاح لملفات MP4 المباشرة والمعتمدة فقط"')+'>'+
+      (saved?"✓ محفوظ دون إنترنت":eligible?"↓ تنزيل دون إنترنت":"التنزيل غير متاح")+'</button>';
+  }
+  function viewDownloads() {
+    var O=window.AlezzOffline;
+    if(!O)return '<div class="empty"><strong>المتصفح لا يدعم التنزيلات المحلية</strong></div>';
+    var saved=O.list();
+    return '<section class="offline-page"><header class="offline-head"><div><span>AL EZZ TV · OFFLINE</span>'+
+      '<h1>تنزيلاتي</h1><p>ملفات الفيديو المحفوظة على هذا الجهاز للمشاهدة دون اتصال.</p></div>'+
+      '<div class="offline-space" id="offlineSpace"></div></header>'+
+      '<label class="offline-auto"><input type="checkbox" id="offlineAuto"'+(O.autoEnabled()?' checked':'')+'>'+
+      '<span><strong>الحفظ التلقائي أثناء المشاهدة</strong><small>قد يستهلك بيانات إضافية عند تشغيل ملفات MP4 المعتمدة. يمكنك إيقافه.</small></span></label>'+
+      '<p class="offline-info">التنزيلات داخل مساحة هذا الموقع في المتصفح، وقد يحذفها النظام عند امتلاء الجهاز أو مسح بيانات الموقع. ليست جميع المصادر قابلة للتخزين: بث HLS ويوتيوب والفيديوهات المحمية تحتاج اتصالًا أو ترخيصًا خاصًا.</p>'+
+      (saved.length?'<div class="offline-list">'+saved.map(function(row){
+        var poster=row.poster?'<img loading="lazy" src="'+esc(row.poster)+'" alt="" onerror="this.remove()">':'';
+        return '<article class="offline-row"><span class="offline-poster">'+poster+'<span>▶</span></span>'+
+          '<div class="offline-row__body"><h2>'+esc(row.title)+'</h2><small>'+O.formatBytes(row.size)+' · نسخة على الجهاز</small>'+
+          '<div class="offline-row__actions"><a href="'+watchLink(row.key)+'" class="btn btn--gold">▶ تشغيل</a>'+
+          '<button type="button" class="btn btn--ghost" data-offline-remove="'+esc(row.key)+'">حذف النسخة</button></div></div></article>';
+      }).join("")+'</div>':
+      '<div class="offline-empty"><strong>لا توجد تنزيلات بعد</strong><p>افتح صفحة الفيلم أو الحلقة، واختر «تنزيل دون إنترنت».</p>'+
+      '<a href="#/movies" class="btn btn--gold">تصفح الأفلام</a></div>')+'</section>';
+  }
+
   function viewDetail(key) {
     var item = findItem(key);
     if (!item) return '<div class="route-empty"><h1>هذا العمل غير متاح الآن</h1><a href="#/home" class="btn btn--gold">الرئيسية</a></div>';
@@ -555,6 +609,7 @@
       '<div class="watch-player-slot" id="watchPlayerSlot"></div>' +
       '<div class="watch-page__below"><div class="watch-page__heading"><div><span>العز TV · مشاهدة</span><h1>' +
       esc(title) + '</h1></div><a class="watch-page__details" href="' + back + '">تفاصيل العمل</a></div>' +
+      '<div class="watch-download-area">'+offlineButton(entry?entry.episode:item,entry?item:null)+'</div>'+
       epLinks + '</div></div>';
   }
 
@@ -625,6 +680,7 @@
       '<button class="btn btn--ghost" data-fav="' + esc(item.key) + '"><svg viewBox="0 0 24 24" aria-hidden="true">' +
       (fav ? '<path d="M5 12l5 5L19 7"/>' : '<path d="M12 5v14M5 12h14"/>') + "</svg>" +
       (fav ? "في قائمتي" : "أضف إلى قائمتي") + "</button>" +
+      (item.kind==="movie"?offlineButton(item):"") +
       "</div></div></div>" +
       (item.description ? '<p class="detail__desc">' + esc(item.description) + "</p>" : "") +
       (meta.length ? '<div class="detail__meta">' + meta.map(function (m) {
@@ -642,7 +698,7 @@
     if (!season || !season.episodes.length) return '<p class="search__hint">لا حلقات منشورة في هذا الموسم.</p>';
     return season.episodes.map(function (e) {
       var pct = progressOf(e), started = pct > 1 && pct < 97;
-      return '<button class="ep' + (started ? ' is-playing' : '') + '" data-ep="' + esc(e.key) + '" aria-label="تشغيل ' + esc(e.title) + '">' +
+      return '<div class="episode-line"><button class="ep' + (started ? ' is-playing' : '') + '" data-ep="' + esc(e.key) + '" aria-label="تشغيل ' + esc(e.title) + '">' +
         '<span class="ep__thumb">' +
         (e.poster ? '<img src="' + esc(e.poster) + '" alt="" loading="lazy" onerror="this.remove()">' : '<span class="ep__thumb-placeholder">▶</span>') +
         '<span class="ep__number">الحلقة ' + esc(e.number || "—") + '</span></span>' +
@@ -652,7 +708,8 @@
         (started ? '<span class="ep__progress"><i style="width:' + pct.toFixed(1) + '%"></i></span>' : '') +
         '</span><span class="ep__trailing">' +
         (e.duration ? '<span class="ep__dur">' + esc(fmtDuration(e.duration)) + '</span>' : '') +
-        '<span class="ep__play">▶</span></span></button>';
+        '<span class="ep__play">▶</span></span></button>' +
+        offlineButton(e, findEpisode(e.key) && findEpisode(e.key).series, "episode-download") + '</div>';
     }).join("");
   }
 
@@ -749,6 +806,7 @@
     var payload = {
       key: item.key, kind: item.kind, title: item.title, subtitle: kindLabel(item.kind) + (item.year ? " · " + item.year : ""),
       poster: item.poster, art: artStyle(item), stream: item.stream, youtubeId: item.youtubeId,
+      offlinePermitted:offlineItem(item).offlinePermitted, parentKey:item.parentKey||"",
       live: !!item.live, quality: item.quality, variants: item.variants || [], kids: item.kids, age: item.age
     };
     if (opts.resumeAt) payload.resumeAt = opts.resumeAt;
@@ -783,6 +841,7 @@
       key: episode.key, kind: "episode", title: series.title + " — " + episode.title,
       subtitle: series.title, poster: series.poster, art: artStyle(series),
       stream: episode.stream, variants: episode.variants || [], youtubeId: episode.youtubeId, live: false,
+      offlinePermitted:offlineItem(episode,series).offlinePermitted, parentKey:series.key,
       quality: series.quality, kids: series.kids, age: series.age
     };
     var saved = Store.progress(episode.key);
@@ -985,6 +1044,29 @@
       // Dedicated TV guide and kids world own their controls.
       if (t.closest("#livePage")) return;
       if (t.closest("#kidsWorld") && Kids && Kids.handleClick(e)) return;
+      var download=t.closest("[data-offline-save]");
+      if(download&&window.AlezzOffline){
+        var key=download.getAttribute("data-offline-save"),e=findEpisode(key);
+        var candidate=offlineItem(e?e.episode:findItem(key),e?e.series:null);
+        if(window.AlezzOffline.get(key)){toast("الفيديو محفوظ بالفعل على هذا الجهاز");return;}
+        download.disabled=true;download.textContent="جارٍ التنزيل…";
+        window.AlezzOffline.save(candidate,function(n,total){
+          if(download.parentNode&&total)download.textContent="التنزيل "+Math.min(100,Math.round(n*100/total))+"%";
+        }).then(function(){
+          toast("اكتمل التنزيل — الفيديو متاح دون إنترنت");
+          if(parseHash().name==="downloads")render(true);
+          else if(download.parentNode)download.textContent="✓ محفوظ دون إنترنت";
+        }).catch(function(err){
+          toast(err&&err.message||"تعذر التنزيل","err");
+          if(download.parentNode){download.disabled=false;download.textContent="إعادة التنزيل";}
+        });return;
+      }
+      var removal=t.closest("[data-offline-remove]");
+      if(removal&&window.AlezzOffline){
+        if(!window.confirm("حذف النسخة المحلية من هذا الجهاز؟"))return;
+        window.AlezzOffline.remove(removal.getAttribute("data-offline-remove")).then(function(){render(true);toast("تم الحذف");}).catch(function(){toast("تعذّر الحذف","err");});
+        return;
+      }
       var playBtn = t.closest("[data-play]");
       if (playBtn) { playItem(findItem(playBtn.getAttribute("data-play"))); return; }
 
@@ -1044,6 +1126,12 @@
     $("searchBtn").addEventListener("click", openSearch);
     $("searchClose").addEventListener("click", closeSearch);
     $("searchInput").addEventListener("input", function (e) { runSearch(e.target.value); });
+    document.addEventListener("change",function(e){
+      if(e.target&&e.target.id==="offlineAuto"&&window.AlezzOffline){
+        window.AlezzOffline.setAuto(!!e.target.checked);
+        toast(e.target.checked?"تم تفعيل الحفظ التلقائي":"تم إيقاف الحفظ التلقائي");
+      }
+    });
     $("tvBtn").addEventListener("click", function () { setTvMode(!document.body.classList.contains("tv-mode")); });
 
     window.addEventListener("scroll", function () {
@@ -1051,6 +1139,10 @@
     }, { passive: true });
 
     window.addEventListener("hashchange", function () { render(); });
+    function markConnection(){document.body.classList.toggle("is-offline",navigator.onLine===false);}
+    window.addEventListener("online",markConnection);
+    window.addEventListener("offline",markConnection);
+    markConnection();
 
     document.addEventListener("keydown", function (e) {
       var openSheet = !$("sheet").hidden;
@@ -1110,6 +1202,11 @@
       render();
       if (source === "snapshot") toast("تعذّر الاتصال — تم فتح النسخة المحفوظة");
     }).catch(function () {
+      if(window.AlezzOffline&&(parseHash().name==="downloads"||parseHash().name==="watch")){
+        catalog={byKey:{},items:[],movies:[],series:[],channels:[],youtube:[],categories:[],rows:[]};
+        document.body.setAttribute("data-boot","ready");
+        render();return;
+      }
       view.innerHTML = '<div class="empty" style="padding-top:22vh"><strong>تعذّر تحميل المكتبة</strong>' +
         "<p>تحقّق من الاتصال ثم أعد تحميل الصفحة.</p>" +
         '<button class="btn btn--gold" onclick="location.reload()">إعادة المحاولة</button></div>';
