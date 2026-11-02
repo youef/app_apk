@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b101b">
+  <meta name="description" content="AL EZZ TV — استوديو استيراد المسلسلات والأفلام ببايثون">
+  <title>العز TV | استوديو الاستيراد الذكي</title>
+  <link rel="stylesheet" href="/static/style.css?v=cloudstudio5">
+  <script src="/static/app.js?v=cloudstudio5" defer></script>
+</head>
+<body>
+  <div class="app-shell" id="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand"><div class="brand-symbol">ع<span>TV</span></div><div><strong>العز <em>TV</em></strong><small>IMPORT STUDIO</small></div></div>
+      <div class="aside-label">مساحة العمل</div>
+      <nav class="nav-list" aria-label="التنقل">
+        <a class="nav-link active" href="#import"><span class="nav-icon">◈</span><span>الاستيراد الذكي</span><span class="nav-trail">●</span></a>
+        <a class="nav-link" href="#library"><span class="nav-icon">▤</span><span>معاينة المكتبة</span></a>
+        <a class="nav-link" href="#episodes"><span class="nav-icon">▦</span><span>المواسم والحلقات</span></a>
+        <a class="nav-link" href="#publish"><span class="nav-icon">⇧</span><span>الحفظ والنشر</span></a>
+      </nav>
+      <div class="aside-label aside-label--second">روابط المشروع</div>
+      <nav class="nav-list">
+        <a class="nav-link" href="https://youef.github.io/app_apk/admin/series-quick.html" target="_blank" rel="noopener"><span class="nav-icon">⌁</span><span>إدارة المسلسلات</span><span class="external">↗</span></a>
+        <a class="nav-link" href="https://youef.github.io/app_apk/admin/#movies" target="_blank" rel="noopener"><span class="nav-icon">▷</span><span>إدارة الأفلام</span><span class="external">↗</span></a>
+      </nav>
+      <div class="sidebar-bottom"><div class="stack-icon">⌘</div><div><strong>Python Engine</strong><span>FASTAPI · SUPABASE</span></div><span class="live-light"></span></div>
+    </aside>
+
+    <div class="main-area">
+      <header class="topbar">
+        <div class="breadcrumbs"><button class="mobile-menu" id="menuBtn" title="القائمة" aria-label="فتح القائمة">☰</button><span>لوحة التحكم</span><span class="crumb-chevron">/</span><strong>الاستيراد الذكي</strong></div>
+        <div class="top-actions"><span class="server-label"><i class="status-dot"></i> خادم Python متصل</span><form action="/logout-site" method="POST" style="display:inline-flex;margin:0"><button type="submit" title="الخروج من الموقع" class="icon-btn" style="width:auto;padding:0 12px;white-space:nowrap">خروج الموقع</button></form><button class="icon-btn" title="عرض التنبيهات" id="toastCenterBtn">♧</button><button id="loginToggle" class="account-btn"><span class="avatar">A</span><span id="accountText">تسجيل الدخول</span><span>⌄</span></button></div>
+      </header>
+      <main id="import" class="page">
+        <div class="heading-row"><div><div class="eyebrow"><span class="eyebrow-dot"></span> AL EZZ SMART INGESTION <span class="eyebrow-separator">/</span> الإصدار 5.0</div><h1>استوديو <span>الاستيراد الذكي</span></h1><p class="lead">من رابط واحد إلى مكتبتك — اكتشف الأعمال، راجع الحلقات، وادِر النشر من مكان واحد.</p></div><div class="heading-actions"><button class="outline-action" id="exportBatchBtn" hidden><span>↓</span> تصدير الدفعة JSON</button><button class="outline-action" id="exportBtn" disabled><span>↓</span> تصدير العمل JSON</button></div></div>
+
+        <section class="quick-stats" aria-label="إحصاءات الاستيراد">
+          <div class="stat-card"><div class="stat-top"><span>الأعمال المستوردة</span><span class="stat-symbol stat-symbol--purple">▱</span></div><div class="stat-number" id="statWork">0</div><div class="stat-caption">العمل الحالي</div></div>
+          <div class="stat-card"><div class="stat-top"><span>الحلقات المكتشفة</span><span class="stat-symbol stat-symbol--blue">▦</span></div><div class="stat-number" id="statAll">0</div><div class="stat-caption">من جميع المواسم</div></div>
+          <div class="stat-card"><div class="stat-top"><span>روابط تم التحقق منها</span><span class="stat-symbol stat-symbol--green">✓</span></div><div class="stat-number" id="statGood">0</div><div class="stat-caption">صالحة وقت الفحص</div></div>
+          <div class="stat-card"><div class="stat-top"><span>تحتاج رابط تشغيل</span><span class="stat-symbol stat-symbol--amber">◷</span></div><div class="stat-number" id="statPending">0</div><div class="stat-caption">تُحفظ بياناتها كمسودات</div></div>
+        </section>
+
+        <section class="section-panel discover-panel" aria-labelledby="discoverTitle">
+          <div class="section-head"><div class="section-count">01</div><div class="section-head-main"><h2 id="discoverTitle">اكتشاف محتوى جديد</h2><p>أضف رابط الفيلم أو صفحة المسلسل، وسنستخرج البيانات المتاحة تلقائيًا.</p></div><span class="head-tag">AUTO DISCOVERY</span></div>
+          <div class="source-form"><label class="field field--source"><span class="field-label">رابط المصدر <span class="field-hint">HTTPS</span></span><span class="input-icon">↗</span><input type="url" id="sourceUrl" dir="ltr" spellcheck="false" autocomplete="url" placeholder="https://example.com/series/..."></label><label class="field field--type"><span class="field-label">نوع المحتوى</span><select id="sourceKind"><option value="auto">✦ اكتشاف تلقائي</option><option value="series">▦ مسلسل وحلقات</option><option value="movie">▷ فيلم</option></select></label></div>
+          <div class="action-row"><button id="discoverBtn" class="primary-btn"><span class="btn-icon">✧</span> اكتشف المحتوى <span class="btn-arrow">←</span></button><button id="demoBtn" class="secondary-btn">معاينة تجريبية</button><p class="discovery-note">يدعم JSON-LD وصفحات المواسم وروابط الوسائط العامة.</p></div>
+          <div class="smart-extras">
+            <label class="setting-choice"><input type="checkbox" id="autoMetadata" checked><span><b>✦ إثراء البيانات تلقائيًا</b><small>الاسم الأصلي · السنة · اللغة · البلد · التصنيفات · البوستر من البيانات المتاحة ومصادر موثوقة</small></span></label>
+            <label class="setting-choice"><input type="checkbox" id="deepScan" checked><span><b>◈ مزامنة تفاصيل الحلقات</b><small>جلب أوصاف وصور الحلقات من الصفحات العامة بالتوازي (حتى 50 صفحة لكل مسلسل)</small></span></label>
+          </div>
+          <div class="batch-import" id="batchImport">
+            <div class="batch-head"><div><span class="overline">MULTI-SERIES SYNC</span><h3>استيراد كل المسلسلات دفعة واحدة</h3><p>الصق رابط كل مسلسل أو فيلم في سطر مستقل، أو أدخل رابط صفحة قائمة في الأعلى واضغط «اجلب الروابط من صفحة قائمة». حتى 18 عملًا في الدفعة. يتعرّف على المواسم والحلقات تلقائيًا، ويتيح مراجعة كل عمل قبل حفظه.</p></div><span class="batch-chip">حتى 18 عمل</span></div>
+            <label class="field"><span class="field-label">روابط المسلسلات والأفلام — رابط لكل سطر</span><textarea id="batchUrls" dir="ltr" rows="5" spellcheck="false" placeholder="https://example.org/series/show-one
+https://example.org/series/show-two
+https://example.org/movie/film-one"></textarea></label>
+            <div class="batch-toolbar"><button class="secondary-btn" type="button" id="scanListingBtn" title="استخرج روابط المسلسلات من صفحة قائمة عامة وضعها في المربع، ثم راجعها">⌕ اجلب الروابط من صفحة قائمة</button><button class="primary-btn" type="button" id="discoverBatchBtn">▦ اكتشف الأعمال والحلقات دفعة واحدة</button><span id="batchStatusText">اكتشاف متزامن من عدة مصادر عامة</span></div>
+            <div id="batchErrorList" class="batch-errors" hidden></div>
+            <div id="batchCards" class="batch-cards" hidden></div>
+          </div>
+          <div id="activity" class="activity" role="status" aria-live="polite"><span class="activity-ico">✦</span><span id="activityText">جاهز لاستيراد عمل جديد. الصق الرابط للبدء.</span></div>
+        </section>
+
+        <section class="library-sync section-panel" id="librarySync" aria-labelledby="librarySyncTitle">
+          <div class="batch-head"><div><div class="overline">FULL LIBRARY SYNC · V5</div><h2 id="librarySyncTitle">مزامنة المكتبات والمسلسلات بالكامل</h2>
+            <p>الصق عدة روابط لصفحات القوائم. يتابع النظام صفحات 2 و3 وما بعدها، ويفهرس الأعمال وحلقاتها. العمل المعطوب يُسجّل كخطأ ولا يوقف بقية القائمة.</p></div><span class="batch-chip">استكمال تلقائي بعد إعادة التشغيل</span></div>
+          <div class="library-input-grid">
+            <label class="field"><span class="field-label">روابط صفحات المكتبات — رابط في كل سطر</span>
+              <textarea id="libraryUrls" rows="4" dir="ltr" spellcheck="false" >https://v3.qrmzi.buzz/all-turkish-series/&#10;https://v3.qrmzi.buzz/all-turkish-movies/</textarea></label>
+            <label class="field"><span class="field-label">نوع المحتوى</span><select id="libraryKind"><option value="auto">تلقائي حسب الصفحة</option><option value="series">مسلسلات فقط</option><option value="movie">أفلام فقط</option></select>
+            <small class="library-tip">يكتشف البيانات وصفحات الحلقات، وليس روابط الفيديو المحمية. يتم الحفظ في Supabase بعد مراجعة المسؤول.</small></label>
+          </div>
+          <div class="library-actions"><button id="libraryStart" class="primary-btn">◈ ابدأ فهرسة المكتبات</button><button id="libraryResume" class="secondary-btn">⟳ استكمال ما توقف</button><button id="libraryRetry" class="small-outline">↻ إعادة محاولة المتعثر</button><button id="librarySave" class="small-gold">⇧ حفظ المكتبة المكتشفة في Supabase</button></div>
+          <div id="libraryProgress" class="library-progress" role="status" aria-live="polite">لا توجد مهام نشطة بعد.</div>
+          <div class="library-counters"><span>صفحات مكتملة <strong id="libPagesDone">0</strong></span><span>أعمال مكتشفة <strong id="libWorksDone">0</strong></span><span>بانتظار المعالجة <strong id="libPending">0</strong></span><span>أخطاء <strong id="libFailed">0</strong></span></div>
+          <div id="libraryWorkList" class="library-work-list"></div>
+          <p class="library-tip">تُحفظ حالة الفهرسة في SQLite على قرص الخادم الدائم؛ تستأنف المهام تلقائيًا بعد إعادة تشغيل الخدمة. إذا فشلت صفحة، تُحفظ رسالة الخطأ ويُستكمل باقي الصفحات. الحفظ العام للمحتوى يحتاج حقوق عرض؛ ويمكن حفظ البيانات كمسودات.</p>
+        </section>
+
+        <section class="workspace" id="workspace" hidden>
+          <div class="section-title-row" id="library"><div><span class="overline">CONTENT OVERVIEW</span><h2>بيانات العمل <span class="muted-title">ومعاينة الهوية</span></h2></div><span id="demoBadge" class="soft-tag" hidden>نموذج تجريبي</span></div>
+          <div class="preview-grid">
+            <div class="preview-card"><div class="poster-art" id="posterArt"><div class="poster-fallback"><span class="poster-letter">ع</span><span>AL EZZ</span></div><img id="posterPreview" alt="بوستر العمل" hidden></div><div class="preview-card-caption"><span>معاينة البوستر</span><span>POSTER</span></div></div>
+            <div class="section-panel metadata-panel"><div class="metadata-head"><div><h3 id="previewTitle">—</h3><p id="previewOriginal">عنوان العمل</p></div><span id="previewType" class="type-badge">مسلسل</span></div><div class="preview-chips" id="previewChips"></div>
+              <div class="meta-form"><label class="field wide"><span class="field-label">العنوان بالعربية</span><input id="metaTitle" maxlength="250"></label><label class="field"><span class="field-label">الاسم الأصلي</span><input id="metaOriginal" maxlength="250" placeholder="Original title" dir="auto"></label><label class="field"><span class="field-label">سنة الإصدار</span><input id="metaYear" type="number" min="1880" max="2100" placeholder="2026"></label><label class="field"><span class="field-label">بلد الإنتاج (رمز)</span><input id="metaCountry" dir="ltr" maxlength="2" placeholder="TR / SA / US"></label><label class="field"><span class="field-label">اللغة (رمز)</span><input id="metaLanguage" maxlength="3" dir="ltr" placeholder="ar / tr / en"></label><label class="field wide"><span class="field-label">التصنيفات (افصل بينها بفواصل)</span><input id="metaGenres" dir="ltr" placeholder="drama, romance, action"></label><label class="field wide"><span class="field-label">الوصف والقصة</span><textarea id="metaDescription" rows="4" maxlength="2000" placeholder="وصف العمل وقصته..."></textarea></label><label class="field wide"><span class="field-label">رابط البوستر</span><input id="metaPoster" type="url" dir="ltr" placeholder="https://...poster.jpg"></label><label class="field wide"><span class="field-label">رابط الخلفية</span><input id="metaBackdrop" type="url" dir="ltr" placeholder="https://...backdrop.jpg"></label>
+              </div>
+              <div class="meta-footer"><span class="meta-footer-note">يمكن تعديل البيانات المستخرجة قبل الحفظ.</span><button class="secondary-btn" id="updateBtn">✓ حفظ التعديلات محليًا</button></div>
+            </div>
+          </div>
+
+          <div class="section-title-row" id="episodes"><div><span class="overline">MEDIA & EPISODES</span><h2>المواسم <span class="muted-title">والحلقات</span></h2></div><div class="inline-actions"><button id="linksToggle" class="small-outline">+ لصق روابط FetchV</button><button id="edgeCaptureBtn" class="small-outline" title="يفتح نافذة Edge جديدة ويقرأ طلبات الوسائط العادية، وليس إضافة FetchV">⌁ فحص عبر Edge</button><button id="verifyAllBtn" class="small-gold">◈ فحص جميع الروابط</button></div></div>
+          <div class="section-panel media-panel">
+            <div class="episodes-head"><div id="seasonTabs" class="season-tabs" role="tablist" aria-label="المواسم"></div><div class="episodes-toolbar"><input type="search" id="episodeSearch" placeholder="⌕ بحث في الحلقات"><button id="addEpisodeBtn" class="tiny-btn">+ إضافة حلقة</button></div></div>
+            <div class="progress-wrap" id="verifyProgressWrap" hidden><div class="progress-header"><span id="verifyProgressText">فحص روابط التشغيل...</span><span id="verifyProgressNum">0%</span></div><div class="progress-rail"><i id="verifyProgressBar"></i></div></div>
+            <div id="movieMedia" hidden><div class="movie-media-form"><label class="field"><span class="field-label">رابط الفيلم المباشر MP4 / HLS</span><input id="movieMediaUrl" type="url" dir="ltr" placeholder="https://.../movie.m3u8"></label><button class="secondary-btn" id="verifyMovieBtn">فحص رابط الفيلم</button></div><div id="movieMediaStatus" class="media-state"></div></div>
+            <div id="episodeContainer"><div class="episode-list" id="episodeList"></div></div>
+            <div class="episodes-foot"><div class="legend"><span><i class="legend-dot good"></i> تم التحقق</span><span><i class="legend-dot warn"></i> ينتظر الفحص</span><span><i class="legend-dot bad"></i> غير صالح وقت الفحص</span></div><button id="verifySelectedBtn" class="tiny-btn">فحص الحلقات المحددة</button></div>
+          </div>
+
+          <div class="section-title-row" id="publish"><div><span class="overline">PUBLISH & SYNC</span><h2>المراجعة <span class="muted-title">والحفظ</span></h2></div><span class="soft-tag">SUPABASE SYNC</span></div>
+          <div class="publish-grid"><section class="section-panel publish-panel"><div class="publish-head"><div class="publish-icon">⇧</div><div><h3>إرسال إلى مكتبة العز TV</h3><p>الحفظ متصل بقاعدة البيانات نفسها التي تستخدمها لوحة الإدارة.</p></div></div>
+          <div class="mode-switch" role="group" aria-label="طريقة الحفظ"><label><input type="radio" name="publishMode" value="draft" checked><span>◷ حفظ كمسودة</span></label><label><input type="radio" name="publishMode" value="publish"><span>✓ نشر عام للمصرّح به</span></label></div>
+          <div id="rightsFields" class="rights-fields" hidden><p class="disclosure">اختر النشر العام فقط للمحتوى الذي تملك حق عرضه وتوزيع صوره. حفظ المسودة لا يتطلب هذه البيانات.</p><label class="field"><span class="field-label">صاحب الحقوق (اختياري للتوثيق)</span><input id="rightsHolder" placeholder="الجهة المالكة"></label><label class="field"><span class="field-label">مرجع تصريح العرض (اختياري للتوثيق)</span><input id="licenseRef" placeholder="رقم العقد / رابط الترخيص"></label><label class="rights-check"><input id="rightsAuthorized" type="checkbox"><span>أؤكد أن لدي تصريحًا صالحًا لعرض المحتوى والصور للجمهور.</span></label></div>
+          <div class="publish-note"><span>ⓘ</span><p>وجود رابط لا يضمن تشغيله دائمًا. الحلقات بلا فيديو محفوظة ضمن البيانات ولا يتم اختلاق روابط لها.</p></div>
+          <button class="primary-btn save-btn" id="saveBtn">⇧ حفظ العمل الحالي في Supabase <span class="btn-arrow">←</span></button>
+          <button class="secondary-btn save-btn" type="button" id="saveBatchBtn" hidden>⇧ حفظ جميع الأعمال المكتشفة دفعة واحدة</button><div id="saveResult" class="save-result" hidden></div>
+          </section><section class="section-panel sync-panel"><div class="sync-graphic"><div class="sync-orbit orbit-one"></div><div class="sync-orbit orbit-two"></div><div class="sync-core">⌁</div></div><div class="sync-summary"><div class="overline">CONNECTED DESTINATION</div><h3>AL EZZ DATABASE</h3><p>Supabase · مشروع العز TV</p></div><div class="sync-details"><div><span>حالة المصادقة</span><strong id="syncAuth">غير مسجل</strong></div><div><span>المسلسلات</span><a target="_blank" rel="noopener" href="https://youef.github.io/app_apk/admin/series-quick.html">فتح الإدارة ↗</a></div><div><span>الأفلام</span><a target="_blank" rel="noopener" href="https://youef.github.io/app_apk/admin/#movies">فتح الإدارة ↗</a></div></div><button class="secondary-btn sync-login" id="syncLogin">تسجيل دخول المسؤول</button></section></div>
+        </section>
+
+        <footer class="footer"><span>© AL EZZ TV · PYTHON IMPORT STUDIO</span><span>خادم Python · استيراد آمن عبر HTTPS عند النشر</span></footer>
+      </main>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="linksModal" hidden><section class="modal" role="dialog" aria-modal="true" aria-labelledby="linksTitle"><button class="modal-close" data-close="linksModal" aria-label="إغلاق">×</button><div class="modal-kicker">MEDIA LINKS</div><h2 id="linksTitle">إضافة روابط الفيديو من FetchV</h2><p>الصق رابط الفيلم مباشرة، أو اكتب لكل حلقة رقم الموسم والحلقة متبوعًا بالرابط، كل واحد في سطر. لا يتصل الموقع بإضافة FetchV تلقائيًا.</p><div class="code-example">S01E01|https://your-cdn.example/video1.m3u8<br>S01E02|https://your-cdn.example/video2.mp4</div><textarea id="linksInput" rows="8" dir="ltr" placeholder="S01E01|https://..."></textarea><div class="modal-actions"><button class="secondary-btn" data-close="linksModal">إلغاء</button><button class="primary-btn" id="applyLinksBtn">+ ربط الحلقات</button></div></section></div>
+
+  <div class="modal-backdrop" id="loginModal" hidden><section class="modal modal--login" role="dialog" aria-modal="true" aria-labelledby="loginTitle"><button class="modal-close" data-close="loginModal" aria-label="إغلاق">×</button><div class="login-mark">ع <small>TV</small></div><div class="modal-kicker">ADMIN ACCESS</div><h2 id="loginTitle">دخول مسؤول العز TV</h2><p>أدخل حساب المسؤول في Supabase. تُرسل البيانات من خادم بايثون إلى Supabase مباشرة، ولا تُخزن كلمة المرور محليًا.</p><form id="loginForm"><label class="field"><span class="field-label">البريد الإلكتروني</span><input id="loginEmail" type="email" autocomplete="username" dir="ltr" placeholder="admin@example.com"></label><label class="field"><span class="field-label">كلمة المرور</span><input id="loginPassword" type="password" autocomplete="current-password" dir="ltr" placeholder="••••••••"></label><details class="token-login"><summary>الدخول باستخدام رمز جلسة Supabase بدل كلمة المرور</summary><label class="field"><span class="field-label">رمز جلسة المسؤول (Access Token)</span><textarea id="loginToken" rows="3" dir="ltr" placeholder="eyJ..."></textarea></label><p>استخدم الرمز على جهازك فقط، ولا تشاركه. يُتحقق من صلاحيات المسؤول قبل أي كتابة.</p></details><button class="primary-btn full-btn" type="submit">تسجيل الدخول الآمن</button></form></section></div>
+
+  <div class="modal-backdrop" id="episodeModal" hidden><section class="modal modal--small" role="dialog" aria-modal="true" aria-labelledby="epAddTitle"><button class="modal-close" data-close="episodeModal" aria-label="إغلاق">×</button><h2 id="epAddTitle">إضافة حلقة يدويًا</h2><form id="episodeAddForm"><div class="row-fields"><label class="field"><span class="field-label">الموسم</span><input id="addSeason" type="number" min="1" max="100" value="1" required></label><label class="field"><span class="field-label">رقم الحلقة</span><input id="addNumber" type="number" min="1" max="1000" value="1" required></label></div><label class="field"><span class="field-label">عنوان الحلقة</span><input id="addTitle" placeholder="الحلقة الجديدة" maxlength="250"></label><button type="submit" class="primary-btn full-btn">إضافة إلى المسلسل</button></form></section></div>
+  <div class="toast-area" id="toastArea" aria-live="polite"></div>
+</body>
+</html>

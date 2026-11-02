@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: alezz-python-studio
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    healthCheckPath: /healthz
+    numInstances: 1
+    disk:
+      name: alezz-sync-state
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: ALEZZ_PUBLIC_MODE
+        value: "1"
+      - key: ALEZZ_DATA_DIR
+        value: /var/data
+      - key: ALEZZ_SITE_PASSWORD
+        sync: false
+      - key: ALEZZ_SITE_SECRET
+        generateValue: true
