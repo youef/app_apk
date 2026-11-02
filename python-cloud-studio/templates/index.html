@@ -4,10 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0b101b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="استوديو العز">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="/static/manifest.webmanifest?v=studio6">
+  <link rel="icon" href="/static/studio-icon.svg" type="image/svg+xml">
   <meta name="description" content="AL EZZ TV — استوديو استيراد المسلسلات والأفلام ببايثون">
   <title>العز TV | استوديو الاستيراد الذكي</title>
   <link rel="stylesheet" href="/static/style.css?v=cloudstudio5">
+  <link rel="stylesheet" href="/static/studio-pro.css?v=studio6">
   <script src="/static/app.js?v=cloudstudio5" defer></script>
+  <script src="/static/studio-pro.js?v=studio6" defer></script>
 </head>
 <body>
   <div class="app-shell" id="app">
@@ -31,10 +39,14 @@
     <div class="main-area">
       <header class="topbar">
         <div class="breadcrumbs"><button class="mobile-menu" id="menuBtn" title="القائمة" aria-label="فتح القائمة">☰</button><span>لوحة التحكم</span><span class="crumb-chevron">/</span><strong>الاستيراد الذكي</strong></div>
-        <div class="top-actions"><span class="server-label"><i class="status-dot"></i> خادم Python متصل</span><form action="/logout-site" method="POST" style="display:inline-flex;margin:0"><button type="submit" title="الخروج من الموقع" class="icon-btn" style="width:auto;padding:0 12px;white-space:nowrap">خروج الموقع</button></form><button class="icon-btn" title="عرض التنبيهات" id="toastCenterBtn">♧</button><button id="loginToggle" class="account-btn"><span class="avatar">A</span><span id="accountText">تسجيل الدخول</span><span>⌄</span></button></div>
+        <div class="top-actions"><span class="server-label"><i class="status-dot"></i> <span id="serverHealthText">فحص الاتصال...</span></span><form action="/logout-site" method="POST" style="display:inline-flex;margin:0"><button type="submit" title="الخروج من الموقع" class="icon-btn" style="width:auto;padding:0 12px;white-space:nowrap">خروج الموقع</button></form><button class="icon-btn" title="عرض التنبيهات" id="toastCenterBtn">♧</button><button id="loginToggle" class="account-btn"><span class="avatar">A</span><span id="accountText">تسجيل الدخول</span><span>⌄</span></button></div>
       </header>
       <main id="import" class="page">
-        <div class="heading-row"><div><div class="eyebrow"><span class="eyebrow-dot"></span> AL EZZ SMART INGESTION <span class="eyebrow-separator">/</span> الإصدار 5.0</div><h1>استوديو <span>الاستيراد الذكي</span></h1><p class="lead">من رابط واحد إلى مكتبتك — اكتشف الأعمال، راجع الحلقات، وادِر النشر من مكان واحد.</p></div><div class="heading-actions"><button class="outline-action" id="exportBatchBtn" hidden><span>↓</span> تصدير الدفعة JSON</button><button class="outline-action" id="exportBtn" disabled><span>↓</span> تصدير العمل JSON</button></div></div>
+        <div class="studio-command-bar" aria-label="مركز التحكم السريع">
+          <div class="command-copy"><strong>مركز عمليات العز TV</strong><small>إدارة المكتبة والمواسم من الهاتف والكمبيوتر · واجهة 6.0</small></div>
+          <div class="studio-command-actions"><span class="studio-edit-state" id="studioEditStatus" data-dirty="false" role="status" aria-live="polite">جاهز لإدارة المحتوى</span><button id="studioQuickSync" class="small-gold" type="button" disabled>✓ حفظ تعديلات الجلسة</button></div>
+        </div>
+        <div class="heading-row"><div><div class="eyebrow"><span class="eyebrow-dot"></span> AL EZZ SMART INGESTION <span class="eyebrow-separator">/</span> الإصدار 6.0</div><h1>استوديو <span>الاستيراد الذكي</span></h1><p class="lead">من رابط واحد إلى مكتبتك — اكتشف الأعمال، راجع الحلقات، وادِر النشر من مكان واحد.</p></div><div class="heading-actions"><button class="outline-action" id="exportBatchBtn" hidden><span>↓</span> تصدير الدفعة JSON</button><button class="outline-action" id="exportBtn" disabled><span>↓</span> تصدير العمل JSON</button></div></div>
 
         <section class="quick-stats" aria-label="إحصاءات الاستيراد">
           <div class="stat-card"><div class="stat-top"><span>الأعمال المستوردة</span><span class="stat-symbol stat-symbol--purple">▱</span></div><div class="stat-number" id="statWork">0</div><div class="stat-caption">العمل الحالي</div></div>
@@ -75,6 +87,7 @@ https://example.org/movie/film-one"></textarea></label>
           <div class="library-actions"><button id="libraryStart" class="primary-btn">◈ ابدأ فهرسة المكتبات</button><button id="libraryResume" class="secondary-btn">⟳ استكمال ما توقف</button><button id="libraryRetry" class="small-outline">↻ إعادة محاولة المتعثر</button><button id="librarySave" class="small-gold">⇧ حفظ المكتبة المكتشفة في Supabase</button></div>
           <div id="libraryProgress" class="library-progress" role="status" aria-live="polite">لا توجد مهام نشطة بعد.</div>
           <div class="library-counters"><span>صفحات مكتملة <strong id="libPagesDone">0</strong></span><span>أعمال مكتشفة <strong id="libWorksDone">0</strong></span><span>بانتظار المعالجة <strong id="libPending">0</strong></span><span>أخطاء <strong id="libFailed">0</strong></span></div>
+          <div class="library-work-tools"><label for="libraryWorkSearch">بحث في نتائج المزامنة</label><input id="libraryWorkSearch" type="search" placeholder="اسم العمل أو رابط المصدر" aria-label="بحث في أعمال المكتبة"><select id="libraryWorkFilter" aria-label="تصفية حالة الأعمال"><option value="all">كل الحالات</option><option value="done">المكتملة</option><option value="failed">المتعثرة</option><option value="pending">قيد الانتظار والمعالجة</option></select><span id="libraryWorkCount" aria-live="polite">—</span></div>
           <div id="libraryWorkList" class="library-work-list"></div>
           <p class="library-tip">تُحفظ حالة الفهرسة في SQLite على قرص الخادم الدائم؛ تستأنف المهام تلقائيًا بعد إعادة تشغيل الخدمة. إذا فشلت صفحة، تُحفظ رسالة الخطأ ويُستكمل باقي الصفحات. الحفظ العام للمحتوى يحتاج حقوق عرض؛ ويمكن حفظ البيانات كمسودات.</p>
         </section>
@@ -93,6 +106,17 @@ https://example.org/movie/film-one"></textarea></label>
           <div class="section-title-row" id="episodes"><div><span class="overline">MEDIA & EPISODES</span><h2>المواسم <span class="muted-title">والحلقات</span></h2></div><div class="inline-actions"><button id="linksToggle" class="small-outline">+ لصق روابط FetchV</button><button id="edgeCaptureBtn" class="small-outline" title="يفتح نافذة Edge جديدة ويقرأ طلبات الوسائط العادية، وليس إضافة FetchV">⌁ فحص عبر Edge</button><button id="verifyAllBtn" class="small-gold">◈ فحص جميع الروابط</button></div></div>
           <div class="section-panel media-panel">
             <div class="episodes-head"><div id="seasonTabs" class="season-tabs" role="tablist" aria-label="المواسم"></div><div class="episodes-toolbar"><input type="search" id="episodeSearch" placeholder="⌕ بحث في الحلقات"><button id="addEpisodeBtn" class="tiny-btn">+ إضافة حلقة</button></div></div>
+            <div class="episode-tools" aria-label="أدوات الحلقات المتقدمة">
+              <div class="episode-tools-top"><div class="episode-metrics"><strong id="episodeViewCount">0 حلقة</strong><span id="episodeSelectionInfo">0 محددة</span></div><span class="soft-tag">فلترة وتحديد متعدد</span></div>
+              <div class="episode-filter-row" role="group" aria-label="حالة روابط الحلقات">
+                <button type="button" class="episode-filter" data-episode-filter="all" aria-pressed="true">كل الحلقات</button>
+                <button type="button" class="episode-filter" data-episode-filter="verified" aria-pressed="false">✓ تم التحقق</button>
+                <button type="button" class="episode-filter" data-episode-filter="missing" aria-pressed="false">⊘ بلا رابط</button>
+                <button type="button" class="episode-filter" data-episode-filter="pending" aria-pressed="false">◷ تحتاج فحصًا</button>
+                <button type="button" class="episode-filter" data-episode-filter="failed" aria-pressed="false">✕ غير صالحة</button>
+              </div>
+              <div class="episode-select-actions"><button type="button" id="selectVisibleBtn" class="small-outline">☑ تحديد الحلقات الظاهرة</button><button type="button" id="clearSelectionBtn" class="small-outline">إلغاء التحديد</button></div>
+            </div>
             <div class="progress-wrap" id="verifyProgressWrap" hidden><div class="progress-header"><span id="verifyProgressText">فحص روابط التشغيل...</span><span id="verifyProgressNum">0%</span></div><div class="progress-rail"><i id="verifyProgressBar"></i></div></div>
             <div id="movieMedia" hidden><div class="movie-media-form"><label class="field"><span class="field-label">رابط الفيلم المباشر MP4 / HLS</span><input id="movieMediaUrl" type="url" dir="ltr" placeholder="https://.../movie.m3u8"></label><button class="secondary-btn" id="verifyMovieBtn">فحص رابط الفيلم</button></div><div id="movieMediaStatus" class="media-state"></div></div>
             <div id="episodeContainer"><div class="episode-list" id="episodeList"></div></div>
@@ -109,11 +133,18 @@ https://example.org/movie/film-one"></textarea></label>
           </section><section class="section-panel sync-panel"><div class="sync-graphic"><div class="sync-orbit orbit-one"></div><div class="sync-orbit orbit-two"></div><div class="sync-core">⌁</div></div><div class="sync-summary"><div class="overline">CONNECTED DESTINATION</div><h3>AL EZZ DATABASE</h3><p>Supabase · مشروع العز TV</p></div><div class="sync-details"><div><span>حالة المصادقة</span><strong id="syncAuth">غير مسجل</strong></div><div><span>المسلسلات</span><a target="_blank" rel="noopener" href="https://youef.github.io/app_apk/admin/series-quick.html">فتح الإدارة ↗</a></div><div><span>الأفلام</span><a target="_blank" rel="noopener" href="https://youef.github.io/app_apk/admin/#movies">فتح الإدارة ↗</a></div></div><button class="secondary-btn sync-login" id="syncLogin">تسجيل دخول المسؤول</button></section></div>
         </section>
 
+        <details class="studio-help"><summary>استخدام الاستوديو كتطبيق على الآيفون</summary><p>افتح الموقع في Safari، اضغط زر المشاركة، ثم «إضافة إلى الشاشة الرئيسية». سيظهر استوديو العز كواجهة مستقلة. يلزم اتصال بالإنترنت، وتبقى كلمة مرور الموقع مطلوبة عند انتهاء الجلسة.</p></details>
         <footer class="footer"><span>© AL EZZ TV · PYTHON IMPORT STUDIO</span><span>خادم Python · استيراد آمن عبر HTTPS عند النشر</span></footer>
       </main>
     </div>
   </div>
 
+  <nav class="mobile-dock" aria-label="التنقل السريع للآيفون">
+    <a href="#import" aria-current="page"><span class="dock-icon" aria-hidden="true">⌕</span><span>استيراد</span></a>
+    <a href="#librarySync"><span class="dock-icon" aria-hidden="true">▤</span><span>المكتبات</span></a>
+    <a href="#episodes"><span class="dock-icon" aria-hidden="true">▦</span><span>الحلقات</span></a>
+    <a href="#publish"><span class="dock-icon" aria-hidden="true">⇧</span><span>الحفظ</span></a>
+  </nav>
   <div class="modal-backdrop" id="linksModal" hidden><section class="modal" role="dialog" aria-modal="true" aria-labelledby="linksTitle"><button class="modal-close" data-close="linksModal" aria-label="إغلاق">×</button><div class="modal-kicker">MEDIA LINKS</div><h2 id="linksTitle">إضافة روابط الفيديو من FetchV</h2><p>الصق رابط الفيلم مباشرة، أو اكتب لكل حلقة رقم الموسم والحلقة متبوعًا بالرابط، كل واحد في سطر. لا يتصل الموقع بإضافة FetchV تلقائيًا.</p><div class="code-example">S01E01|https://your-cdn.example/video1.m3u8<br>S01E02|https://your-cdn.example/video2.mp4</div><textarea id="linksInput" rows="8" dir="ltr" placeholder="S01E01|https://..."></textarea><div class="modal-actions"><button class="secondary-btn" data-close="linksModal">إلغاء</button><button class="primary-btn" id="applyLinksBtn">+ ربط الحلقات</button></div></section></div>
 
   <div class="modal-backdrop" id="loginModal" hidden><section class="modal modal--login" role="dialog" aria-modal="true" aria-labelledby="loginTitle"><button class="modal-close" data-close="loginModal" aria-label="إغلاق">×</button><div class="login-mark">ع <small>TV</small></div><div class="modal-kicker">ADMIN ACCESS</div><h2 id="loginTitle">دخول مسؤول العز TV</h2><p>أدخل حساب المسؤول في Supabase. تُرسل البيانات من خادم بايثون إلى Supabase مباشرة، ولا تُخزن كلمة المرور محليًا.</p><form id="loginForm"><label class="field"><span class="field-label">البريد الإلكتروني</span><input id="loginEmail" type="email" autocomplete="username" dir="ltr" placeholder="admin@example.com"></label><label class="field"><span class="field-label">كلمة المرور</span><input id="loginPassword" type="password" autocomplete="current-password" dir="ltr" placeholder="••••••••"></label><details class="token-login"><summary>الدخول باستخدام رمز جلسة Supabase بدل كلمة المرور</summary><label class="field"><span class="field-label">رمز جلسة المسؤول (Access Token)</span><textarea id="loginToken" rows="3" dir="ltr" placeholder="eyJ..."></textarea></label><p>استخدم الرمز على جهازك فقط، ولا تشاركه. يُتحقق من صلاحيات المسؤول قبل أي كتابة.</p></details><button class="primary-btn full-btn" type="submit">تسجيل الدخول الآمن</button></form></section></div>
