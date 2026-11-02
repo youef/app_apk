@@ -1,0 +1,22 @@
+{
+  "id": "/",
+  "name": "العز TV | استوديو الإدارة",
+  "short_name": "استوديو العز",
+  "description": "إدارة مكتبة العز TV والمسلسلات والأفلام والحلقات",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#080c14",
+  "theme_color": "#101827",
+  "orientation": "any",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": [
+    {
+      "src": "/static/studio-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
