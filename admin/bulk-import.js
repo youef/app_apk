@@ -141,36 +141,102 @@
  }
  async function first(table,qs){const x=await rest(table,qs+"&limit=1");return Array.isArray(x)?x[0]:null;}
  async function insert(table,data){const x=await rest(table,"",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify(data)});if(!x?.[0]?.id)throw Error("لم يؤكد Supabase عملية الحفظ");return x[0];}
+ async function patch(table,id,data){
+  const result=await rest(table,"id="+eq(id),{method:"PATCH",
+    headers:{Prefer:"return=representation"},body:JSON.stringify(data)});
+  if(!Array.isArray(result)||!result.length)throw Error("لم يؤكّد Supabase تحديث السجل؛ تحقق من الصلاحيات");
+  return result[0];
+ }
  async function save(){
   if(busy||!batch)return;
-  const todo=items.filter(x=>x.checked!==false&&x.result?.ok&&!x.saved);if(!todo.length)return msg("لا يوجد محتوى سليم ومحدد للحفظ","error");
-  const publish=$("batchPublish").checked,agreed=$("batchRights").checked,holder=$("batchHolder").value.trim(),license=$("batchLicense").value.trim(),source=$("batchSource").value;
-  if(publish&&(!agreed||!holder||!license||!source))return msg("للنشر: أكد حق العرض وأدخل صاحب الحقوق، وثيقة الترخيص ومصدرًا معتمدًا","error");
-  if(!window.confirm("اعتماد حفظ "+todo.length+" ملفًا تم فحصه؟"))return;
-  busy=true;status();let created=0,duplicates=0,errors=[],parent=null;const seasons=new Map(),title=($("batchTitle").value.trim()||batch.title||"عمل جديد").slice(0,250);
-  const fields={status:publish?"published":"draft",rights_status:publish?"approved":"pending",license_reference:license||null};
+  const includeDrafts=$("batchIncludeUnverified").checked;
+  const todo=items.filter(x=>x.checked!==false&&!x.saved&&(x.result?.ok||includeDrafts));
+  if(!todo.length)return msg("اختر حلقات للحفظ أو فعّل خيار حفظ بيانات الحلقات غير المؤكدة.","error");
+  let meta;try{meta=metadata();}catch(e){return msg(e.message,"error");}
+  const requested=$("batchPublish").checked,agreed=$("batchRights").checked;
+  const holder=text("batchHolder"),license=text("batchLicense"),source=text("batchSource");
+  const licenced=requested&&agreed&&holder.length>=3&&license.length>=4&&
+    !/^(?:0+|1234|none|test|unknown|غير معروف|بدون)$/i.test(holder)&&
+    !/^(?:0+|1234|none|test|unknown|غير معروف|بدون)$/i.test(license)&&sourceIds.has(source);
+  if(requested&&!licenced)
+   return msg("النشر يتطلب إذن عرض فعليًا وإثبات ترخيص صالحًا ومصدرًا معتمدًا؛ يمكنك إلغاء «النشر» وحفظ جميع البيانات كمسودات.","error");
+  const verified=todo.filter(it=>it.result?.ok).length,unknown=todo.length-verified;
+  const confirmText="حفظ "+todo.length+" عنصرًا: "+verified+" رابطًا متحققًا و"+unknown+
+    " عنصر بيانات بلا تشغيل مؤكد. "+(licenced?"سيُنشر العمل والحلقات الصالحة؛ البقية مسودات.":"ستُحفظ العناصر الجديدة كمسودات دون نشر.")+
+    " سيتم تحديث السجلات المطابقة دون تكرار. هل تتابع؟";
+  if(!window.confirm(confirmText))return;
+  busy=true;status();
+  const publication=licenced?{status:"published",rights_status:"approved",rights_holder:holder,license_reference:license,source_id:source}:null;
+  let created=0,updated=0,errors=[],series=null,duplicate=0,published=0,draftCount=0;
+  const seasons=new Map();
+  // Metadata is saved even if the source has not exposed a valid media URL.
+  const metadataFields={title_ar:meta.title_ar,...meta};
+  const safeMeta={...metadataFields};
+  for(const key of Object.keys(safeMeta))if(safeMeta[key]===null||safeMeta[key]===""||(Array.isArray(safeMeta[key])&&!safeMeta[key].length))delete safeMeta[key];
   try{
    if(batch.type==="series"){
-    parent=await first("aseel_series","select=id&title_ar="+eq(title));
-    if(!parent)parent=await insert("aseel_series",{title_ar:title,description:batch.description||null,poster_url:batch.poster_url||null,backdrop_url:batch.poster_url||null,rights_holder:holder||null,source_id:source||null,...fields});
+    series=await first("aseel_series","select=id,title_ar,status,rights_status&title_ar="+eq(meta.title_ar));
+    if(series){
+      await patch("aseel_series",series.id,{...safeMeta,...(publication||{})});updated++;
+    }else{
+      series=await insert("aseel_series",{...safeMeta,...(publication||{status:"draft",rights_status:"pending"}),
+        ...(!publication&&source?{source_id:source}:{})});created++;
+    }
    }
-   for(const it of todo){
+   for(const item of todo){
+    if(stopped)break;
     try{
-     const x=it.result;
+     const check=item.result?.ok?item.result:null;
+     const url=check?https(check.stream_url):"";
+     const playable=!!url;
+     const itemStatus=publication&&playable?"published":"draft";
+     const itemRights=publication&&playable?"approved":"pending";
+     const itemDescription=(item.description||check?.description||meta.description||"").slice(0,1800);
+     const itemPoster=https(item.poster_url||check?.poster_url||meta.poster_url)||null;
+     const itemTitle=(item.title||check?.title||"الحلقة "+item.number).slice(0,250);
      if(batch.type==="movie"){
-      if(await first("aseel_movies","select=id&source_page_url="+eq(it.url))){duplicates++;it.saved=true;continue;}
-      await insert("aseel_movies",{title_ar:(x.title||title).slice(0,250),description:x.description||batch.description||null,poster_url:x.poster_url||batch.poster_url||null,backdrop_url:x.poster_url||batch.poster_url||null,stream_url:x.stream_url,stream_variants:x.variants||[],source_page_url:it.url,source_id:source||null,rights_holder:holder||null,...fields});
+       const existing=await first("aseel_movies","select=id,status,rights_status&source_page_url="+eq(item.url));
+       const data={...safeMeta,title_ar:(item.title||meta.title_ar).slice(0,250),
+         source_page_url:item.url,...(url?{stream_url:url,stream_variants:check?.variants||[]}:{}),
+         ...(!existing?{status:itemStatus,rights_status:itemRights}:{}),
+         ...(publication&&playable?publication:{})};
+       if(existing){await patch("aseel_movies",existing.id,data);updated++;}
+       else{await insert("aseel_movies",data);created++;}
      }else{
-      let season=seasons.get(it.season);if(!season){season=await first("aseel_seasons","select=id&series_id="+eq(parent.id)+"&number=eq."+Number(it.season));if(!season)season=await insert("aseel_seasons",{series_id:parent.id,number:Number(it.season),title_ar:"الموسم "+it.season});seasons.set(it.season,season);}
-      if(await first("aseel_episodes","select=id&season_id="+eq(season.id)+"&number=eq."+Number(it.number))){duplicates++;it.saved=true;continue;}
-      await insert("aseel_episodes",{season_id:season.id,number:Number(it.number),title_ar:(it.title||x.title||"الحلقة "+it.number).slice(0,250),description:it.description||x.description||null,poster_url:it.poster_url||x.poster_url||batch.poster_url||null,stream_url:x.stream_url,stream_variants:x.variants||[],source_id:source||null,...fields});
+       let season=seasons.get(Number(item.season));
+       if(!season){
+         season=await first("aseel_seasons","select=id&series_id="+eq(series.id)+"&number=eq."+Number(item.season));
+         if(!season)season=await insert("aseel_seasons",{series_id:series.id,number:Number(item.season),title_ar:"الموسم "+Number(item.season)});
+         seasons.set(Number(item.season),season);
+       }
+       const existing=await first("aseel_episodes","select=id,status,rights_status&season_id="+eq(season.id)+"&number=eq."+Number(item.number));
+       const data={title_ar:itemTitle,...(itemDescription?{description:itemDescription}:{}),
+         ...(itemPoster?{poster_url:itemPoster}:{}),
+         ...(url?{stream_url:url,stream_variants:check?.variants||[]}:{}),
+         ...(source?{source_id:source}:{})};
+       if(existing){
+         if(publication&&playable)Object.assign(data,{status:"published",rights_status:"approved",license_reference:license});
+         await patch("aseel_episodes",existing.id,data);updated++;duplicate++;
+       }else{
+         await insert("aseel_episodes",{season_id:season.id,number:Number(item.number),...data,
+           status:itemStatus,rights_status:itemRights,...(publication&&playable?{license_reference:license}:{})});
+         created++;
+       }
      }
-     saved++;created++;it.saved=true;status();
-    }catch(e){errors.push(String(e.message||e).slice(0,170));}
+     if(itemStatus==="published"){published++;item.savedMode="published";}
+     else{draftCount++;item.savedMode="draft";}
+     item.saved=true;saved++;status();
+    }catch(e){errors.push("الحلقة "+item.number+": "+String(e.message||e).slice(0,160));}
    }
-  }catch(e){errors.push("سجل المسلسل: "+e.message);}
-  busy=false;status();msg("حُفظ "+created+"، مكرر "+duplicates+"، أخطاء "+errors.length+(errors.length?": "+errors.slice(0,2).join("؛ "):""),errors.length?"error":"success");
+  }catch(e){errors.push("المسلسل: "+String(e.message||e).slice(0,170));}
+  busy=false;status();
+  msg("تم الحفظ: "+created+" جديد و"+updated+" محدّث (منها "+duplicate+" حلقة موجودة). "+
+    "جاهز للنشر: "+published+"، محفوظ دون تشغيل مؤكد: "+draftCount+"، أخطاء: "+errors.length+
+    (errors.length?" — "+errors.slice(0,2).join("؛ "):"")+
+    (licenced?"":" · النشر العام لم يُفعّل بسبب عدم اعتماد الحقوق."),
+    errors.length?"error":"success");
  }
+
  function csv(){const quote=x=>'"'+String(x??"").replace(/"/g,'""')+'"';const lines=[["title","season","episode","source_page","stream","working","saved","error"].map(quote).join(",")];for(const x of items)lines.push([x.result?.title||x.title,x.season,x.number,x.url,x.result?.stream_url||"",!!x.result?.ok,!!x.saved,x.result?.reason||""].map(quote).join(","));const blob=new Blob(["\ufeff"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="al-ezz-import-check.csv";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
  ["batchTitle","batchOriginal","batchYear","batchCountry","batchDescription","batchPosterUrl","batchGenres"].forEach(id=>{
    $(id).addEventListener("input",previewBatch);
