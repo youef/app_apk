@@ -10,6 +10,7 @@
   var Api = window.AlezzApi;
   var Player = window.AlezzPlayer;
   var Live = window.AlezzLive;
+  var Kids = window.AlezzKids;
 
   var $ = function (id) { return document.getElementById(id); };
   var view = $("view");
@@ -441,42 +442,7 @@
   }
 
   function viewKids(filterCat) {
-    var all = catalog.items.filter(function (i) { return i.kids; });
-    var channelItems=all.filter(function (i) {return i.kind==="channel";});
-    var countries=[],languages=[];
-    channelItems.forEach(function (i) {
-      if(i.country && countries.indexOf(i.country)===-1)countries.push(i.country);
-      if(i.language && languages.indexOf(i.language)===-1)languages.push(i.language);
-    });
-    countries.sort();languages.sort();
-    var list=all.filter(function (i) {
-      return (!kidsType || kidsType==="all" ||
-        (kidsType==="channel"?i.kind==="channel":i.kind!=="channel")) &&
-        (!kidsCountry || i.country===kidsCountry) &&
-        (!kidsLanguage || i.language===kidsLanguage);
-    });
-    list.sort(function (a,b) {return a.title.localeCompare(b.title,"ar")});
-    var shown=list.filter(function(x){return itemMatches(x,filterCat);});
-    function options(values,selected) {
-      return values.map(function (v) {
-        return '<option value="'+esc(v)+'"'+(v===selected?' selected':'')+'>'+esc(v)+'</option>';
-      }).join("");
-    }
-    var filters='<div class="kids-filters">'+
-      '<label class="kids-filter">النوع<select id="kidsTypeFilter">'+
-      '<option value="channel"'+(kidsType==="channel"?' selected':'')+'>قنوات الأطفال</option>'+
-      '<option value="other"'+(kidsType==="other"?' selected':'')+'>أفلام ومسلسلات</option>'+
-      '<option value="all"'+(kidsType==="all"?' selected':'')+'>كل محتوى الأطفال</option></select></label>'+
-      '<label class="kids-filter">الدولة<select id="kidsCountryFilter">'+
-      '<option value="">كل الدول</option>'+options(countries,kidsCountry)+'</select></label>'+
-      '<label class="kids-filter">اللغة<select id="kidsLanguageFilter">'+
-      '<option value="">كل اللغات</option>'+options(languages,kidsLanguage)+'</select></label></div>';
-    return pageHead("عالم الأطفال", "كرتون وأنمي ومسلسلات وقنوات للأطفال.", shown.length) +
-      (!filterCat&&kidsType==="all"&&!kidsCountry&&!kidsLanguage?
-        railHTML("قنوات للأطفال",shown.filter(function(i){return i.kind==="channel";}).slice(0,16),{subtitle:"قنوات من مكتبة الأطفال"}):"")+
-      classifiedFilterBar(list,filterCat,"kids") + filters +
-      '<div class="experience-shelf-title"><h2>مكتبة الأطفال</h2><p>استخدم فلاتر الدولة واللغة والنوع</p></div>'+
-      (shown.length ? gridHTML(shown) : emptyHTML("لا يوجد محتوى يطابق الفلاتر."));
+    return Kids.render(catalog, filterCat);
   }
 
   function viewYoutube(filterCat) {
@@ -544,12 +510,14 @@
 
     var unified=/^(movies|series|live|kids|youtube|mylist)$/.test(route.name);
     view.className="view"+(unified?" is-experience experience--"+route.name:"");
-    view.innerHTML=unified?experienceHeader(route.name)+html:html;
+    view.innerHTML=route.name==="kids"?html:(unified?experienceHeader(route.name)+html:html);
+    document.body.classList.toggle("kids-world-active",route.name==="kids");
     setNav(route.name);
     if (preserveScroll) window.scrollTo(0, y); else window.scrollTo(0, 0);
     startHeroRotation();
     wireRails();
     if (route.name === "live" && Live) Live.mount();
+    if (route.name === "kids" && Kids) Kids.mount(catalog,function(){render(true);});
     if (route.name === "title" && route.arg) {
       setTimeout(function () { openDetail(route.arg); }, 50);
     }
@@ -1024,8 +992,9 @@
     document.addEventListener("click", function (e) {
       var t = e.target;
 
-      // The live guide owns its own buttons and event handling.
+      // Dedicated TV guide and kids world own their controls.
       if (t.closest("#livePage")) return;
+      if (t.closest("#kidsWorld") && Kids && Kids.handleClick(e)) return;
       var playBtn = t.closest("[data-play]");
       if (playBtn) { playItem(findItem(playBtn.getAttribute("data-play"))); return; }
 
