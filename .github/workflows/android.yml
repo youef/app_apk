@@ -157,16 +157,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release create "$AL_EZZ_RELEASE_TAG" \
+          if ! gh release create "$AL_EZZ_RELEASE_TAG" \
             dist/al-ezz-tv-v11-api19.apk \
             dist/install-metadata.txt \
             dist/build-report.txt \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "Al Ezz TV v12 - Native Remote, Channel Guide, DASH, Episodes and Tracks - $AL_EZZ_EXPECTED_PACKAGE" \
-            --notes "Al Ezz TV v12 experimental native Android TV: immersive player, live channels guide and remote CH+/CH-/digits, automatic HLS and DASH variants, MP4/WebM/MKV/TS best effort, audio/subtitle track selection, screen aspect and VOD speed. Children YouTube use official in-app embed where OS supports it, direct licensed video through ExoPlayer. Unique package per release. Android 4.4.4 install checks passed, physical decoding and stream rights/availability NOT guaranteed." \
+            --notes "Al Ezz TV v12 experimental native Android TV: immersive player, live channels guide and remote CH+/CH-/digits, automatic HLS and DASH variants, MP4/WebM/MKV/TS best effort, audio/subtitle track selection, screen aspect and VOD speed. Independent Kids World uses approved direct MP4/HLS in ExoPlayer with age presets and a local daily watch limit; YouTube remains separate. Unique package per release. Android 4.4.4 install checks passed, physical decoding and stream rights/availability NOT guaranteed." \
             --prerelease \
-            --latest=false
+            --latest=false; then
+            echo "::warning::GitHub Releases unavailable for this token; signed APK is preserved in the workflow artifact."
+          fi
       - name: Upload to Appetize when linked
         if: env.APPETIZE_API_TOKEN != '' && env.APPETIZE_ANDROID_PUBLIC_KEY != ''
         uses: appetizeio/github-action-appetize@v1.1.0
