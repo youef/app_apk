@@ -53,7 +53,7 @@ class MobileStudioTests(unittest.TestCase):
         self.assertEqual(manifest["display"], "standalone")
         self.assertEqual(manifest["dir"], "rtl")
         self.assertEqual(manifest["scope"], "/")
-        self.assertTrue((BASE / manifest["icons"][0]["src"].removeprefix("/static/").join(["static/"])).exists() if False else (BASE / "static/studio-icon.svg").exists())
+        self.assertTrue((BASE / "static" / pathlib.Path(manifest["icons"][0]["src"]).name).exists())
     def test_security(self):
         self.assertNotIn("ALEZZ_SITE_SECRET", HTML)
         self.assertNotIn("ALEZZ_SITE_PASSWORD", HTML)
