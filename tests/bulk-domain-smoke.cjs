@@ -9,6 +9,12 @@ let handler=null;
 const visited=[];
 const responses=(data,status=200,type="application/json")=>new Response(typeof data==="string"||data instanceof Uint8Array?data:JSON.stringify(data),{status,headers:{"content-type":type}});
 const page='<html><head><title>مسلسل تجريبي</title><meta property="og:title" content="مسلسل تجريبي"></head><body><video src="https://cdn.sample.org/episode-1.mp4"></video></body></html>';
+const seriesPage='<html><head><script type="application/ld+json">'+JSON.stringify({
+"@type":"TVSeries","name":"مسلسل مرخّص للتجربة","description":"وصف المسلسل","image":"https://cdn.sample.org/poster.jpg",
+"containsSeason":[{"@type":"TVSeason","seasonNumber":2,"episode":[
+{"@type":"TVEpisode","seasonNumber":2,"episodeNumber":1,"name":"الحلقة الأولى","url":"https://public.example.net/s2e1","image":"https://cdn.sample.org/ep1.jpg"},
+{"@type":"TVEpisode","seasonNumber":2,"episodeNumber":2,"name":"الحلقة الثانية","url":"https://public.example.net/s2e2","contentUrl":"https://cdn.sample.org/s2e2.mp4"}]}]
+})+'</script></head><body></body></html>';
 const fetchMock=async (input)=>{
  const url=String(input),u=new URL(url);
  visited.push(url);
@@ -20,6 +26,7 @@ const fetchMock=async (input)=>{
   return responses({Status:0,Answer:u.searchParams.get("type")==="A"?[{type:1,data:privateIP?"127.0.0.1":"1.1.1.1"}]:[]});
  }
  if(u.hostname==="public.example.net"&&u.pathname==="/movie")return responses(page,200,"text/html");
+ if(u.hostname==="public.example.net"&&u.pathname==="/show")return responses(seriesPage,200,"text/html");
  if(u.hostname==="public.example.net"&&u.pathname==="/redirect")return new Response(null,{status:302,headers:{location:"http://127.0.0.1/secret"}});
  if(u.hostname==="cdn.sample.org")return responses(new Uint8Array([0,0,0,16,102,116,121,112,105,115,111,109]),206,"video/mp4");
  throw Error("Unexpected outbound URL: "+url);
@@ -36,7 +43,16 @@ async function run(action,url,extra={}){
  assert.equal(disc.status,200,JSON.stringify(disc.data));
  assert.equal(disc.data.items.length,1);
  assert.equal(disc.data.title,"مسلسل تجريبي");
- const check=await run("inspect","https://public.example.net/movie");
+ const structured=await run("discover","https://public.example.net/show",{kind:"series"});
+ assert.equal(structured.status,200,JSON.stringify(structured.data));
+ assert.equal(structured.data.type,"series");
+ assert.equal(structured.data.items.length,2);
+ assert.equal(structured.data.description,"وصف المسلسل");
+ assert.equal(structured.data.poster_url,"https://cdn.sample.org/poster.jpg");
+ assert.equal(structured.data.items[0].season,2);
+ assert.equal(structured.data.items[0].number,1);
+ assert.equal(structured.data.items[1].media_url,"https://cdn.sample.org/s2e2.mp4");
+  const check=await run("inspect","https://public.example.net/movie");
  assert.equal(check.status,200,JSON.stringify(check.data));
  assert.equal(check.data.ok,true,JSON.stringify(check.data));
  assert.equal(check.data.stream_url,"https://cdn.sample.org/episode-1.mp4");
