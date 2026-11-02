@@ -19,7 +19,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap">
 <link rel="preload" href="css/app.css" as="style">
-<link rel="stylesheet" href="css/app.css?v=tv-studio-20261102-2">
+<link rel="stylesheet" href="css/app.css?v=series-binge-20261102-1">
 <link rel="stylesheet" href="css/live.css?v=tv-studio-20261102-1">
 <script>
 (function () {
@@ -161,6 +161,7 @@
           <button class="iconbtn iconbtn--round" id="btnFwd10" aria-label="تقديم 10 ثوان">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5l7 7-7 7"/><path d="M20 12h-8.5a5.5 5.5 0 100 11H15"/></svg>
           </button>
+          <button class="chipbtn player__quick-next" id="playerQuickNext" aria-label="الانتقال السريع للحلقة التالية" hidden>الحلقة التالية <span aria-hidden="true">⏭</span></button>
           <div class="player__time"><span id="tNow">0:00</span><em>/</em><span id="tTotal">0:00</span></div>
           <div class="player__spacer"></div>
           <div class="player__vol">
@@ -178,12 +179,17 @@
       </div>
     </div>
 
-    <div class="player__next" id="playerNext" hidden>
-      <div>
-        <small>التالي في القائمة</small>
+    <div class="player__next" id="playerNext" role="group" aria-label="الحلقة التالية" hidden>
+      <span class="player__next-symbol" aria-hidden="true">⏭</span>
+      <div class="player__next-info">
+        <small id="nextContext">اقتربت نهاية الحلقة</small>
         <strong id="nextTitle"></strong>
+        <span id="nextCountdown">جاهزة للتشغيل</span>
       </div>
-      <button class="btn btn--gold" id="nextPlay">تشغيل</button>
+      <div class="player__next-actions">
+        <button class="btn btn--gold" id="nextPlay">شغّل التالية</button>
+        <button class="btn btn--ghost" id="nextDismiss">لاحقًا</button>
+      </div>
     </div>
   </div>
 </div>
@@ -217,8 +223,8 @@
 <script src="js/api.js?v=genre-browse-20261101"></script>
 <script src="js/explore.js?v=netflix-taxonomy-20261101"></script>
 <script src="js/store.js"></script>
-<script src="js/player.js?v=tv-studio-20261102-2"></script>
+<script src="js/player.js?v=series-binge-20261102-1"></script>
 <script src="js/live.js?v=tv-studio-20261102-1"></script>
-<script src="js/app.js?v=quality-select-20261101-v1-netflix"></script>
+<script src="js/app.js?v=series-binge-20261102-1"></script>
 </body>
 </html>

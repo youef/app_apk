@@ -346,10 +346,52 @@
     return pageHead("الأفلام","أفلام تركية وعربية وأجنبية، جريمة وحرب وأنمي وغيرها.",shown.length)+
       classifiedFilterBar(list,filterCat,"movies")+(shown.length?gridHTML(shown):emptyHTML("لا توجد أفلام في هذا التصنيف بعد."));
   }
+  function seriesEpisodes(item) {
+    var result = [];
+    (item.seasons || []).forEach(function (season) {
+      (season.episodes || []).forEach(function (ep) { result.push(ep); });
+    });
+    return result;
+  }
+
+  function seriesResume(item) {
+    var episodes = seriesEpisodes(item), active = null, latest = 0;
+    episodes.forEach(function (ep) {
+      var saved = Store.progress(ep.key);
+      if (saved && saved.t > 5 && saved.at >= latest) { active = ep; latest = saved.at; }
+    });
+    return active;
+  }
+
   function viewSeries(filterCat){
-    var list=catalog.series,shown=list.filter(function(x){return itemMatches(x,filterCat);});
-    return pageHead("المسلسلات","مسلسلات تركية وأجنبية وعربية، أنمي وجريمة ودراما وغيرها.",shown.length)+
-      classifiedFilterBar(list,filterCat,"series")+(shown.length?gridHTML(shown):emptyHTML("لا توجد مسلسلات في هذا التصنيف بعد."));
+    var list = catalog.series, shown = list.filter(function(x){return itemMatches(x,filterCat);});
+    var featured = shown.filter(function(x){return x.backdrop || x.poster;})[0] || shown[0];
+    var hero = "";
+    if (featured) {
+      var totalSeasons = (featured.seasons || []).length;
+      hero = '<section class="series-spotlight" aria-label="مسلسل مميز">' +
+        '<div class="series-spotlight__art" style="background:' + artStyle(featured,true) + '">' +
+        (featured.backdrop || featured.poster ? '<img src="' + esc(featured.backdrop || featured.poster) + '" alt="" loading="lazy" onerror="this.remove()">' : "") + '</div>' +
+        '<div class="series-spotlight__content"><span class="series-spotlight__eyebrow">✦ مختارات المسلسلات</span>' +
+        '<h2>' + esc(featured.title) + '</h2>' +
+        '<div class="series-spotlight__facts">' +
+        (featured.year ? '<span>' + esc(featured.year) + '</span>' : '') +
+        (totalSeasons ? '<span>' + totalSeasons + ' موسم</span>' : '') +
+        (featured.episodeCount ? '<span>' + featured.episodeCount + ' حلقة</span>' : '') +
+        (featured.category ? '<span>' + esc(featured.category) + '</span>' : '') + '</div>' +
+        (featured.description ? '<p>' + esc(featured.description) + '</p>' : '') +
+        '<div class="series-spotlight__actions"><button class="btn btn--gold" data-play="' + esc(featured.key) + '">▶ ' +
+        (seriesResume(featured) ? 'متابعة المشاهدة' : 'ابدأ المشاهدة') + '</button>' +
+        '<button class="btn btn--ghost" data-detail="' + esc(featured.key) + '">المواسم والحلقات</button></div></div></section>';
+    }
+    var inProgress = shown.filter(function (s) { return !!seriesResume(s); });
+    var totals = shown.reduce(function(acc,s){ acc.seasons += (s.seasons || []).length; acc.episodes += s.episodeCount || 0; return acc; },{seasons:0,episodes:0});
+    return '<div class="series-page">' + pageHead("عالم المسلسلات","قصص تستحق المتابعة — اكتشف المسلسلات والمواسم وشاهد الحلقات بالتسلسل.",shown.length) +
+      hero + '<div class="series-metrics" aria-label="مكتبة المسلسلات"><span><strong>' + shown.length + '</strong> مسلسل</span>' +
+      '<span><strong>' + totals.seasons + '</strong> موسم</span><span><strong>' + totals.episodes + '</strong> حلقة</span></div>' +
+      (inProgress.length ? railHTML("أكمل مسلسلاتك",inProgress,{ subtitle:"استكمل من حيث توقفت",more:"#/series" }) : '') +
+      '<div class="series-library-head"><div><h2>استكشف المسلسلات</h2><p>تصفح حسب النوع والبلد واختر مسلسلك المفضل</p></div></div>' +
+      classifiedFilterBar(list,filterCat,"series") + (shown.length ? gridHTML(shown) : emptyHTML("لا توجد مسلسلات في هذا التصنيف بعد.")) + '</div>';
   }
 
   function viewLive(filterCat) {
@@ -551,10 +593,15 @@
 
     var epsHTML = "";
     if (item.kind === "series" && item.seasons && item.seasons.length) {
-      var firstSeason = item.seasons[0];
-      epsHTML = '<div class="eps"><div class="eps__head"><h3>الحلقات</h3><div class="seasons">' +
-        item.seasons.map(function (s, i) {
-          return '<button class="filter' + (i === 0 ? " is-on" : "") + '" data-season="' + esc(s.id) + '">' + esc(s.title) + "</button>";
+      var resumed = seriesResume(item);
+      var firstSeason = item.seasons.filter(function(s) {
+        return resumed && s.episodes.indexOf(resumed) !== -1;
+      })[0] || item.seasons[0];
+      epsHTML = '<div class="eps"><div class="eps__head"><div><h3>المواسم والحلقات</h3>' +
+        '<p class="eps__summary">' + item.seasons.length + ' موسم · ' + (item.episodeCount || 0) + ' حلقة</p></div>' +
+        '<div class="seasons" role="group" aria-label="اختيار الموسم">' +
+        item.seasons.map(function (s) {
+          return '<button class="filter' + (s.id === firstSeason.id ? " is-on" : "") + '" data-season="' + esc(s.id) + '" aria-label="' + esc(s.title) + '">' + esc(s.title) + "</button>";
         }).join("") + "</div></div>" +
         '<div id="epList">' + episodesHTML(firstSeason) + "</div></div>";
     }
@@ -593,11 +640,18 @@
   function episodesHTML(season) {
     if (!season || !season.episodes.length) return '<p class="search__hint">لا حلقات منشورة في هذا الموسم.</p>';
     return season.episodes.map(function (e) {
-      return '<button class="ep" data-ep="' + esc(e.key) + '">' +
-        '<span class="ep__num">' + esc(e.number || "•") + "</span>" +
-        '<span class="ep__txt"><strong>' + esc(e.title) + "</strong><span>" + esc(e.description || "اضغط للتشغيل") + "</span></span>" +
-        (e.duration ? '<span class="ep__dur">' + esc(fmtDuration(e.duration)) + "</span>" : "") +
-        "</button>";
+      var pct = progressOf(e), started = pct > 1 && pct < 97;
+      return '<button class="ep' + (started ? ' is-playing' : '') + '" data-ep="' + esc(e.key) + '" aria-label="تشغيل ' + esc(e.title) + '">' +
+        '<span class="ep__thumb">' +
+        (e.poster ? '<img src="' + esc(e.poster) + '" alt="" loading="lazy" onerror="this.remove()">' : '<span class="ep__thumb-placeholder">▶</span>') +
+        '<span class="ep__number">الحلقة ' + esc(e.number || "—") + '</span></span>' +
+        '<span class="ep__txt"><strong>' + esc(e.title) + '</strong>' +
+        '<span>' + esc(e.description || 'اضغط لمشاهدة هذه الحلقة') + '</span>' +
+        (started ? '<span class="ep__watching">● متابعة · ' + Math.round(pct) + '%</span>' : '') +
+        (started ? '<span class="ep__progress"><i style="width:' + pct.toFixed(1) + '%"></i></span>' : '') +
+        '</span><span class="ep__trailing">' +
+        (e.duration ? '<span class="ep__dur">' + esc(fmtDuration(e.duration)) + '</span>' : '') +
+        '<span class="ep__play">▶</span></span></button>';
     }).join("");
   }
 
@@ -641,8 +695,8 @@
     }
 
     /* a series has no stream of its own: start the first episode */
-    if (item.kind === "series" && !item.stream && !item.youtubeId) {
-      var first = null;
+    if (item.kind === "series" && item.seasons && item.episodeCount) {
+      var first = seriesResume(item);
       (item.seasons || []).forEach(function (s) {
         if (!first && s.episodes && s.episodes.length) first = s.episodes[0];
       });
@@ -673,9 +727,10 @@
     catalog.series.forEach(function (s) {
       s.seasons.forEach(function (season) {
         season.episodes.forEach(function (e) {
-          if (e.key === epKey) { episode = e; series = s; list = season.episodes; }
+          if (e.key === epKey) { episode = e; series = s; }
         });
       });
+      if (series === s) list = seriesEpisodes(s);
     });
     if (!episode) return;
     var idx = list.indexOf(episode);
@@ -696,8 +751,10 @@
     Player.queue(list, idx);
     Player.open(payload, { next: next ? {
       key: next.key, kind: "episode", title: series.title + " — " + next.title, subtitle: series.title,
-      poster: series.poster, stream: next.stream, variants: next.variants || [], youtubeId: next.youtubeId, art: artStyle(series)
-    } : null });
+      poster: next.poster || series.poster, stream: next.stream, variants: next.variants || [],
+      youtubeId: next.youtubeId, art: artStyle(series)
+    } : null, onNext: next ? function () { playEpisode(next.key); } : null });
+    closeDetail();
   }
 
   /* ---------------------------------------------------------------- search */

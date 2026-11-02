@@ -12,6 +12,10 @@
   var el = {};
   var current = null;
   var nextItem = null;
+  var nextHandler = null;
+  var nextDismissed = false;
+  var autoNextTimer = null;
+  var autoNextSeconds = 0;
   var hls = null;
   var hideTimer = null;
   var saveTimer = null;
@@ -56,7 +60,7 @@
     return loadHlsScript._p;
   }
 
-  function show(id, on) { if (el[id]) el[id].hidden = !on; }
+  function show(id, on) { var node = el[id] || $(id); if (node) node.hidden = !on; }
 
   function setChromeIdle(idle) {
     el.root.classList.toggle("is-idle", !!idle);
@@ -103,7 +107,43 @@
     });
   }
 
+  function stopAutoNext() {
+    if (autoNextTimer) clearInterval(autoNextTimer);
+    autoNextTimer = null;
+    autoNextSeconds = 0;
+  }
+
+  function updateNextPrompt() {
+    if (!nextItem || !current || current.live || !el.root || el.root.hidden || nextDismissed || youtubeFrame) return;
+    var duration = el.video.duration, remaining = duration - el.video.currentTime;
+    if (duration > 0 && isFinite(duration) && remaining <= 90 && remaining >= 0) {
+      $("nextContext").textContent = "اقتربت نهاية الحلقة";
+      $("nextCountdown").textContent = "متبقي " + fmt(remaining) + " · الانتقال متاح الآن";
+      show("playerNext", true);
+      setChromeIdle(false);
+    } else if (!autoNextTimer) show("playerNext", false);
+  }
+
+  function beginAutoNext() {
+    if (!nextItem) return;
+    stopAutoNext();
+    nextDismissed = false;
+    autoNextSeconds = 8;
+    $("nextContext").textContent = "انتهت الحلقة";
+    $("nextCountdown").textContent = "تشغيل تلقائي بعد " + autoNextSeconds + " ثوانٍ";
+    $("nextTitle").textContent = nextItem.title;
+    show("playerNext", true);
+    setChromeIdle(false);
+    autoNextTimer = setInterval(function () {
+      if (!nextItem || !current || el.root.hidden) { stopAutoNext(); return; }
+      autoNextSeconds--;
+      if (autoNextSeconds <= 0) { stopAutoNext(); playNext(); return; }
+      $("nextCountdown").textContent = "تشغيل تلقائي بعد " + autoNextSeconds + " ثوانٍ";
+    }, 1000);
+  }
+
   function clearStage() {
+    stopAutoNext();
     playbackToken++;
     if (hls) { try { hls.destroy(); } catch (e) {} hls = null; }
     if (youtubeFrame) { youtubeFrame.remove(); youtubeFrame = null; }
@@ -278,6 +318,8 @@
       options = options || {};
       current = Object.assign({}, item);
       if (options.next) nextItem = options.next; else nextItem = null;
+      nextHandler = typeof options.onNext === "function" ? options.onNext : null;
+      nextDismissed = false;
 
       var saved = Store.progress(item.key);
       if (!options.restart && saved && saved.t > 5) current.resumeAt = saved.t;
@@ -286,10 +328,13 @@
       document.body.style.overflow = "hidden";
       startPlayback(current);
 
+      show("playerQuickNext", !!nextItem);
       if (nextItem) {
         $("nextTitle").textContent = nextItem.title;
-        show("playerNext", false); /* shown near the end */
+        $("nextContext").textContent = "اقتربت نهاية الحلقة";
+        $("nextCountdown").textContent = "الانتقال متاح أثناء المشاهدة";
       }
+      show("playerNext", false);
       return true;
     },
 
@@ -300,6 +345,9 @@
       document.body.style.overflow = "";
       current = null;
       nextItem = null;
+      nextHandler = null;
+      nextDismissed = false;
+      show("playerQuickNext", false);
       activeQuality = "auto";
       activeSourceIndex = 0;
       activeStreamUrl = "";
@@ -316,8 +364,11 @@
 
   function playNext() {
     if (!nextItem) return;
-    var next = nextItem;
-    Player.open(next, { next: null });
+    var next = nextItem, advance = nextHandler;
+    persist(true);
+    stopAutoNext();
+    if (advance) advance();
+    else Player.open(next, { next: null });
   }
 
   function seek(delta) {
@@ -552,13 +603,13 @@
 
     v.setAttribute("webkit-playsinline", "");
     v.setAttribute("x-webkit-airplay", "allow");
-    v.addEventListener("timeupdate", function () { if (!scrubbing) updateScrub(); persist(false); });
+    v.addEventListener("timeupdate", function () { if (!scrubbing) updateScrub(); persist(false); updateNextPrompt(); });
     v.addEventListener("playing", function () { show("playerSpinner", false); setPlayIcon(true); wake(); });
     v.addEventListener("progress", updateScrub);
     v.addEventListener("pause", function () { setPlayIcon(false); setChromeIdle(false); });
     v.addEventListener("ended", function () {
       persist(true);
-      if (nextItem) { show("playerNext", true); $("nextTitle").textContent = nextItem.title; }
+      if (nextItem) beginAutoNext();
       setChromeIdle(false);
     });
     v.addEventListener("error", function () {
@@ -586,6 +637,13 @@
     });
     $("btnCaptions").addEventListener("click", toggleCaptions);
     $("nextPlay").addEventListener("click", playNext);
+    $("playerQuickNext").addEventListener("click", playNext);
+    $("nextDismiss").addEventListener("click", function () {
+      stopAutoNext();
+      nextDismissed = true;
+      show("playerNext", false);
+      wake();
+    });
     $("btnMute").addEventListener("click", function () {
       v.muted = !v.muted;
       $("volWave").style.opacity = v.muted ? ".15" : "1";
