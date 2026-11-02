@@ -2324,6 +2324,178 @@
     });
   }
 
+  /* ---------- multi-select and deletion across all content tables ---------- */
+  function isOtherBulkTable(tableCfg) {
+    return !!tableCfg && /^aseel_[a-z_]+$/.test(tableCfg.table) &&
+      tableCfg.table !== 'aseel_channels' && !isMediaBulkTable(tableCfg);
+  }
+
+  function selectedBulkRows(tableCfg) {
+    if (!tableCfg) return [];
+    var chosen = tableCfg.table === 'aseel_channels' ? state.selectedChannels :
+      isMediaBulkTable(tableCfg) ? state.selectedMedia : state.selectedOther;
+    return state.rows.filter(function (row) { return !!chosen[row.id]; });
+  }
+
+  function appendBulkDeleteAction(host) {
+    var button = el('button', {
+      type: 'button', class: 'btn btn-danger btn-sm bulk-delete-btn',
+      'aria-label': 'حذف العناصر المحددة نهائيًا'
+    }, 'حذف المحدد (0)');
+    button.disabled = true;
+    button.addEventListener('click', function () { openBulkDelete(state.table); });
+    var actions = el('div', { class: 'bulk-actions' });
+    actions.append(button);
+    host.append(actions);
+  }
+
+  function syncBulkDeleteButton() {
+    if (!state.table || !state.els.bulkPanel) return;
+    var button = $('.bulk-delete-btn', state.els.bulkPanel);
+    if (!button) return;
+    var count = selectedBulkRows(state.table).length;
+    button.textContent = 'حذف المحدد (' + formatNumber(count) + ')';
+    button.disabled = state.bulkBusy || state.deleteBusy || !state.adminVerified || count < 1;
+  }
+
+  function selectFilteredOther(checked) {
+    if (state.bulkBusy || !isOtherBulkTable(state.table)) return;
+    state.filteredOther.forEach(function (row) {
+      if (checked) state.selectedOther[row.id] = true;
+      else delete state.selectedOther[row.id];
+    });
+    applyFilter();
+  }
+
+  function buildOtherBulkPanel(tableCfg) {
+    var host = state.els.bulkPanel;
+    if (!host) return;
+    host.replaceChildren();
+    var header = el('div', { class: 'bulk-header' });
+    header.append(el('strong', null, 'عمليات جماعية — ' + tableCfg.label),
+      el('span', { class: 'bulk-count', id: 'otherBulkSummary', role: 'status' }, '0 محدد'));
+    host.append(header);
+    var selection = el('div', { class: 'bulk-actions' });
+    [
+      ['تحديد نتائج البحث', function () { selectFilteredOther(true); }],
+      ['تحديد كل العناصر المحمّلة', function () {
+        if (state.bulkBusy) return;
+        state.rows.forEach(function (row) { state.selectedOther[row.id] = true; });
+        applyFilter();
+      }],
+      ['إلغاء التحديد', function () {
+        if (state.bulkBusy) return;
+        state.selectedOther = {};
+        applyFilter();
+      }]
+    ].forEach(function (entry) {
+      var button = el('button', { class: 'btn btn-ghost btn-sm other-bulk-control', type: 'button' }, entry[0]);
+      button.addEventListener('click', entry[1]);
+      selection.append(button);
+    });
+    host.append(selection);
+    appendBulkDeleteAction(host);
+    host.append(el('p', { class: 'bulk-status', id: 'otherBulkStatus', role: 'status', 'aria-live': 'polite' },
+      'حدد العناصر المطلوبة، ثم اضغط حذف المحدد. قد يؤدي حذف المسلسلات أو المواسم إلى حذف الحلقات التابعة لها.'));
+    syncOtherBulkPanel();
+  }
+
+  function syncOtherBulkPanel() {
+    if (!state.table || !isOtherBulkTable(state.table) || !state.els.bulkPanel) return;
+    var chosen = selectedBulkRows(state.table);
+    var summary = $('#otherBulkSummary');
+    if (summary) summary.textContent = formatNumber(chosen.length) + ' محدد من ' + formatNumber(state.rows.length);
+    var filtered = state.filteredOther || [];
+    var marked = filtered.filter(function (row) { return !!state.selectedOther[row.id]; }).length;
+    var master = $('.bulk-check-cell input', state.els.thead);
+    if (master) {
+      master.checked = filtered.length > 0 && marked === filtered.length;
+      master.indeterminate = marked > 0 && marked < filtered.length;
+      master.disabled = state.bulkBusy;
+    }
+    $('.other-bulk-control', state.els.bulkPanel).forEach(function (button) {
+      button.disabled = state.bulkBusy;
+    });
+    syncBulkDeleteButton();
+  }
+
+  function bulkDeleteWarning(tableName) {
+    if (tableName === 'aseel_series') return 'حذف المسلسل يحذف مواسمه وحلقاته أيضًا تلقائيًا.';
+    if (tableName === 'aseel_seasons') return 'حذف الموسم يحذف جميع حلقاته أيضًا.';
+    if (tableName === 'aseel_channels' || tableName === 'aseel_movies' || tableName === 'aseel_episodes') {
+      return 'قد تُحذف روابط هذه العناصر من صفوف الصفحة الرئيسية المرتبطة بها.';
+    }
+    if (tableName === 'aseel_home_collections') return 'حذف صف الرئيسية يزيل العناصر المرتبطة بذلك الصف.';
+    return 'قد تتأثر العلاقات المرتبطة بالسجلات المحددة.';
+  }
+
+  function openBulkDelete(tableCfg) {
+    if (!tableCfg || state.bulkBusy || !state.adminVerified) {
+      toast('يلزم تسجيل الدخول بصلاحية المسؤول قبل الحذف.', 'error');
+      return;
+    }
+    var selected = selectedBulkRows(tableCfg);
+    if (!selected.length) { toast('حدد عنصرًا أو أكثر أولًا.', 'error'); return; }
+    // Reuse the existing accessible confirmation dialog, with a count-specific phrase.
+    openDelete(tableCfg, selected[0]);
+    state.deleteTargets = selected.slice();
+    state.deletePhrase = 'حذف ' + selected.length;
+    $('#deleteText').textContent = 'سيتم حذف ' + formatNumber(selected.length) +
+      ' من ' + tableCfg.label + ' نهائيًا من قاعدة البيانات. ' +
+      bulkDeleteWarning(tableCfg.table) + ' لا يمكن التراجع عن العملية.';
+    var label = $('#deleteConfirmLabel');
+    if (label) label.textContent = 'اكتب «' + state.deletePhrase + '» لتأكيد حذف العناصر المحددة';
+    $('#deleteConfirmInput').placeholder = state.deletePhrase;
+    $('#deleteConfirmBtn').textContent = 'حذف ' + formatNumber(selected.length) + ' نهائيًا';
+    $('#deleteConfirmBtn').disabled = true;
+  }
+
+  function deleteSelectedBatch(tableName, selected) {
+    if (!/^aseel_[a-z_]+$/.test(tableName) || !Array.isArray(selected)) {
+      return Promise.reject(new Error('جدول الحذف غير صالح.'));
+    }
+    var idsSeen = {};
+    selected.forEach(function (row) {
+      if (!/^[0-9a-f]{8}-[0-9a-f-]{27,36}$/i.test(row.id)) {
+        throw new Error('معرف محتوى غير صالح، تم إلغاء الحذف.');
+      }
+      if (idsSeen[row.id]) throw new Error('عناصر مكررة في التحديد.');
+      idsSeen[row.id] = true;
+    });
+    var result = { requested: selected.length, deleted: 0, failed: 0, errors: [], deletedIds: [] };
+    return bulkParts(selected, 25).reduce(function (chain, batch) {
+      return chain.then(function () {
+        var ids = batch.map(function (row) { return row.id; });
+        var filter = 'id=in.(' + ids.join(',') + ')';
+        return api(tableName + '?' + filter, {
+          method: 'DELETE', headers: { Prefer: 'return=representation' }
+        }).then(function (returned) {
+          if (!Array.isArray(returned)) throw new Error('الخادم لم يؤكد السجلات المحذوفة.');
+          var confirmedByDelete = {};
+          returned.forEach(function (row) { if (idsSeen[row.id]) confirmedByDelete[row.id] = true; });
+          // A 2xx alone does not mean deletion: verify the rows really disappeared.
+          return restList(tableName, 'select=id&' + filter + '&limit=30').then(function (remaining) {
+            if (!Array.isArray(remaining)) throw new Error('تعذر التحقق من حذف الدفعة.');
+            var remainingById = {};
+            remaining.forEach(function (row) { remainingById[row.id] = true; });
+            ids.forEach(function (id) {
+              if (confirmedByDelete[id] && !remainingById[id]) {
+                result.deleted++;
+                result.deletedIds.push(id);
+              } else {
+                result.failed++;
+                if (result.errors.length < 5) result.errors.push('لم يؤكد حذف العنصر ' + id.slice(0, 8));
+              }
+            });
+          });
+        }).catch(function (error) {
+          result.failed += ids.length;
+          if (result.errors.length < 5) result.errors.push(describeError(error));
+        });
+      });
+    }, Promise.resolve()).then(function () { return result; });
+  }
+
   /* ---------- delete modal ---------- */
   function openDelete(tableCfg, row) {
     state.deleteTarget = row;
