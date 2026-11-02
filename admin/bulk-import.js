@@ -52,9 +52,32 @@
      const item=categoryOptions.find(c=>c.name_ar===name);if(item)return item.id;
    }return "";
  }
+ function tidyTitle(value){
+   return String(value||"").replace(/\s*[-–—|]\s*(?:موقع\s*)?(?:قرمزي|qrmzi)\s*$/i,"")
+     .replace(/\s+/g," ").trim();
+ }
+ async function discoverExisting(){
+   if(!batch||batch.type!=="series")return;
+   const target=tidyTitle(text("batchTitle"));
+   const all=await rest("aseel_series","select=id,title_ar,title_original,release_year,description,poster_url,backdrop_url,country_code,language_code,category_id,genre_tags,auto_tags,status,rights_status&limit=700");
+   const matches=(all||[]).filter(x=>tidyTitle(x.title_ar).toLowerCase()===target.toLowerCase());
+   if(matches.length!==1)return;
+   const found=matches[0];batch.existingId=found.id;
+   $("batchTitle").value=found.title_ar;
+   if(!text("batchOriginal"))$("batchOriginal").value=found.title_original||"";
+   if(!text("batchYear"))$("batchYear").value=found.release_year||"";
+   if(!text("batchDescription"))$("batchDescription").value=found.description||"";
+   if(!text("batchPosterUrl"))$("batchPosterUrl").value=found.poster_url||"";
+   if(!text("batchBackdropUrl"))$("batchBackdropUrl").value=found.backdrop_url||"";
+   if(!text("batchCountry"))$("batchCountry").value=found.country_code||"";
+   if(!text("batchLanguage"))$("batchLanguage").value=found.language_code||"";
+   if(found.category_id)$("batchCategory").value=found.category_id;
+   if(!text("batchGenres"))$("batchGenres").value=(found.genre_tags||found.auto_tags||[]).join(", ");
+   msg("المسلسل موجود بالفعل في المكتبة: ستُحدَّث بياناته وحلقاته دون إنشاء نسخة جديدة.","success");
+ }
  function populateWork(){
    if(!batch)return;
-   $("batchTitle").value=batch.title||"";
+   $("batchTitle").value=tidyTitle(batch.title)||"";
    $("batchOriginal").value=batch.title_original||"";
    $("batchYear").value=batch.release_year&&batch.release_year>=1880&&batch.release_year<=2100?batch.release_year:"";
    const description=batch.description||"";
@@ -128,7 +151,8 @@
   if(busy||!authenticated)return;
   let url;try{url=new URL($("batchUrl").value.trim());if(url.protocol!=="https:")throw Error();}catch{return msg("أدخل رابط HTTPS صحيحًا","error");}
   busy=true;batch=null;items=[];saved=0;status();msg("يتم اكتشاف مواسم المسلسل وحلقاته...");
-  try{batch=await edge({action:"discover",url:url.href,kind:$("batchKind").value});items=(batch.items||[]).map(x=>({...x,checked:true,saved:false}));populateWork();
+  try{batch=await edge({action:"discover",url:url.href,kind:$("batchKind").value});items=(batch.items||[]).map(x=>({...x,title:tidyTitle(x.title)||x.title,checked:true,saved:false}));populateWork();
+     try{await discoverExisting();}catch(e){msg("تعذر مراجعة السجلات الموجودة: "+e.message,"error");}
      busy=false;status();msg("تم جلب بيانات المسلسل و"+items.length+" حلقة. يتم فحص التشغيل تلقائيًا...","success");
      if(items.length)await verify();else msg("تم جلب البيانات ولكن الصفحة لا تُظهر حلقات قابلة للاكتشاف؛ جرّب رابط المواسم أو مصدرًا آخر.","error");}
   catch(e){msg("فشل الاكتشاف: "+e.message,"error");}finally{busy=false;status();}
@@ -175,7 +199,8 @@
   for(const key of Object.keys(safeMeta))if(safeMeta[key]===null||safeMeta[key]===""||(Array.isArray(safeMeta[key])&&!safeMeta[key].length))delete safeMeta[key];
   try{
    if(batch.type==="series"){
-    series=await first("aseel_series","select=id,title_ar,status,rights_status&title_ar="+eq(meta.title_ar));
+    series=batch.existingId?await first("aseel_series","select=id,title_ar,status,rights_status&id="+eq(batch.existingId)):
+      await first("aseel_series","select=id,title_ar,status,rights_status&title_ar="+eq(meta.title_ar));
     if(series){
       await patch("aseel_series",series.id,{...safeMeta,...(publication||{})});updated++;
     }else{
