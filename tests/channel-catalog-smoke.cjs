@@ -12,7 +12,7 @@ assert.ok(native.includes("status=eq.published&rights_status=eq.approved&playbac
 async function run(failChannels) {
   const channels = Array.from({ length: 216 }, (_, i) => ({
     id: String(i + 1), title_ar: "قناة " + (i + 1),
-    status: "published", rights_status: i < 44 ? "approved" : "pending",
+    status: "published", link_health_status: "healthy", rights_status: i < 44 ? "approved" : "pending",
     playback_mode: "stream", stream_url: "https://example.org/live/" + i + ".m3u8"
   }));
   const requests = [];
