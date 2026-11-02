@@ -23,6 +23,7 @@
   var activeStreamUrl = "";
   var preferredQuality = "auto";
   var youtubeFrame = null;
+  var playbackToken = 0;
 
   function $(id) { return document.getElementById(id); }
 
@@ -103,6 +104,7 @@
   }
 
   function clearStage() {
+    playbackToken++;
     if (hls) { try { hls.destroy(); } catch (e) {} hls = null; }
     if (youtubeFrame) { youtubeFrame.remove(); youtubeFrame = null; }
     var v = el.video;
@@ -161,29 +163,44 @@
   }
 
   function attachHls(url) {
-    var v = el.video;
+    var v = el.video, ticket = playbackToken;
+    // Safari on iOS/iPadOS/macOS supports HLS natively and does not need to
+    // download a JavaScript player before the first frame.
+    if (v.canPlayType("application/vnd.apple.mpegurl") ||
+        v.canPlayType("application/x-mpegURL")) {
+      attachNative(url);
+      return Promise.resolve(true);
+    }
     return loadHlsScript().then(function (Hls) {
-      if (Hls && Hls.isSupported()) {
-        hls = new Hls({ enableWorker: true, lowLatencyMode: !!current.live, backBufferLength: 60 });
-        var instance = hls;
-        hls.on(Hls.Events.MANIFEST_PARSED, function () { updateHlsLevels(instance); });
-        hls.loadSource(url);
-        hls.attachMedia(v);
-        hls.on(Hls.Events.ERROR, function (_e, data) {
-          if (data && data.fatal) {
-            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) { try { hls.startLoad(); return; } catch (e) {} }
-            fail("تعذّر تحميل بث HLS من المصدر. جرّب مصدرًا آخر أو أعد المحاولة.");
-          }
-        });
-        var p = v.play();
-        if (p && p.catch) p.catch(function () {});
-        return true;
-      }
-      if (v.canPlayType("application/vnd.apple.mpegurl")) {
-        attachNative(url);
-        return true;
-      }
-      return false;
+      if (ticket !== playbackToken) return true; // a newer episode is now playing
+      if (!Hls || !Hls.isSupported()) return false;
+      var attempts = 0;
+      var instance = new Hls({
+        enableWorker: true, lowLatencyMode: !!(current && current.live),
+        backBufferLength: 40, maxBufferLength: 24,
+        startLevel: -1
+      });
+      hls = instance;
+      instance.on(Hls.Events.MANIFEST_PARSED, function () {
+        if (ticket === playbackToken) updateHlsLevels(instance);
+      });
+      instance.on(Hls.Events.ERROR, function (_event, data) {
+        if (ticket !== playbackToken || instance !== hls || !data || !data.fatal) return;
+        if (attempts++ < 2) {
+          try {
+            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) { instance.startLoad(); return; }
+            if (data.type === Hls.ErrorTypes.MEDIA_ERROR) { instance.recoverMediaError(); return; }
+          } catch (e) { /* show a readable error below */ }
+        }
+        fail("تعذّر تشغيل المصدر بعد إعادة المحاولة. جرّب جودة أو رابطًا آخر.");
+      });
+      instance.attachMedia(v);
+      instance.loadSource(url);
+      var p = v.play();
+      if (p && p.catch) p.catch(function () {
+        if (ticket === playbackToken) toast("اضغط تشغيل لبدء المقطع في هذا المتصفح");
+      });
+      return true;
     });
   }
 
@@ -222,7 +239,9 @@
     show("playerSpinner", true);
     el.video.hidden = false;
 
+    var token = playbackToken;
     var ready = function () {
+      if (token !== playbackToken) return;
       show("playerSpinner", false);
       var resume = item.resumeAt || 0;
       if (resume > 3 && !item.live) {
@@ -231,7 +250,6 @@
       }
     };
     el.video.addEventListener("loadedmetadata", ready, { once: true });
-    el.video.addEventListener("playing", function () { show("playerSpinner", false); setPlayIcon(true); wake(); });
 
     if (/\.m3u8(\?|#|$)/i.test(url)) {
       attachHls(url).then(function (ok) {
@@ -532,7 +550,10 @@
 
     var v = el.video;
 
+    v.setAttribute("webkit-playsinline", "");
+    v.setAttribute("x-webkit-airplay", "allow");
     v.addEventListener("timeupdate", function () { if (!scrubbing) updateScrub(); persist(false); });
+    v.addEventListener("playing", function () { show("playerSpinner", false); setPlayIcon(true); wake(); });
     v.addEventListener("progress", updateScrub);
     v.addEventListener("pause", function () { setPlayIcon(false); setChromeIdle(false); });
     v.addEventListener("ended", function () {
