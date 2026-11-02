@@ -1057,6 +1057,16 @@
 
   function buildActions(tableCfg, row) {
     var td = el('td', { class: 'cell-actions' });
+    if (tableCfg.table === 'aseel_series' && row.id) {
+      td.append(actionButton('layers', 'إضافة حلقات سريعة', function () {
+        location.href = 'series-quick.html?series=' + encodeURIComponent(row.id);
+      }));
+    }
+    if (tableCfg.table === 'aseel_seasons' && row.series_id) {
+      td.append(actionButton('plus', 'إضافة حلقات للمسلسل', function () {
+        location.href = 'series-quick.html?series=' + encodeURIComponent(row.series_id);
+      }));
+    }
     td.append(actionButton('edit', 'تعديل', function () { openDrawer(row); }));
 
     if (tableCfg.statusFilter) {
