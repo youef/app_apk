@@ -2093,7 +2093,7 @@
 
       if (field.type === 'tags') {
         var picker=form.querySelector('.genre-tag-picker[data-field="' + field.key + '"]');
-        value=picker ? $('input[type="checkbox"]:checked',picker).map(function(input){return input.value;}) : [];
+        value=picker ? Array.prototype.map.call(picker.querySelectorAll('input[type="checkbox"]:checked'), function(input){return input.value;}) : [];
       } else if (field.type === 'variants') {
         var box = form.querySelector('.variants[data-field="' + field.key + '"]');
         var rows = box ? $$('.variant-row', box) : [];

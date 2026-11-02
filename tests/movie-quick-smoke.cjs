@@ -11,7 +11,7 @@ assert(js.includes("movieQuickLinkType(link)"));
 assert(js.includes("var extras = el('details'"));
 assert(js.includes("field.closest('details')"));
 assert(js.includes("errors.movie_quick_url"));
-assert(js.includes("value=picker ? $$("));
+assert(js.includes("picker.querySelectorAll("));
 assert(config.includes("movieCountries:"));
 assert(css.includes(".drawer--quick-movie"));
 assert(html.includes("admin.js?v=quick-movies-20261101"));
