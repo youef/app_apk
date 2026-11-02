@@ -10,6 +10,8 @@
    token: "", refreshToken: "", userId: "", account: null, authMode: "login",
    playback: null, hls: null, progressTimer: 0, lastProgressAt: 0, heroIndex:0, homeCollections:[],homeCollectionItems:[] };
  const labels = { movie: "فيلم", series: "مسلسل", channel: "قناة", episode: "حلقة" };
+ const GENRE_FILTERS=[["action","أكشن"],["adventure","مغامرات"],["animation","كرتون"],["anime","أنمي"],["biography","سيرة ذاتية"],["comedy","كوميديا"],["crime","جريمة"],["documentary","وثائقي"],["drama","دراما"],["education","تعليمي"],["family","عائلي"],["fantasy","فانتازيا"],["history","تاريخي"],["horror","رعب"],["kids","أطفال"],["mystery","غموض"],["nature","طبيعة"],["romance","رومانسي"],["scifi","خيال علمي"],["science","علوم"],["short","قصير"],["sports","رياضة"],["thriller","إثارة"],["war","حرب"],["western","ويسترن"],["music","موسيقي"],["classic","كلاسيكي"]], COUNTRY_FILTERS=[["TR","تركية"],["US","أمريكية"],["GB","بريطانية"],["KR","كورية"],["IN","هندية"],["JP","يابانية"],["CN","صينية"],["FR","فرنسية"],["ES","إسبانية"],["EG","مصرية"],["SA","سعودية"],["DE","ألمانية"],["NL","هولندية"],["IT","إيطالية"],["MX","مكسيكية"],["BR","برازيلية"]], ARAB_COUNTRIES=["SA","EG","AE","KW","BH","QA","OM","YE","IQ","JO","LB","SY","PS","MA","DZ","TN","LY","SD","SO","MR","DJ","KM"];
+ function itemCategoryMatches(x,v){if(!v)return true;if(v.indexOf("genre:")===0)return (x.genre_tags||[]).concat(x.auto_tags||[]).indexOf(v.slice(6))!==-1;var c=String(x.country_code||"").toUpperCase();if(v==="origin:arab")return ARAB_COUNTRIES.indexOf(c)!==-1;if(v==="origin:foreign")return !!c&&ARAB_COUNTRIES.indexOf(c)===-1;if(v.indexOf("country:")===0)return c===v.slice(8);return x.category_id===v;}
  let toastTimer = null;
  const storageKey = "aseel-web-favorites-v1";
  function store() {
@@ -325,7 +327,7 @@
      if(state.kidsCountry)data=data.filter(x=>x.country_code===state.kidsCountry);
      if(state.kidsLanguage)data=data.filter(x=>(x.language_code||"und")===state.kidsLanguage);
    }
-   if (state.category) data = data.filter(x => x.category_id===state.category);
+   if (state.category) data = data.filter(x => itemCategoryMatches(x,state.category));
    if (state.page==="favorites") data=data.filter(x=>state.favorites.has(key(type,x)));
    return data;
  }
@@ -359,7 +361,10 @@
  }
  function categories() {
    const bar=$("categoryBar");bar.replaceChildren();
-   const all=[{id:"",name_ar:"الكل"},...state.categories];
+   const media=state.page==="movies"||state.page==="series";
+   const nation=[{id:"origin:arab",name_ar:"عربية"},{id:"origin:foreign",name_ar:"أجنبية"}].concat(COUNTRY_FILTERS.map(x=>({id:"country:"+x[0],name_ar:x[1]})));
+   const genre=GENRE_FILTERS.map(x=>({id:"genre:"+x[0],name_ar:x[1]}));
+   const all=[{id:"",name_ar:"الكل"},...(media?nation.concat(genre):[]),...state.categories];
    all.forEach(x=>{
      const button=el("button","chip"+(state.category===x.id?" active":""),x.name_ar);
      button.onclick=()=>{state.category=x.id;draw()};

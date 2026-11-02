@@ -726,3 +726,12 @@ body{background:#06070a;color:#f4f1ea;font-family:Tahoma,Arial,sans-serif}
   .brand__mark--full{width:120px;height:44px;max-width:120px}
   .hero__fallback-logo{inset-inline-end:5%;width:55%;opacity:.35}
 }
+
+/* Native genre and country facets: scrollable with keyboard and TV remote. */
+.classified-filters{display:grid;gap:12px;margin:18px var(--pad-x) 26px}
+.classified-filter-group{min-width:0;display:grid;gap:7px}
+.classified-filter-group>strong{font-size:12px;font-weight:800;color:var(--gold)}
+.classified-filter-group .filters{display:flex;flex-wrap:nowrap;gap:8px;overflow-x:auto;overflow-y:hidden;padding:3px 2px 10px;scrollbar-width:thin}
+.classified-filter-group .filter{flex:none;white-space:nowrap}
+body.tv-mode .classified-filter-group .filter:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+@media(max-width:620px){.classified-filters{gap:8px;margin:12px 16px 19px}}

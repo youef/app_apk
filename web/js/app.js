@@ -241,6 +241,30 @@
     }, 9000);
   }
 
+
+  var genreOptions=[["action","أكشن"],["adventure","مغامرات"],["animation","كرتون"],["anime","أنمي"],["biography","سيرة ذاتية"],["comedy","كوميديا"],["crime","جريمة"],["documentary","وثائقي"],["drama","دراما"],["education","تعليمي"],["family","عائلي"],["fantasy","فانتازيا"],["history","تاريخي"],["horror","رعب"],["kids","أطفال"],["mystery","غموض"],["nature","طبيعة"],["romance","رومانسي"],["scifi","خيال علمي"],["science","علوم"],["short","قصير"],["sports","رياضة"],["thriller","إثارة"],["war","حرب"],["western","ويسترن"],["music","موسيقي"],["classic","كلاسيكي"]];
+  var originOptions=[["TR","تركية"],["US","أمريكية"],["GB","بريطانية"],["KR","كورية"],["IN","هندية"],["JP","يابانية"],["CN","صينية"],["FR","فرنسية"],["ES","إسبانية"],["EG","مصرية"],["SA","سعودية"],["DE","ألمانية"],["NL","هولندية"],["IT","إيطالية"],["MX","مكسيكية"],["BR","برازيلية"]];
+  var arabCountries=["SA","EG","AE","KW","BH","QA","OM","YE","IQ","JO","LB","SY","PS","MA","DZ","TN","LY","SD","SO","MR","DJ","KM"];
+  function genreLabel(key){for(var k=0;k<genreOptions.length;k++)if(genreOptions[k][0]===key)return genreOptions[k][1];return key;}
+  function itemMatches(item,choice){
+    if(!choice)return true;
+    if(choice.indexOf("genre:")===0)return (item.genreTags||[]).indexOf(choice.slice(6))!==-1;
+    if(choice.indexOf("country:")===0)return String(item.country||"").toUpperCase()===choice.slice(8);
+    if(choice==="origin:arab")return arabCountries.indexOf(String(item.country||"").toUpperCase())!==-1;
+    if(choice==="origin:foreign")return !!item.country&&arabCountries.indexOf(String(item.country).toUpperCase())===-1;
+    return item.categoryId===choice;
+  }
+  function classifiedFilterBar(list,selected){
+    var origins=[{id:"origin:arab",name_ar:"عربية"},{id:"origin:foreign",name_ar:"أجنبية"}];
+    originOptions.forEach(function(x){origins.push({id:"country:"+x[0],name_ar:x[1]});});
+    var tags=genreOptions.map(function(x){return{id:"genre:"+x[0],name_ar:x[1]};});
+    var legacy=catalog.categories.filter(function(cat){return list.some(function(item){return item.categoryId===cat.id;});});
+    return '<div class="classified-filters"><div class="classified-filter-group"><strong>الكل</strong>'+filterBar([],selected)+'</div>'+
+      '<div class="classified-filter-group"><strong>بلد الإنتاج</strong>'+filterBar(origins,selected,"noall")+'</div>'+
+      '<div class="classified-filter-group"><strong>تصنيفات الأفلام والمسلسلات</strong>'+filterBar(tags,selected,"noall")+'</div>'+
+      (legacy.length?'<div class="classified-filter-group"><strong>أقسام المكتبة</strong>'+filterBar(legacy,selected,"noall")+'</div>':'')+'</div>';
+  }
+
   /* ---------------------------------------------------------------- views */
 
   function continueWatching() {
@@ -291,6 +315,22 @@
     });
     rows.push(railHTML("أفلام تستحق المشاهدة", catalog.movies.filter(function (m) { return m.poster || m.description; }).slice(0, 18), { more: "#/movies", subtitle: "مختارات من المكتبة المرخّصة" }));
     rows.push(railHTML("مسلسلات وحكايات", catalog.series, { more: "#/series", subtitle: "مواسم وحلقات متتابعة" }));
+    [["series","country:TR","مسلسلات تركية"],["series","origin:foreign","مسلسلات أجنبية"],
+     ["series","country:KR","مسلسلات كورية"],["series","origin:arab","مسلسلات عربية"],
+     ["movies","country:TR","أفلام تركية"],["movies","origin:foreign","أفلام أجنبية"],
+     ["movies","country:IN","أفلام هندية"],["movies","country:US","أفلام أمريكية"]].forEach(function(row){
+      var matches=(row[0]==="movies"?catalog.movies:catalog.series).filter(function(x){return itemMatches(x,row[1]);}).slice(0,18);
+      if(matches.length)rows.push(railHTML(row[2],matches,{more:"#/"+row[0]+"/"+encodeURIComponent(row[1])}));
+    });
+    ["anime","animation","documentary","crime","war","action","comedy","horror","drama","romance","scifi"].forEach(function(tag){
+      ["movies","series"].forEach(function(type){
+        var matches=(type==="movies"?catalog.movies:catalog.series).filter(function(x){return itemMatches(x,"genre:"+tag);}).slice(0,18);
+        if(matches.length)rows.push(railHTML((type==="movies"?"أفلام ":"مسلسلات ")+genreLabel(tag),matches,{
+          more:"#/"+type+"/"+encodeURIComponent("genre:"+tag)
+        }));
+      });
+    });
+
     rows.push(railHTML("على الهواء الآن", catalog.channels, { more: "#/live", subtitle: "بث مباشر من المصادر الرسمية" }));
     rows.push(railHTML("وثائقيات من العالم", catalog.channels.filter(function(c){return c.categoryId==="d7070bfe-19e2-403d-97de-ef2d26614624";}).slice(0,18), { more: "#/live/d7070bfe-19e2-403d-97de-ef2d26614624", subtitle: "طبيعة وتاريخ وعلوم وثقافات — يتوفر البث حسب منطقتك" }));
     rows.push(railHTML("رياضة حول العالم", catalog.channels.filter(function(c){return c.categoryId==="146b8c7f-8e03-45ee-aa4f-2d8ab20e6c95";}).slice(0,20), { more: "#/live/146b8c7f-8e03-45ee-aa4f-2d8ab20e6c95", subtitle: "قنوات رياضية دولية • بث متاح حسب الدولة" }));
@@ -311,27 +351,23 @@
   }
 
   function filterBar(categories, active, kind) {
-    var items = ['<button class="filter' + (!active ? " is-on" : "") + '" data-filter="">الكل</button>'];
+    var items = kind === 'noall' ? [] : ['<button class="filter' + (!active ? " is-on" : "") + '" data-filter="">الكل</button>'];
     categories.forEach(function (c) {
       items.push('<button class="filter' + (active === c.id ? " is-on" : "") + '" data-filter="' + esc(c.id) + '">' + esc(c.name_ar) + "</button>");
     });
     return '<div class="filters">' + items.join("") + "</div>";
   }
 
-  function viewMovies(filterCat) {
-    var list = catalog.movies;
-    var cats = catalog.categories.filter(function (c) {
-      return list.some(function (m) { return m.categoryId === c.id; });
-    });
-    var shown = filterCat ? list.filter(function (m) { return m.categoryId === filterCat; }) : list;
-    return pageHead("الأفلام", "أفلام كاملة ومقاطع سينمائية من مصادر موثقة.", shown.length) +
-      filterBar(cats, filterCat) +
-      (shown.length ? gridHTML(shown) : emptyHTML("لا توجد أفلام في هذا التصنيف بعد."));
-  }
 
-  function viewSeries() {
-    return pageHead("المسلسلات", "مواسم وحلقات مرتبة، مع متابعة تلقائية للحلقة.", catalog.series.length) +
-      (catalog.series.length ? gridHTML(catalog.series) : emptyHTML("لم تُنشر مسلسلات بعد."));
+  function viewMovies(filterCat){
+    var list=catalog.movies, shown=list.filter(function(item){return itemMatches(item,filterCat);});
+    return pageHead("الأفلام","أفلام تركية وأجنبية وأنمي ووثائقي وجريمة وحرب وغيرها.",shown.length)+
+      classifiedFilterBar(list,filterCat)+(shown.length?gridHTML(shown):emptyHTML("لا توجد أفلام في هذا التصنيف بعد."));
+  }
+  function viewSeries(filterCat){
+    var list=catalog.series,shown=list.filter(function(item){return itemMatches(item,filterCat);});
+    return pageHead("المسلسلات","مسلسلات تركية وأجنبية وكورية وأنمي وجريمة ودراما وغيرها.",shown.length)+
+      classifiedFilterBar(list,filterCat)+(shown.length?gridHTML(shown):emptyHTML("لا توجد مسلسلات في هذا التصنيف بعد."));
   }
 
   function viewLive(filterCat) {
@@ -426,7 +462,7 @@
 
     switch (route.name) {
       case "movies": html = viewMovies(route.arg); break;
-      case "series": html = viewSeries(); break;
+      case "series": html = viewSeries(route.arg); break;
       case "live": html = viewLive(route.arg); break;
       case "kids": html = viewKids(); break;
       case "youtube": html = viewYoutube(); break;
@@ -519,6 +555,7 @@
 
     var meta = [];
     if (item.category) meta.push(["التصنيف", item.category]);
+    if (item.genreTags && item.genreTags.length) meta.push(["الأنواع",item.genreTags.map(genreLabel).join("، ")]);
     if (item.country) meta.push(["البلد", item.country]);
     if (item.language) meta.push(["اللغة", item.language]);
     meta.push(["المصدر", sourceLabel(item)]);
