@@ -23,6 +23,7 @@
 <link rel="stylesheet" href="css/live.css?v=tv-studio-20261102-1">
 <link rel="stylesheet" href="css/unified.css?v=universal-20261102-1">
 <link rel="stylesheet" href="css/kids.css?v=kids-direct-20261102-1">
+<link rel="stylesheet" href="css/cast.css?v=cast-airplay-20261102-1">
 <script>
 (function () {
   try {
@@ -138,7 +139,7 @@
 <!-- ============ player ============ -->
 <div class="player" id="player" hidden>
   <div class="player__stage" id="playerStage">
-    <video id="video" playsinline preload="metadata"></video>
+    <video id="video" playsinline webkit-playsinline x-webkit-airplay="allow" preload="metadata"></video>
     <div class="player__veil" id="playerVeil"></div>
     <div class="player__spinner" id="playerSpinner" hidden>
       <span></span><p>جارٍ التحضير…</p>
@@ -197,6 +198,9 @@
           <div class="player__quality-wrap"><button class="chipbtn" id="btnQuality" type="button" aria-label="اختيار الجودة" aria-haspopup="menu" aria-controls="playerQualityMenu" aria-expanded="false">الجودة: تلقائي</button><div class="player__quality-menu" id="playerQualityMenu" role="menu" aria-label="جودات الفيديو المتاحة" hidden></div></div>
           <button class="chipbtn" id="btnCaptions" aria-label="الترجمة العربية" title="تفعيل أو إخفاء الترجمة العربية" hidden>ترجمة عربية</button>
           <button class="chipbtn" id="btnFit" type="button" aria-pressed="false" title="تكبير الصورة لملء الإطار">ملء الصورة</button>
+          <google-cast-launcher id="playerCast" class="cast-launcher" title="الإرسال إلى Google Cast" aria-label="الإرسال إلى Google Cast" hidden></google-cast-launcher>
+          <button class="chipbtn cast-airplay" id="playerAirPlay" type="button" title="الإرسال عبر AirPlay" aria-label="اختيار شاشة AirPlay" hidden>AirPlay</button>
+          <span class="cast-status" id="playerCastStatus" role="status" aria-live="polite" hidden></span>
           <button class="iconbtn iconbtn--round" id="btnFull" aria-label="ملء الشاشة" aria-pressed="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 15v5h-5M4 15v5h5M20 9V4h-5"/></svg>
           </button>
@@ -249,8 +253,9 @@
 <script src="js/api.js?v=genre-browse-20261101"></script>
 <script src="js/explore.js?v=netflix-taxonomy-20261101"></script>
 <script src="js/store.js"></script>
-<script src="js/player.js?v=kids-direct-20261102-1"></script>
-<script src="js/live.js?v=tv-studio-20261102-1"></script>
+<script src="js/cast.js?v=cast-airplay-20261102-1"></script>
+<script src="js/player.js?v=cast-airplay-20261102-1"></script>
+<script src="js/live.js?v=cast-airplay-20261102-1"></script>
 <script src="js/kids.js?v=kids-direct-20261102-1"></script>
 <script src="js/app.js?v=kids-direct-20261102-1"></script>
 <script src="js/install.js?v=universal-20261102-1"></script>
