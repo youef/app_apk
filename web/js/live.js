@@ -598,7 +598,7 @@
     return '<section class="live-page" id="livePage" aria-label="البث المباشر">' +
       '<div class="live-heading"><div><span class="live-eyebrow"><i></i> AL EZZ TV · LIVE STATION</span>' +
       '<h1>البث المباشر <em>على شاشتك</em></h1>' +
-      '<p>شغّل القنوات داخل الموقع، وتصفح الدليل، وانتقل بين المحطات دون مغادرة الصفحة.</p></div>' +
+      '<p>شغّل القنوات التي تسمح بالتشغيل المباشر داخل التطبيق، أو افتح موقع الناشر الرسمي للقنوات ذات الوصول المقيد.</p></div>' +
       '<div class="live-heading__actions"><span class="live-total">' + count + ' قناة في الدليل</span>' +
       '<button type="button" class="live-outline" id="liveRefresh">' + icon("refresh") + ' تحديث القنوات</button></div></div>' +
       '<div class="live-discovery" id="liveFilters">' + categoryButtons + '</div>' +
