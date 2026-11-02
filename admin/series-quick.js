@@ -1,4 +1,4 @@
-/* AL EZZ TV — Quick Series Studio. Admin-only atomic RPC, no service-role keys. */
+/* AL EZZ TV — Quick Series Studio, administrator-authenticated atomic RPC. */
 (function(){
 "use strict";
 var cfg=window.ALEZZ_ADMIN_CONFIG;
