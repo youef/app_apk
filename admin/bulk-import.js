@@ -26,15 +26,35 @@
  const edge=body=>call(cfg.supabaseUrl+"/functions/v1/aseel-batch-discover",{method:"POST",body:JSON.stringify(body)});
  const rest=(table,qs="",init={})=>call(cfg.supabaseUrl+"/rest/v1/"+table+(qs?"?"+qs:""),init);
  const eq=v=>"eq."+encodeURIComponent(v);
- const status=()=>{const tested=items.filter(x=>x.result).length;$("countAll").textContent=items.length;$("countGood").textContent=items.filter(x=>x.result?.ok).length;$("countBad").textContent=items.filter(x=>x.result&&!x.result.ok).length;$("countSaved").textContent=saved;$("batchProgress").style.width=(items.length?Math.round(100*tested/items.length):0)+"%";$("batchDiscover").disabled=busy||!authenticated;$("batchVerify").disabled=busy||!items.length;$("batchCancel").disabled=!busy;$("batchSave").disabled=busy||!items.some(x=>x.result?.ok&&!x.saved);$("batchExport").disabled=!items.length;
+ 
+ function previewBatch(){
+  const panel=$("batchOverview");if(!panel)return;
+  panel.hidden=!batch;if(!batch)return;
+  const poster=$("batchPoster"),src=batch.poster_url||"";
+  poster.hidden=!(src.indexOf("https://")===0);
+  if(!poster.hidden)poster.src=src;else poster.removeAttribute("src");
+  $("batchPreviewTitle").textContent=batch.title||"مسلسل بلا عنوان";
+  $("batchPreviewDescription").textContent=batch.description||"لا يوجد وصف في الصفحة؛ يمكن إضافته من لوحة الإدارة.";
+  const count=new Set(items.map(item=>item.season||1)).size;
+  $("batchPreviewMeta").textContent=(batch.title_original?batch.title_original+" · ":"")+
+    (batch.release_year?batch.release_year+" · ":"")+count+" موسم · "+items.length+" حلقة";
+ }
+ const status=()=>{previewBatch();const tested=items.filter(x=>x.result).length;$("countAll").textContent=items.length;$("countGood").textContent=items.filter(x=>x.result?.ok).length;$("countBad").textContent=items.filter(x=>x.result&&!x.result.ok).length;$("countSaved").textContent=saved;$("batchProgress").style.width=(items.length?Math.round(100*tested/items.length):0)+"%";$("batchDiscover").disabled=busy||!authenticated;$("batchVerify").disabled=busy||!items.length;$("batchCancel").disabled=!busy;$("batchSave").disabled=busy||!items.some(x=>x.result?.ok&&!x.saved);$("batchExport").disabled=!items.length;
   const tbody=$("batchRows");tbody.replaceChildren();
-  if(!items.length){const t=document.createElement("tr"),c=document.createElement("td");c.colSpan=5;c.textContent="لم يتم اكتشاف عناصر";t.append(c);tbody.append(t);}
+  if(!items.length){const t=document.createElement("tr"),c=document.createElement("td");c.colSpan=6;c.textContent="لم يتم اكتشاف عناصر";t.append(c);tbody.append(t);}
   for(const [i,x] of items.entries()){
    const tr=document.createElement("tr");if(x.result&&!x.result.ok)tr.className="failed";
    const td=document.createElement("td"),cb=document.createElement("input");cb.type="checkbox";cb.checked=x.checked!==false;cb.disabled=!x.result?.ok||x.saved;cb.onchange=()=>x.checked=cb.checked;td.append(cb);tr.append(td);
    const t=document.createElement("td");t.textContent=x.result?.title||x.title||batch?.title||"غير معنون";tr.append(t);
    const s=document.createElement("td");s.textContent=batch?.type==="series"?"الموسم "+x.season+"، الحلقة "+x.number:"فيلم";tr.append(s);
    const l=document.createElement("td"),a=document.createElement("a");a.href=x.url;a.target="_blank";a.rel="noopener noreferrer";a.textContent="فتح الرابط";l.append(a);tr.append(l);
+   const uCell=document.createElement("td"),u=document.createElement("input");
+   u.type="url";u.className="batch-media-url";u.placeholder="https://…/episode.m3u8";
+   u.setAttribute("aria-label","رابط تشغيل الحلقة "+(x.number||""));u.value=x.media_url||"";
+   u.disabled=busy||x.saved;
+   u.addEventListener("change",()=>{x.media_url=u.value.trim()||undefined;x.result=null;
+     status();msg("تغير الرابط؛ اضغط «افحص روابط التشغيل» للتأكد من صلاحيته.");});
+   uCell.append(u);tr.append(uCell);
    const c=document.createElement("td");c.textContent=x.saved?"✓ محفوظ":!x.result?"بانتظار الفحص":x.result.ok?"✓ مؤكد: "+(x.result.checks?.find(v=>v.ok)?.format||"صالح"):"✗ "+(x.result.reason||x.result.error||"رابط غير صالح");tr.append(c);tbody.append(tr);
   }
  };
@@ -42,11 +62,13 @@
   if(busy||!authenticated)return;
   let url;try{url=new URL($("batchUrl").value.trim());if(url.protocol!=="https:")throw Error();}catch{return msg("أدخل رابط HTTPS صحيحًا","error");}
   busy=true;batch=null;items=[];saved=0;status();msg("يتم اكتشاف مواسم المسلسل وحلقاته...");
-  try{batch=await edge({action:"discover",url:url.href,kind:$("batchKind").value});items=(batch.items||[]).map(x=>({...x,checked:true,saved:false}));$("batchTitle").value=batch.title||"";msg("تم اكتشاف "+items.length+" عنصرًا. افحص الروابط قبل الحفظ.","success");}
+  try{batch=await edge({action:"discover",url:url.href,kind:$("batchKind").value});items=(batch.items||[]).map(x=>({...x,checked:true,saved:false}));$("batchTitle").value=batch.title||"";
+     busy=false;status();msg("تم جلب بيانات المسلسل و"+items.length+" حلقة. يتم فحص التشغيل تلقائيًا...","success");
+     if(items.length)await verify();else msg("تم جلب البيانات ولكن الصفحة لا تُظهر حلقات قابلة للاكتشاف؛ جرّب رابط المواسم أو مصدرًا آخر.","error");}
   catch(e){msg("فشل الاكتشاف: "+e.message,"error");}finally{busy=false;status();}
  }
  async function verify(){
-  if(busy)return;busy=true;stopped=false;status();msg("يتم فحص الاستجابة الفعلية لكل فيديو...");
+  if(busy||!items.length)return;busy=true;stopped=false;status();msg("يتم فحص الاستجابة الفعلية لكل رابط...");
   let next=0;
   async function worker(){while(!stopped){const i=next++;if(i>=items.length)break;const it=items[i];if(it.result)continue;try{it.result=await edge({action:"inspect",url:it.url,media_url:it.media_url,title:it.title});}catch(e){it.result={ok:false,reason:e.message};}status();}}
   await Promise.all([worker(),worker(),worker()]);busy=false;status();msg("الفحص انتهى: "+items.filter(x=>x.result?.ok).length+" رابطًا سليمًا من أصل "+items.length+".",items.some(x=>x.result?.ok)?"success":"error");
@@ -75,7 +97,7 @@
      }else{
       let season=seasons.get(it.season);if(!season){season=await first("aseel_seasons","select=id&series_id="+eq(parent.id)+"&number=eq."+Number(it.season));if(!season)season=await insert("aseel_seasons",{series_id:parent.id,number:Number(it.season),title_ar:"الموسم "+it.season});seasons.set(it.season,season);}
       if(await first("aseel_episodes","select=id&season_id="+eq(season.id)+"&number=eq."+Number(it.number))){duplicates++;it.saved=true;continue;}
-      await insert("aseel_episodes",{season_id:season.id,number:Number(it.number),title_ar:(x.title||it.title||"الحلقة "+it.number).slice(0,250),description:x.description||null,poster_url:x.poster_url||batch.poster_url||null,stream_url:x.stream_url,stream_variants:x.variants||[],source_id:source||null,...fields});
+      await insert("aseel_episodes",{season_id:season.id,number:Number(it.number),title_ar:(it.title||x.title||"الحلقة "+it.number).slice(0,250),description:it.description||x.description||null,poster_url:it.poster_url||x.poster_url||batch.poster_url||null,stream_url:x.stream_url,stream_variants:x.variants||[],source_id:source||null,...fields});
      }
      saved++;created++;it.saved=true;status();
     }catch(e){errors.push(String(e.message||e).slice(0,170));}
