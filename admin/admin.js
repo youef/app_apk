@@ -621,7 +621,21 @@
       loadTable(state.table);
     });
 
-    newBtn.addEventListener('click', function () { openDrawer(null); });
+    // The same single-step series editor serves the Series and Seasons sections.
+    if (section.id === 'series' || section.id === 'seasons') {
+      var quick = el('a', { class: 'btn btn-gold btn-sm', href: 'series-quick.html' },
+        '⚡ إضافة مسلسل ومواسم وحلقات');
+      headActions.insertBefore(quick, newBtn);
+      var text = newBtn.querySelector('span:last-child');
+      if (text) text.textContent = 'إضافة سريعة';
+    }
+    newBtn.addEventListener('click', function () {
+      if (section.id === 'series' || section.id === 'seasons') {
+        location.href = 'series-quick.html';
+        return;
+      }
+      openDrawer(null);
+    });
 
     selectTable(section.tables[0]);
   }
