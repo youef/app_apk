@@ -46,6 +46,7 @@ public final class TVHomeActivity extends Activity {
     private LinearLayout content,navBar;
     private TextView status;
     private String section="home";
+    private int kidsAge=6,kidsDailyMinutes=60;
     private String lastLoadError="";
     private boolean loading=false,unlocked=false;
     private int generation=0,episodeGeneration=0,pendingRequests=0;
@@ -161,6 +162,8 @@ public final class TVHomeActivity extends Activity {
         super.onCreate(state);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN);
         catalog=new CatalogApi(this);
+        kidsAge=getSharedPreferences("alezz_kids",MODE_PRIVATE).getInt("age",6);
+        kidsDailyMinutes=getSharedPreferences("alezz_kids",MODE_PRIVATE).getInt("minutes",60);
         if(!PinGate.isActivated(this)){
             new PinGate(this,new Runnable(){public void run(){startViewer();}}).show();
         }else{startViewer();}
@@ -322,12 +325,29 @@ public final class TVHomeActivity extends Activity {
         else if("live".equals(section))liveGuide();
         else if("youtube".equals(section))grid("مقاطع يوتيوب للأطفال",youtubeVideos);
         else if("kids".equals(section)){
+            heading("عالم الأطفال المستقل","قنوات وأفلام بروابط MP4/HLS مباشرة، بدون مشغل يوتيوب.");
+            LinearLayout ages=row();content.addView(ages,space(-1,-2,7));
+            for(final int age:new int[]{3,6,9,12}){
+                Button b=button((kidsAge==age?"✓ ":"")+"عمر "+age);
+                ages.addView(b,space(dp(135),dp(54),3));
+                b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                    kidsAge=age;getSharedPreferences("alezz_kids",MODE_PRIVATE).edit().putInt("age",age).apply();render();
+                }});
+            }
+            LinearLayout times=row();content.addView(times,space(-1,-2,7));
+            for(final int minutes:new int[]{30,60,90,120}){
+                Button b=button((kidsDailyMinutes==minutes?"✓ ":"")+minutes+" دقيقة يوميًا");
+                times.addView(b,space(dp(165),dp(54),3));
+                b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                    kidsDailyMinutes=minutes;getSharedPreferences("alezz_kids",MODE_PRIVATE).edit().putInt("minutes",minutes).apply();render();
+                }});
+            }
             ArrayList<JSONObject> kids=new ArrayList<JSONObject>();
-            for(JSONObject x:movies)if(x.optBoolean("is_kids",false))kids.add(x);
-            for(JSONObject x:series)if(x.optBoolean("is_kids",false))kids.add(x);
-            for(JSONObject x:channels)if(x.optBoolean("is_kids",false))kids.add(x);
-            grid("عالم الأطفال • أفلام وقنوات",kids);
-            shelf("مقاطع يوتيوب للأطفال","محتوى رسمي — افتح المقطع بالريموت",youtubeVideos,34);
+            for(JSONObject x:movies)if(kidsDirect(x))kids.add(x);
+            for(JSONObject x:series)if(x.optBoolean("is_kids",false) &&
+                "approved".equals(value(x,"rights_status")) && kidsAgeAllowed(value(x,"age_rating")))kids.add(x);
+            for(JSONObject x:channels)if(kidsDirect(x))kids.add(x);
+            grid("محتوى أطفال ملائم للشاشة",kids);
         }else if("favorites".equals(section)){
             ArrayList<JSONObject> list=new ArrayList<JSONObject>();
             for(JSONObject x:movies)if(isFavorite(x))list.add(x);
@@ -456,6 +476,27 @@ public final class TVHomeActivity extends Activity {
         outer.setOnClickListener(new View.OnClickListener(){public void onClick(View v){detail(item);}});
         return outer;
     }
+    private boolean kidsAgeAllowed(String rating){
+        String r=rating.trim().toLowerCase(Locale.US);
+        if(r.equals("all")||r.equals("g")||r.equals("tv-y")||r.equals("tv-g"))return true;
+        if(r.equals("6")||r.equals("6+"))return kidsAge>=6;
+        if(r.equals("pg")||r.equals("tv-y7")||r.equals("7")||r.equals("7+"))return kidsAge>=7;
+        if(r.equals("9")||r.equals("9+"))return kidsAge>=9;
+        if(r.equals("tv-pg")||r.equals("12")||r.equals("12+"))return kidsAge>=12;
+        return false;
+    }
+    private boolean kidsDirect(JSONObject x){
+        if(x==null || !x.optBoolean("is_kids",false) ||
+           !"approved".equals(value(x,"rights_status")) ||
+           !kidsAgeAllowed(value(x,"age_rating")))return false;
+        String url=value(x,"stream_url");
+        return url.startsWith("https://") &&
+           url.matches("(?i)^https://[^\\s?#]+\\.(mp4|m3u8)([?#].*)?$");
+    }
+    private String kidsDayKey(){
+        java.text.SimpleDateFormat format=new java.text.SimpleDateFormat("yyyy-MM-dd",Locale.US);
+        return format.format(new java.util.Date());
+    }
     private void detail(final JSONObject item){
         if("series".equals(kind(item))){episodes(item);return;}
         if("youtube".equals(kind(item))){openYouTube(item);return;}
@@ -527,6 +568,16 @@ public final class TVHomeActivity extends Activity {
         }});
     }
     private void play(JSONObject item){
+        boolean kidsMode="kids".equals(section);
+        if(kidsMode){
+            int seconds=getSharedPreferences("alezz_kids",MODE_PRIVATE).getInt("watched_"+kidsAge+"_"+kidsDayKey(),0);
+            if(seconds>=kidsDailyMinutes*60){
+                heading("انتهى وقت مشاهدة الأطفال","عدّل الوقت اليومي من قسم الأطفال أو تابع غدًا.");return;
+            }
+            if("youtube".equals(kind(item)) || (!"episode".equals(kind(item)) && !kidsDirect(item))){
+                heading("هذا المحتوى غير متاح للأطفال","يجب وجود رابط MP4/HLS مباشر معتمد وتصنيف عمري مناسب.");return;
+            }
+        }
         if("channel".equals(kind(item)) && "official_link".equals(value(item,"playback_mode"))){
             String official=value(item,"official_url");
             if(!official.startsWith("https://")){
@@ -541,7 +592,7 @@ public final class TVHomeActivity extends Activity {
             return;
         }
         String youtube=value(item,"youtube_url");
-        if(YouTubeLink.usable(youtube)){openYouTube(item);return;}
+        if(YouTubeLink.usable(youtube) && !kidsMode){openYouTube(item);return;}
         String url=value(item,"stream_url");
         if(StreamQuality.parse(url,value(item,"quality"),
             item.optJSONArray("stream_variants")==null?"[]":item.optJSONArray("stream_variants").toString()).isEmpty()){
@@ -553,6 +604,9 @@ public final class TVHomeActivity extends Activity {
         intent.putExtra("title",label(item));
         intent.putExtra("stream_url",url);
         intent.putExtra("is_live","channel".equals(kind(item)));
+        intent.putExtra("kids_mode",kidsMode);
+        intent.putExtra("kids_age",kidsAge);
+        intent.putExtra("kids_minutes",kidsDailyMinutes);
         intent.putExtra("quality",value(item,"quality"));
         intent.putExtra("stream_variants",item.optJSONArray("stream_variants")==null?"[]":item.optJSONArray("stream_variants").toString());
         if("movie".equals(kind(item)) || "episode".equals(kind(item))){
@@ -560,6 +614,9 @@ public final class TVHomeActivity extends Activity {
             int currentIndex=0;
             ArrayList<JSONObject> sourceItems="episode".equals(kind(item))?episodeQueue:movies;
             for(JSONObject candidate:sourceItems){
+                if(kidsMode && "movie".equals(kind(candidate)) && !kidsDirect(candidate))continue;
+                if(kidsMode && "episode".equals(kind(candidate)) &&
+                    !"approved".equals(value(candidate,"rights_status")))continue;
                 String candidateUrl=value(candidate,"stream_url");
                 String variants=candidate.optJSONArray("stream_variants")==null
                     ? "[]" : candidate.optJSONArray("stream_variants").toString();
@@ -583,6 +640,7 @@ public final class TVHomeActivity extends Activity {
             JSONArray playlist=new JSONArray();
             int selected=0;
             for(JSONObject candidate:channels){
+                if(kidsMode && !kidsDirect(candidate))continue;
                 if("official_link".equals(value(candidate,"playback_mode")))continue;
                 String candidateUrl=value(candidate,"stream_url");
                 String variants=candidate.optJSONArray("stream_variants")==null?"[]":
