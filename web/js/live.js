@@ -75,7 +75,8 @@
       '<span class="live-guide__thumb">' + poster(channel) + '</span>' +
       '<span class="live-guide__copy"><strong>' + esc(channel.title) + '</strong><small>' +
       esc(channel.category || channelKind(channel)) + '</small></span>' +
-      '<span class="live-guide__indicator">' + (isOfficial(channel) ? icon("external") : '<i></i>') + '</span></button>';
+      '<span class="live-guide__indicator">' + (state.favorites.indexOf(channel.key)>=0 ? '<span aria-label="مفضلة" class="live-guide__star">★</span>' : '') +
+      (isOfficial(channel) ? icon("external") : '<i></i>') + '</span></button>';
   }
   function sortedChannels() {
     return state.channels.filter(function (c) {
@@ -437,6 +438,7 @@
       '<div class="live-layout"><div class="live-viewer">' +
       '<div class="live-stage" id="liveStage">' +
       '<video id="liveVideo" controls playsinline webkit-playsinline preload="none" aria-label="مشغل البث المباشر"></video>' +
+      '<div class="live-channel-hud" id="liveChannelHud" aria-live="off" hidden></div>' +
       '<div class="live-poster" id="livePoster"><span class="live-poster__glow"></span><span class="live-emblem">' +
         icon("tv") + '</span><span class="live-poster__text">AL EZZ <b>LIVE</b></span></div>' +
       '<span class="live-stage__badge"><i></i> LIVE</span>' +
@@ -450,17 +452,21 @@
       '<button id="liveNext" type="button" class="live-control">التالية ' + icon("arrow") + '</button>' +
       '<button id="liveRetry" type="button" class="live-control">' + icon("refresh") + ' إعادة الاتصال</button>' +
       '<button id="liveGoLive" type="button" class="live-control">● الآن</button>' +
+      '<button id="liveFavorite" type="button" class="live-control" aria-pressed="false">☆ أضف للمفضلة</button>' +
+      '<div class="live-quality-wrap"><button id="liveQuality" type="button" class="live-control" aria-haspopup="menu" aria-expanded="false" aria-controls="liveQualityMenu" disabled>الجودة: تلقائي</button><div id="liveQualityMenu" class="live-quality-menu" role="menu" hidden></div></div>' +
+      '<button id="livePip" type="button" class="live-control" title="نافذة عائمة" aria-label="عرض القناة في نافذة عائمة">' + icon("pip") + ' نافذة عائمة</button>' +
       '<button id="liveMute" type="button" class="live-control live-control--icon" aria-pressed="false" title="كتم الصوت">' + icon("volume") + '</button>' +
       '<button id="liveFullscreen" type="button" class="live-control live-control--icon" title="ملء الشاشة">' + icon("expand") + '</button></div>' +
       '<a id="liveOfficial" class="live-official" target="_blank" rel="noopener noreferrer" hidden>' + icon("external") + ' فتح المصدر الرسمي</a>' +
-      '<p class="live-help">إذا لم يبدأ البث، فقد يمنع المصدر عرضه داخل المتصفح (CORS)، أو يقيّده حسب البلد أو نوع الجهاز. افتح المصدر الأصلي عند توفره.</p>' +
+      '<p class="live-help">البث متاح وفق المصدر وبلد المشاهدة. قد يرفض بعض الناشرين تشغيله داخل المتصفح (CORS)، كما أن iPhone وiPad يتحكمان تلقائيًا في جودات HLS الأصلية.</p>' +
       '</div><aside class="live-guide" aria-label="دليل القنوات">' +
       '<div class="live-guide__head"><div><span class="live-eyebrow">TV GUIDE</span><h2>دليل القنوات</h2></div>' +
       '<span class="live-guide__count" id="liveFilteredCount">' + count + ' قناة</span></div>' +
       '<div class="live-search">' + icon("search") + '<input id="liveSearch" type="search" placeholder="ابحث عن قناة أو دولة..." aria-label="بحث القنوات" autocomplete="off">' +
       '<button id="liveSearchClear" type="button" aria-label="مسح البحث" hidden>×</button></div>' +
+      '<button id="liveFavoritesFilter" type="button" class="live-favorites-filter" aria-pressed="false">☆ عرض المفضلة</button>' +
       '<div class="live-guide__items" id="liveGuideItems" role="group" aria-label="القنوات"></div>' +
-      '<div class="live-guide__bottom">اختر قناة للتشغيل · مفاتيح Alt + ↑ / ↓ للتنقل</div>' +
+      '<div class="live-guide__bottom">رقم القناة + Enter للتنقل · PgUp / PgDn أو ريموت التلفزيون</div>' +
       '</aside></div></section>';
   }
 
