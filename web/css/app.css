@@ -926,3 +926,12 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{
 .player__youtube-next{position:absolute;z-index:12;left:clamp(12px,3vw,40px);top:clamp(75px,11vh,110px);padding:10px 18px;background:rgba(10,12,18,.94);border:1px solid rgba(231,194,124,.65);border-radius:40px;color:#f3d9a5;font-size:14px;font-weight:800;box-shadow:0 8px 24px rgba(0,0,0,.45)}
 .player__youtube-next:hover,.player__youtube-next:focus-visible{background:#e7c27c;color:#0c0b0a}
 @media(max-width:620px){.player__youtube-next{top:75px;left:12px;padding:8px 12px;font-size:12px}}
+
+/* Episode metadata previews: do not offer playback for unverified streams. */
+.eps--outline{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
+.eps--outline h3{font-size:18px;font-weight:800;margin:0 0 12px}
+.eps--outline h4{font-size:15px;color:var(--gold);margin:19px 0 10px}
+.outline-episode{padding:14px 17px;margin:8px 0;background:rgba(255,255,255,.035);border:1px solid var(--line-strong);border-radius:12px;display:grid;gap:6px}
+.outline-episode strong{font-size:14px;font-weight:800}
+.outline-episode p{margin:0;color:var(--text-2);font-size:12px;line-height:1.75}
+.outline-episode small{font-size:11px;color:var(--gold)}
