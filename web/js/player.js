@@ -329,6 +329,7 @@
       startPlayback(current);
 
       show("playerQuickNext", !!nextItem);
+      show("youtubeNext", !!(nextItem && current.youtubeId));
       if (nextItem) {
         $("nextTitle").textContent = nextItem.title;
         $("nextContext").textContent = "اقتربت نهاية الحلقة";
@@ -348,6 +349,7 @@
       nextHandler = null;
       nextDismissed = false;
       show("playerQuickNext", false);
+      show("youtubeNext", false);
       activeQuality = "auto";
       activeSourceIndex = 0;
       activeStreamUrl = "";
@@ -638,6 +640,7 @@
     $("btnCaptions").addEventListener("click", toggleCaptions);
     $("nextPlay").addEventListener("click", playNext);
     $("playerQuickNext").addEventListener("click", playNext);
+    $("youtubeNext").addEventListener("click", playNext);
     $("nextDismiss").addEventListener("click", function () {
       stopAutoNext();
       nextDismissed = true;

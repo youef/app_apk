@@ -921,3 +921,8 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{
   .player__quick-next{font-size:11px;min-height:40px}
 }
 @media(prefers-reduced-motion:reduce){.series-spotlight,.ep,.player__next{animation:none}}
+
+/* Keep episode navigation accessible above official YouTube embeds. */
+.player__youtube-next{position:absolute;z-index:12;left:clamp(12px,3vw,40px);top:clamp(75px,11vh,110px);padding:10px 18px;background:rgba(10,12,18,.94);border:1px solid rgba(231,194,124,.65);border-radius:40px;color:#f3d9a5;font-size:14px;font-weight:800;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+.player__youtube-next:hover,.player__youtube-next:focus-visible{background:#e7c27c;color:#0c0b0a}
+@media(max-width:620px){.player__youtube-next{top:75px;left:12px;padding:8px 12px;font-size:12px}}

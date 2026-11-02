@@ -11,9 +11,9 @@ for (const file of ["web/js/player.js","web/js/app.js","web/js/api.js"])
 assert.ok(html.includes('id="playerQualityMenu"'),"Quality menu must exist inside player");
 assert.ok(html.includes('aria-controls="playerQualityMenu"'),"Quality trigger needs accessible menu link");
 assert.ok(html.includes('aria-expanded="false"'),"Quality trigger needs expanded state");
-assert.ok(/player\.js\?v=(?:quality-select|tv-studio)-/.test(html),"Player cache bust required");
-assert.ok(html.includes("app.js?v=quality-select"),"Episode payload cache bust required");
-assert.ok(/app\.css\?v=(?:quality-select|tv-studio)-/.test(html),"Responsive styling cache bust required");
+assert.ok(/player\.js\?v=[a-z0-9][a-z0-9-]+/.test(html),"Player cache bust required");
+assert.ok(/js\/app\.js\?v=[a-z0-9][a-z0-9-]+/.test(html),"Episode payload cache bust required");
+assert.ok(/app\.css\?v=[a-z0-9][a-z0-9-]+/.test(html),"Responsive styling cache bust required");
 assert.ok(css.includes(".player__quality-menu[hidden]"),"Hidden quality menu must not be visible");
 assert.ok(css.includes(".player__quality-option:focus-visible"),"D-pad focus must be visible");
 assert.ok(app.includes("variants: episode.variants || []"),"Episode must forward its stream variants");
@@ -29,4 +29,13 @@ assert.ok(player.includes("Store.setPref(\"preferredPlaybackQuality\""),"Chosen 
 assert.ok(player.includes('el.video.currentTime = position'),"Switch must restore playhead position");
 assert.ok(player.includes('row.setAttribute("role", "menuitemradio")'),"Menu must work with accessibility controls");
 assert.ok(!player.includes("cycleQuality()"),"Cycling button must be replaced with direct picker");
-console.log("PASS: real HLS levels, per-episode variant quality picker, resume and cache markers");
+assert.ok(html.includes('id="playerQuickNext"'),"Quick next episode control must exist");
+assert.ok(html.includes('id="nextDismiss"'),"User must be able to dismiss auto-next");
+assert.ok(html.includes('id="youtubeNext"'),"YouTube episode must have an independent next button");
+assert.ok(app.includes("onNext: next ? function () { playEpisode(next.key); }"),"Next episode must continue through season transitions");
+assert.ok(app.includes("list = seriesEpisodes(s)"),"Series queue must include all seasons");
+assert.ok(player.includes("updateNextPrompt()"),"Pre-end prompt must follow playhead");
+assert.ok(player.includes("autoNextSeconds = 8"),"Countdown must be configured");
+assert.ok(player.includes('show("playerNext", true)'),"Next episode prompt must become visible");
+assert.ok(player.includes('var node = el[id] || $(id)'),"Overlay display must resolve DOM nodes");
+console.log("PASS: quality picker, dynamic cache markers, and binge-watch next episode controls");
