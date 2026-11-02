@@ -1378,12 +1378,9 @@
   }
 
   function canPublishChannel(row) {
-    if (!row || row.link_health_status === 'broken' || row.rights_status !== 'approved' || !String(row.license_reference || '').trim()) return false;
-    if (row.rights_expires_at && !(new Date(row.rights_expires_at).getTime() > Date.now())) return false;
-    if (row.playback_mode === 'stream') return isHttps(row.stream_url);
-    if (row.playback_mode === 'official_link') return isHttps(row.official_url);
-    if (row.playback_mode === 'youtube_embed') return isHttps(row.youtube_url);
-    return false;
+    return !!row && row.link_health_status !== 'broken' &&
+      row.playback_mode === 'stream' && isHttps(row.stream_url) &&
+      /\.(m3u8|mp4)(\?[^\s]*)?$/i.test(row.stream_url);
   }
 
   function selectFilteredChannels(checked) {
@@ -1400,63 +1397,25 @@
     if (!host) return;
     host.replaceChildren();
     var header = el('div', { class: 'bulk-header' });
-    header.append(el('strong', null, 'العمليات الجماعية — قنوات البث المباشر'));
+    header.append(el('strong', null, 'عمليات القنوات الجماعية'));
     header.append(el('span', { id: 'bulkSelectionSummary', class: 'bulk-count', 'aria-live': 'polite' }, '0 قناة محددة'));
     host.append(header);
-    var selection = el('div', { class: 'bulk-actions' });
+    var actions = el('div', { class: 'bulk-actions' });
     [
       ['تحديد نتائج البحث', function () { selectFilteredChannels(true); }],
       ['تحديد جميع القنوات', function () {
-        state.rows.forEach(function (row) { state.selectedChannels[row.id] = true; });
-        applyFilter();
+        state.rows.forEach(function (row) { state.selectedChannels[row.id] = true; }); applyFilter();
       }],
       ['إلغاء التحديد', function () { state.selectedChannels = {}; applyFilter(); }]
     ].forEach(function (item) {
       var button = el('button', { class: 'btn btn-ghost btn-sm bulk-control', type: 'button' }, item[0]);
       button.addEventListener('click', item[1]);
-      selection.append(button);
+      actions.append(button);
     });
-    host.append(selection);
-
-    var details = el('details', { class: 'bulk-license' });
-    details.append(el('summary', null, 'إعدادات الترخيص المشترك (اختياري)'));
-    details.append(el('p', { class: 'bulk-hint' },
-      'استخدم ترخيصًا واحدًا فقط إذا كان يغطي كل القنوات المحددة فعلاً؛ تسجيل المرجع لا يمنحك حقوق البث تلقائيًا.'));
-    var fields = el('div', { class: 'bulk-fields' });
-    [
-      ['صاحب الحقوق', 'bulkRightsHolder', 'اسم جهة الحقوق', 'text'],
-      ['مرجع الترخيص', 'bulkLicenseReference', 'رقم وثيقة أو رابط', 'text'],
-      ['تاريخ انتهاء الترخيص (اختياري)', 'bulkLicenseExpiry', '', 'date']
-    ].forEach(function (item) {
-      var field = el('label', { class: 'bulk-field' });
-      field.append(el('span', null, item[0]));
-      field.append(el('input', {
-        type: item[3], id: item[1], placeholder: item[2], autocomplete: 'off', dir: item[3] === 'date' ? 'ltr' : 'auto'
-      }));
-      fields.append(field);
-    });
-    details.append(fields);
-    var ack = el('label', { class: 'bulk-ack' });
-    ack.append(el('input', { type: 'checkbox', id: 'bulkLicenseAck' }));
-    ack.append(el('span', null, 'أؤكد وجود إذن إعادة بث صالح يشمل جميع القنوات المحددة.'));
-    details.append(ack);
-    host.append(details);
-
-    var buttons = el('div', { class: 'bulk-actions' });
-    [
-      ['اعتماد الترخيص للمحدد', 'license', 'btn-ghost'],
-      ['نشر القنوات المؤهلة', 'publish', 'btn-ghost'],
-      ['إضافة المؤهل إلى «على الهواء الآن»', 'live', 'btn-ghost'],
-      ['تنفيذ الكل دفعة واحدة', 'all', 'btn-gold']
-    ].forEach(function (item) {
-      var button = el('button', { class: 'btn btn-sm bulk-control ' + item[2], type: 'button' }, item[0]);
-      button.addEventListener('click', function () { runChannelBulk(item[1]); });
-      buttons.append(button);
-    });
-    host.append(buttons);
-    host.append(el('p', { class: 'bulk-status', id: 'bulkStatus', role: 'status', 'aria-live': 'polite' },
-      'التنفيذ الكامل: ترخيص مشترك عند إدخاله والتأكيد عليه، ثم نشر المستوفي، ثم إضافته لصف البث دون تكرار.'));
+    host.append(actions);
     host.append(el('p', { class: 'bulk-status', id: 'bulkReadiness', role: 'status' }, ''));
+    host.append(el('p', { class: 'bulk-status', id: 'bulkStatus', role: 'status', 'aria-live': 'polite' },
+      'القنوات الجديدة تُحفظ كمنشورة تلقائيًا. يُظهر هذا القسم فحص الروابط دون بيانات التراخيص.'));
     syncChannelBulkPanel();
   }
 
@@ -1469,9 +1428,9 @@
     if (readiness) {
       var chosen = state.rows.filter(function (row) { return state.selectedChannels[row.id]; });
       var qualified = chosen.filter(canPublishChannel).length;
-      readiness.textContent = chosen.length ? ('الجاهز للنشر حسب البيانات: ' + qualified + ' / ' + chosen.length +
-        ' — غير المؤهل: ' + (chosen.length - qualified) + '. يلزم إذن بث صالح ورابط تشغيل HTTPS؛ النشر وحده لا يضمن ظهور المحتوى.') :
-        'حدد القنوات لمعاينة عدد المؤهل للنشر قبل تنفيذ الحفظ.';
+      readiness.textContent = chosen.length ? ('روابط تشغيل قابلة للفحص: ' + qualified + ' / ' + chosen.length +
+        ' — روابط تحتاج تصحيحًا: ' + (chosen.length - qualified) + '.') :
+        'القنوات الجديدة تنشر تلقائيًا؛ حدد القنوات لمراجعة روابطها.';
     }
     var master = $('.bulk-check-cell input', state.els.thead);
     if (master) {
@@ -1971,7 +1930,7 @@
     if (read('duration_minutes')) parts.push(read('duration_minutes') + ' د');
     $('#previewSub').textContent = parts.length ? parts.join(' • ') : 'أدخل بيانات العمل لمعاينة البطاقة';
 
-    var status = read('status');
+    var status = state.table && state.table.table === 'aseel_channels' ? 'published' : read('status');
     var statusEl = $('#previewStatus');
     if (status) {
       statusEl.hidden = false;
@@ -2063,8 +2022,12 @@
       if (isNaN(expires.getTime())) errors.rights_expires_at = 'تاريخ غير صالح.';
       else payload.rights_expires_at = expires.toISOString();
     }
-    if (tableCfg.table === 'aseel_channels' && payload.playback_mode === 'official_link' && !payload.official_url) {
-      errors.official_url = 'أدخل رابط المشاهدة الرسمي عند اختيار العرض برابط خارجي.';
+    if (tableCfg.table === 'aseel_channels') {
+      payload.status = 'published';
+      payload.playback_mode = 'stream';
+      if (!/^https:\/\/[^\s]+\.(m3u8|mp4)(\?[^\s]*)?$/i.test(payload.stream_url || '')) {
+        errors.stream_url = 'أدخل رابط بث HTTPS مباشر بصيغة HLS أو MP4.';
+      }
     }
     if (tableCfg.table === 'aseel_home_collection_items') {
       var chosen = ['movie_id', 'series_id', 'channel_id', 'episode_id'].filter(function (key) { return payload[key]; });
@@ -2389,7 +2352,7 @@
         legend.append(row);
       });
       statusBody.append(legend);
-      statusBody.append(el('p', { class: 'status-note' }, 'النشر يتطلب اعتماد الحقوق وإدخال مرجع الترخيص.'));
+      statusBody.append(el('p', { class: 'status-note' }, 'قنوات البث المباشر الجديدة تُنشر تلقائيًا عند حفظ بياناتها وصحة رابطها.'));
     }
 
     var latestHost = $('#latestBody');
