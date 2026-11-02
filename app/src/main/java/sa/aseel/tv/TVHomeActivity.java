@@ -32,8 +32,9 @@ import java.util.concurrent.Executors;
 
 /** Al Ezz TV 11: entirely native, remote-first leanback UI (Android KitKat+). */
 public final class TVHomeActivity extends Activity {
-    private static final int BG=0xFF090A0E, PANEL=0xFF17141C, RED=0xFFF23154;
-    private static final int WHITE=0xFFF6F5FA, MUTED=0xFFABB0BB;
+    private static final int BG=0xFF090B11, PANEL=0xFF191B28, RED=0xFFEF3658;
+    private static final int WHITE=0xFFF7F4F8, MUTED=0xFFA7A6B4, GOLD=0xFFE9BF7A;
+    private static final String SETTINGS="alezz_tv_settings_v14";
     private final ExecutorService background=Executors.newFixedThreadPool(4);
     private final Handler ui=new Handler();
     private final ArrayList<JSONObject> movies=new ArrayList<JSONObject>();
@@ -46,6 +47,8 @@ public final class TVHomeActivity extends Activity {
     private LinearLayout content,navBar;
     private TextView status;
     private String section="home";
+    private boolean detailVisible=false, showingWelcome=false;
+    private String detailOrigin="home";
     private int kidsAge=6,kidsDailyMinutes=60;
     private String lastLoadError="";
     private boolean loading=false,unlocked=false;
@@ -79,9 +82,9 @@ public final class TVHomeActivity extends Activity {
     }
     private Button button(String name){
         final Button b=new Button(this);b.setText(name);b.setAllCaps(false);b.setTextColor(WHITE);
-        b.setTextSize(15);b.setFocusable(true);b.setBackgroundDrawable(bg(0xFF2B202B,0xFF4D3744,11));
+        b.setTextSize(15);b.setFocusable(true);b.setBackgroundDrawable(bg(0xFF252635,0xFF373341,12));
         b.setOnFocusChangeListener(new View.OnFocusChangeListener(){public void onFocusChange(View v,boolean focused){
-            b.setBackgroundDrawable(bg(focused?RED:0xFF2B202B,focused?0xFFFFB7C7:0xFF4D3744,11));
+            b.setBackgroundDrawable(bg(focused?0xFF811E38:0xFF252635,focused?RED:0xFF373341,12));
             b.setScaleX(focused?1.04f:1f);b.setScaleY(focused?1.04f:1f);
         }});return b;
     }
@@ -166,61 +169,188 @@ public final class TVHomeActivity extends Activity {
         catalog=new CatalogApi(this);
         kidsAge=getSharedPreferences("alezz_kids",MODE_PRIVATE).getInt("age",6);
         kidsDailyMinutes=getSharedPreferences("alezz_kids",MODE_PRIVATE).getInt("minutes",60);
-        if(!PinGate.isActivated(this)){
-            new PinGate(this,new Runnable(){public void run(){startViewer();}}).show();
-        }else{startViewer();}
+        showSplash();
+    }
+    /** Figma v14: public viewer has no PIN, credential or activation gate. */
+    private void showSplash(){
+        showingWelcome=true;
+        LinearLayout splash=column();
+        splash.setGravity(Gravity.CENTER);
+        splash.setBackgroundDrawable(new GradientDrawable(
+            GradientDrawable.Orientation.TL_BR,
+            new int[]{0xFF0A0D15,0xFF271422,0xFF090B11}));
+        setContentView(splash);
+        ImageView icon=new ImageView(this);
+        int mark=getResources().getIdentifier("alizz_brand","drawable",getPackageName());
+        if(mark!=0)icon.setImageResource(mark);
+        icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        splash.addView(icon,new LinearLayout.LayoutParams(dp(145),dp(145)));
+        TextView brand=text("العز TV",42,WHITE,true);brand.setGravity(Gravity.CENTER);
+        splash.addView(brand,space(dp(380),dp(84),7));
+        TextView note=text("عالمك السينمائي يبدأ هنا",18,MUTED,false);note.setGravity(Gravity.CENTER);
+        splash.addView(note);
+        ui.postDelayed(new Runnable(){public void run(){
+            if(!isFinishing()&&showingWelcome&&!unlocked)showWelcome();
+        }},1100L);
+    }
+    private void showWelcome(){
+        final LinearLayout panel=column();panel.setGravity(Gravity.CENTER);
+        panel.setBackgroundDrawable(new GradientDrawable(
+            GradientDrawable.Orientation.TL_BR,
+            new int[]{0xFF0B0E18,0xFF342033,0xFF090B11}));
+        setContentView(panel);
+        ImageView icon=new ImageView(this);
+        int mark=getResources().getIdentifier("alizz_brand","drawable",getPackageName());
+        if(mark!=0)icon.setImageResource(mark);
+        icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        panel.addView(icon,new LinearLayout.LayoutParams(dp(172),dp(172)));
+        TextView hello=text("أهلًا بك في عالم العز TV",35,WHITE,true);
+        hello.setGravity(Gravity.CENTER);
+        panel.addView(hello,space(-1,dp(80),10));
+        TextView note=text("مسلسلات  •  أفلام  •  بث مباشر  •  أطفال",20,MUTED,false);
+        note.setGravity(Gravity.CENTER);panel.addView(note,space(-1,dp(49),2));
+        Button start=button("▶   ابدأ المشاهدة");
+        start.setTextSize(23);
+        panel.addView(start,space(dp(300),dp(66),12));
+        start.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            showingWelcome=false;startViewer();
+        }});
+        TextView guest=text("دون حساب أو رمز دخول",15,0xFF44C892,false);
+        guest.setGravity(Gravity.CENTER);panel.addView(guest,space(-1,dp(40),4));
+        start.requestFocus();
     }
     private void startViewer(){
-        unlocked=true;buildShell();render();loadCatalog();
+        unlocked=true;showingWelcome=false;
+        section="home";buildShell();render();loadCatalog();
     }
     private void buildShell(){
         LinearLayout root=column();root.setBackgroundColor(BG);
         root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
         setContentView(root);
-        LinearLayout top=row();top.setPadding(dp(24),dp(9),dp(24),dp(9));
+        LinearLayout top=row();top.setPadding(dp(16),dp(6),dp(16),dp(6));
         top.setBackgroundDrawable(new GradientDrawable(GradientDrawable.Orientation.RIGHT_LEFT,
-            new int[]{0xFF4D1424,0xFF190E17,0xFF0A0A10}));
-        root.addView(top,new LinearLayout.LayoutParams(-1,dp(83)));
+            new int[]{0xFF25151F,0xFF13141D,0xFF0B0C13}));
+        root.addView(top,new LinearLayout.LayoutParams(-1,dp(79)));
         ImageView logo=new ImageView(this);
         int logoId=getResources().getIdentifier("alizz_brand","drawable",getPackageName());
         if(logoId!=0)logo.setImageResource(logoId);
         logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        top.addView(logo,new LinearLayout.LayoutParams(dp(93),dp(65)));
-        LinearLayout intro=column();
-        intro.addView(text("العز TV",25,WHITE,true));
-        intro.addView(text("تجربة سينمائية لشاشتك",12,0xFFFFAABB,false));
-        top.addView(intro,space(dp(175),-2,5));
+        top.addView(logo,new LinearLayout.LayoutParams(dp(76),dp(67)));
+        LinearLayout branding=column();
+        branding.addView(text("العز TV",25,WHITE,true));
+        branding.addView(text("عالمك السينمائي",12,GOLD,false));
+        top.addView(branding,space(dp(175),-2,2));
         top.addView(new View(this),new LinearLayout.LayoutParams(0,1,1));
-        status=text("● جاهز",12,MUTED,false);
-        top.addView(status,space(dp(245),-2,3));
-        Button refresh=button("↻ تحديث");
+        status=text("● متصل",12,MUTED,false);
+        status.setSingleLine(true);status.setEllipsize(TextUtils.TruncateAt.END);
+        top.addView(status,space(dp(170),-2,3));
+        Button search=button("⌕  بحث");
+        top.addView(search,space(dp(102),dp(49),2));
+        search.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            section="search";render();
+        }});
+        Button refresh=button("↻  تحديث");
+        top.addView(refresh,space(dp(108),dp(49),2));
         refresh.setOnClickListener(new View.OnClickListener(){public void onClick(View v){loadCatalog();}});
-        top.addView(refresh,space(dp(110),dp(51),4));
-        Button search=button("⌕ بحث");
-        search.setOnClickListener(new View.OnClickListener(){public void onClick(View v){section="search";render();}});
-        top.addView(search,space(dp(96),dp(51),4));
-        navBar=row();navBar.setPadding(dp(17),dp(7),dp(17),dp(7));navBar.setBackgroundColor(PANEL);
-        root.addView(navBar,new LinearLayout.LayoutParams(-1,dp(61)));
-        View line=new View(this);line.setBackgroundColor(0xFF50212E);root.addView(line,new LinearLayout.LayoutParams(-1,dp(2)));
+        navBar=row();navBar.setPadding(dp(15),dp(3),dp(15),dp(3));
+        navBar.setBackgroundColor(0xFF10121A);
+        root.addView(navBar,new LinearLayout.LayoutParams(-1,dp(57)));
         scroller=new ScrollView(this);scroller.setFillViewport(true);scroller.setVerticalScrollBarEnabled(false);
         root.addView(scroller,new LinearLayout.LayoutParams(-1,0,1));
-        content=column();content.setPadding(dp(25),dp(14),dp(25),dp(29));
+        content=column();content.setPadding(dp(19),dp(12),dp(19),dp(19));
         scroller.addView(content,new ScrollView.LayoutParams(-1,-2));
         updateNav();
     }
+    private String sectionName(String s){
+        if("movies".equals(s))return "الأفلام";
+        if("series".equals(s))return "المسلسلات";
+        if("live".equals(s))return "البث المباشر";
+        if("kids".equals(s))return "عالم الأطفال";
+        if("favorites".equals(s))return "قائمتي";
+        if("settings".equals(s))return "الإعدادات";
+        if("search".equals(s))return "البحث";
+        if("youtube".equals(s))return "يوتيوب الأطفال";
+        return "اختر عالمك";
+    }
+    private void goTo(String target){
+        episodeGeneration++;detailVisible=false;section=target;
+        render();if(scroller!=null)scroller.scrollTo(0,0);
+    }
     private void updateNav(){
+        if(navBar==null)return;
         navBar.removeAllViews();
-        final String[] tabs={"الرئيسية","الأفلام","المسلسلات","البث المباشر","يوتيوب","الأطفال","قائمتي"};
-        final String[] modes={"home","movies","series","live","youtube","kids","favorites"};
-        for(int i=0;i<tabs.length;i++){
-            final String selected=modes[i];Button b=button(tabs[i]);
-            b.setTextSize(14);
-            if(section.equals(selected))b.setBackgroundDrawable(bg(0xFF8C2039,RED,12));
-            navBar.addView(b,new LinearLayout.LayoutParams(0,-1,1));
-            b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-                section=selected;render();scroller.scrollTo(0,0);
-            }});
+        navBar.setVisibility("home".equals(section)?View.GONE:View.VISIBLE);
+        if("home".equals(section))return;
+        Button back=button("⌂  القائمة الرئيسية");
+        back.setOnClickListener(new View.OnClickListener(){public void onClick(View v){goTo("home");}});
+        navBar.addView(back,space(dp(210),dp(48),2));
+        TextView breadcrumb=text("العز TV   /   "+sectionName(section),19,GOLD,true);
+        navBar.addView(breadcrumb,new LinearLayout.LayoutParams(0,-1,1));
+        Button next=button("التنقل بين الأقسام");
+        next.setOnClickListener(new View.OnClickListener(){public void onClick(View v){goTo("home");}});
+        navBar.addView(next,space(dp(218),dp(48),2));
+    }
+    private int screenWidthDp(){
+        return Math.round(getResources().getDisplayMetrics().widthPixels/
+            getResources().getDisplayMetrics().density);
+    }
+    private int screenHeightDp(){
+        return Math.round(getResources().getDisplayMetrics().heightPixels/
+            getResources().getDisplayMetrics().density);
+    }
+    private LinearLayout dashboardTile(final String label,final String subtitle,
+            final String glyph,final String target,final int baseColor){
+        final LinearLayout tile=column();tile.setPadding(dp(19),dp(13),dp(19),dp(12));
+        tile.setFocusable(true);tile.setClickable(true);
+        tile.setBackgroundDrawable(bg(baseColor,0xFF474052,19));
+        TextView symbol=text(glyph,37,WHITE,true);symbol.setGravity(Gravity.RIGHT);
+        tile.addView(symbol,new LinearLayout.LayoutParams(-1,0,1));
+        TextView name=text(label,27,WHITE,true);name.setGravity(Gravity.RIGHT);
+        tile.addView(name,space(-1,-2,2));
+        TextView caption=text(subtitle,14,0xFFCFCCD7,false);caption.setGravity(Gravity.RIGHT);
+        tile.addView(caption,space(-1,-2,0));
+        tile.setOnFocusChangeListener(new View.OnFocusChangeListener(){
+            public void onFocusChange(View v,boolean focused){
+                tile.setBackgroundDrawable(bg(focused?0xFF65233E:baseColor,
+                    focused?RED:0xFF474052,19));
+                tile.setScaleX(focused?1.035f:1f);
+                tile.setScaleY(focused?1.035f:1f);
+                tile.setElevation(focused?dp(8):0f);
+            }
+        });
+        tile.setOnClickListener(new View.OnClickListener(){public void onClick(View v){goTo(target);}});
+        return tile;
+    }
+    private void portal(){
+        LinearLayout banner=column();
+        banner.setPadding(dp(22),dp(13),dp(22),dp(9));
+        content.addView(banner,space(-1,dp(91),3));
+        banner.addView(text("اختر عالمك",34,WHITE,true));
+        banner.addView(text("كل الترفيه في مكان واحد  •  تحكم كامل بالريموت",16,MUTED,false));
+        final String[][] data={
+            {"المسلسلات","المواسم والحلقات","▣","series"},
+            {"الأفلام","اكتشف مكتبة السينما","▤","movies"},
+            {"البث المباشر","شاهد قنواتك المفضلة","◉","live"},
+            {"الأطفال","محتوى مناسب للصغار","☻","kids"},
+            {"قائمتي","المفضلة وتابع المشاهدة","♥","favorites"},
+            {"الإعدادات","خصص تجربتك","⚙","settings"}
+        };
+        int[] colors={0xFF482A3F,0xFF503724,0xFF223D4C,0xFF225044,0xFF352A48,0xFF2C3047};
+        int columns=screenWidthDp()>=620?3:2;
+        int cellHeight=Math.max(130,Math.min(190,(screenHeightDp()-205)/2));
+        for(int j=0;j<6;j+=columns){
+            LinearLayout line=row();line.setGravity(Gravity.CENTER);
+            for(int k=j;k<Math.min(6,j+columns);k++){
+                LinearLayout tile=dashboardTile(data[k][0],data[k][1],data[k][2],data[k][3],colors[k]);
+                LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(cellHeight),1);
+                lp.setMargins(dp(7),dp(7),dp(7),dp(7));
+                line.addView(tile,lp);
+                if(j==0&&k==0)tile.requestFocus();
+            }
+            content.addView(line,space(-1,-2,1));
         }
+        TextView guide=text("الأسهم للتنقل     •     OK اختيار     •     رجوع للخروج",13,MUTED,false);
+        guide.setGravity(Gravity.CENTER);content.addView(guide,space(-1,dp(39),5));
     }
     private void loadCatalog(){
         if(loading || !unlocked)return;
@@ -286,7 +416,7 @@ public final class TVHomeActivity extends Activity {
         loading=pendingRequests>0;
         status.setText(loading?"◌ تحميل المكتبة...":lastLoadError.length()>0
             ?"⚠ بعض الأقسام غير متاحة":"● المكتبة متصلة");
-        render();
+        if(!detailVisible)render();
     }
     private void heading(String title,String note){
         TextView h=text(title,23,WHITE,true);content.addView(h,space(-1,-2,5));
@@ -294,21 +424,12 @@ public final class TVHomeActivity extends Activity {
     }
     private void render(){
         if(content==null)return;
-        if(!"detail".equals(section) && !"episodes".equals(section))updateNav();
+        if(detailVisible)episodeGeneration++;
+        detailVisible=false;
+        updateNav();
         content.removeAllViews();
         if("home".equals(section)){
-            hero();
-            shelf("الأفلام","اكتشف أحدث الأعمال المتاحة",movies,14);
-            shelf("مسلسلات","مواسم وحلقات مرتبة",series,12);
-            classifiedHomeShelves();
-            if(!channels.isEmpty())livePreview();
-            ArrayList<JSONObject> sports=new ArrayList<JSONObject>();
-            for(JSONObject channel:channels)if("146b8c7f-8e03-45ee-aa4f-2d8ab20e6c95".equals(value(channel,"category_id")))sports.add(channel);
-            shelf("رياضة حول العالم","قنوات رياضية عالمية متاحة حسب بلدك",sports,20);
-            ArrayList<JSONObject> beIN=new ArrayList<JSONObject>();
-            for(JSONObject channel:channels)if("f30c2110-ae62-47c4-99e4-b45762bde695".equals(value(channel,"category_id")))beIN.add(channel);
-            shelf("قنوات beIN SPORTS الرسمية","قد تحتاج إلى اشتراك • تفتح موقع beIN الرسمي",beIN,20);
-            shelf("يوتيوب الأطفال","مقاطع يوتيوب الرسمية المنشورة",youtubeVideos,14);
+            portal();
         }else if("movies".equals(section)){
             heading("الأفلام بحسب التصنيف","تظهر قوائم الأعمال المتوفرة تلقائيًا، مع إمكانية التنقل بالريموت.");
             shelf("أفلام تركية","بلد الإنتاج: تركيا",originItems(movies,"TR"),30);
@@ -359,13 +480,48 @@ public final class TVHomeActivity extends Activity {
             for(JSONObject x:youtubeVideos)if(isFavorite(x))list.add(x);
             grid("قائمتي",list);
         }else if("search".equals(section))searchScreen();
-        if(movies.size()+series.size()+channels.size()+youtubeVideos.size()==0){
+        else if("settings".equals(section))settingsScreen();
+        if(!"home".equals(section)&&!"settings".equals(section)&&movies.size()+series.size()+channels.size()+youtubeVideos.size()==0){
             heading(loading?"جاري تحميل المكتبة...":"المكتبة لم تُحمّل",
                 loading?"اتصل بالإنترنت، ستظهر البطاقات تلقائيًا.":"اضغط تحديث. "+lastLoadError);
             Button refresh=button("إعادة المحاولة");content.addView(refresh,space(dp(240),dp(60),4));
             refresh.setOnClickListener(new View.OnClickListener(){public void onClick(View v){loadCatalog();}});
             refresh.requestFocus();
         }
+    }
+    private void settingsScreen(){
+        heading("الإعدادات","تخصيص تجربة العز TV • التفضيلات محفوظة على هذا الجهاز فقط");
+        final SharedPreferences prefs=getSharedPreferences(SETTINGS,MODE_PRIVATE);
+        final boolean autoNext=prefs.getBoolean("auto_next",true);
+        Button next=button((autoNext?"✓  ":"")+"تشغيل الحلقة التالية تلقائيًا");
+        content.addView(next,space(-1,dp(62),6));
+        next.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            prefs.edit().putBoolean("auto_next",!prefs.getBoolean("auto_next",true)).apply();
+            render();
+        }});
+        final boolean autoRefresh=prefs.getBoolean("auto_refresh",true);
+        Button sync=button((autoRefresh?"✓  ":"")+"تحديث المكتبة تلقائيًا بعد العودة للتطبيق");
+        content.addView(sync,space(-1,dp(62),6));
+        sync.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            prefs.edit().putBoolean("auto_refresh",!prefs.getBoolean("auto_refresh",true)).apply();
+            render();
+        }});
+        heading("عالم الأطفال","تعديل العمر المسموح ووقت المشاهدة اليومي");
+        Button kids=button("♧  إعدادات الأطفال  •  "+kidsAge+" سنوات  /  "+kidsDailyMinutes+" دقيقة");
+        content.addView(kids,space(-1,dp(62),6));
+        kids.setOnClickListener(new View.OnClickListener(){public void onClick(View v){goTo("kids");}});
+        heading("المكتبة والمشغل","تعتمد الجودة والتوافق على اتصال الإنترنت وإمكانات الجهاز");
+        Button reload=button("↻  تحديث جميع أقسام المكتبة");
+        content.addView(reload,space(-1,dp(58),6));
+        reload.setOnClickListener(new View.OnClickListener(){public void onClick(View v){loadCatalog();}});
+        Button youtube=button("▶  مكتبة فيديوهات يوتيوب المعتمدة");
+        content.addView(youtube,space(-1,dp(58),6));
+        youtube.setOnClickListener(new View.OnClickListener(){public void onClick(View v){goTo("youtube");}});
+        TextView data=text("Android "+android.os.Build.VERSION.RELEASE+
+            "  •  API "+android.os.Build.VERSION.SDK_INT+
+            "  •  المحتوى من Supabase  •  المشاهدة بدون حساب",14,MUTED,false);
+        content.addView(data,space(-1,dp(51),8));
+        next.requestFocus();
     }
     private void hero(){
         LinearLayout hero=row();hero.setPadding(dp(26),dp(18),dp(26),dp(18));
@@ -503,6 +659,7 @@ public final class TVHomeActivity extends Activity {
     private void detail(final JSONObject item){
         if("series".equals(kind(item))){episodes(item);return;}
         if("youtube".equals(kind(item))){openYouTube(item);return;}
+        detailVisible=true;detailOrigin=section;
         content.removeAllViews();
         heading(label(item),"channel".equals(kind(item))?("official_link".equals(value(item,"playback_mode"))?"↗ مشاهدة في الموقع الرسمي":"● قناة مباشرة"):"فيلم • مشاهدة مباشرة");
         LinearLayout hero=row();content.addView(hero,space(-1,dp(240),7));
@@ -521,10 +678,11 @@ public final class TVHomeActivity extends Activity {
         }});
         Button back=button("رجوع إلى القسم");
         info.addView(back,space(dp(260),dp(50),7));
-        back.setOnClickListener(new View.OnClickListener(){public void onClick(View v){render();}});
+        back.setOnClickListener(new View.OnClickListener(){public void onClick(View v){detailVisible=false;render();}});
         play.requestFocus();
     }
     private void episodes(final JSONObject show){
+        detailVisible=true;detailOrigin=section;
         content.removeAllViews();heading(label(show),"جارٍ استرجاع المواسم والحلقات...");
         final String seriesId=value(show,"id");
         if(!seriesId.matches("[0-9a-fA-F-]{36}")){heading("خطأ في معرف المسلسل","");return;}
@@ -554,7 +712,7 @@ public final class TVHomeActivity extends Activity {
             ui.post(new Runnable(){public void run(){
                 if(isFinishing()||token!=episodeGeneration)return;
                 content.removeAllViews();
-                heading(label(show),"اختر حلقة واضغط OK للتشغيل");
+                heading(label(show),"المواسم والحلقات  •  "+episodes.size()+" حلقة مرتبة  •  تشغيل متتالٍ");
                 if(episodes.isEmpty())heading("لا توجد حلقات جاهزة",
                     problem.length()>0?problem:"راجع نشر الموسم والحلقات وروابط تشغيلها.");
                 episodeQueue.clear();episodeQueue.addAll(episodes);
@@ -565,7 +723,7 @@ public final class TVHomeActivity extends Activity {
                     b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){play(ep);}});
                 }
                 Button back=button("↩ رجوع إلى المسلسلات");content.addView(back,space(dp(260),dp(54),5));
-                back.setOnClickListener(new View.OnClickListener(){public void onClick(View v){section="series";render();}});
+                back.setOnClickListener(new View.OnClickListener(){public void onClick(View v){goTo(detailOrigin);}});
                 if(!episodes.isEmpty() && content.getChildCount()>2)content.getChildAt(2).requestFocus();else back.requestFocus();
             }});
         }});
@@ -582,16 +740,8 @@ public final class TVHomeActivity extends Activity {
             }
         }
         if("channel".equals(kind(item)) && "official_link".equals(value(item,"playback_mode"))){
-            String official=value(item,"official_url");
-            if(!official.startsWith("https://")){
-                heading("تعذر فتح القناة","رابط الموقع الرسمي غير صالح.");return;
-            }
-            try {
-                Intent link=new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(official));
-                startActivity(link);
-            } catch(android.content.ActivityNotFoundException error){
-                heading("لا يوجد متصفح متوافق","يتطلب فتح موقع القناة متصفحًا على جهاز التلفزيون.");
-            }
+            heading("المحتوى غير قابل للتشغيل داخل التطبيق",
+                "القناة تعرض رابطًا رسميًا خارجيًا وليست لديها وصلة بث مرخصة مباشرة. حدّث المصدر من لوحة الإدارة.");
             return;
         }
         String youtube=value(item,"youtube_url");
@@ -742,8 +892,14 @@ public final class TVHomeActivity extends Activity {
         prefs.edit().putBoolean(favKey(item),!isFavorite(item)).apply();
     }
     @Override public boolean onKeyDown(int code,KeyEvent event){
+        if(code==KeyEvent.KEYCODE_BACK && showingWelcome){
+            finish();return true;
+        }
+        if(code==KeyEvent.KEYCODE_BACK && detailVisible){
+            detailVisible=false;episodeGeneration++;render();return true;
+        }
         if(code==KeyEvent.KEYCODE_BACK && !"home".equals(section)){
-            section="home";render();return true;
+            goTo("home");return true;
         }
         if(code==KeyEvent.KEYCODE_MENU||code==KeyEvent.KEYCODE_GUIDE){
             section="live";render();scroller.scrollTo(0,0);return true;
@@ -767,7 +923,8 @@ public final class TVHomeActivity extends Activity {
     }
     @Override protected void onResume(){
         super.onResume();
-        if(unlocked && !loading && android.os.SystemClock.elapsedRealtime()-lastCatalogRefreshAt>=CATALOG_REFRESH_INTERVAL_MS){
+        if(unlocked && !loading && getSharedPreferences(SETTINGS,MODE_PRIVATE).getBoolean("auto_refresh",true)
+            && android.os.SystemClock.elapsedRealtime()-lastCatalogRefreshAt>=CATALOG_REFRESH_INTERVAL_MS){
             loadCatalog();
         }
     }

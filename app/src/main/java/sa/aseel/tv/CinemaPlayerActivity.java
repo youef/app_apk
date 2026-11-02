@@ -305,6 +305,7 @@ public final class CinemaPlayerActivity extends Activity {
                         : "سينما العز • جودة تلقائية")+"   |  "+sources.get(index).label);
                 }else if(state==Player.STATE_ENDED){
                     if(!live && "episode".equals(mediaKind) &&
+                       getSharedPreferences("alezz_tv_settings_v14",MODE_PRIVATE).getBoolean("auto_next",true) &&
                        mediaIndex>=0 && mediaIndex+1<mediaPlaylist.size()){
                         switchMedia(mediaIndex+1);
                     }else{
