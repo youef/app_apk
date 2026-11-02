@@ -314,7 +314,21 @@
       });
     });
 
-    rows.push(railHTML("على الهواء الآن", catalog.channels, { more: "#/live", subtitle: "بث مباشر من المصادر الرسمية" }));
+    var channelGroups = [
+      ["روتانا — القنوات الرسمية", function(c){return /روتانا|LBC/i.test(c.title);}],
+      ["قنوات مصرية", function(c){return c.country==="EG";}],
+      ["قنوات مغربية", function(c){return c.country==="MA";}],
+      ["قنوات أردنية", function(c){return c.country==="JO";}],
+      ["قنوات أفلام وأكشن", function(c){return (c.genreTags||[]).some(function(t){return t==="movies"||t==="action";});}],
+      ["قنوات الكوميديا", function(c){return (c.genreTags||[]).indexOf("comedy")!==-1;}],
+      ["قنوات الرومانسية", function(c){return (c.genreTags||[]).indexOf("romance")!==-1;}],
+      ["قنوات المسلسلات والدراما", function(c){return (c.genreTags||[]).some(function(t){return t==="series"||t==="drama";});}]
+    ];
+    channelGroups.forEach(function(group){
+      var matches=catalog.channels.filter(group[1]).slice(0,18);
+      if(matches.length)rows.push(railHTML(group[0],matches,{more:"#/live",subtitle:"مصادر مباشرة أو روابط رسمية حسب حقوق القناة"}));
+    });
+    rows.push(railHTML("على الهواء الآن", catalog.channels.filter(function(c){return c.live;}), { more: "#/live", subtitle: "قنوات ذات روابط بث مباشر" }));
     rows.push(railHTML("وثائقيات من العالم", catalog.channels.filter(function(c){return c.categoryId==="d7070bfe-19e2-403d-97de-ef2d26614624";}).slice(0,18), { more: "#/live/d7070bfe-19e2-403d-97de-ef2d26614624", subtitle: "طبيعة وتاريخ وعلوم وثقافات — يتوفر البث حسب منطقتك" }));
     rows.push(railHTML("رياضة حول العالم", catalog.channels.filter(function(c){return c.categoryId==="146b8c7f-8e03-45ee-aa4f-2d8ab20e6c95";}).slice(0,20), { more: "#/live/146b8c7f-8e03-45ee-aa4f-2d8ab20e6c95", subtitle: "قنوات رياضية دولية • بث متاح حسب الدولة" }));
     rows.push(railHTML("beIN SPORTS — القنوات الرسمية", catalog.channels.filter(function(c){return c.categoryId==="f30c2110-ae62-47c4-99e4-b45762bde695";}).slice(0,20), { more: "#/live/f30c2110-ae62-47c4-99e4-b45762bde695", subtitle: "روابط مشاهدة رسمية • القنوات المشفرة تتطلب اشتراك beIN" }));
