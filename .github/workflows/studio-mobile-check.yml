@@ -1,0 +1,27 @@
+name: Al Ezz Studio – Mobile UI smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - "python-cloud-studio/**"
+      - ".github/workflows/studio-mobile-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  studio-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Parse desktop and iPhone JavaScript
+        run: |
+          node --check python-cloud-studio/static/app.js
+          node --check python-cloud-studio/static/studio-pro.js
+      - name: Validate mobile interface, navigation, and PWA assets
+        run: python3 python-cloud-studio/test_mobile_ui.py
