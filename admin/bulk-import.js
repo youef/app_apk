@@ -140,7 +140,7 @@
      status();msg("تغير الرابط؛ اضغط «افحص روابط التشغيل» للتأكد من صلاحيته.");});
    uCell.append(u);tr.append(uCell);
    const c=document.createElement("td");
-   c.textContent=x.saved?(x.savedMode==="published"?"✓ منشور":"✓ محفوظ كمسودة"):
+   c.textContent=x.saved?(x.savedMode==="published"?"✓ منشور للتشغيل":x.savedMode==="metadata"?"✓ بيانات منشورة":"✓ محفوظ كمسودة"):
      !x.result?"بانتظار الفحص":x.result.ok?"✓ جاهز: "+(x.result.checks?.find(v=>v.ok)?.format||"فيديو"):
      "معلومات فقط — "+(x.result.reason||x.result.error||"رابط غير متحقق");
    if(x.result&&!x.result.ok)tr.classList.add("is-metadata");
@@ -186,12 +186,12 @@
    return msg("النشر يتطلب إذن عرض فعليًا وإثبات ترخيص صالحًا ومصدرًا معتمدًا؛ يمكنك إلغاء «النشر» وحفظ جميع البيانات كمسودات.","error");
   const verified=todo.filter(it=>it.result?.ok).length,unknown=todo.length-verified;
   const confirmText="حفظ "+todo.length+" عنصرًا: "+verified+" رابطًا متحققًا و"+unknown+
-    " عنصر بيانات بلا تشغيل مؤكد. "+(licenced?"سيُنشر العمل والحلقات الصالحة؛ البقية مسودات.":"ستُحفظ العناصر الجديدة كمسودات دون نشر.")+
+    " عنصر بيانات بلا تشغيل مؤكد. "+(licenced?"ستُنشر بطاقة العمل وبيانات كل الحلقات؛ التشغيل للروابط المعتمدة فقط.":"ستُحفظ العناصر الجديدة كمسودات دون نشر.")+
     " سيتم تحديث السجلات المطابقة دون تكرار. هل تتابع؟";
   if(!window.confirm(confirmText))return;
   busy=true;status();
   const publication=licenced?{status:"published",rights_status:"approved",rights_holder:holder,license_reference:license,source_id:source}:null;
-  let created=0,updated=0,errors=[],series=null,duplicate=0,published=0,draftCount=0;
+  let created=0,updated=0,errors=[],series=null,duplicate=0,published=0,metadataPublic=0,draftCount=0;
   const seasons=new Map();
   // Metadata is saved even if the source has not exposed a valid media URL.
   const metadataFields={title_ar:meta.title_ar,...meta};
@@ -214,7 +214,7 @@
      const check=item.result?.ok?item.result:null;
      const url=check?https(check.stream_url):"";
      const playable=!!url;
-     const itemStatus=publication&&playable?"published":"draft";
+     const itemStatus=publication?"published":"draft";
      const itemRights=publication&&playable?"approved":"pending";
      const itemDescription=(item.description||check?.description||meta.description||"").slice(0,1800);
      const itemPoster=https(item.poster_url||check?.poster_url||meta.poster_url)||null;
@@ -240,7 +240,8 @@
          ...(url?{stream_url:url,stream_variants:check?.variants||[]}:{}),
          ...(source?{source_id:source}:{})};
        if(existing){
-         if(publication&&playable)Object.assign(data,{status:"published",rights_status:"approved",license_reference:license});
+         if(publication)Object.assign(data,playable?
+           {status:"published",rights_status:"approved",license_reference:license}:{status:"published"});
          await patch("aseel_episodes",existing.id,data);updated++;duplicate++;
        }else{
          await insert("aseel_episodes",{season_id:season.id,number:Number(item.number),...data,
@@ -248,7 +249,8 @@
          created++;
        }
      }
-     if(itemStatus==="published"){published++;item.savedMode="published";}
+     if(itemStatus==="published"&&playable){published++;item.savedMode="published";}
+     else if(itemStatus==="published"){metadataPublic++;item.savedMode="metadata";}
      else{draftCount++;item.savedMode="draft";}
      item.saved=true;saved++;status();
     }catch(e){errors.push("الحلقة "+item.number+": "+String(e.message||e).slice(0,160));}
@@ -256,7 +258,7 @@
   }catch(e){errors.push("المسلسل: "+String(e.message||e).slice(0,170));}
   busy=false;status();
   msg("تم الحفظ: "+created+" جديد و"+updated+" محدّث (منها "+duplicate+" حلقة موجودة). "+
-    "جاهز للنشر: "+published+"، محفوظ دون تشغيل مؤكد: "+draftCount+"، أخطاء: "+errors.length+
+    "جاهز للتشغيل: "+published+"، بيانات منشورة دون تشغيل: "+metadataPublic+"، مسودات: "+draftCount+"، أخطاء: "+errors.length+
     (errors.length?" — "+errors.slice(0,2).join("؛ "):"")+
     (licenced?"":" · النشر العام لم يُفعّل بسبب عدم اعتماد الحقوق."),
     errors.length?"error":"success");
