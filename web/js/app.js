@@ -667,7 +667,7 @@
     var payload = {
       key: item.key, kind: item.kind, title: item.title, subtitle: kindLabel(item.kind) + (item.year ? " · " + item.year : ""),
       poster: item.poster, art: artStyle(item), stream: item.stream, youtubeId: item.youtubeId,
-      live: !!item.live, quality: item.quality, kids: item.kids, age: item.age
+      live: !!item.live, quality: item.quality, variants: item.variants || [], kids: item.kids, age: item.age
     };
     if (opts.resumeAt) payload.resumeAt = opts.resumeAt;
 
@@ -696,7 +696,7 @@
     var payload = {
       key: episode.key, kind: "episode", title: series.title + " — " + episode.title,
       subtitle: series.title, poster: series.poster, art: artStyle(series),
-      stream: episode.stream, youtubeId: episode.youtubeId, live: false,
+      stream: episode.stream, variants: episode.variants || [], youtubeId: episode.youtubeId, live: false,
       quality: series.quality, kids: series.kids, age: series.age
     };
     var saved = Store.progress(episode.key);
@@ -709,7 +709,7 @@
     Player.queue(list, idx);
     Player.open(payload, { next: next ? {
       key: next.key, kind: "episode", title: series.title + " — " + next.title, subtitle: series.title,
-      poster: series.poster, stream: next.stream, youtubeId: next.youtubeId, art: artStyle(series)
+      poster: series.poster, stream: next.stream, variants: next.variants || [], youtubeId: next.youtubeId, art: artStyle(series)
     } : null });
   }
 
