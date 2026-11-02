@@ -10,8 +10,10 @@ const read = file => fs.readFileSync(path.join(root, file), "utf8");
 const html = read("web/index.html");
 const css = read("web/css/live.css");
 const source = read("web/js/live.js");
+const explore = read("web/js/explore.js");
 const app = read("web/js/app.js");
 const context = { window: {} };
+vm.runInNewContext(explore, context, { filename: "web/js/explore.js" });
 vm.runInNewContext(source, context, { filename: "web/js/live.js" });
 const live = context.window.AlezzLive;
 assert.ok(live, "Missing live player module");
@@ -30,11 +32,11 @@ const page = live.render({ channels, categories: [
 ] }, "");
 const ids = [...page.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]);
 assert.equal(new Set(ids).size, ids.length, "Duplicate live page IDs");
-for (const id of ["livePage", "liveVideo", "liveGuideItems", "liveStart", "liveRetry", "liveSearch", "liveCategories", "liveNext", "livePrev", "liveStatus", "liveFullscreen"]) {
+for (const id of ["livePage", "liveVideo", "liveGuideItems", "liveStart", "liveRetry", "liveSearch", "liveFilters", "liveNext", "livePrev", "liveStatus", "liveFullscreen"]) {
   assert.ok(ids.includes(id), "Missing live UI: " + id);
 }
 assert.ok(page.includes("قناة في الدليل") && page.includes("دليل القنوات"));
-assert.ok(page.includes("data-live-category="));
+assert.ok(page.includes("data-live-filter=") && page.includes("data-browse-select="));
 assert.ok(!page.includes('crossorigin="anonymous"'), "Native playback must not force CORS mode");
 assert.ok(html.includes("css/live.css") && html.includes("js/live.js"));
 assert.ok(app.includes("Live.mount()") && app.includes("Live.destroy()"));

@@ -1,6 +1,7 @@
 /* AL EZZ TV — dedicated live television page, browser-safe and RTL. */
 (function () {
   "use strict";
+  var Explore=window.AlezzExplore;
   var state = {
     channels: [], shown: [], current: null, search: "", category: "",
     hls: null, dash: null, frame: null, request: 0, timeout: null, mounted: false,
@@ -73,7 +74,7 @@
   }
   function sortedChannels() {
     return state.channels.filter(function (c) {
-      if (state.category && c.categoryId !== state.category) return false;
+      if (state.category && !Explore.matches(c,state.category)) return false;
       var query = state.search.trim().toLocaleLowerCase();
       return !query || (c.title + " " + c.category + " " + (c.country || "")).toLocaleLowerCase().indexOf(query) !== -1;
     });
@@ -290,15 +291,17 @@
     $("liveSearchClear").addEventListener("click", function () {
       state.search = ""; $("liveSearch").value = ""; updateGuide(); $("liveSearch").focus();
     });
-    $("liveCategories").addEventListener("click", function (event) {
-      var btn = event.target.closest("[data-live-category]");
-      if (!btn) return;
-      state.category = btn.getAttribute("data-live-category");
-      Array.prototype.forEach.call($("liveCategories").querySelectorAll("[data-live-category]"), function (item) {
-        var active = item === btn; item.classList.toggle("is-on", active);
-        item.setAttribute("aria-pressed", String(active));
-      });
+    function chooseLiveCategory(value) {
+      state.category=value||"";
+      $("liveFilters").innerHTML=Explore.picker(state.channels,state.category,"live",state.catalogCategories);
       updateGuide();
+    }
+    $("liveFilters").addEventListener("click",function(event){
+      var btn=event.target.closest("[data-live-filter]");
+      if(btn)chooseLiveCategory(btn.getAttribute("data-live-filter"));
+    });
+    $("liveFilters").addEventListener("change",function(event){
+      if(event.target.getAttribute("data-browse-select")==="live")chooseLiveCategory(event.target.value);
     });
     $("liveStart").addEventListener("click", function () { if (state.current) select(state.current, true); });
     $("liveRetry").addEventListener("click", function () { if (state.current) select(state.current, true); });
@@ -367,27 +370,20 @@
   }
   function render(catalog, initialCategory) {
     state.channels = (catalog && catalog.channels) || [];
+    state.catalogCategories=(catalog && catalog.categories)||[];
     state.search = "";
     state.category = initialCategory || "";
     state.shown = [];
     state.current = null;
     var count = state.channels.length;
-    var categories = ((catalog && catalog.categories) || []).filter(function (c) {
-      return state.channels.some(function (x) { return x.categoryId === c.id; });
-    });
-    var categoryButtons = '<button class="live-chip' + (!state.category ? ' is-on' : '') +
-      '" data-live-category="" aria-pressed="' + (!state.category ? "true" : "false") + '">كل القنوات</button>' +
-      categories.map(function (c) {
-        return '<button class="live-chip' + (state.category === c.id ? ' is-on' : '') +
-          '" data-live-category="' + esc(c.id) + '" aria-pressed="' +
-          (state.category === c.id ? "true" : "false") + '">' + esc(c.name_ar) + '</button>';
-      }).join("");
+    var categoryButtons=Explore.picker(state.channels,state.category,"live",state.catalogCategories);
     return '<section class="live-page" id="livePage" aria-label="البث المباشر">' +
       '<div class="live-heading"><div><span class="live-eyebrow"><i></i> AL EZZ TV · LIVE STATION</span>' +
       '<h1>البث المباشر <em>على شاشتك</em></h1>' +
       '<p>شغّل القنوات داخل الموقع، وتصفح الدليل، وانتقل بين المحطات دون مغادرة الصفحة.</p></div>' +
       '<div class="live-heading__actions"><span class="live-total">' + count + ' قناة في الدليل</span>' +
       '<button type="button" class="live-outline" id="liveRefresh">' + icon("refresh") + ' تحديث القنوات</button></div></div>' +
+      '<div class="live-discovery" id="liveFilters">' + categoryButtons + '</div>' +
       '<div class="live-layout"><div class="live-viewer">' +
       '<div class="live-stage" id="liveStage">' +
       '<video id="liveVideo" controls playsinline webkit-playsinline preload="none" aria-label="مشغل البث المباشر"></video>' +
@@ -413,7 +409,6 @@
       '<span class="live-guide__count" id="liveFilteredCount">' + count + ' قناة</span></div>' +
       '<div class="live-search">' + icon("search") + '<input id="liveSearch" type="search" placeholder="ابحث عن قناة أو دولة..." aria-label="بحث القنوات" autocomplete="off">' +
       '<button id="liveSearchClear" type="button" aria-label="مسح البحث" hidden>×</button></div>' +
-      '<div class="live-categories" id="liveCategories" aria-label="تصفية التصنيف">' + categoryButtons + '</div>' +
       '<div class="live-guide__items" id="liveGuideItems" role="group" aria-label="القنوات"></div>' +
       '<div class="live-guide__bottom">اختر قناة للتشغيل · مفاتيح Alt + ↑ / ↓ للتنقل</div>' +
       '</aside></div></section>';
