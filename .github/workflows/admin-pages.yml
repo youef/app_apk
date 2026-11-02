@@ -42,6 +42,8 @@ jobs:
           node --check admin/importer.js
           node --check admin/bulk-import.js
           node --check admin/config.js
+          node --check admin/series-quick.js
+          node tests/series-quick-smoke.cjs
           node tests/importer-smoke.cjs
           node tests/bulk-domain-smoke.cjs
           node tests/studio-smoke.cjs
@@ -65,6 +67,8 @@ jobs:
           test -s web/alizz-tv-transparent.png
           test -s web/al-ezz-mark.svg
           test -s admin/index.html
+          test -s admin/series-quick.html
+          test -s admin/series-quick.js
           test -s admin/app.js
           test -s admin/importer.js
           test -s admin/bulk-import.html
