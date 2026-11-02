@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#090b12">
+<title>العز TV | إضافة مسلسل ومواسم وحلقات بسرعة</title>
+<link rel="icon" href="../web/assets/logo.svg" type="image/svg+xml">
+<style>
+:root{color-scheme:dark;--bg:#090b12;--surface:#141824;--card:#1b2030;--line:#363b50;--gold:#f3c768;--text:#f6f4f0;--muted:#b5b9c5;--bad:#ff9b9b;--good:#76dfab}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse 1100px 500px at 80% -100px,#292135 0,transparent 70%),var(--bg);color:var(--text);font:16px/1.7 system-ui,Tahoma,Arial,sans-serif}
+a{color:var(--gold);text-decoration:none}a:hover{text-decoration:underline}
+main{max-width:1100px;margin:auto;padding:24px 18px 90px}
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:0 0 25px}
+header h1{font-size:clamp(22px,3vw,34px);margin:3px 0}.subtitle{color:var(--muted);font-size:14px;margin:0 0 17px}
+.brand{display:flex;align-items:center;gap:11px;color:var(--gold);font-weight:800}
+.brand img{width:52px;height:52px;object-fit:contain}
+.pill{border:1px solid #8b713f;background:#362b1b;padding:4px 12px;border-radius:30px;font-size:13px;color:var(--gold)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:22px;margin:0 0 18px;box-shadow:0 10px 35px #0002}
+.panel h2{font-size:19px;margin:0 0 16px}
+label{display:grid;gap:7px;color:#ece8e1;font-size:14px;font-weight:650}
+input,select,textarea{font:inherit;background:#0c111c;color:white;border:1px solid #4c5165;border-radius:10px;padding:12px;min-width:0;width:100%;outline-offset:3px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--gold);border-color:var(--gold)}
+input::placeholder,textarea::placeholder{color:#8a91a5}
+input[type=url]{direction:ltr;text-align:left}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.note{color:var(--muted);font-size:13px;margin:8px 0}
+button{font:inherit;cursor:pointer;border-radius:10px;padding:10px 15px;font-weight:700;border:1px solid #6a5c43;background:#27212b;color:var(--gold)}
+button.primary{background:var(--gold);color:#1c1720;border-color:var(--gold)}
+button.ghost{background:#192031;color:#dfdfe7;border-color:#4f566a}
+button.danger{color:var(--bad);border-color:#553b45;background:#2b1c26}
+button:disabled{opacity:.45;cursor:not-allowed}
+.actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.season{border:1px solid #49516a;border-radius:14px;padding:15px;margin:16px 0;background:var(--card)}
+.season-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.season-head h3{margin:0;color:var(--gold);font-size:18px}
+.episode{display:grid;grid-template-columns:minmax(90px,auto) 1fr minmax(120px,145px) auto;align-items:end;gap:10px;margin:12px 0;padding:10px 0;border-bottom:1px solid #35394b}
+.episode:last-child{border-bottom:none}
+.episode-label{padding-bottom:10px;color:#d2d4dd;font-weight:650;white-space:nowrap}
+.episode label{min-width:0}
+.bulk{margin-top:10px;border-top:1px solid #3c4255;padding-top:17px}
+.bulk textarea{min-height:92px;resize:vertical}
+footer{display:flex;gap:13px;align-items:center;flex-wrap:wrap;position:sticky;bottom:0;padding:12px;border:1px solid #484453;background:#151821ee;backdrop-filter:blur(12px);border-radius:15px}
+footer button{min-width:160px}
+.result{padding:12px 15px;border-radius:11px;background:#142c25;color:var(--good);border:1px solid #426454;margin:16px 0}
+.error{background:#331e25;color:#ffb9b9;border-color:#724151}
+.hidden{display:none!important}
+#loading{color:var(--muted);padding:40px;text-align:center}
+@media(max-width:720px){.grid{grid-template-columns:1fr}.episode{grid-template-columns:1fr 125px}.episode-label{grid-column:1/-1;padding:0}.episode label:first-of-type{grid-column:1;}.episode .danger{align-self:end}main{padding:12px 12px 90px}.panel{padding:14px}footer button{min-width:0}}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div class="brand"><img src="../web/assets/logo.svg" alt=""><div><h1>إضافة مسلسل سريعًا</h1><div class="subtitle">العز TV — المسلسل ← المواسم ← الحلقات في حفظ واحد</div></div></div>
+  <div class="actions"><span class="pill">نشر تلقائي</span><a href="index.html#series">العودة لإدارة المسلسلات</a><a href="index.html#seasons">المواسم والحلقات</a></div>
+</header>
+<div id="loading">جارٍ التحقق من جلسة المسؤول…</div>
+<div id="authError" class="result error hidden"></div>
+<div id="studio" class="hidden">
+<section class="panel">
+<h2>1. اختر المسلسل أو أدخل اسمه</h2>
+<div class="grid">
+<label>العمل المطلوب
+<select id="seriesSelect"><option value="">+ مسلسل جديد</option></select></label>
+<label id="seriesTitleWrap">اسم المسلسل الجديد
+<input id="seriesTitle" type="text" maxlength="250" placeholder="مثال: مسلسل جديد" autocomplete="off"></label>
+</div>
+<p class="note" id="seriesHint">إذا اخترت مسلسلًا موجودًا، تُضاف الحلقات إليه دون إنشاء مسلسل مكرر.</p>
+</section>
+<section class="panel">
+<h2>2. المواسم والحلقات</h2>
+<div class="actions" style="margin-bottom:10px">
+<label style="min-width:220px" id="existingSeasonWrap" class="hidden">أضف إلى موسم موجود
+<select id="existingSeasonSelect"></select></label>
+<button id="addSeason" class="ghost" type="button">+ موسم جديد</button>
+<button id="addEpisode" class="ghost" type="button">+ حلقة جديدة</button>
+</div>
+<p class="note">الأسماء والأرقام تُنشأ تلقائيًا. أدخل رابط الحلقة والجودة فقط. تستطيع إضافة عدة مواسم وحلقات في نفس الحفظ.</p>
+<div id="seasonGroups"></div>
+<div class="bulk">
+<label>إضافة عدة روابط دفعة واحدة للموسم الحالي (رابط في كل سطر)
+<textarea id="bulkLinks" dir="ltr" placeholder="https://example.com/episode1.m3u8&#10;https://example.com/episode2.mp4"></textarea></label>
+<div class="actions" style="margin-top:10px">
+<label style="min-width:150px">جودة الروابط الملصوقة
+<select id="bulkQuality"><option>HD</option><option>FHD</option><option>4K</option><option>SD</option><option>720P</option><option>1080P</option><option>AUTO</option></select></label>
+<button id="addBulk" type="button">إضافة الروابط كحلقات</button>
+</div>
+</div>
+</section>
+<div id="result" role="status" aria-live="polite"></div>
+<footer>
+<button id="save" type="button" class="primary">حفظ ونشر الكل</button>
+<span id="counter" class="note">جاهز لإضافة الحلقات</span>
+<span class="note">لا يتم تسجيل ترخيص أو تأكيد حقوق تلقائيًا؛ الروابط المعطلة تُخفى عند اكتشافها.</span>
+</footer>
+</div>
+</main>
+<script src="config.js?v=quick-series-20261101"></script>
+<script src="series-quick.js?v=quick-series-20261101"></script>
+</body>
+</html>
