@@ -83,6 +83,64 @@ public final class TVHomeActivity extends Activity {
         }});return b;
     }
     private String value(JSONObject item,String key){return item==null?"":item.optString(key,"");}
+
+    /** Country reflects production metadata, not dubbed language or guessed origin. */
+    private boolean isArabOrigin(String country){
+        return ("SA EG AE KW BH QA OM YE IQ JO LB SY PS MA DZ TN LY SD SO MR DJ KM ")
+            .contains(country.toUpperCase(Locale.US)+" ") && country.length()==2;
+    }
+    private boolean matchesCountry(JSONObject item,String code){
+        String country=value(item,"country_code").toUpperCase(Locale.US);
+        if("ARAB".equals(code))return isArabOrigin(country);
+        if("FOREIGN".equals(code))return country.length()==2&&!isArabOrigin(country);
+        return country.equals(code);
+    }
+    private boolean hasGenre(JSONObject item,String key){
+        if(item==null)return false;
+        for(String name:new String[]{"genre_tags","auto_tags"}){
+            JSONArray list=item.optJSONArray(name);
+            if(list==null)continue;
+            for(int i=0;i<list.length();i++)if(key.equals(list.optString(i)))return true;
+        }
+        return false;
+    }
+    private ArrayList<JSONObject> originItems(ArrayList<JSONObject> list,String code){
+        ArrayList<JSONObject> filtered=new ArrayList<JSONObject>();
+        for(JSONObject item:list)if(matchesCountry(item,code))filtered.add(item);
+        return filtered;
+    }
+    private ArrayList<JSONObject> genreItems(ArrayList<JSONObject> list,String key){
+        ArrayList<JSONObject> filtered=new ArrayList<JSONObject>();
+        for(JSONObject item:list)if(hasGenre(item,key))filtered.add(item);
+        return filtered;
+    }
+    private void classifiedHomeShelves(){
+        shelf("مسلسلات تركية","مباشرة من بيانات بلد الإنتاج",originItems(series,"TR"),18);
+        shelf("مسلسلات أجنبية","أعمال عالمية متاحة",originItems(series,"FOREIGN"),18);
+        shelf("مسلسلات كورية","دراما وإنتاج كوري",originItems(series,"KR"),18);
+        shelf("مسلسلات عربية","دراما من الدول العربية",originItems(series,"ARAB"),18);
+        shelf("أفلام تركية","السينما التركية",originItems(movies,"TR"),18);
+        shelf("أفلام أجنبية","أعمال دولية",originItems(movies,"FOREIGN"),18);
+        shelf("أفلام هندية","السينما الهندية",originItems(movies,"IN"),18);
+        shelf("أفلام أمريكية","السينما الأمريكية",originItems(movies,"US"),18);
+        classifiedGenreShelves(movies,"أفلام",12);
+        classifiedGenreShelves(series,"مسلسلات",12);
+    }
+    private void classifiedGenreShelves(ArrayList<JSONObject> list,String label,int limit){
+        String[][] genres={
+            {"anime","أنمي"},{"animation","كرتون ورسوم متحركة"},
+            {"documentary","وثائقي"},{"crime","جريمة"},{"war","حرب"},
+            {"action","أكشن"},{"thriller","إثارة وتشويق"},
+            {"drama","دراما"},{"comedy","كوميديا"},{"horror","رعب"},
+            {"mystery","غموض"},{"romance","رومانسي"},
+            {"history","تاريخي"},{"fantasy","فانتازيا"},
+            {"scifi","خيال علمي"},{"kids","أطفال"}
+        };
+        for(String[] genre:genres){
+            shelf(label+" "+genre[1],"مصنّف تلقائيًا أو من لوحة الإدارة",genreItems(list,genre[0]),limit);
+        }
+    }
+
     private String label(JSONObject item){
         String result=value(item,"title_ar");
         if(result.length()==0)result=value(item,"title");return result.length()==0?"بدون عنوان":result;
@@ -236,6 +294,7 @@ public final class TVHomeActivity extends Activity {
             hero();
             shelf("الأفلام","اكتشف أحدث الأعمال المتاحة",movies,14);
             shelf("مسلسلات","مواسم وحلقات مرتبة",series,12);
+            classifiedHomeShelves();
             if(!channels.isEmpty())livePreview();
             ArrayList<JSONObject> sports=new ArrayList<JSONObject>();
             for(JSONObject channel:channels)if("146b8c7f-8e03-45ee-aa4f-2d8ab20e6c95".equals(value(channel,"category_id")))sports.add(channel);
@@ -244,8 +303,22 @@ public final class TVHomeActivity extends Activity {
             for(JSONObject channel:channels)if("f30c2110-ae62-47c4-99e4-b45762bde695".equals(value(channel,"category_id")))beIN.add(channel);
             shelf("قنوات beIN SPORTS الرسمية","قد تحتاج إلى اشتراك • تفتح موقع beIN الرسمي",beIN,20);
             shelf("يوتيوب الأطفال","مقاطع يوتيوب الرسمية المنشورة",youtubeVideos,14);
-        }else if("movies".equals(section))grid("الأفلام",movies);
-        else if("series".equals(section))grid("المسلسلات",series);
+        }else if("movies".equals(section)){
+            heading("الأفلام بحسب التصنيف","تظهر قوائم الأعمال المتوفرة تلقائيًا، مع إمكانية التنقل بالريموت.");
+            shelf("أفلام تركية","بلد الإنتاج: تركيا",originItems(movies,"TR"),30);
+            shelf("أفلام أجنبية","بلد إنتاج غير عربي",originItems(movies,"FOREIGN"),30);
+            shelf("أفلام عربية","بلد إنتاج عربي",originItems(movies,"ARAB"),30);
+            classifiedGenreShelves(movies,"أفلام",20);
+            grid("كل الأفلام",movies);
+        }
+        else if("series".equals(section)){
+            heading("المسلسلات بحسب التصنيف","تُحدّث التصنيفات تلقائيًا عند إضافة حلقات ومسلسلات.");
+            shelf("مسلسلات تركية","بلد الإنتاج: تركيا",originItems(series,"TR"),30);
+            shelf("مسلسلات أجنبية","بلد إنتاج غير عربي",originItems(series,"FOREIGN"),30);
+            shelf("مسلسلات عربية","بلد إنتاج عربي",originItems(series,"ARAB"),30);
+            classifiedGenreShelves(series,"مسلسلات",20);
+            grid("كل المسلسلات",series);
+        }
         else if("live".equals(section))liveGuide();
         else if("youtube".equals(section))grid("مقاطع يوتيوب للأطفال",youtubeVideos);
         else if("kids".equals(section)){
