@@ -14,16 +14,11 @@
 <link rel="icon" href="assets/al-ezz-app-icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="alizz-tv-transparent.png">
 <link rel="manifest" href="manifest.webmanifest?v=direct-streams-only-20261102">
-<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap">
-<link rel="preload" href="css/app.css" as="style">
 <link rel="stylesheet" href="css/app.css?v=quality-select-universal-20261102-1">
 <link rel="stylesheet" href="css/live.css?v=tv-studio-20261102-1">
-<link rel="stylesheet" href="css/unified.css?v=universal-20261102-1">
 <link rel="stylesheet" href="css/kids.css?v=kids-direct-20261102-1">
 <link rel="stylesheet" href="css/cast.css?v=cast-airplay-20261102-1">
+<link rel="stylesheet" href="css/unified.css?v=simple-mobile-20261102-1">
 <script>
 (function () {
   try {
@@ -38,17 +33,10 @@
 </head>
 <body data-boot="loading">
 
-<!-- ============ ambient background ============ -->
-<div class="ambient" aria-hidden="true">
-  <div class="ambient__glow ambient__glow--gold"></div>
-  <div class="ambient__glow ambient__glow--crimson"></div>
-  <div class="ambient__grain"></div>
-</div>
-
 <!-- ============ top bar ============ -->
 <header class="topbar" id="topbar">
   <a class="brand" href="#/home" aria-label="العز TV — الرئيسية">
-    <img src="alizz-tv-transparent.png" alt="العز TV" width="160" height="56" class="brand__mark brand__mark--full">
+    <img src="assets/logo.svg" alt="" width="42" height="42" class="brand__mark"><span class="brand__name">العز <b>TV</b></span>
   </a>
 
   <nav class="nav" id="mainNav" aria-label="التنقل الرئيسي">
@@ -71,8 +59,11 @@
     <button class="iconbtn" id="tvBtn" aria-label="وضع التلفزيون" title="وضع التلفزيون (T)">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2.5"/><path d="M9 21h6M12 17v4"/></svg>
     </button>
-    <a class="iconbtn" href="../admin/" aria-label="لوحة الإدارة" title="استوديو العز">
+    <a class="iconbtn admin-link" href="../admin/" aria-label="لوحة الإدارة" title="استوديو العز">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6"/><path d="M4.5 20c1.4-3.6 4.1-5.2 7.5-5.2s6.1 1.6 7.5 5.2"/></svg>
+    </a>
+    <a class="iconbtn mylist-link" href="#/mylist" title="قائمتي" aria-label="قائمتي">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 8.2c0 4.1-8.8 10.1-8.8 10.1S3.2 12.3 3.2 8.2a4.4 4.4 0 018.8-.3 4.4 4.4 0 018.8.3z"/></svg>
     </a>
   </div>
 </header>
@@ -82,29 +73,13 @@
   <!-- skeletons injected by JS on first paint -->
 </main>
 
-<footer class="footer">
-  <div class="footer__brand">
-    <img src="alizz-tv-transparent.png" width="124" height="56" alt="العز TV" class="footer__logo">
-    <div>
-      <strong>العز TV</strong>
-      <span>كل الحكايات تبدأ بمشهد</span>
-    </div>
-  </div>
-  <p class="footer__legal">
-    منصة عرض لمحتوى مرخّص وروابط مصادر رسمية. توفر العناوين مرتبط بمصدر المحتوى وحقوقه.
-    <span>© <span id="year">2026</span> AL EZZ TV — v10.0.0</span>
-  </p>
-  <div class="footer__links">
-    <a href="#/home">الرئيسية</a><a href="#/movies">أفلام</a><a href="#/series">مسلسلات</a><a href="#/live">مباشر</a><a href="../admin/">الاستوديو</a>
-  </div>
-</footer>
-<nav class="app-dock" aria-label="التنقل بين أقسام العز TV">
-  <a href="#/home" data-dock="home"><span aria-hidden="true">⌂</span><small>الرئيسية</small></a>
-  <a href="#/movies" data-dock="movies"><span aria-hidden="true">▣</span><small>أفلام</small></a>
-  <a href="#/series" data-dock="series"><span aria-hidden="true">▤</span><small>مسلسلات</small></a>
-  <a href="#/live" data-dock="live"><span aria-hidden="true">◉</span><small>مباشر</small></a>
-  <a href="#/kids" data-dock="kids"><span aria-hidden="true">★</span><small>أطفال</small></a>
-  <a href="#/youtube" data-dock="youtube"><span aria-hidden="true">▶</span><small>فيديو</small></a>
+<nav class="app-dock" aria-label="التنقل بين الأقسام">
+  <a href="#/home" data-dock="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 12 3l9 8v9h-6v-6H9v6H3z"/></svg><small>الرئيسية</small></a>
+  <a href="#/movies" data-dock="movies"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 9h18M8 5l3 4m3-4 3 4"/></svg><small>أفلام</small></a>
+  <a href="#/series" data-dock="series"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4v16m5-11 4 3-4 3z"/></svg><small>مسلسلات</small></a>
+  <a href="#/live" data-dock="live"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M8 3l4 3 4-3M8 22h8"/></svg><small>مباشر</small></a>
+  <a href="#/kids" data-dock="kids"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 10h.01M16 10h.01M8 15q4 4 8 0"/></svg><small>أطفال</small></a>
+  <a href="#/youtube" data-dock="youtube"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="4"/><path d="m10 9 5 3-5 3z"/></svg><small>فيديو</small></a>
 </nav>
 <div class="install-guide" id="installGuide" role="dialog" aria-modal="true" aria-labelledby="installGuideTitle" hidden>
  <div class="install-guide__shade" data-dismiss-install></div>
@@ -227,7 +202,7 @@
 <!-- ============ activation gate ============ -->
 <div class="gate" id="gate" hidden>
   <div class="gate__card">
-    <img src="alizz-tv-transparent.png" width="164" height="90" alt="العز TV" class="gate__mark">
+    <img src="assets/logo.svg" width="90" height="90" alt="العز TV" class="gate__mark">
     <p class="eyebrow">تفعيل لمرة واحدة</p>
     <h1>رمز الدخول إلى العز</h1>
     <p class="gate__sub">أدخل الرمز المكوّن من ستة أرقام. يُحفظ التفعيل على هذا الجهاز ولا يُطلب مرة أخرى.</p>

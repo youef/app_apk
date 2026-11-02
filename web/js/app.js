@@ -169,7 +169,7 @@
   /* ---------------------------------------------------------------- hero */
 
   function renderHero() {
-    heroItems = Api.featured();
+    heroItems = Api.featured().slice(0, 5);
     if (!heroItems.length) return "";
     var item = heroItems[0];
     return heroHTML(item);
@@ -233,17 +233,11 @@
   }
 
   function startHeroRotation() {
+    // No automatic slider or layout shifts; people can change slides manually.
     clearInterval(heroTimer);
-    heroTimer = setInterval(function () {
-      if (document.hidden) return;
-      if (!$("hero")) return;
-      if (document.querySelector(".sheet:not([hidden]), .searchpanel:not([hidden]), .player:not([hidden])")) return;
-      showSlide(heroIndex + 1);
-    }, 9000);
   }
 
-
-  var Explore=window.AlezzExplore;
+    var Explore=window.AlezzExplore;
   function genreLabel(key){return Explore.genreLabel(key);}
   function itemMatches(item,choice){return Explore.matches(item,choice);}
   function classifiedFilterBar(list,selected,section){return Explore.picker(list,selected,section,catalog.categories);}
@@ -291,63 +285,23 @@
   }
 
   function viewHome() {
-    var rows = [];
-    rows.push(continueRail());
-    (catalog.rows || []).slice(0, 4).forEach(function (row) {
-      rows.push(railHTML(row.title, row.items, { subtitle: row.subtitle }));
-    });
-    rows.push(railHTML("أفلام تستحق المشاهدة", catalog.movies.filter(function (m) { return m.poster || m.description; }).slice(0, 18), { more: "#/movies", subtitle: "مختارات من المكتبة المرخّصة" }));
-    rows.push(railHTML("مسلسلات وحكايات", catalog.series, { more: "#/series", subtitle: "مواسم وحلقات متتابعة" }));
-    [["series","country:TR","مسلسلات تركية"],["series","origin:foreign","مسلسلات أجنبية"],
-     ["series","country:KR","مسلسلات كورية"],["series","origin:arab","مسلسلات عربية"],
-     ["movies","country:TR","أفلام تركية"],["movies","origin:foreign","أفلام أجنبية"],
-     ["movies","country:IN","أفلام هندية"],["movies","country:US","أفلام أمريكية"]].forEach(function(row){
-      var matches=(row[0]==="movies"?catalog.movies:catalog.series).filter(function(x){return itemMatches(x,row[1]);}).slice(0,18);
-      if(matches.length)rows.push(railHTML(row[2],matches,{more:"#/"+row[0]+"/"+encodeURIComponent(row[1])}));
-    });
-    ["anime","animation","documentary","crime","war","action","comedy","horror","drama","romance","scifi"].forEach(function(tag){
-      ["movies","series"].forEach(function(type){
-        var matches=(type==="movies"?catalog.movies:catalog.series).filter(function(x){return itemMatches(x,"genre:"+tag);}).slice(0,18);
-        if(matches.length)rows.push(railHTML((type==="movies"?"أفلام ":"مسلسلات ")+genreLabel(tag),matches,{
-          more:"#/"+type+"/"+encodeURIComponent("genre:"+tag)
-        }));
-      });
-    });
-
-    var channelGroups = [
-      ["روتانا — القنوات الرسمية", function(c){return /روتانا|LBC/i.test(c.title);}],
-      ["قنوات مصرية", function(c){return c.country==="EG";}],
-      ["قنوات مغربية", function(c){return c.country==="MA";}],
-      ["قنوات أردنية", function(c){return c.country==="JO";}],
-      ["قنوات أفلام وأكشن", function(c){return (c.genreTags||[]).some(function(t){return t==="movies"||t==="action";});}],
-      ["قنوات الكوميديا", function(c){return (c.genreTags||[]).indexOf("comedy")!==-1;}],
-      ["قنوات الرومانسية", function(c){return (c.genreTags||[]).indexOf("romance")!==-1;}],
-      ["قنوات المسلسلات والدراما", function(c){return (c.genreTags||[]).some(function(t){return t==="series"||t==="drama";});}]
-    ];
-    channelGroups.forEach(function(group){
-      var matches=catalog.channels.filter(group[1]).slice(0,18);
-      if(matches.length)rows.push(railHTML(group[0],matches,{more:"#/live",subtitle:"مصادر مباشرة أو روابط رسمية حسب حقوق القناة"}));
-    });
-    rows.push(railHTML("على الهواء الآن", catalog.channels.filter(function(c){return c.live;}), { more: "#/live", subtitle: "قنوات ذات روابط بث مباشر" }));
-    rows.push(railHTML("وثائقيات من العالم", catalog.channels.filter(function(c){return c.categoryId==="d7070bfe-19e2-403d-97de-ef2d26614624";}).slice(0,18), { more: "#/live/d7070bfe-19e2-403d-97de-ef2d26614624", subtitle: "طبيعة وتاريخ وعلوم وثقافات — يتوفر البث حسب منطقتك" }));
-    rows.push(railHTML("رياضة حول العالم", catalog.channels.filter(function(c){return c.categoryId==="146b8c7f-8e03-45ee-aa4f-2d8ab20e6c95";}).slice(0,20), { more: "#/live/146b8c7f-8e03-45ee-aa4f-2d8ab20e6c95", subtitle: "قنوات رياضية دولية • بث متاح حسب الدولة" }));
-    rows.push(railHTML("beIN SPORTS — القنوات الرسمية", catalog.channels.filter(function(c){return c.categoryId==="f30c2110-ae62-47c4-99e4-b45762bde695";}).slice(0,20), { more: "#/live/f30c2110-ae62-47c4-99e4-b45762bde695", subtitle: "روابط مشاهدة رسمية • القنوات المشفرة تتطلب اشتراك beIN" }));
-    var kidsCount = catalog.items.filter(function (i) { return i.kids; }).length;
-    if (kidsCount) rows.push(railHTML("عالم الأطفال", catalog.items.filter(function (i) { return i.kids; }).slice(0, 18), { more: "#/kids", subtitle: "محتوى عائلي آمن" }));
-    if (catalog.youtube.length) rows.push(railHTML("يوتيوب العز", catalog.youtube, { more: "#/youtube", subtitle: "فيديوهات رسمية مختارة" }));
-    rows.push(railHTML("قنوات إخبارية", catalog.channels.filter(function (c) { return /أخبار|بث حي|الجزيرة|العربية|BBC|TRT|فرانس|سي جي تي/i.test(c.title + c.description); }).slice(0, 14)));
-
-    return renderHero() + bannerHTML() + Explore.shortcuts() + rows.join("") + "";
+    var rows = [continueRail()];
+    rows.push(railHTML("أحدث الأفلام", catalog.movies.slice(0, 18), { more: "#/movies" }));
+    rows.push(railHTML("المسلسلات", catalog.series.slice(0, 18), { more: "#/series" }));
+    rows.push(railHTML("قنوات مباشرة", catalog.channels.filter(function(c) { return c.live && c.stream; }).slice(0, 16), { more: "#/live" }));
+    var kids = catalog.items.filter(function(i) { return i.kids; });
+    if (kids.length) rows.push(railHTML("عالم الأطفال", kids.slice(0, 16), { more: "#/kids" }));
+    if (catalog.youtube.length) rows.push(railHTML("الفيديوهات", catalog.youtube.slice(0, 14), { more: "#/youtube" }));
+    return renderHero() + '<div class="home-content">' + rows.join("") + '</div>';
   }
 
-  function pageHead(title, subtitle, count) {
-    return '<div class="pagehead"><h1>' + esc(title) + "</h1>" +
-      (subtitle ? "<p>" + esc(subtitle) + "</p>" : "") +
-      (count != null ? '<p style="margin-top:6px;color:var(--gold);font-size:12px;letter-spacing:2px">' + count + " عمل</p>" : "") +
-      "</div>";
+    function pageHead(title, subtitle, count) {
+    return '<div class="pagehead"><h1>' + esc(title) + '</h1>' +
+      (count != null ? '<span class="pagehead__count">' + count + ' عنوان</span>' : '') +
+      '</div>';
   }
 
-  function filterBar(categories, active, kind) {
+    function filterBar(categories, active, kind) {
     var items = kind === 'noall' ? [] : ['<button class="filter' + (!active ? " is-on" : "") + '" data-filter="">الكل</button>'];
     categories.forEach(function (c) {
       items.push('<button class="filter' + (active === c.id ? " is-on" : "") + '" data-filter="' + esc(c.id) + '">' + esc(c.name_ar) + "</button>");
@@ -357,47 +311,21 @@
 
 
   function experienceHeader(route) {
-    var types={
-      movies:["الأفلام","سينما العز","مكتبة أفلام متنوعة مع تحكم كامل بالصورة وجودة العرض.","🎬"],
-      series:["المسلسلات","عالم الحكايات","مواسم وحلقات متتابعة وانتقال سهل للحلقة التالية.","🎞"],
-      live:["البث المباشر","تلفزيون العز","قنوات ودليل تلفزيوني وتنقل سريع بين المحطات.","📺"],
-      youtube:["يوتيوب","مكتبة الفيديو","مقاطع رسمية بتجربة موحدة تناسب مختلف الشاشات.","▶"],
-      kids:["الأطفال","عالم الصغار","رسوم وأفلام ومسلسلات وقنوات للأطفال.","⭐"],
-      mylist:["قائمتي","مشاهداتي","احفظ أعمالك وتابع من حيث توقفت على هذا الجهاز.","♡"]
-    };
-    var info=types[route];if(!info)return "";
-    var groups={movies:catalog.movies,series:catalog.series,live:catalog.channels,youtube:catalog.youtube,
-      kids:catalog.items.filter(function(i){return i.kids;}),
-      mylist:catalog.items.filter(function(i){return Store.isFavorite(i.key);})};
-    var items=groups[route]||[];
-    var featured=items.filter(function(i){return i.backdrop||i.poster;})[0]||items[0];
-    var media=featured&&(featured.backdrop||featured.poster);
-    var tabs=[["movies","أفلام"],["series","مسلسلات"],["live","مباشر"],["youtube","فيديو"],["kids","أطفال"]];
-    return '<section class="experience-hero" aria-label="'+esc(info[0])+'">'+
-      '<div class="experience-hero__art" style="background:'+(featured?artStyle(featured,true):'linear-gradient(145deg,#221c22,#090d15)')+'">'+
-      (media?'<img loading="lazy" src="'+esc(media)+'" alt="" onerror="this.remove()">':'')+'</div>'+
-      '<div class="experience-hero__content"><span class="experience-hero__eyebrow"><span aria-hidden="true">'+info[3]+
-      '</span> AL EZZ TV · '+esc(info[1])+'</span><h1>'+esc(info[0])+'</h1><p>'+esc(info[2])+'</p>'+
-      '<div class="experience-hero__actions"><button type="button" class="btn btn--gold" data-install-app>⌄ تثبيت العز TV</button>'+
-      '<button type="button" class="btn btn--ghost" data-app-search>⌕ البحث في المكتبة</button>'+
-      '<span class="experience-hero__count">'+items.length+' عمل في المكتبة</span></div></div></section>'+
-      '<nav class="experience-tabs" aria-label="أقسام العز TV">'+tabs.map(function(t){
-        return '<a href="#/'+t[0]+'" class="experience-tabs__link'+(route===t[0]?' is-active':'')+'"'+
-          (route===t[0]?' aria-current="page"':'')+'>'+esc(t[1])+'</a>';
-      }).join('')+'</nav>';
+    // The shared header and page heading replace the former oversized banners and duplicate tabs.
+    return "";
   }
 
-  function viewMovies(filterCat){
-    var list=catalog.movies,shown=list.filter(function(x){return itemMatches(x,filterCat);});
-    var picks=shown.filter(function(m){return m.featured;}).slice(0,16);
-    var resume=shown.filter(function(m){return progressOf(m)>2&&progressOf(m)<97;}).slice(0,16);
-    return pageHead("الأفلام","أفلام تركية وعربية وأجنبية، جريمة وحرب وأنمي وغيرها.",shown.length)+
-      (resume.length?railHTML("أكمل مشاهدة أفلامك",resume,{subtitle:"ارجع إلى المشهد الذي توقفت عنده"}):"")+
-      (picks.length?railHTML("مختارات سينمائية",picks,{subtitle:"مختارات من مكتبة العز"}):"")+
-      '<div class="experience-shelf-title"><h2>استكشف الأفلام</h2><p>اختر التصنيف ثم استمتع بالمشاهدة ملء الشاشة</p></div>'+
-      classifiedFilterBar(list,filterCat,"movies")+(shown.length?gridHTML(shown):emptyHTML("لا توجد أفلام في هذا التصنيف بعد."));
+    function viewMovies(filterCat) {
+    var list = catalog.movies;
+    var shown = list.filter(function(x) { return itemMatches(x, filterCat); });
+    var resume = shown.filter(function(x) { var p = progressOf(x); return p > 2 && p < 97; }).slice(0, 12);
+    return pageHead("الأفلام", "", shown.length) +
+      (resume.length && !filterCat ? railHTML("أكمل المشاهدة", resume) : "") +
+      classifiedFilterBar(list, filterCat, "movies") +
+      (shown.length ? gridHTML(shown) : emptyHTML("لا توجد أفلام في هذا القسم."));
   }
-  function seriesEpisodes(item) {
+
+    function seriesEpisodes(item) {
     var result = [];
     (item.seasons || []).forEach(function (season) {
       (season.episodes || []).forEach(function (ep) { result.push(ep); });
@@ -414,38 +342,17 @@
     return active;
   }
 
-  function viewSeries(filterCat){
-    var list = catalog.series, shown = list.filter(function(x){return itemMatches(x,filterCat);});
-    var featured = shown.filter(function(x){return x.backdrop || x.poster;})[0] || shown[0];
-    var hero = "";
-    if (featured) {
-      var totalSeasons = (featured.seasons || []).length;
-      hero = '<section class="series-spotlight" aria-label="مسلسل مميز">' +
-        '<div class="series-spotlight__art" style="background:' + artStyle(featured,true) + '">' +
-        (featured.backdrop || featured.poster ? '<img src="' + esc(featured.backdrop || featured.poster) + '" alt="" loading="lazy" onerror="this.remove()">' : "") + '</div>' +
-        '<div class="series-spotlight__content"><span class="series-spotlight__eyebrow">✦ مختارات المسلسلات</span>' +
-        '<h2>' + esc(featured.title) + '</h2>' +
-        '<div class="series-spotlight__facts">' +
-        (featured.year ? '<span>' + esc(featured.year) + '</span>' : '') +
-        (totalSeasons ? '<span>' + totalSeasons + ' موسم</span>' : '') +
-        (featured.episodeCount ? '<span>' + featured.episodeCount + ' حلقة</span>' : '') +
-        (featured.category ? '<span>' + esc(featured.category) + '</span>' : '') + '</div>' +
-        (featured.description ? '<p>' + esc(featured.description) + '</p>' : '') +
-        '<div class="series-spotlight__actions"><button class="btn btn--gold" data-play="' + esc(featured.key) + '">▶ ' +
-        (seriesResume(featured) ? 'متابعة المشاهدة' : 'ابدأ المشاهدة') + '</button>' +
-        '<button class="btn btn--ghost" data-detail="' + esc(featured.key) + '">المواسم والحلقات</button></div></div></section>';
-    }
-    var inProgress = shown.filter(function (s) { return !!seriesResume(s); });
-    var totals = shown.reduce(function(acc,s){ acc.seasons += (s.seasons || []).length; acc.episodes += s.episodeCount || 0; return acc; },{seasons:0,episodes:0});
-    return '<div class="series-page">' + pageHead("عالم المسلسلات","قصص تستحق المتابعة — اكتشف المسلسلات والمواسم وشاهد الحلقات بالتسلسل.",shown.length) +
-      hero + '<div class="series-metrics" aria-label="مكتبة المسلسلات"><span><strong>' + shown.length + '</strong> مسلسل</span>' +
-      '<span><strong>' + totals.seasons + '</strong> موسم</span><span><strong>' + totals.episodes + '</strong> حلقة</span></div>' +
-      (inProgress.length ? railHTML("أكمل مسلسلاتك",inProgress,{ subtitle:"استكمل من حيث توقفت",more:"#/series" }) : '') +
-      '<div class="series-library-head"><div><h2>استكشف المسلسلات</h2><p>تصفح حسب النوع والبلد واختر مسلسلك المفضل</p></div></div>' +
-      classifiedFilterBar(list,filterCat,"series") + (shown.length ? gridHTML(shown) : emptyHTML("لا توجد مسلسلات في هذا التصنيف بعد.")) + '</div>';
+  function viewSeries(filterCat) {
+    var list = catalog.series;
+    var shown = list.filter(function(x) { return itemMatches(x, filterCat); });
+    var resume = shown.filter(function(s) { return !!seriesResume(s); }).slice(0, 12);
+    return pageHead("المسلسلات", "", shown.length) +
+      (resume.length && !filterCat ? railHTML("أكمل مسلسلاتك", resume) : "") +
+      classifiedFilterBar(list, filterCat, "series") +
+      (shown.length ? gridHTML(shown) : emptyHTML("لا توجد مسلسلات في هذا القسم."));
   }
 
-  function viewLive(filterCat) {
+    function viewLive(filterCat) {
     if (Live) return Live.render(catalog, filterCat);
     var list = catalog.channels;
     var cats = catalog.categories.filter(function (c) { return list.some(function (x) { return x.categoryId === c.id; }); });
@@ -460,23 +367,17 @@
   }
 
   function viewYoutube(filterCat) {
-    var list=catalog.youtube,shown=list.filter(function(x){return itemMatches(x,filterCat);});
-    var head=pageHead("يوتيوب العز","قصص وحروف وعلوم وأغاني تعليمية.",shown.length)+classifiedFilterBar(list,filterCat,"youtube");
-    if (shown.length) {
-      return head + railHTML("مقاطع مختارة",shown.slice(0,12),{subtitle:"شاهد الفيديو من داخل العز TV"})+
-        '<div class="experience-shelf-title"><h2>جميع المقاطع</h2><p>مكتبة فيديوهات رسمية</p></div>'+
-        '<div class="grid grid--wide">' +
-        shown.map(function (v) { return cardHTML(v, { wide: true }); }).join("") + "</div>";
-    }
-    if (Api.failedTables && Api.failedTables.indexOf("youtube") !== -1) {
-      return head + '<div class="empty"><strong>تعذّر تحميل فيديوهات يوتيوب</strong>' +
-        '<p>تعذّر الاتصال بمكتبة المقاطع. تحقق من الإنترنت ثم أعد المحاولة.</p>' +
-        '<button class="btn btn--gold" type="button" onclick="location.reload()">تحديث المكتبة</button></div>';
-    }
-    return head + emptyHTML("لا فيديوهات منشورة حاليًا.");
+    var list = catalog.youtube;
+    var shown = list.filter(function(x) { return itemMatches(x, filterCat); });
+    var content = pageHead("الفيديوهات", "", shown.length) + classifiedFilterBar(list, filterCat, "youtube");
+    if (shown.length) return content + '<div class="grid grid--wide">' +
+      shown.map(function(x) { return cardHTML(x, {wide:true}); }).join("") + '</div>';
+    if (Api.failedTables && Api.failedTables.indexOf("youtube") !== -1)
+      return content + emptyHTML("تعذّر تحميل الفيديوهات. أعد المحاولة بعد التحقق من الاتصال.");
+    return content + emptyHTML("لا توجد فيديوهات منشورة الآن.");
   }
 
-  function viewMyList(filterCat) {
+    function viewMyList(filterCat) {
     var keys = Store.favorites();
     var items = keys.map(function (k) { return catalog.byKey[k]; }).filter(Boolean);
     var cont = continueWatching().map(function (e) { return e.item; });
@@ -541,7 +442,14 @@
     var map = { home: "home", movies: "movies", series: "series", live: "live", kids: "kids", youtube: "youtube", mylist: "mylist" };
     var active = map[name] || "home";
     Array.prototype.forEach.call(document.querySelectorAll(".nav__link"), function (a) {
-      a.classList.toggle("is-active", a.getAttribute("data-nav") === active);
+      var selected = a.getAttribute("data-nav") === active;
+      a.classList.toggle("is-active", selected);
+      if (selected) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+    });
+    Array.prototype.forEach.call(document.querySelectorAll(".app-dock [data-dock]"), function(a) {
+      var selected = a.getAttribute("data-dock") === active;
+      a.classList.toggle("is-active", selected);
+      if (selected) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
   }
 
@@ -886,7 +794,7 @@
   function initTvMode() {
     var param = /[?&]tv=1/.test(location.search);
     var stored = Store.pref("tv", null);
-    var auto = window.matchMedia && window.matchMedia("(hover: none) and (min-width: 900px)").matches;
+    var auto = false; // Touch tablets must not automatically enter remote-control mode.
     if (param || stored === true || (stored === null && auto)) setTvMode(true, true);
   }
 
@@ -1121,7 +1029,7 @@
       document.addEventListener(ev, bump, { passive: true });
     });
 
-    $("year").textContent = new Date().getFullYear();
+    if ($("year")) $("year").textContent = new Date().getFullYear();
   }
 
   /* ---------------------------------------------------------------- boot */

@@ -31,37 +31,38 @@ function groups(list,section,categories){
  return result;
 }
 function picker(list,active,section,categories){
- list=list||[];var isLive=section==="live",attr=isLive?"data-live-filter":"data-filter";
+ list=list||[];
+ var attr=section==="live"?"data-live-filter":"data-filter";
  var sections=groups(list,section,categories),all=[];
  sections.forEach(function(g){all=all.concat(g.items);});
- var picks=section==="youtube"?["topic:stories","topic:animals","topic:science","topic:songs","topic:letters"]:
- section==="kids"?["kind:channel","kind:movie","kind:series","genre:animation","genre:anime"]:
+ var picks=section==="youtube"?["topic:stories","topic:animals","topic:science","topic:songs"]:
+ section==="kids"?["kind:channel","kind:movie","kind:series"]:
  section==="live"?["origin:arab","origin:foreign","genre:sports","genre:documentary"]:
- section==="mylist"?["kind:movie","kind:series","kind:channel"]:
- ["origin:foreign","country:TR","genre:action","genre:crime","genre:comedy","genre:anime","genre:documentary","genre:war"];
+ section==="mylist"?["kind:movie","kind:series"]:
+ ["origin:arab","origin:foreign","country:TR","genre:action","genre:comedy","genre:drama"];
  var quick=[];
- picks.forEach(function(id){var x=all.filter(function(y){return y.id===id&&y.count>0;})[0];if(x&&quick.length<7)quick.push(x);});
+ picks.forEach(function(id){var x=all.filter(function(y){return y.id===id&&y.count>0;})[0];if(x&&quick.length<6)quick.push(x);});
  var selected=all.filter(function(x){return x.id===active;})[0];
- var html='<section class="browse-panel" aria-label="خيارات التصنيف">'+
- '<div class="browse-panel__head"><div><span class="browse-panel__eyebrow">AL EZZ · DISCOVER</span><h2>اكتشف حسب ذوقك</h2></div>'+
- '<span class="browse-panel__count">'+count(list,active)+' من '+list.length+' عنوان</span></div>'+
- '<div class="browse-panel__quick" aria-label="تصنيفات سريعة">'+
- '<button type="button" '+attr+'="" class="browse-pill'+(!active?' is-on':'')+'" aria-pressed="'+(!active)+'">الكل</button>'+
- quick.map(function(x){return '<button type="button" '+attr+'="'+esc(x.id)+'" class="browse-pill'+(active===x.id?' is-on':'')+
- '" aria-pressed="'+(active===x.id)+'">'+esc(x.label)+'</button>';}).join("")+'</div>'+
- '<div class="browse-panel__controls">';
- sections.forEach(function(section){
- html+='<label class="browse-select"><span>'+esc(section.name)+'</span><select data-browse-select="'+(isLive?'live':'main')+
- '" aria-label="'+esc(section.name)+'"><option value="">اختر '+esc(section.name)+'</option>'+
- section.items.map(function(x){return '<option value="'+esc(x.id)+'"'+(active===x.id?' selected':'')+
- (x.count===0&&x.id!==active?' disabled':'')+'>'+esc(x.label)+' · '+x.count+'</option>';}).join("")+'</select></label>';
+ var present=quick.some(function(x){return x.id===active;});
+ var html='<section class="browse-panel" aria-label="تصفية المكتبة"><div class="browse-panel__quick">'+
+ '<button type="button" '+attr+'="" class="browse-pill'+(!active?' is-on':'')+'">الكل</button>'+
+ quick.map(function(x){return '<button type="button" '+attr+'="'+esc(x.id)+'" class="browse-pill'+(active===x.id?' is-on':'')+'">'+esc(x.label)+'</button>';}).join('');
+ if(active&&!present) html+='<button type="button" class="browse-pill is-on" aria-current="true">'+esc(selected?selected.label:"محدد")+'</button>';
+ html+='</div><details class="browse-advanced"><summary>فلاتر إضافية</summary><div class="browse-panel__controls">';
+ sections.forEach(function(g){
+  var options=g.items.filter(function(x){return x.count>0||x.id===active;});
+  if(!options.length)return;
+  html+='<label class="browse-select"><span>'+esc(g.name)+'</span><select data-browse-select="'+(section==="live"?"live":"main")+'" aria-label="'+esc(g.name)+'">'+
+  '<option value="">الكل</option>'+
+  options.map(function(x){return '<option value="'+esc(x.id)+'"'+(active===x.id?' selected':'')+'>'+esc(x.label)+' ('+x.count+')</option>';}).join('')+
+  '</select></label>';
  });
- html+='</div>';
- if(active)html+='<div class="browse-panel__selected"><span>تصفية حسب <b>'+esc(selected?selected.label:"التصنيف المختار")+
- '</b></span><button type="button" '+attr+'="">إزالة التصفية ×</button></div>';
- return html+'</section>';
+ html+='</div></details></section>';
+ return html;
 }
-function shortcuts(){
+
+
+  function shortcuts(){
  var items=[["movies","","أفلام","كل الأفلام"],["series","","مسلسلات","كل الحلقات"],["movies","genre:action","أكشن","حماس ومغامرة"],
  ["movies","genre:crime","جريمة","تحقيق وغموض"],["movies","genre:documentary","وثائقي","قصص حقيقية"],
  ["series","country:TR","تركي","مسلسلات تركية"],["movies","genre:anime","أنمي","عالم الأنمي"],

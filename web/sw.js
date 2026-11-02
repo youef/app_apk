@@ -1,8 +1,8 @@
 /* Al Ezz TV — cache app shell only, never streamed video or external APIs. */
-var CACHE="alezz-shell-direct-streams-20261102-v2";
+var CACHE="alezz-shell-simple-mobile-20261102-v3";
 var BASE=self.registration.scope;
 var FILES=[
- "./","./index.html","./manifest.webmanifest","./alizz-tv-transparent.png",
+ "./","./index.html","./manifest.webmanifest","./assets/logo.svg",
  "./assets/al-ezz-app-icon.svg","./css/app.css","./css/unified.css","./css/live.css",
  "./js/legacy-polyfills.js","./js/config.js","./js/api.js","./js/explore.js",
  "./js/store.js","./js/app.js","./js/player.js","./js/live.js","./js/kids.js","./js/cast.js","./js/install.js","./css/kids.css","./css/cast.css",
