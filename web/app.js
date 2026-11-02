@@ -556,14 +556,18 @@
      holder.append(list);
      const display=async()=>{
        list.replaceChildren(el("p","detail-desc","جارٍ تحميل الحلقات..."));
-       const episodes=(await api("aseel_episodes","select=*&season_id=eq."+encodeURIComponent(picker.value)+"&order=number.asc&limit=100") || []).filter(x => playable(x,"episode"));
+       // Keep every published episode in the list, even while its streaming
+       // rights are pending. Rights review must not look like deleted content.
+       const episodes=(await api("aseel_episodes","select=*&season_id=eq."+encodeURIComponent(picker.value)+"&order=number.asc&limit=100") || []).filter(x => x.status==="published");
        list.replaceChildren();
-       if (!episodes?.length) {list.append(el("p","detail-desc","لا توجد حلقات منشورة حاليًا."));return;}
+       if (!episodes.length) {list.append(el("p","detail-desc","لا توجد حلقات محفوظة ومنشورة في هذا الموسم."));return;}
        episodes.forEach(ep=>{
-         const b=el("button","episode");
-         b.append(el("span","",ep.number+". "+ep.title_ar));
-         b.append(el("small","",ep.duration_minutes?ep.duration_minutes+" دقيقة":"▶ مشاهدة"));
-         b.onclick=()=>startPlayer(ep,"episode");
+         const ready=playable(ep,"episode");
+         const b=el(ready?"button":"div","episode"+(ready?"":" episode--pending"));
+         b.append(el("span","",ep.number+". "+(ep.title_ar||("الحلقة "+ep.number))));
+         b.append(el("small","",ready?(ep.duration_minutes?ep.duration_minutes+" دقيقة":"▶ مشاهدة"):"بانتظار اعتماد حقوق العرض"));
+         if (ready) b.onclick=()=>startPlayer(ep,"episode");
+         else b.setAttribute("aria-label","الحلقة "+ep.number+" محفوظة لكنها غير متاحة للتشغيل قبل اعتماد الحقوق");
          list.append(b);
        });
      };
