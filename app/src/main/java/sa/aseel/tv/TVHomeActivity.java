@@ -315,7 +315,7 @@ public final class TVHomeActivity extends Activity {
                     focused?RED:0xFF474052,19));
                 tile.setScaleX(focused?1.035f:1f);
                 tile.setScaleY(focused?1.035f:1f);
-                tile.setElevation(focused?dp(8):0f);
+                if(android.os.Build.VERSION.SDK_INT>=21)tile.setElevation(focused?dp(8):0f);
             }
         });
         tile.setOnClickListener(new View.OnClickListener(){public void onClick(View v){goTo(target);}});
@@ -345,7 +345,12 @@ public final class TVHomeActivity extends Activity {
                 LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(cellHeight),1);
                 lp.setMargins(dp(7),dp(7),dp(7),dp(7));
                 line.addView(tile,lp);
-                if(j==0&&k==0)tile.requestFocus();
+                if(j==0&&k==0){
+                    final View primaryTile=tile;
+                    ui.post(new Runnable(){public void run(){
+                        if(unlocked&&"home".equals(section))primaryTile.requestFocus();
+                    }});
+                }
             }
             content.addView(line,space(-1,-2,1));
         }
@@ -416,7 +421,7 @@ public final class TVHomeActivity extends Activity {
         loading=pendingRequests>0;
         status.setText(loading?"◌ تحميل المكتبة...":lastLoadError.length()>0
             ?"⚠ بعض الأقسام غير متاحة":"● المكتبة متصلة");
-        if(!detailVisible)render();
+        if(!detailVisible && !loading)render();
     }
     private void heading(String title,String note){
         TextView h=text(title,23,WHITE,true);content.addView(h,space(-1,-2,5));

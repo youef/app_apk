@@ -9,6 +9,8 @@ check("Splash -> welcome -> portal",home.includes("showSplash()")&&home.includes
 check("No viewer PIN or login",!home.includes("PinGate.")&&!home.includes("loginUser")&&!home.includes("activation_code"));
 check("Six actionable RTL tiles",["series","movies","live","kids","favorites","settings"].every(k=>home.includes('"'+k+'"'))&&home.includes("private void portal()")&&home.includes("dashboardTile("));
 check("Real remote focus on native tiles",home.includes("tile.setOnFocusChangeListener")&&home.includes("tile.setOnClickListener")&&home.includes("setScaleX"));
+check("Android 4.4 guard avoids unsupported View.setElevation",home.includes("SDK_INT>=21")&&home.includes("tile.setElevation"));
+check("Catalog refresh avoids re-rendering portal during four concurrent requests",home.includes("!detailVisible && !loading"));
 check("Native catalog from Supabase",home.includes("catalog.listQuery(")&&home.includes("aseel_seasons")&&home.includes("aseel_episodes"));
 check("Native player",home.includes("CinemaPlayerActivity.class")&&player.includes("ExoPlayer.Builder"));
 check("No external browser for official-link-only channels",home.includes("المحتوى غير قابل للتشغيل داخل التطبيق")&&!home.includes("Intent.ACTION_VIEW"));
