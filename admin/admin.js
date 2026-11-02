@@ -310,6 +310,7 @@
       if (allowed) {
         state.adminVerified = true;
         if (banner) banner.hidden = true;
+        syncBulkDeleteButton();
       } else {
         state.adminVerified = false;
         showAdminWarning('لا يوجد سجل نشط لهذا الحساب في جدول aseel_admins. الجلسة صالحة لكن الكتابة قد تُرفض — راجع صلاحيات المسؤول.');
@@ -741,7 +742,7 @@
     tbody.replaceChildren();
     for (var i = 0; i < 6; i++) {
       var tr = el('tr', { class: 'skeleton-row' });
-      if (tableCfg.table === 'aseel_channels' || isMediaBulkTable(tableCfg)) tr.append(el('td', null, el('span', { class: 'skeleton skeleton-text' })));
+      if (tableCfg.table === 'aseel_channels' || isMediaBulkTable(tableCfg) || isOtherBulkTable(tableCfg)) tr.append(el('td', null, el('span', { class: 'skeleton skeleton-text' })));
       tableCfg.columns.forEach(function (col) {
         var td = el('td');
         td.append(el('span', { class: 'skeleton skeleton-text' + (col.kind === 'poster' ? ' skeleton-poster' : '') }));
