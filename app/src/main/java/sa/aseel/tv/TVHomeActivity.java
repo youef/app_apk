@@ -161,7 +161,15 @@ public final class TVHomeActivity extends Activity {
         if(rows==null)return;
         for(int i=0;i<rows.length();i++){
             JSONObject item=rows.optJSONObject(i);
-            if(item!=null){mark(item,type);target.add(item);}
+            if(item!=null){
+                if("channel".equals(type)){
+                    String liveUrl=value(item,"stream_url");
+                    if(!"stream".equals(value(item,"playback_mode")) ||
+                       !"healthy".equals(value(item,"link_health_status")) ||
+                       !liveUrl.matches("(?i)^https://[^\\s]+\\.(m3u8|mp4)(\\?[^\\s]*)?$"))continue;
+                }
+                mark(item,type);target.add(item);
+            }
         }
     }
     @Override public void onCreate(Bundle state){
@@ -384,7 +392,7 @@ public final class TVHomeActivity extends Activity {
         }});
         background.execute(new Runnable(){public void run(){
             JSONArray data=null;String error="";
-            try{data=catalog.listQuery("aseel_channels","?select=*&status=eq.published&order=rights_status.asc,display_order.asc,created_at.desc&limit=500");}
+            try{data=catalog.listQuery("aseel_channels","?select=*&status=eq.published&playback_mode=eq.stream&link_health_status=eq.healthy&order=display_order.asc,created_at.desc&limit=500");}
             catch(Exception e){error="قنوات: "+CatalogApi.describe(e);}
             final JSONArray rows=data;final String issue=error;
             ui.post(new Runnable(){public void run(){if(token!=generation||!unlocked)return;
