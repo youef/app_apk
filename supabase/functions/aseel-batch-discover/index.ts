@@ -13,7 +13,7 @@ function safe(input,hosts){
 }
 const clean=x=>String(x||"").replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim();
 const att=(s,k)=>{const m=s.match(new RegExp("(?:\\s|^)"+k+"\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s>]+))","i"));return clean(m?.[1]||m?.[2]||m?.[3]||"");};
-function joined(value,base,hosts){try{return safe(new URL(value,base).href,hosts)?.href||""}catch{return "";}}
+function joined(value,base,hosts){if(!value||!String(value).trim())return "";try{return safe(new URL(value,base).href,hosts)?.href||""}catch{return "";}}
 function seq(s){
  let a=String(s||"").match(/\bS(\d{1,2})[\s._-]*E(\d{1,3})\b/i);if(a)return [Number(a[1]),Number(a[2])];
  a=String(s||"").match(/(?:الموسم|season)\D{0,5}(\d{1,2})[\s\S]{0,80}(?:الحلقة|episode|ep)\D{0,5}(\d{1,3})/i);if(a)return [Number(a[1]),Number(a[2])];
