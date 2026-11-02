@@ -28,4 +28,5 @@ t("Movies pass playlist to in-app player",home.includes('putExtra("media_playlis
 t("Episode queue is populated from fetched episodes",home.includes("episodeQueue.addAll(episodes)"));
 t("Movie and episode remote next/previous",player.includes("switchMedia(")&&player.includes("KEYCODE_MEDIA_NEXT")&&player.includes("KEYCODE_MEDIA_PREVIOUS"));
 t("Episodes auto-advance after finishing",player.includes('"episode".equals(mediaKind)')&&player.includes("switchMedia(mediaIndex+1)"));
+t("TV catalog refreshes on foreground after standby",home.includes("CATALOG_REFRESH_INTERVAL_MS")&&home.includes("lastCatalogRefreshAt")&&home.includes("onResume()"));
 console.log("Static remote/format/playlists smoke tests passed. Real device playback is NOT asserted.");

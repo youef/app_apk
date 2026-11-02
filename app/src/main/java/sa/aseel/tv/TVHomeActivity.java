@@ -49,6 +49,8 @@ public final class TVHomeActivity extends Activity {
     private int kidsAge=6,kidsDailyMinutes=60;
     private String lastLoadError="";
     private boolean loading=false,unlocked=false;
+    private static final long CATALOG_REFRESH_INTERVAL_MS=10L*60L*1000L;
+    private long lastCatalogRefreshAt=0L;
     private int generation=0,episodeGeneration=0,pendingRequests=0;
     private String remoteChannelDigits="";
     private final Runnable remoteChannelCommit=new Runnable(){public void run(){
@@ -222,6 +224,7 @@ public final class TVHomeActivity extends Activity {
     }
     private void loadCatalog(){
         if(loading || !unlocked)return;
+        lastCatalogRefreshAt=android.os.SystemClock.elapsedRealtime();
         loading=true;pendingRequests=4;lastLoadError="";status.setText("◌ تحديث المكتبة...");
         final int token=++generation;
         background.execute(new Runnable(){public void run(){
@@ -761,6 +764,12 @@ public final class TVHomeActivity extends Activity {
             }
         }
         return super.onKeyDown(code,event);
+    }
+    @Override protected void onResume(){
+        super.onResume();
+        if(unlocked && !loading && android.os.SystemClock.elapsedRealtime()-lastCatalogRefreshAt>=CATALOG_REFRESH_INTERVAL_MS){
+            loadCatalog();
+        }
     }
     @Override protected void onDestroy(){
         generation++;episodeGeneration++;unlocked=false;background.shutdownNow();ui.removeCallbacks(remoteChannelCommit);ui.removeCallbacksAndMessages(null);

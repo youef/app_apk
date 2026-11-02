@@ -1,4 +1,4 @@
-name: Al Ezz TV v12 — Native Living Room & Remote Guide (API19+)
+name: Al Ezz TV v13 — Universal Living Room, Resume Refresh & Remote (API19+)
 on:
   push:
     branches: [main]
@@ -77,13 +77,13 @@ jobs:
           set -euo pipefail
           PACKAGE="sa.alezz.tv.redclassic.b${GITHUB_RUN_ID}a${GITHUB_RUN_ATTEMPT}"
           VERSION_CODE=$(( 10000 + GITHUB_RUN_NUMBER ))
-          VERSION_NAME="12.0.0-native-${GITHUB_RUN_ID}a${GITHUB_RUN_ATTEMPT}"
+          VERSION_NAME="13.0.0-native-${GITHUB_RUN_ID}a${GITHUB_RUN_ATTEMPT}"
           echo "ORG_GRADLE_PROJECT_ezzApplicationId=$PACKAGE" >> "$GITHUB_ENV"
           echo "ORG_GRADLE_PROJECT_ezzVersionCode=$VERSION_CODE" >> "$GITHUB_ENV"
           echo "ORG_GRADLE_PROJECT_ezzVersionName=$VERSION_NAME" >> "$GITHUB_ENV"
           echo "AL_EZZ_EXPECTED_PACKAGE=$PACKAGE" >> "$GITHUB_ENV"
           echo "AL_EZZ_MIN_VERSION=$VERSION_CODE" >> "$GITHUB_ENV"
-          echo "AL_EZZ_RELEASE_TAG=al-ezz-v12-${GITHUB_RUN_ID}-a${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+          echo "AL_EZZ_RELEASE_TAG=al-ezz-v13-${GITHUB_RUN_ID}-a${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
           echo "Unique install package: $PACKAGE"
 
       - name: Bundle official transparent brand artwork offline
@@ -108,6 +108,9 @@ jobs:
         run: |
           node tests/tv-kids-playback-smoke.cjs
           node tests/tv-remote-guide-smoke.cjs
+          node tests/quality-picker-smoke.cjs
+          node tests/kids-world-smoke.cjs
+          node tests/cast-airplay-smoke.cjs
       - name: Build legacy-compatible APK
         shell: bash
         run: |
@@ -121,10 +124,10 @@ jobs:
           }
           if [[ "$SIGNING_READY" == "true" ]]; then
             gradle assembleRelease --no-daemon --stacktrace >>dist/gradle-build.log 2>&1 || { tail -100 dist/gradle-build.log; exit 1; }
-            cp app/build/outputs/apk/release/app-release.apk dist/al-ezz-tv-v11-api19.apk
+            cp app/build/outputs/apk/release/app-release.apk dist/al-ezz-tv-v13-universal-api19.apk
             echo "SIGNING_MODE=protected_permanent_release" >dist/install-metadata.txt
           else
-            cp app/build/outputs/apk/debug/app-debug.apk dist/al-ezz-tv-v11-api19.apk
+            cp app/build/outputs/apk/debug/app-debug.apk dist/al-ezz-tv-v13-universal-api19.apk
             echo "SIGNING_MODE=temporary_debug_fresh_install_only" >dist/install-metadata.txt
           fi
           echo "PACKAGE=$AL_EZZ_EXPECTED_PACKAGE" >>dist/install-metadata.txt
@@ -136,15 +139,15 @@ jobs:
       - name: "Verify universal ABI coverage, Android 4.4 manifest and V1 signature"
         run: |
           set -euo pipefail
-          python3 scripts/verify_apk.py dist/al-ezz-tv-v11-api19.apk | tee dist/build-report.txt
-          sha256sum dist/al-ezz-tv-v11-api19.apk | tee -a dist/build-report.txt
-          test -s dist/al-ezz-tv-v11-api19.apk
+          python3 scripts/verify_apk.py dist/al-ezz-tv-v13-universal-api19.apk | tee dist/build-report.txt
+          sha256sum dist/al-ezz-tv-v13-universal-api19.apk | tee -a dist/build-report.txt
+          test -s dist/al-ezz-tv-v13-universal-api19.apk
       - name: Upload signed installation candidate and diagnostic report
         uses: actions/upload-artifact@v6
         with:
           name: al-ezz-tv-redclassic-fresh-api19-${{ github.run_number }}
           path: |
-            dist/al-ezz-tv-v11-api19.apk
+            dist/al-ezz-tv-v13-universal-api19.apk
             dist/install-metadata.txt
             dist/build-report.txt
             dist/gradle-build.log
@@ -158,13 +161,13 @@ jobs:
         run: |
           set -euo pipefail
           if ! gh release create "$AL_EZZ_RELEASE_TAG" \
-            dist/al-ezz-tv-v11-api19.apk \
+            dist/al-ezz-tv-v13-universal-api19.apk \
             dist/install-metadata.txt \
             dist/build-report.txt \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Al Ezz TV v12 - Native Remote, Channel Guide, DASH, Episodes and Tracks - $AL_EZZ_EXPECTED_PACKAGE" \
-            --notes "Al Ezz TV v12 experimental native Android TV: immersive player, live channels guide and remote CH+/CH-/digits, automatic HLS and DASH variants, MP4/WebM/MKV/TS best effort, audio/subtitle track selection, screen aspect and VOD speed. Independent Kids World uses approved direct MP4/HLS in ExoPlayer with age presets and a local daily watch limit; YouTube remains separate. Unique package per release. Android 4.4.4 install checks passed, physical decoding and stream rights/availability NOT guaranteed." \
+            --title "Al Ezz TV v13 - Universal Remote, Refresh, Channel Guide and Multiformat - $AL_EZZ_EXPECTED_PACKAGE" \
+            --notes "Al Ezz TV v13 experimental universal Android TV APK built from current main: native player, CH+/CH-/digits, guide, HLS/DASH/MP4, tracks, aspect and speed, kids direct-stream controls, and automatic catalog refresh on returning after standby. Web/PWA additionally supports eligible Cast and AirPlay; those controls are not native Android Cast support. Every APK has a unique package ID. Automated API19 and ABI/signature verification pass when this release is published; actual device codecs, older WebView YouTube playback, stream availability and permissions still require testing." \
             --prerelease \
             --latest=false; then
             echo "::warning::GitHub Releases unavailable for this token; signed APK is preserved in the workflow artifact."
@@ -175,5 +178,5 @@ jobs:
         with:
           apiToken: ${{ secrets.APPETIZE_API_TOKEN }}
           publicKey: ${{ secrets.APPETIZE_ANDROID_PUBLIC_KEY }}
-          appFile: dist/al-ezz-tv-v11-api19.apk
+          appFile: dist/al-ezz-tv-v13-universal-api19.apk
           platform: android
