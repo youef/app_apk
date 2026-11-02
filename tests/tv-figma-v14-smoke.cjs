@@ -15,5 +15,5 @@ check("Native catalog from Supabase",home.includes("catalog.listQuery(")&&home.i
 check("Native player",home.includes("CinemaPlayerActivity.class")&&player.includes("ExoPlayer.Builder"));
 check("No external browser for official-link-only channels",home.includes("المحتوى غير قابل للتشغيل داخل التطبيق")&&!home.includes("Intent.ACTION_VIEW"));
 check("Settings are persisted and honored by player",home.includes('prefs.edit().putBoolean("auto_next"')&&player.includes('getBoolean("auto_next",true)'));
-check("V14 APK and API19",workflow.includes("14.0.0-native-")&&workflow.includes("v14-figma-native-api19.apk"));
+check("V14+ APK and API19",/VERSION_NAME="(?:14|15)\.0\.0-native-/.test(workflow)&&workflow.includes("api19.apk"));
 console.log("Figma v14 UI acceptance static checks passed; real TV installation still requires hardware verification.");

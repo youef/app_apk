@@ -293,7 +293,8 @@ public final class CinemaPlayerActivity extends Activity {
         }
         JSONObject previous=PlaybackMemory.entry(this,profile,itemId);
         String preferred=previous==null
-            ?getSharedPreferences("alezz_v11_player",MODE_PRIVATE).getString("quality_"+itemId,"auto")
+            ?("family".equals(profile)?
+                getSharedPreferences("alezz_v11_player",MODE_PRIVATE).getString("quality_"+itemId,"auto"):"auto")
             :previous.optString("quality","auto");
         index=StreamQuality.choose(sources,preferred,Build.VERSION.SDK_INT);
         if(index<0)index=0;
@@ -419,7 +420,8 @@ public final class CinemaPlayerActivity extends Activity {
                     engine.prepare();
                     engine.play();
                     long saved=PlaybackMemory.position(CinemaPlayerActivity.this,profile,itemId);
-                    if(saved<=0)saved=getSharedPreferences("alezz_v11_player",MODE_PRIVATE).getLong("position_"+itemId,0L);
+                    if(saved<=0&&"family".equals(profile))
+                        saved=getSharedPreferences("alezz_v11_player",MODE_PRIVATE).getLong("position_"+itemId,0L);
                     if(!live&&saved>5000 && !getIntent().getBooleanExtra("no_resume",false))
                         engine.seekTo(saved);
                     handler.postDelayed(watchdog,22000);

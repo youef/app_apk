@@ -1025,11 +1025,17 @@ public final class TVHomeActivity extends Activity {
     }
     private String favKey(JSONObject x){return kind(x)+":"+value(x,"id");}
     private boolean isFavorite(JSONObject item){
-        return getSharedPreferences("alizz_v11_favorites",MODE_PRIVATE).getBoolean(favKey(item),false);
+        SharedPreferences prefs=getSharedPreferences("alizz_v11_favorites",MODE_PRIVATE);
+        String profile=PlaybackMemory.activeProfile(this);
+        String scoped=profile+"."+favKey(item);
+        if(prefs.contains(scoped))return prefs.getBoolean(scoped,false);
+        // Family keeps the user's original v14 favorites; kids/guest stay private.
+        return "family".equals(profile)&&prefs.getBoolean(favKey(item),false);
     }
     private void toggleFavorite(JSONObject item){
         SharedPreferences prefs=getSharedPreferences("alizz_v11_favorites",MODE_PRIVATE);
-        prefs.edit().putBoolean(favKey(item),!isFavorite(item)).apply();
+        String scoped=PlaybackMemory.activeProfile(this)+"."+favKey(item);
+        prefs.edit().putBoolean(scoped,!isFavorite(item)).apply();
     }
     @Override public boolean onKeyDown(int code,KeyEvent event){
         if(code==KeyEvent.KEYCODE_BACK && showingWelcome){

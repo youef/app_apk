@@ -9,7 +9,7 @@ const poster=source("app/src/main/java/sa/aseel/tv/PosterLoader.java");
 const flow=source(".github/workflows/android.yml");
 function check(name,ok){assert.ok(ok,name);console.log("PASS | "+name);}
 check("Independent local profiles without viewer login",state.includes('new String')===false&&state.includes('"family"')&&state.includes('"kids"')&&state.includes('"guest"')&&!home.includes("PinGate."));
-check("Save playback time, duration, title, quality and episode identity",state.includes('item.put("position"')&&state.includes('item.put("quality"')&&state.includes('item.put("series_id"')&&player.includes("saveProgress()"));
+check("Save playback time, duration, title, quality and episode identity",state.includes('row.put("position"')&&state.includes('row.put("quality"')&&state.includes('row.put("series_id"')&&player.includes("saveProgress()"));
 check("Watch-history deletion is per item",home.includes('PlaybackMemory.remove(TVHomeActivity.this,profile,id)')&&state.includes('public static void remove('));
 check("Continue watching resolves source from approved catalog",home.includes("showContinueWatching(true)")&&home.includes("findCatalogItem(")&&home.includes("pendingResumeEpisodeId"));
 check("Episode next action on right",player.includes('button("⏭ الحلقة التالية")')&&player.includes("switchMedia(mediaIndex+1)"));
@@ -24,3 +24,4 @@ check("Poster bounded memory and disk cache",poster.includes("MAX_DISK_BYTES=14L
 check("Android KitKat API19 stays supported",flow.includes("v15-smart-cinema-api19.apk")&&flow.includes("15.0.0-native-"));
 check("No new backend credential exposure",!state.includes("SERVICE_ROLE")&&!state.includes("SUPABASE_SERVICE"));
 console.log("PASS | Al Ezz TV v15 static acceptance; media playback still needs physical device verification.");
+\ncheck("Favorites are scoped per local profile",home.includes('String scoped=profile+"."+favKey(item)')&&home.includes('String scoped=PlaybackMemory.activeProfile(this)+"."+favKey(item)'));\n
