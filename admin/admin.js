@@ -89,8 +89,13 @@
     rows: [],
     selectedChannels: {},
     selectedMedia: {},
+    selectedOther: {},
     filteredChannels: [],
     filteredMedia: [],
+    filteredOther: [],
+    deleteTargets: null,
+    deleteBusy: false,
+    deletePhrase: 'حذف',
     bulkBusy: false,
     healthOnly: false,
     scanBusy: false,
@@ -651,11 +656,14 @@
     state.statusFilter = '';
     state.selectedChannels = {};
     state.selectedMedia = {};
+    state.selectedOther = {};
+    state.filteredOther = [];
     if (state.els.bulkPanel) {
-      var bulkAvailable = tableCfg.table === 'aseel_channels' || isMediaBulkTable(tableCfg);
+      var bulkAvailable = tableCfg.table === 'aseel_channels' || isMediaBulkTable(tableCfg) || isOtherBulkTable(tableCfg);
       state.els.bulkPanel.hidden = !bulkAvailable;
       if (tableCfg.table === 'aseel_channels') buildChannelBulkPanel();
       else if (isMediaBulkTable(tableCfg)) buildMediaBulkPanel(tableCfg);
+      else if (isOtherBulkTable(tableCfg)) buildOtherBulkPanel(tableCfg);
       else state.els.bulkPanel.replaceChildren();
     }
     if (state.els.search) state.els.search.value = '';
@@ -681,12 +689,13 @@
   function renderHead(tableCfg) {
     var row = state.els.thead;
     row.replaceChildren();
-    if (tableCfg.table === 'aseel_channels' || isMediaBulkTable(tableCfg)) {
+    if (tableCfg.table === 'aseel_channels' || isMediaBulkTable(tableCfg) || isOtherBulkTable(tableCfg)) {
       var cell = el('th', { scope: 'col', class: 'bulk-check-cell' });
-      var box = el('input', { type: 'checkbox', 'aria-label': 'تحديد كل القنوات في نتائج البحث' });
+      var box = el('input', { type: 'checkbox', 'aria-label': 'تحديد كل العناصر المعروضة في نتائج البحث' });
       box.addEventListener('change', function () {
         if (tableCfg.table === 'aseel_channels') selectFilteredChannels(box.checked);
-        else selectFilteredMedia(box.checked);
+        else if (isMediaBulkTable(tableCfg)) selectFilteredMedia(box.checked);
+        else selectFilteredOther(box.checked);
       });
       cell.append(box);
       row.append(cell);
@@ -765,6 +774,11 @@
       return optionsPromise.then(function () {
         if (token !== state.loadToken) return null;
         state.rows = Array.isArray(rows) ? rows : [];
+        if (isOtherBulkTable(tableCfg)) {
+          var keptOther = {};
+          state.rows.forEach(function (row) { if (state.selectedOther[row.id]) keptOther[row.id] = true; });
+          state.selectedOther = keptOther;
+        }
         if (isMediaBulkTable(tableCfg)) {
           var kept = {};
           state.rows.forEach(function (row) { if (state.selectedMedia[row.id]) kept[row.id] = true; });
@@ -793,7 +807,7 @@
     var tbody = state.els.tbody;
     tbody.replaceChildren();
     var tr = el('tr', { class: 'message-row' });
-    var td = el('td', { colspan: tableCfg.columns.length + (tableCfg.table === 'aseel_channels' || isMediaBulkTable(tableCfg) ? 2 : 1) });
+    var td = el('td', { colspan: tableCfg.columns.length + (tableCfg.table === 'aseel_channels' || isMediaBulkTable(tableCfg) || isOtherBulkTable(tableCfg) ? 2 : 1) });
     td.append(errorCard(describeError(err), function () { loadTable(state.table); }));
     tr.append(td);
     tbody.append(tr);
@@ -851,10 +865,13 @@
       if (state.healthOnly) rows = rows.filter(function (row) { return row.link_health_status === 'broken'; });
     }
     if (isMediaBulkTable(tableCfg)) state.filteredMedia = rows;
+    if (isOtherBulkTable(tableCfg)) state.filteredOther = rows;
     renderRows(tableCfg, rows);
     setCount(rows.length, state.rows.length);
     if (tableCfg.table === 'aseel_channels') syncChannelBulkPanel();
     if (isMediaBulkTable(tableCfg)) syncMediaBulkPanel();
+    if (isOtherBulkTable(tableCfg)) syncOtherBulkPanel();
+    syncBulkDeleteButton();
   }
 
   function renderRows(tableCfg, rows) {
@@ -862,7 +879,7 @@
     tbody.replaceChildren();
     if (!rows.length) {
       var tr = el('tr', { class: 'message-row' });
-      var td = el('td', { colspan: tableCfg.columns.length + (tableCfg.table === 'aseel_channels' || isMediaBulkTable(tableCfg) ? 2 : 1) });
+      var td = el('td', { colspan: tableCfg.columns.length + (tableCfg.table === 'aseel_channels' || isMediaBulkTable(tableCfg) || isOtherBulkTable(tableCfg) ? 2 : 1) });
       var empty = el('div', { class: 'empty' });
       empty.append(el('span', { class: 'empty-icon', html: icon('inbox', 30) }));
       empty.append(el('strong', null, state.rows.length ? 'لا يوجد سجل مطابق' : 'لا يوجد محتوى بعد'));
@@ -902,9 +919,24 @@
         if (checkbox.checked) state.selectedChannels[row.id] = true;
         else delete state.selectedChannels[row.id];
         syncChannelBulkPanel();
+        syncBulkDeleteButton();
       });
       cell.append(checkbox);
       tr.append(cell);
+    }
+    if (isOtherBulkTable(tableCfg)) {
+      var otherCell = el('td', { class: 'bulk-check-cell' });
+      var otherCheck = el('input', { type: 'checkbox', 'aria-label': 'تحديد ' + (row.title_ar || row.name_ar || row.title || row.id) });
+      otherCheck.checked = Boolean(state.selectedOther[row.id]);
+      otherCheck.disabled = state.bulkBusy;
+      otherCheck.addEventListener('change', function () {
+        if (otherCheck.checked) state.selectedOther[row.id] = true;
+        else delete state.selectedOther[row.id];
+        syncOtherBulkPanel();
+        syncBulkDeleteButton();
+      });
+      otherCell.append(otherCheck);
+      tr.append(otherCell);
     }
     if (isMediaBulkTable(tableCfg)) {
       var mediaCell = el('td', { class: 'bulk-check-cell' });
@@ -915,6 +947,7 @@
         if (mediaCheck.checked) state.selectedMedia[row.id] = true;
         else delete state.selectedMedia[row.id];
         syncMediaBulkPanel();
+        syncBulkDeleteButton();
       });
       mediaCell.append(mediaCheck);
       tr.append(mediaCell);
@@ -1201,6 +1234,7 @@
       operations.append(button);
     });
     host.append(operations);
+    appendBulkDeleteAction(host);
     host.append(el('p', { class: 'bulk-status', id: 'mediaBulkReadiness', role: 'status' }, ''));
     host.append(el('p', { class: 'bulk-status', id: 'mediaBulkStatus', role: 'status', 'aria-live': 'polite' },
       'يتم الحفظ على دفعات مع إعادة قراءة البيانات للتأكد من تطبيق كل عملية. المحتوى المعطوب لا يعاد نشره حتى إصلاح الرابط.'));
@@ -1437,6 +1471,7 @@
       actions.append(button);
     });
     host.append(actions);
+    appendBulkDeleteAction(host);
     host.append(el('p', { class: 'bulk-status', id: 'bulkReadiness', role: 'status' }, ''));
     host.append(el('p', { class: 'bulk-status', id: 'bulkStatus', role: 'status', 'aria-live': 'polite' },
       'القنوات الجديدة تُحفظ كمنشورة تلقائيًا. يُظهر هذا القسم فحص الروابط دون بيانات التراخيص.'));
