@@ -341,9 +341,45 @@
   }
 
 
+  function experienceHeader(route) {
+    var types={
+      movies:["الأفلام","سينما العز","مكتبة أفلام متنوعة مع تحكم كامل بالصورة وجودة العرض.","🎬"],
+      series:["المسلسلات","عالم الحكايات","مواسم وحلقات متتابعة وانتقال سهل للحلقة التالية.","🎞"],
+      live:["البث المباشر","تلفزيون العز","قنوات ودليل تلفزيوني وتنقل سريع بين المحطات.","📺"],
+      youtube:["يوتيوب","مكتبة الفيديو","مقاطع رسمية بتجربة موحدة تناسب مختلف الشاشات.","▶"],
+      kids:["الأطفال","عالم الصغار","رسوم وأفلام ومسلسلات وقنوات للأطفال.","⭐"],
+      mylist:["قائمتي","مشاهداتي","احفظ أعمالك وتابع من حيث توقفت على هذا الجهاز.","♡"]
+    };
+    var info=types[route];if(!info)return "";
+    var groups={movies:catalog.movies,series:catalog.series,live:catalog.channels,youtube:catalog.youtube,
+      kids:catalog.items.filter(function(i){return i.kids;}),
+      mylist:catalog.items.filter(function(i){return Store.isFavorite(i.key);})};
+    var items=groups[route]||[];
+    var featured=items.filter(function(i){return i.backdrop||i.poster;})[0]||items[0];
+    var media=featured&&(featured.backdrop||featured.poster);
+    var tabs=[["movies","أفلام"],["series","مسلسلات"],["live","مباشر"],["youtube","فيديو"],["kids","أطفال"]];
+    return '<section class="experience-hero" aria-label="'+esc(info[0])+'">'+
+      '<div class="experience-hero__art" style="background:'+(featured?artStyle(featured,true):'linear-gradient(145deg,#221c22,#090d15)')+'">'+
+      (media?'<img loading="lazy" src="'+esc(media)+'" alt="" onerror="this.remove()">':'')+'</div>'+
+      '<div class="experience-hero__content"><span class="experience-hero__eyebrow"><span aria-hidden="true">'+info[3]+
+      '</span> AL EZZ TV · '+esc(info[1])+'</span><h1>'+esc(info[0])+'</h1><p>'+esc(info[2])+'</p>'+
+      '<div class="experience-hero__actions"><button type="button" class="btn btn--gold" data-install-app>⌄ تثبيت العز TV</button>'+
+      '<button type="button" class="btn btn--ghost" data-app-search>⌕ البحث في المكتبة</button>'+
+      '<span class="experience-hero__count">'+items.length+' عمل في المكتبة</span></div></div></section>'+
+      '<nav class="experience-tabs" aria-label="أقسام العز TV">'+tabs.map(function(t){
+        return '<a href="#/'+t[0]+'" class="experience-tabs__link'+(route===t[0]?' is-active':'')+'"'+
+          (route===t[0]?' aria-current="page"':'')+'>'+esc(t[1])+'</a>';
+      }).join('')+'</nav>';
+  }
+
   function viewMovies(filterCat){
     var list=catalog.movies,shown=list.filter(function(x){return itemMatches(x,filterCat);});
+    var picks=shown.filter(function(m){return m.featured;}).slice(0,16);
+    var resume=shown.filter(function(m){return progressOf(m)>2&&progressOf(m)<97;}).slice(0,16);
     return pageHead("الأفلام","أفلام تركية وعربية وأجنبية، جريمة وحرب وأنمي وغيرها.",shown.length)+
+      (resume.length?railHTML("أكمل مشاهدة أفلامك",resume,{subtitle:"ارجع إلى المشهد الذي توقفت عنده"}):"")+
+      (picks.length?railHTML("مختارات سينمائية",picks,{subtitle:"مختارات من مكتبة العز"}):"")+
+      '<div class="experience-shelf-title"><h2>استكشف الأفلام</h2><p>اختر التصنيف ثم استمتع بالمشاهدة ملء الشاشة</p></div>'+
       classifiedFilterBar(list,filterCat,"movies")+(shown.length?gridHTML(shown):emptyHTML("لا توجد أفلام في هذا التصنيف بعد."));
   }
   function seriesEpisodes(item) {
@@ -426,17 +462,20 @@
         return '<option value="'+esc(v)+'"'+(v===selected?' selected':'')+'>'+esc(v)+'</option>';
       }).join("");
     }
-    var filters='<div style="display:flex;gap:10px;flex-wrap:wrap;margin:18px 0 23px">'+
-      '<label style="display:grid;gap:6px">النوع<select id="kidsTypeFilter" style="padding:10px;color:inherit;background:#191e29;border:1px solid #515663;border-radius:10px">'+
+    var filters='<div class="kids-filters">'+
+      '<label class="kids-filter">النوع<select id="kidsTypeFilter">'+
       '<option value="channel"'+(kidsType==="channel"?' selected':'')+'>قنوات الأطفال</option>'+
       '<option value="other"'+(kidsType==="other"?' selected':'')+'>أفلام ومسلسلات</option>'+
       '<option value="all"'+(kidsType==="all"?' selected':'')+'>كل محتوى الأطفال</option></select></label>'+
-      '<label style="display:grid;gap:6px">الدولة<select id="kidsCountryFilter" style="padding:10px;color:inherit;background:#191e29;border:1px solid #515663;border-radius:10px">'+
+      '<label class="kids-filter">الدولة<select id="kidsCountryFilter">'+
       '<option value="">كل الدول</option>'+options(countries,kidsCountry)+'</select></label>'+
-      '<label style="display:grid;gap:6px">اللغة<select id="kidsLanguageFilter" style="padding:10px;color:inherit;background:#191e29;border:1px solid #515663;border-radius:10px">'+
+      '<label class="kids-filter">اللغة<select id="kidsLanguageFilter">'+
       '<option value="">كل اللغات</option>'+options(languages,kidsLanguage)+'</select></label></div>';
     return pageHead("عالم الأطفال", "كرتون وأنمي ومسلسلات وقنوات للأطفال.", shown.length) +
+      (!filterCat&&kidsType==="all"&&!kidsCountry&&!kidsLanguage?
+        railHTML("قنوات للأطفال",shown.filter(function(i){return i.kind==="channel";}).slice(0,16),{subtitle:"قنوات من مكتبة الأطفال"}):"")+
       classifiedFilterBar(list,filterCat,"kids") + filters +
+      '<div class="experience-shelf-title"><h2>مكتبة الأطفال</h2><p>استخدم فلاتر الدولة واللغة والنوع</p></div>'+
       (shown.length ? gridHTML(shown) : emptyHTML("لا يوجد محتوى يطابق الفلاتر."));
   }
 
@@ -444,7 +483,9 @@
     var list=catalog.youtube,shown=list.filter(function(x){return itemMatches(x,filterCat);});
     var head=pageHead("يوتيوب العز","قصص وحروف وعلوم وأغاني تعليمية.",shown.length)+classifiedFilterBar(list,filterCat,"youtube");
     if (shown.length) {
-      return head + '<div class="grid grid--wide">' +
+      return head + railHTML("مقاطع مختارة",shown.slice(0,12),{subtitle:"شاهد الفيديو من داخل العز TV"})+
+        '<div class="experience-shelf-title"><h2>جميع المقاطع</h2><p>مكتبة فيديوهات رسمية</p></div>'+
+        '<div class="grid grid--wide">' +
         shown.map(function (v) { return cardHTML(v, { wide: true }); }).join("") + "</div>";
     }
     if (Api.failedTables && Api.failedTables.indexOf("youtube") !== -1) {
@@ -501,7 +542,9 @@
       default: html = viewHome();
     }
 
-    view.innerHTML = html;
+    var unified=/^(movies|series|live|kids|youtube|mylist)$/.test(route.name);
+    view.className="view"+(unified?" is-experience experience--"+route.name:"");
+    view.innerHTML=unified?experienceHeader(route.name)+html:html;
     setNav(route.name);
     if (preserveScroll) window.scrollTo(0, y); else window.scrollTo(0, 0);
     startHeroRotation();
