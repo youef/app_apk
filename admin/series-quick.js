@@ -62,6 +62,31 @@ async function verifyAdmin(){
  if(!Array.isArray(list)||!list.some(function(a){return a.active&&a.user_id===user.id;}))
  throw new Error("الحساب لا يملك صلاحية الإدارة");
 }
+function findExistingSeries(title){
+ var wanted=String(title||"").trim().toLowerCase();
+ if(!wanted)return null;
+ return series.filter(function(row){return String(row.title_ar||"").trim().toLowerCase()===wanted;})[0]||null;
+}
+function duplicateSuggestion(){
+ var match=!$("seriesSelect").value&&findExistingSeries($("seriesTitle").value);
+ var hint=$("duplicateHint");
+ if(!hint)return match;
+ hint.classList.toggle("hidden",!match);
+ if(match)$("duplicateSeriesName").textContent=match.title_ar;
+ return match;
+}
+function remapDrafts(drafts,knownMax){
+ return drafts.map(function(g){
+  var next=Number(knownMax[g.season])||0;
+  var episodes=g.episodes.map(function(e){
+   next++;
+   if(next>300)throw new Error("الموسم "+g.season+" وصل إلى الحد الأقصى 300 حلقة. اختر موسمًا جديدًا أولًا.");
+   return {number:next,url:e.url,quality:e.quality};
+  });
+  return {season:g.season,episodes:episodes};
+ });
+}
+
 function groupBySeason(number){
  return groups.filter(function(g){return g.season===number;})[0]||null;
 }
@@ -138,32 +163,58 @@ async function loadSeries(){
  var op=document.createElement("option");op.value="";op.textContent="+ مسلسل جديد";select.append(op);
  series.forEach(function(s){var o=document.createElement("option");o.value=s.id;o.textContent=s.title_ar;select.append(o);});
  select.value=selected&&series.some(function(s){return s.id===selected;})?selected:"";
+ duplicateSuggestion();
 }
-async function loadExisting(){
- existingSeasons=[];existingEpisodeMax={};groups=[];activeSeason=1;
+async function loadExisting(preserveDraft){
+ // Read the new season map before touching the form. A failed request must never lose pasted URLs.
+ var drafts=preserveDraft?groups.map(function(g){
+  return {season:g.season,episodes:g.episodes.filter(function(ep){return !!String(ep.url||"").trim();}).map(function(ep){
+   return {url:ep.url,quality:ep.quality};
+  })};
+ }).filter(function(g){return g.episodes.length>0;}):[];
+ var previousSeason=activeSeason;
  var id=$("seriesSelect").value;
+ var loadedSeasons=[],loadedMax={};
+ if(id){
+  loadedSeasons=await rest("aseel_seasons?select=id,number&series_id=eq."+encodeURIComponent(id)+"&order=number.asc&limit=100");
+  if(loadedSeasons.length){
+   var ids=loadedSeasons.map(function(s){return s.id;});
+   var episodes=await rest("aseel_episodes?select=season_id,number&season_id=in.("+ids.join(",")+")&limit=3000");
+   loadedSeasons.forEach(function(se){loadedMax[se.number]=0;});
+   episodes.forEach(function(ep){
+    var season=loadedSeasons.filter(function(se){return se.id===ep.season_id;})[0];
+    if(season)loadedMax[season.number]=Math.max(loadedMax[season.number]||0,Number(ep.number)||0);
+   });
+  }
+ }
+ // Explicitly append after existing numbers: never overwrite an existing episode by changing series.
+ var shifted=drafts.length?remapDrafts(drafts,loadedMax):[];
+ existingSeasons=loadedSeasons;existingEpisodeMax=loadedMax;groups=[];
+ activeSeason=id&&loadedSeasons.length?loadedSeasons[loadedSeasons.length-1].number:1;
+ if(shifted.length){
+  groups=shifted;
+  activeSeason=groupBySeason(previousSeason)?previousSeason:groups[0].season;
+  render();
+  message("تم اختيار المسلسل الموجود مع الاحتفاظ بـ "+shifted.reduce(function(n,g){return n+g.episodes.length;},0)+
+   " رابط حلقة وإعادة ترقيمها بعد آخر حلقة محفوظة. راجع الأرقام ثم اضغط «حفظ ونشر الكل».");
+ }else startGroup(activeSeason);
  $("seriesTitleWrap").classList.toggle("hidden",!!id);
  $("seriesTitle").disabled=!!id;
- if(id){
-  existingSeasons=await rest("aseel_seasons?select=id,number&series_id=eq."+encodeURIComponent(id)+"&order=number.asc&limit=100");
-  if(existingSeasons.length){
-   var ids=existingSeasons.map(function(x){return x.id;});
-   var episodes=await rest("aseel_episodes?select=season_id,number&season_id=in.("+ids.join(",")+")&limit=3000");
-   existingSeasons.forEach(function(se){existingEpisodeMax[se.number]=0;});
-   episodes.forEach(function(ep){
-    var se=existingSeasons.filter(function(x){return x.id===ep.season_id;})[0];
-    if(se)existingEpisodeMax[se.number]=Math.max(existingEpisodeMax[se.number]||0,ep.number||0);
-   });
-   activeSeason=existingSeasons[existingSeasons.length-1].number;
-  }
-  $("seriesHint").textContent="اختر الموسم الحالي أو أضف موسمًا جديدًا. ستُضاف الحلقات بأرقام تالية للحلقات الموجودة دون تكرار.";
- }else{
-  $("seriesHint").textContent="اكتب اسم مسلسل جديد، ثم ألصق روابط الحلقات. لا تحتاج إلى تعبئة وصف أو صور أو أرقام حلقات.";
- }
- startGroup(activeSeason);updateExistingSeasons();
+ $("seriesHint").textContent=id?
+  "أضف إلى موسم موجود أو أنشئ موسمًا جديدًا. تُرقّم الحلقات الجديدة بعد الحلقات المحفوظة لحمايتها من الاستبدال.":
+  "اكتب اسم مسلسل جديد، ثم ألصق روابط الحلقات. لا تحتاج إلى تعبئة وصف أو صور أو أرقام حلقات.";
+ duplicateSuggestion();
+ updateExistingSeasons();
 }
 function wire(){
- $("seriesSelect").addEventListener("change",function(){loadExisting().catch(function(e){message(e.message,true);});});
+ $("seriesSelect").addEventListener("change",function(){loadExisting(true).catch(function(e){message(e.message,true);});});
+ $("seriesTitle").addEventListener("input",duplicateSuggestion);
+ $("useExistingSeries").addEventListener("click",function(){
+  var match=findExistingSeries($("seriesTitle").value);
+  if(!match){message("لم يعد هذا المسلسل في القائمة. أعد تحميل القائمة أو ابحث باسمه.",true);return;}
+  $("seriesSelect").value=match.id;
+  loadExisting(true).catch(function(e){message(e.message,true);});
+ });
  $("existingSeasonSelect").addEventListener("change",function(){
   var n=Number(this.value);
   if(n>0)startGroup(n);
@@ -216,12 +267,19 @@ async function saveAll(){
  if(saving)return;
  var selected=$("seriesSelect").value, title=$("seriesTitle").value.trim();
  if(!selected && title.length<2){message("اكتب اسم المسلسل (حرفان على الأقل).",true);return;}
+ if(!selected && duplicateSuggestion()){
+  message("هذا المسلسل موجود بالفعل في قاعدة البيانات. اضغط «استخدام المسلسل الموجود» بالأعلى؛ ستبقى كل الروابط وسيتم ترقيم الحلقات التالية تلقائيًا.",true);
+  return;
+ }
  var data=[],duplicates={};
  for(var i=0;i<groups.length;i++){
   var g=groups[i];
   for(var j=0;j<g.episodes.length;j++){
    var e=g.episodes[j],url=String(e.url||"").trim();
    if(!urlPattern.test(url)){message("أدخل رابط HTTPS بصيغة MP4 أو HLS للموسم "+g.season+" الحلقة "+e.number+".",true);return;}
+   if(e.number<1||e.number>300||g.season<1||g.season>50){
+    message("رقم الحلقة أو الموسم خارج المجال المسموح. الحد 300 حلقة لكل موسم.",true);return;
+   }
    if(duplicates[g.season+":"+e.number]){message("هناك رقم حلقة مكرر في الموسم "+g.season+".",true);return;}
    duplicates[g.season+":"+e.number]=true;
    data.push({season:g.season,number:e.number,url:url,quality:e.quality});
@@ -240,7 +298,13 @@ async function saveAll(){
   await loadSeries();$("seriesSelect").value=result.series_id;
   $("seriesTitle").value="";$("bulkLinks").value="";
   await loadExisting();
- }catch(e){message(e.message||"تعذر الحفظ، لم تُعتمد الدفعة.",true);}
+ }catch(e){
+  if(!selected && /SERIES_EXISTS_SELECT_FROM_LIST/.test(String(e.message||""))){
+   try{await loadSeries();}catch(refreshError){}
+   duplicateSuggestion();
+   message("اسم المسلسل موجود مسبقًا. اختر «استخدام المسلسل الموجود» في أعلى الصفحة، ثم راجع الحلقات الجديدة واحفظها دون فقدان روابطك.",true);
+  }else message(e.message||"تعذر الحفظ، لم تُعتمد الدفعة.",true);
+ }
  finally{saving=false;$("save").disabled=false;$("save").textContent="حفظ ونشر الكل";}
 }
 async function boot(){
