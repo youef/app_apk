@@ -38,15 +38,15 @@ jobs:
           python-version: '3.12'
       - name: Verify importer syntax
         run: python -m py_compile scripts/arabic_iptv_import.py
-      - name: Discover Arabic channels and validate actual HLS media segments
-        run: python scripts/arabic_iptv_import.py
-      - name: Require database write credential for scheduled imports
+      - name: Require database write credential before importing
         if: ${{ inputs.dry_run != true }}
         run: |
           if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
-            echo "::error::SUPABASE_SERVICE_ROLE_KEY is missing. No channels were inserted."
+            echo "::error::SUPABASE_SERVICE_ROLE_KEY is missing. No channels can be inserted."
             exit 1
           fi
+      - name: Discover Arabic channels and validate actual HLS media segments
+        run: python scripts/arabic_iptv_import.py
       - name: Upload import/verification report
         if: always()
         uses: actions/upload-artifact@v4
