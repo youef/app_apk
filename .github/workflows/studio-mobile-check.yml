@@ -40,4 +40,7 @@ jobs:
       - name: Verify cloud browser authorization and selection
         working-directory: python-cloud-studio
         run: |
-          python3 -m unittest             test_web.DemoTest.test_cloud_browser_requires_admin_and_opt_in             test_web.DemoTest.test_cloud_browser_uses_headless_mode_after_admin_login
+          python3 -m unittest \
+            test_web.DemoTest.test_cloud_browser_requires_admin_and_opt_in \
+            test_web.DemoTest.test_cloud_browser_uses_headless_mode_after_admin_login \
+            test_importer.Tests.test_static_player_links_and_escaped_scripts

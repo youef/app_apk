@@ -397,11 +397,27 @@
       const message=cloud?'سيعمل متصفح Chromium على خادم Render لفحص روابط HTTPS العامة فقط. لا يتحكم في Safari ولا في الإضافات. متابعة؟':'سيُفتح Microsoft Edge محليًا في نافذة جديدة لفحص طلبات الوسائط العامة. متابعة؟';
       if(!confirm(message))return;
       await syncEdits({silent:true});
-      activity('يجري تشغيل متصفح الفحص واكتشاف طلبات الوسائط العامة...','loading');
-      const result=await API('edge-capture',{seconds:3,max_pages:8});
-      updateStatus(result);
-      activity(`تم التقاط ${result.detected} رابط. افحصها قبل حفظها.`,result.detected?'success':'info');
-      toast(`نتيجة فحص المتصفح: ${result.detected} رابط فيديو. افحص صلاحية الروابط قبل الحفظ.`,result.detected?'success':'info');
+      const total=app.catalogue.kind==='series'?app.catalogue.episodes.length:1;
+      if(!total)throw new Error('لم يتم اكتشاف حلقات بعد؛ استورد قائمة الحلقات أولًا.');
+      const key=app.catalogue.url+'|'+total;
+      if(app.browserScanKey!==key){app.browserScanKey=key;app.browserScanIndex=0;}
+      let index=app.browserScanIndex||0;
+      if(index>=total)index=0;
+      let found=0,processed=0;
+      while(index<total&&processed<32){
+        activity(`فحص الصفحات عبر Chromium: ${index} من ${total}. روابط مكتشفة في الجولة: ${found}.`,'loading');
+        const result=await API('edge-capture',{seconds:2,max_pages:4,start_index:index});
+        found+=result.detected;
+        processed+=result.processed;
+        index=result.next_index;
+        app.browserScanIndex=index;
+        updateStatus(result);
+        if(!result.processed)break;
+      }
+      const more=index<total;
+      const note=`انتهى فحص ${processed} صفحة؛ اكتُشف ${found} رابط. ${more?'اضغط الزر مجددًا لاستكمال بقية الحلقات.':'انتهت جميع الصفحات.'} افحص صلاحية الروابط قبل حفظها.`;
+      activity(note,found?'success':'info');
+      toast(note,found?'success':'info');
     });
     $('episodeSearch').oninput=()=>{if(app.catalogue?.kind==='series')renderEpisodes();};
     $('loginForm').onsubmit=doLogin;

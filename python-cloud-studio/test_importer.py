@@ -46,6 +46,21 @@ class Tests(unittest.TestCase):
         self.assertEqual(cat.poster_url,"https://public.example.com/poster.jpg")
         self.assertEqual([(e.season,e.number) for e in cat.episodes],[(1,1),(1,2),(2,1)])
 
+
+    def test_static_player_links_and_escaped_scripts(self):
+        soup = mod.BeautifulSoup('''
+          <html><body>
+            <video data-src="https://cdn.example.org/main.m3u8"></video>
+            <script>const player = {"src": "https:\\/\\/cdn.example.org/episode.mp4"};</script>
+            <iframe src="https://cdn.example.org/embedded.m3u8"></iframe>
+          </body></html>
+        ''', "html.parser")
+        links = mod.find_static_media(soup, "https://public.example.org/episode")
+        self.assertIn("https://cdn.example.org/main.m3u8", links)
+        self.assertIn("https://cdn.example.org/embedded.m3u8", links)
+        self.assertIn("https://cdn.example.org/episode.mp4", links)
+        self.assertTrue(all(link.startswith("https://") for link in links))
+
     def test_fetchv_links(self):
         cat=mod.pull_html("https://public.example.com/series",FakeClient())
         with tempfile.TemporaryDirectory() as d:

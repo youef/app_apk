@@ -114,6 +114,9 @@ class DemoTest(unittest.TestCase):
                 self.assertEqual(result.status_code, 200, result.text)
                 self.assertEqual(result.json()['detected'], 2)
                 self.assertTrue(capture.call_args.kwargs['cloud'])
+                self.assertEqual(capture.call_args.kwargs['start_index'], 0)
+                self.assertEqual(result.json()['total'], 1)
+                self.assertEqual(result.json()['next_index'], 1)
 
     def test_validation(self):
         self.assertEqual(self.post('discover', {'url':'http://localhost/secret','kind':'auto'}).status_code,400)

@@ -624,7 +624,8 @@ async def verify(request: Request, data: VerifyForm):
 
 class EdgeCaptureForm(BaseModel):
     seconds: int = Field(default=3, ge=1, le=8)
-    max_pages: int = Field(default=8, ge=1, le=12)
+    max_pages: int = Field(default=4, ge=1, le=8)
+    start_index: int = Field(default=0, ge=0, le=5000)
 
 
 @app.post('/api/edge-capture')
@@ -639,14 +640,22 @@ async def edge_capture(request: Request, data: EdgeCaptureForm):
     if state.demo:
         raise HTTPException(400, 'اكتشف رابطًا حقيقيًا قبل فحص الشبكة')
     cat = current_catalogue(state)
+    total = len(cat.episodes) if cat.kind == 'series' else 1
+    if data.start_index >= total:
+        return {'detected': 0, 'processed': 0, 'total': total, 'next_index': total,
+                'has_more': False, **get_summary(state)}
+    processed = min(data.max_pages, total - data.start_index)
     def task():
         with state.lock:
-            return collect_edge_network(cat, seconds=data.seconds, max_pages=data.max_pages, cloud=cloud)
+            return collect_edge_network(cat, seconds=data.seconds, max_pages=data.max_pages,
+                                        cloud=cloud, start_index=data.start_index)
     try:
         count = await run_in_threadpool(task)
     except Exception as exc:
         raise HTTPException(400, 'تعذّر فحص الوسائط بالمتصفح: '+clean(exc,180)) from None
-    return {'detected':count, **get_summary(state)}
+    next_index = data.start_index + processed
+    return {'detected': count, 'processed': processed, 'total': total,
+            'next_index': next_index, 'has_more': next_index < total, **get_summary(state)}
 
 
 class LoginForm(BaseModel):

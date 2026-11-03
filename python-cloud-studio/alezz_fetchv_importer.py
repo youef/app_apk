@@ -493,21 +493,45 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
     return out
 
 
-def find_static_media(soup: BeautifulSoup,base: str,nodes: list[dict] | None=None) -> list[str]:
-    links=[]
-    for tag in soup.select('video[src],video source[src],source[src],a[href],meta[property="og:video"],meta[property="og:video:url"]'):
-        value=tag.get("href") or tag.get("src") or tag.get("content") or ""
-        if MEDIA_EXT.search(value):
-            link=absolutize(base,value)
-            if link and link not in links:links.append(link)
-    for node in nodes or json_nodes(soup):
-        for prop in ("contentUrl","url","embedUrl"):
-            value=field_of(node,prop)
-            if MEDIA_EXT.search(value):
-                link=absolutize(base,value)
-                if link and link not in links:links.append(link)
-    return links
+def find_static_media(soup: BeautifulSoup, base: str, nodes: list[dict] | None = None) -> list[str]:
+    """Collect standard public video links from video tags, metadata and JS literals.
 
+    This does not evaluate third-party scripts or expose blob/session-only media.
+    """
+    links: list[str] = []
+    def add(value: str):
+        if not value or not MEDIA_EXT.search(value):
+            return
+        url = absolutize(base, value.replace("\\/", "/").replace("\\u0026", "&"))
+        if url and url not in links:
+            links.append(url)
+
+    for tag in soup.select(
+        'video[src], video[data-src], source[src], source[data-src],'
+        ' a[href], meta[property="og:video"], meta[property="og:video:url"],'
+        ' meta[property="og:video:secure_url"], iframe[src],'
+        ' [data-video], [data-video-src], [data-hls], [data-stream]'
+    )[:500]:
+        for attr in ("href", "src", "data-src", "data-video", "data-video-src",
+                     "data-hls", "data-stream", "content"):
+            add(tag.get(attr) or "")
+    for node in nodes or json_nodes(soup):
+        for prop in ("contentUrl", "url", "embedUrl"):
+            add(field_of(node, prop))
+    # Many standard players declare their HLS URL inside inline JS configuration
+    # (including an escaped JSON string such as https:\/\/cdn/.../master.m3u8).
+    pattern = re.compile(
+        r'''(?:https?:)?(?:/|\\/){2}[^\s"'<>]{0,700}\.(?:m3u8|mp4|m4v|webm)(?:\?[^\s"'<>]{0,350})?''',
+        re.I
+    )
+    for script in soup.select("script:not([src])")[:40]:
+        body = (script.string or script.get_text() or "")[:100_000]
+        body = body.replace("\\/", "/").replace("\\u0026", "&")
+        for match in pattern.findall(body):
+            add("https:" + match if match.startswith("//") else match)
+            if len(links) >= 80:
+                return links
+    return links
 
 def inspect_episodes(out: Catalogue, client: SourceClient, delay: float=.15):
     targets = out.episodes if out.kind=="series" else [out]
@@ -594,19 +618,27 @@ def load_fetchv_links(path: Path, out: Catalogue) -> int:
     return count
 
 
-def collect_edge_network(out: Catalogue, seconds: int, max_pages: int = 8, cloud: bool = False) -> int:
-    """Inspect standard public HTTPS media requests with a new browser session.
+def collect_edge_network(
+    out: Catalogue, seconds: int, max_pages: int = 8,
+    cloud: bool = False, start_index: int = 0
+) -> int:
+    """Inspect public episode pages for standard HLS/MP4/WebM in browser traffic.
 
-    On Render this uses cloud-side Chromium headless; on a local PC, headed Edge.
-    The browser has no access to existing Safari/Edge cookies or extensions.
+    FetchV is not required and cannot be controlled from this server. The scan
+    uses an isolated Chromium (cloud) or Edge (desktop) session with no cookies,
+    without bypassing login, DRM or site access restrictions.
     """
     try:
         from playwright.sync_api import sync_playwright
     except ImportError as exc:
-        raise ValueError("Playwright غير مثبت. أعد نشر نسخة Docker المحدثة على Render.") from exc
+        raise ValueError("Playwright غير مثبت؛ أعد نشر نسخة Docker المحدثة.") from exc
 
     targets = out.episodes if out.kind == "series" else [out]
+    selected = targets[start_index:start_index + min(max_pages, 8)]
+    if not selected:
+        return 0
     count = 0
+    failed = 0
     with sync_playwright() as p:
         try:
             browser = (
@@ -614,11 +646,11 @@ def collect_edge_network(out: Catalogue, seconds: int, max_pages: int = 8, cloud
                 if cloud else p.chromium.launch(channel="msedge", headless=False)
             )
         except Exception as exc:
-            mode = "Chromium السحابي" if cloud else "Microsoft Edge المحلي"
-            raise ValueError(f"تعذر بدء {mode}: {clean(exc, 180)}") from None
+            name = "Chromium السحابي" if cloud else "Microsoft Edge المحلي"
+            raise ValueError(f"تعذر بدء {name}: {clean(exc, 180)}") from None
         try:
             context = browser.new_context(accept_downloads=False, service_workers="block")
-            context.set_default_timeout(8_000)
+            context.set_default_timeout(6_000)
             checked_hosts: set[str] = set()
 
             def safe_route(route):
@@ -634,56 +666,119 @@ def collect_edge_network(out: Catalogue, seconds: int, max_pages: int = 8, cloud
                 except (ValueError, OSError, TypeError):
                     route.abort("blockedbyclient")
 
-            # Best-effort guard for page and subresource URLs: no local/private hosts,
-            # ports, IP-literals, non-HTTPS or service-worker controlled traffic.
             context.route("**/*", safe_route)
             try:
-                for entry in targets[:min(max_pages, 8)]:
+                for entry in selected:
                     raw_url = entry.page_url if isinstance(entry, Episode) else out.url
                     if not raw_url:
+                        failed += 1
                         continue
-                    page_url = public_url(raw_url)
-                    check_dns(page_url)
+                    try:
+                        page_url = public_url(raw_url)
+                        check_dns(page_url)
+                    except ValueError:
+                        failed += 1
+                        continue
                     page = context.new_page()
                     found: list[str] = []
 
-                    def listen(request):
-                        uri = request.url
-                        if WEB_MEDIA.search(uri) and uri.startswith("https://") and uri not in found:
-                            try:
-                                found.append(public_url(uri))
-                            except (ValueError, TypeError):
-                                pass
-                    page.on("request", listen)
+                    def observe(uri: str):
+                        try:
+                            url = public_url(uri)
+                        except (ValueError, TypeError):
+                            return
+                        if MEDIA_EXT.search(url) and url not in found:
+                            found.append(url)
+
+                    def listen_request(request):
+                        if WEB_MEDIA.search(request.url):
+                            observe(request.url)
+
+                    def listen_response(response):
+                        kind = (response.headers.get("content-type") or "").lower()
+                        if WEB_MEDIA.search(response.url) or any(
+                            name in kind for name in ("application/vnd.apple.mpegurl",
+                              "application/x-mpegurl", "video/mp4", "video/webm")
+                        ):
+                            observe(response.url)
+
+                    page.on("request", listen_request)
+                    page.on("response", listen_response)
                     try:
-                        page.goto(page_url, wait_until="domcontentloaded", timeout=18_000)
-                        page.wait_for_timeout(seconds * 1000)
-                        for selector in ("video", "button[aria-label*=play i]", "button[title*=play i]"):
+                        page.goto(page_url, wait_until="domcontentloaded", timeout=15_000)
+                        page.wait_for_timeout(seconds * 500)
+                        for frame in page.frames[:10]:
                             try:
-                                page.locator(selector).first.click(timeout=1200)
-                                page.wait_for_timeout(1200)
-                                break
+                                markup = frame.content()
+                                if len(markup) <= 1_000_000:
+                                    for uri in find_static_media(BeautifulSoup(markup, "html.parser"), frame.url):
+                                        observe(uri)
+                                # Recognize dynamically assigned currentSrc that is not
+                                # necessarily present in the rendered HTML attributes.
+                                for uri in frame.eval_on_selector_all(
+                                    "video, video source, source",
+                                    "(nodes) => nodes.map(n=>n.currentSrc||n.src||n.getAttribute('data-src')||'').filter(Boolean)"
+                                )[:25]:
+                                    observe(uri)
                             except Exception:
                                 pass
-                        uri = next((u for u in found if MEDIA_EXT.search(u)), "")
-                        if uri:
+                        if not found:
+                            selectors = ("video", ".vjs-big-play-button",
+                                         ".plyr__control--overlaid", ".jw-icon-display",
+                                         "button[aria-label*='play' i]", "button[title*='play' i]",
+                                         "[data-testid='play-button']")
+                            for frame in page.frames[:8]:
+                                for selector in selectors:
+                                    try:
+                                        button = frame.locator(selector).first
+                                        if button.count() and button.is_visible():
+                                            button.click(timeout=1300)
+                                            page.wait_for_timeout(seconds * 700)
+                                            if found:
+                                                break
+                                    except Exception:
+                                        pass
+                                if found:
+                                    break
+                        # Check a second time after the player has started.
+                        if not found:
+                            page.wait_for_timeout(seconds * 500)
+                            for frame in page.frames[:10]:
+                                try:
+                                    for uri in frame.eval_on_selector_all(
+                                        "video, source",
+                                        "(nodes) => nodes.map(n=>n.currentSrc||n.src||'').filter(Boolean)"
+                                    )[:20]:
+                                        observe(uri)
+                                except Exception:
+                                    pass
+                        candidate = next((u for u in found if u.lower().split("?")[0].endswith(".m3u8")), "")
+                        candidate = candidate or next((u for u in found if MEDIA_EXT.search(u)), "")
+                        if candidate:
+                            # Browser discovery is not the same as successful playback.
                             if isinstance(entry, Episode):
-                                entry.media_url = uri
+                                entry.media_url = candidate
                                 entry.verified = False
+                                entry.error = ""
                             else:
-                                out.media_url = uri
+                                out.media_url = candidate
                                 out.verified = False
                             count += 1
                     except Exception:
-                        # A failed page should not stop the remaining episodes.
-                        pass
+                        failed += 1
                     finally:
                         page.close()
             finally:
                 context.close()
         finally:
             browser.close()
+    if failed:
+        out.discovery_warnings.append(
+            f"تعذر فتح أو فحص {failed} صفحة من الدفعة؛ قد يمنع الموقع الوصول من Render أو يتطلب تشغيلًا يدويًا."
+        )
+        out.discovery_warnings = out.discovery_warnings[-25:]
     return count
+
 
 class Supabase:
     def __init__(self,url: str,key: str,access_token: str="",email: str="",password: str=""):
