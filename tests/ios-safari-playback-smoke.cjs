@@ -11,9 +11,12 @@ for (const s of [
   "v.getAttribute(\"src\") !== attemptedUrl", "sourceFailureMessage(code)",
   "el.video.controls = iosSafari", "rejectedSources.indexOf(option.url)"
 ])assert(p.includes(s),"iOS media regression: "+s);
+assert(!p.includes("var token = playbackToken;\n    var ready = function"),"metadata binding must use active source token");
+assert(p.includes("el.video.addEventListener(\"loadedmetadata\", function () {"),"resume on current source required");
+assert(p.indexOf("function startPlayback(item)")<p.indexOf("playSelectedSource(url, false);"),"source handoff missing");
 assert(p.indexOf("instance.on(Hls.Events.MEDIA_ATTACHED")<p.indexOf("instance.loadSource(url)"),
   "HLS must load manifest only after media attachment");
-assert(html.includes("ios-safari-source-fix-20261103-v2"),"iOS player cache-bust missing");
+assert(html.includes("ios-safari-source-fix-20261103-v3"),"iOS player cache-bust missing");
 assert(css.includes(".player.needs-user-play .player__center"),"portrait/landscape tap button missing");
 assert(sw.includes("alezz-shell-ios-safari-fix-20261103"),"ServiceWorker cache invalidation missing");
 assert(!html.includes("js/offline.js"),"Offline downloads should stay removed");

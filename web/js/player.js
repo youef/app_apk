@@ -188,7 +188,12 @@
     if (ticket !== playbackToken) return;
     var result;
     try { result = el.video.play(); }
-    catch (err) { if (err && err.name === "NotAllowedError") needsUserGesture(); return; }
+    catch (err) {
+      if (err && err.name === "NotAllowedError") needsUserGesture();
+      else if (err && err.name === "NotSupportedError")
+        recoverSource("هذا المصدر غير مدعوم من مشغل الآيفون.");
+      return;
+    }
     if (result && result.catch) result.catch(function (err) {
       if (ticket !== playbackToken || !current || el.root.hidden) return;
       if (err && err.name === "NotAllowedError") needsUserGesture();
@@ -212,6 +217,15 @@
     bindSubtitleTrack(current);
     show("playerSpinner", true);
     var ticket = playbackToken;
+    el.video.addEventListener("loadedmetadata", function () {
+      if (ticket !== playbackToken || !current) return;
+      show("playerSpinner", false);
+      var resume = Number(current.resumeAt || 0);
+      if (resume > 3 && !current.live) {
+        try { el.video.currentTime = resume; current.resumeAt = 0; toast("متابعة من " + fmt(resume)); }
+        catch (_e) {}
+      }
+    }, { once: true });
     if (/\.m3u8([?#]|$)/i.test(url)) {
       attachHls(url, !!forceJs).then(function (ok) {
         if (ticket === playbackToken && !ok) recoverSource(
@@ -351,7 +365,6 @@
   }
 
   function startPlayback(item) {
-    clearStage();
     $("playerTitle").textContent = item.title || "—";
     $("playerSubtitle").textContent = item.subtitle || "";
     $("playerBadges").innerHTML = buildBadges(item);
@@ -365,6 +378,7 @@
 
     var url = activeStreamUrl || item.stream || "";
     if (!url) {
+      clearStage();
       if (window.AlezzCast) window.AlezzCast.detach("player");
       fail("لا يوجد رابط تشغيل مسجّل لهذا العنصر."); return;
     }
@@ -376,19 +390,6 @@
     });
 
     el.video.hidden = false;
-
-    var token = playbackToken;
-    var ready = function () {
-      if (token !== playbackToken) return;
-      show("playerSpinner", false);
-      var resume = item.resumeAt || 0;
-      if (resume > 3 && !item.live) {
-        try { el.video.currentTime = resume; } catch (e) {}
-        toast("متابعة من " + fmt(resume));
-      }
-    };
-    el.video.addEventListener("loadedmetadata", ready, { once: true });
-
     playSelectedSource(url, false);
   }
 
@@ -662,9 +663,7 @@
     var position = el.video.currentTime || 0;
     var playing = !el.video.paused;
     activeStreamUrl = url;
-    clearStage();
-    show("playerSpinner", true);
-    bindSubtitleTrack(current);
+    // Save the position before swapping, then let the common path reset the video once.
     el.video.addEventListener("loadedmetadata", function () {
       if (position > 1 && isFinite(el.video.duration) && position < el.video.duration) {
         try { el.video.currentTime = position; } catch (e) {}
