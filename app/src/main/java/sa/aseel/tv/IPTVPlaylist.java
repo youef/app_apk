@@ -57,7 +57,7 @@ public final class IPTVPlaylist {
         }
     }
 
-    public static Download open(Context context,String address,int limit) throws IOException {
+    public static Download open(Context context,String address,int limit) throws Exception {
         if(address==null || address.length()>2048)throw new IOException("HTTPS URL required");
         URL current=new URL(address.trim());
         for(int redirects=0;redirects<=3;redirects++){
