@@ -106,6 +106,8 @@ class DemoTest(unittest.TestCase):
         sid = self.client.cookies.get(server.COOKIE)
         state = server._states[sid]
         state.db = DummyDB()
+        state.demo = False
+        state.catalogue = Catalogue(kind='movie', title='فيلم اختبار', url='https://example.org/film')
         with patch.dict(server.os.environ, {'ALEZZ_PUBLIC_MODE': '1', 'ALEZZ_BROWSER_CAPTURE': '1'}):
             with patch.object(server, 'collect_edge_network', return_value=2) as capture:
                 result = self.post('edge-capture', {'seconds': 2, 'max_pages': 4})
