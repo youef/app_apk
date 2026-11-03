@@ -12,6 +12,12 @@ on:
       - 'gradle.properties'
       - 'web/alizz-tv-transparent.png'
       - '.github/workflows/android.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'tests/**'
+      - '.github/workflows/android.yml'
   workflow_dispatch:
 concurrency:
   group: al-ezz-redclassic-fresh-v1-${{ github.ref }}
@@ -112,6 +118,7 @@ jobs:
           node tests/tv-remote-guide-smoke.cjs
           node tests/tv-figma-v14-smoke.cjs
           node tests/tv-smart-v15-smoke.cjs
+          node tests/tv-iptv-nimbus-smoke.cjs
           node tests/quality-picker-smoke.cjs
           node tests/kids-world-smoke.cjs
           node tests/cast-airplay-smoke.cjs
