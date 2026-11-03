@@ -537,6 +537,7 @@ function wire(){
 }
 async function saveAll(){
  if(saving)return;
+ if(hasSavedEdits()&&!confirm("هناك تعديلات على حلقات محفوظة لم تعتمد بعد. متابعة إضافة حلقات جديدة وإهمال تلك التعديلات؟"))return;
  var selected=$("seriesSelect").value, title=$("seriesTitle").value.trim();
  if(!selected && title.length<2){message("اكتب اسم المسلسل (حرفان على الأقل).",true);return;}
  if(!selected && duplicateSuggestion()){
