@@ -41,6 +41,8 @@ public final class TVHomeActivity extends Activity {
     private final ArrayList<JSONObject> series=new ArrayList<JSONObject>();
     private final ArrayList<JSONObject> episodeQueue=new ArrayList<JSONObject>();
     private final ArrayList<JSONObject> channels=new ArrayList<JSONObject>();
+    private final ArrayList<JSONObject> localChannels=new ArrayList<JSONObject>();
+    private int localPlaylistGeneration=0;
     private final ArrayList<JSONObject> youtubeVideos=new ArrayList<JSONObject>();
     private CatalogApi catalog;
     private ScrollView scroller;
@@ -232,6 +234,8 @@ public final class TVHomeActivity extends Activity {
     private void startViewer(){
         unlocked=true;showingWelcome=false;
         section="home";buildShell();render();loadCatalog();
+        if(!getSharedPreferences(SETTINGS,MODE_PRIVATE).getString("iptv_m3u","").isEmpty())
+            refreshLocalPlaylist(false);
     }
     private void buildShell(){
         LinearLayout root=column();root.setBackgroundColor(BG);
@@ -367,6 +371,52 @@ public final class TVHomeActivity extends Activity {
         TextView guide=text("الأسهم للتنقل     •     OK اختيار     •     رجوع للخروج",13,MUTED,false);
         guide.setGravity(Gravity.CENTER);content.addView(guide,space(-1,dp(39),5));
     }
+
+    /**
+     * Device-local playlists are not written to Supabase or published for other viewers.
+     * Failed updates keep the last in-memory channel set and never mark links as verified.
+     */
+    private void refreshLocalPlaylist(final boolean interactive){
+        final SharedPreferences preferences=getSharedPreferences(SETTINGS,MODE_PRIVATE);
+        final String playlist=preferences.getString("iptv_m3u","").trim();
+        final String epg=preferences.getString("iptv_xmltv","").trim();
+        final int token=++localPlaylistGeneration;
+        if(playlist.isEmpty())return;
+        if(interactive&&status!=null)status.setText("◌ استيراد قائمة M3U وبيانات دليل البرامج...");
+        background.execute(new Runnable(){public void run(){
+            ArrayList<JSONObject> fetched=null;
+            String error="";
+            try {
+                fetched=IPTVPlaylist.load(TVHomeActivity.this,playlist);
+                if(!epg.isEmpty())XmltvGuide.apply(TVHomeActivity.this,epg,fetched);
+            }catch(Exception exception){error=CatalogApi.describe(exception);}
+            final ArrayList<JSONObject> result=fetched;
+            final String failure=error;
+            ui.post(new Runnable(){public void run(){
+                if(isFinishing()||!unlocked||token!=localPlaylistGeneration)return;
+                if(result!=null){
+                    localChannels.clear();localChannels.addAll(result);
+                    for(int i=channels.size()-1;i>=0;i--)
+                        if(channels.get(i).optBoolean("_local_iptv",false))channels.remove(i);
+                    channels.addAll(localChannels);
+                    if(status!=null)status.setText("● أضيفت "+result.size()+" قناة محلية (الروابط تُفحص عند التشغيل)");
+                    if("live".equals(section)||"settings".equals(section))render();
+                }else if(status!=null){
+                    status.setText("⚠ تعذّر تحميل القائمة: "+failure);
+                }
+            }});
+        }});
+    }
+    private void clearLocalPlaylist(){
+        ++localPlaylistGeneration;
+        getSharedPreferences(SETTINGS,MODE_PRIVATE).edit()
+            .remove("iptv_m3u").remove("iptv_xmltv").apply();
+        localChannels.clear();
+        for(int i=channels.size()-1;i>=0;i--)
+            if(channels.get(i).optBoolean("_local_iptv",false))channels.remove(i);
+        if(status!=null)status.setText("تم حذف بيانات القائمة المحلية فقط");
+        render();
+    }
     private void loadCatalog(){
         if(loading || !unlocked)return;
         lastCatalogRefreshAt=android.os.SystemClock.elapsedRealtime();
@@ -396,7 +446,8 @@ public final class TVHomeActivity extends Activity {
             catch(Exception e){error="قنوات: "+CatalogApi.describe(e);}
             final JSONArray rows=data;final String issue=error;
             ui.post(new Runnable(){public void run(){if(token!=generation||!unlocked)return;
-                if(rows!=null)putAll(channels,rows,"channel");completeCatalog(token,issue);
+                if(rows!=null){putAll(channels,rows,"channel");channels.addAll(localChannels);}
+                completeCatalog(token,issue);
             }});
         }});
         background.execute(new Runnable(){public void run(){
@@ -537,10 +588,47 @@ public final class TVHomeActivity extends Activity {
         Button kids=button("♧  إعدادات الأطفال  •  "+kidsAge+" سنوات  /  "+kidsDailyMinutes+" دقيقة");
         content.addView(kids,space(-1,dp(62),6));
         kids.setOnClickListener(new View.OnClickListener(){public void onClick(View v){goTo("kids");}});
+
+        heading("قنوات IPTV من جهازك","استيراد M3U ودليل XMLTV بشكل محلي فقط؛ لا تُنشر المصادر للآخرين.");
+        final EditText playlistUrl=new EditText(this);
+        playlistUrl.setSingleLine(true);playlistUrl.setTextSize(16);playlistUrl.setTextColor(WHITE);
+        playlistUrl.setHintTextColor(MUTED);playlistUrl.setHint("رابط قائمة M3U بصيغة HTTPS");
+        playlistUrl.setText(prefs.getString("iptv_m3u",""));
+        playlistUrl.setBackgroundDrawable(bg(PANEL,RED,12));
+        content.addView(playlistUrl,space(-1,dp(59),4));
+        final EditText epgUrl=new EditText(this);
+        epgUrl.setSingleLine(true);epgUrl.setTextSize(16);epgUrl.setTextColor(WHITE);
+        epgUrl.setHintTextColor(MUTED);epgUrl.setHint("رابط XMLTV اختياري (HTTPS)");
+        epgUrl.setText(prefs.getString("iptv_xmltv",""));
+        epgUrl.setBackgroundDrawable(bg(PANEL,0xFF453744,12));
+        content.addView(epgUrl,space(-1,dp(59),4));
+        Button importButton=button("↓ استيراد القنوات وتحديث دليل البرامج");
+        content.addView(importButton,space(-1,dp(59),4));
+        importButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            String m3u=playlistUrl.getText().toString().trim();
+            String xml=epgUrl.getText().toString().trim();
+            if(!m3u.startsWith("https://")||m3u.length()>2048||
+               (!xml.isEmpty()&&(!xml.startsWith("https://")||xml.length()>2048))){
+                status.setText("يرجى إدخال روابط HTTPS صحيحة؛ دليل XMLTV اختياري.");return;
+            }
+            prefs.edit().putString("iptv_m3u",m3u).putString("iptv_xmltv",xml).apply();
+            ((InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE))
+                .hideSoftInputFromWindow(playlistUrl.getWindowToken(),0);
+            refreshLocalPlaylist(true);
+        }});
+        Button clearImport=button("✕ حذف قائمة IPTV المحلية");
+        content.addView(clearImport,space(-1,dp(55),6));
+        clearImport.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            clearLocalPlaylist();
+        }});
+        content.addView(text("المصادر المستوردة غير مفحوصة حتى بدء تشغيلها. استخدم فقط القنوات المصرّح لك بمشاهدتها.",
+            12,MUTED,false),space(-1,-2,8));
         heading("المكتبة والمشغل","تعتمد الجودة والتوافق على اتصال الإنترنت وإمكانات الجهاز");
         Button reload=button("↻  تحديث جميع أقسام المكتبة");
         content.addView(reload,space(-1,dp(58),6));
-        reload.setOnClickListener(new View.OnClickListener(){public void onClick(View v){loadCatalog();}});
+        reload.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            loadCatalog();refreshLocalPlaylist(true);
+        }});
         Button youtube=button("▶  مكتبة فيديوهات يوتيوب المعتمدة");
         content.addView(youtube,space(-1,dp(58),6));
         youtube.setOnClickListener(new View.OnClickListener(){public void onClick(View v){goTo("youtube");}});
@@ -685,11 +773,15 @@ public final class TVHomeActivity extends Activity {
                 activeChannelCategory=type;render();
             }});
         }
+        int displayed=0;
         for(int i=0;i<channels.size();i++){
             JSONObject x=channels.get(i);
-            if("الكل".equals(activeChannelCategory)||activeChannelCategory.equals(channelCategory(x)))
+            if("الكل".equals(activeChannelCategory)||activeChannelCategory.equals(channelCategory(x))){
+                if(++displayed>350)break;
                 content.addView(channelLine(x,i));
+            }
         }
+        if(displayed>350)heading("عرض أول 350 قناة من هذا التصنيف","يمكن الوصول إلى بقية القنوات من البحث.");
     }
     private LinearLayout channelLine(final JSONObject channel,final int position){
         final LinearLayout line=row();
@@ -937,7 +1029,12 @@ public final class TVHomeActivity extends Activity {
         if("channel".equals(kind(item))){
             JSONArray playlist=new JSONArray();
             int selected=0;
-            for(JSONObject candidate:channels){
+            // Keep Android Binder intents below the transaction limit for large local IPTV lists.
+            int selectedGlobal=channels.indexOf(item);
+            int from=Math.max(0,selectedGlobal-75);
+            int to=Math.min(channels.size(),Math.max(from+150,selectedGlobal+76));
+            for(int channelIndex=from;channelIndex<to;channelIndex++){
+                JSONObject candidate=channels.get(channelIndex);
                 if(kidsMode && !kidsDirect(candidate))continue;
                 if("official_link".equals(value(candidate,"playback_mode")))continue;
                 String candidateUrl=value(candidate,"stream_url");
@@ -1083,7 +1180,7 @@ public final class TVHomeActivity extends Activity {
         }
     }
     @Override protected void onDestroy(){
-        generation++;episodeGeneration++;unlocked=false;background.shutdownNow();ui.removeCallbacks(remoteChannelCommit);ui.removeCallbacksAndMessages(null);
+        generation++;episodeGeneration++;localPlaylistGeneration++;unlocked=false;background.shutdownNow();ui.removeCallbacks(remoteChannelCommit);ui.removeCallbacksAndMessages(null);
         super.onDestroy();
     }
 }
