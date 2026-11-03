@@ -18,7 +18,7 @@
 <link rel="stylesheet" href="css/live.css?v=tv-studio-20261102-1">
 <link rel="stylesheet" href="css/kids.css?v=kids-direct-20261102-1">
 <link rel="stylesheet" href="css/cast.css?v=cast-airplay-20261102-1">
-<link rel="stylesheet" href="css/unified.css?v=cinema-refined-20261102-v1">
+<link rel="stylesheet" href="css/unified.css?v=pre-download-restore-20261103-v1">
 <script>
 (function () {
   try {
@@ -32,6 +32,12 @@
 </script>
 </head>
 <body data-boot="loading">
+<script>
+try {
+  localStorage.removeItem("alezz.offline.items.v1");
+  localStorage.removeItem("alezz.offline.auto.v1");
+} catch (e) {}
+</script>
 
 <!-- ============ top bar ============ -->
 <header class="topbar" id="topbar">
@@ -47,13 +53,9 @@
     <a href="#/kids"   class="nav__link" data-nav="kids">أطفال</a>
     <a href="#/youtube" class="nav__link" data-nav="youtube">يوتيوب</a>
     <a href="#/mylist" class="nav__link" data-nav="mylist">قائمتي</a>
-    <a href="#/downloads" class="nav__link" data-nav="downloads">تنزيلاتي</a>
   </nav>
 
   <div class="topbar__actions">
-    <a class="iconbtn offline-link" href="#/downloads" aria-label="تنزيلاتي" title="تنزيلاتي دون إنترنت">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 17v4h16v-4"/></svg>
-    </a>
     <button class="iconbtn app-install-trigger" type="button" data-install-app aria-label="تثبيت العز TV" title="تثبيت العز TV">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4M4 17v3h16v-3"/></svg>
     </button>
@@ -93,7 +95,7 @@
   <span class="install-guide__eyebrow">العز TV · تطبيق على جهازك</span>
   <h2 id="installGuideTitle">ثبّت العز TV على الشاشة الرئيسية</h2>
   <p id="installGuideSteps">يمكنك فتح العز TV من الشاشة الرئيسية بواجهة مستقلة عن علامات تبويب المتصفح.</p>
-  <p class="install-guide__note">يمكن مشاهدة الأفلام التي أكملت تنزيلها على هذا الجهاز دون إنترنت؛ ويحتاج البث المباشر وبقية المصادر إلى اتصال.</p>
+  <p class="install-guide__note">المكتبة والأفلام والمسلسلات والبث المباشر تحتاج اتصالًا بالإنترنت ومصادر متاحة.</p>
   <button class="btn btn--gold" data-dismiss-install>فهمت</button>
  </div>
 </div>
@@ -233,11 +235,10 @@
 <script src="js/explore.js?v=netflix-taxonomy-20261101"></script>
 <script src="js/store.js"></script>
 <script src="js/cast.js?v=cast-airplay-20261102-1"></script>
-<script src="js/offline.js?v=offline-media-20261102-v1"></script>
-<script src="js/player.js?v=media-recovery-20261103-v1"></script>
+<script src="js/player.js?v=pre-download-restore-20261103-v1"></script>
 <script src="js/live.js?v=direct-streams-only-20261102"></script>
 <script src="js/kids.js?v=kids-direct-20261102-1"></script>
-<script src="js/app.js?v=cinema-refined-20261102-v2"></script>
+<script src="js/app.js?v=pre-download-restore-20261103-v1"></script>
 <script src="js/install.js?v=universal-20261102-1"></script>
 </body>
 </html>

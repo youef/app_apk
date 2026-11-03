@@ -292,10 +292,7 @@
     var kids = catalog.items.filter(function(i) { return i.kids; });
     if (kids.length) rows.push(railHTML("عالم الأطفال", kids.slice(0, 16), { more: "#/kids" }));
     if (catalog.youtube.length) rows.push(railHTML("الفيديوهات", catalog.youtube.slice(0, 14), { more: "#/youtube" }));
-    var shortcuts='<nav class="home-quick" aria-label="أقسام العز">' +
-      '<a href="#/movies">🎬 أفلام</a><a href="#/series">🎞 مسلسلات</a>' +
-      '<a href="#/live">📺 مباشر</a><a href="#/kids">⭐ أطفال</a></nav>';
-    return renderHero() + shortcuts + '<div class="home-content">' + rows.join("") + '</div>';
+    return renderHero() + '<div class="home-content">' + rows.join("") + '</div>';
   }
 
     function pageHead(title, subtitle, count) {
@@ -428,7 +425,6 @@
       case "kids": html = viewKids(route.arg); break;
       case "youtube": html = viewYoutube(route.arg); break;
       case "mylist": html = viewMyList(route.arg); break;
-      case "downloads": html = viewDownloads(); break;
       case "title": html = viewDetail(route.arg); break;
       case "watch": html = viewWatch(route.arg); break;
       default: html = viewHome();
@@ -439,11 +435,6 @@
       (route.name === "watch" ? " view--watch" : "");
     view.innerHTML = route.name === "kids" ? html : (unified ? experienceHeader(route.name) + html : html);
     document.body.classList.toggle("kids-world-active", route.name === "kids");
-    document.title="العز TV — سينما في بيتك";
-    if(route.name==="title"||route.name==="watch"){
-      var episodeTitle=findEpisode(route.arg),targetItem=episodeTitle?episodeTitle.series:findItem(route.arg);
-      if(targetItem)document.title=(episodeTitle?episodeTitle.episode.title+" — ":"")+targetItem.title+" | العز TV";
-    }
     setNav(route.name === "title" || route.name === "watch" ? parentSection(route.arg) : route.name);
     if (preserveScroll) window.scrollTo(0, y); else window.scrollTo(0, 0);
     startHeroRotation();
@@ -453,12 +444,6 @@
     if (route.name === "title") {
       var item = findItem(route.arg);
       if (item && item.kind === "series") showUnavailableEpisodes(item);
-    }
-    if(route.name==="downloads"&&navigator.storage&&navigator.storage.estimate){
-      navigator.storage.estimate().then(function(est){
-        var host=$("offlineSpace");if(host&&est.quota)
-          host.textContent="مساحة الموقع: "+window.AlezzOffline.formatBytes(est.usage||0)+" / "+window.AlezzOffline.formatBytes(est.quota);
-      }).catch(function(){});
     }
     if (route.name === "watch" && playerNode) {
       var slot = $("watchPlayerSlot");
@@ -473,7 +458,7 @@
   }
 
     function setNav(name) {
-    var map = { home: "home", movies: "movies", series: "series", live: "live", kids: "kids", youtube: "youtube", mylist: "mylist", downloads: "downloads" };
+    var map = { home: "home", movies: "movies", series: "series", live: "live", kids: "kids", youtube: "youtube", mylist: "mylist" };
     var active = map[name] || "home";
     Array.prototype.forEach.call(document.querySelectorAll(".nav__link"), function (a) {
       var selected = a.getAttribute("data-nav") === active;
@@ -520,12 +505,6 @@
   function findItem(key) {
     if (!catalog) return null;
     if (catalog.byKey[key]) return catalog.byKey[key];
-    if (window.AlezzOffline && window.AlezzOffline.get(key)) {
-      var rec = window.AlezzOffline.get(key);
-      return { key:key,kind:rec.kind,title:rec.title,poster:rec.poster,
-        stream:window.AlezzOffline.virtualURL(key),variants:[],youtubeId:"",live:false,
-        offlinePermitted:true,rights:{status:"approved"},parentKey:rec.parentKey };
-    }
     var m = continueWatching().filter(function (e) { return e.item.key === key; })[0];
     return m ? m.item : null;
   }
@@ -554,79 +533,18 @@
   function detailLink(key) { return "#/title/" + encodeURIComponent(key); }
   function watchLink(key) { return "#/watch/" + encodeURIComponent(key); }
 
-
-  function offlineItem(item,parent) {
-    if(!item)return null;
-    var episode=item.kind==="episode", saved=!!(window.AlezzOffline&&window.AlezzOffline.get(item.key));
-    var licensed=episode ? !!(item.rightsStatus==="approved"&&parent&&parent.rights&&parent.rights.status==="approved") :
-      !!(item.rights&&item.rights.status==="approved");
-    return {key:item.key,kind:item.kind,
-      title:episode&&parent?parent.title+" — "+item.title:item.title,
-      poster:item.poster||(parent&&parent.poster)||"",parentKey:episode&&parent?parent.key:"",
-      stream:item.stream,variants:item.variants||[],youtubeId:item.youtubeId,live:!!item.live,
-      offlinePermitted:licensed||saved};
-  }
-  function offlineButton(item,parent,cls) {
-    if(!item||!window.AlezzOffline||(item.kind!=="movie"&&item.kind!=="episode"))return "";
-    var saved=window.AlezzOffline.get(item.key);
-    var eligible=!!(saved||window.AlezzOffline.canSave(offlineItem(item,parent)));
-    return '<button type="button" class="'+(cls||"btn btn--ghost")+' offline-download" data-offline-save="'+esc(item.key)+'"'+
-      (eligible?"":' disabled title="الحفظ متاح لملفات MP4 المباشرة والمعتمدة فقط"')+'>'+
-      (saved?"✓ محفوظ دون إنترنت":eligible?"↓ تنزيل دون إنترنت":"التنزيل غير متاح")+'</button>';
-  }
-  function viewDownloads() {
-    var O=window.AlezzOffline;
-    if(!O)return '<div class="empty"><strong>المتصفح لا يدعم التنزيلات المحلية</strong></div>';
-    var saved=O.list();
-    return '<section class="offline-page"><header class="offline-head"><div><span>AL EZZ TV · OFFLINE</span>'+
-      '<h1>تنزيلاتي</h1><p>ملفات الفيديو المحفوظة على هذا الجهاز للمشاهدة دون اتصال.</p></div>'+
-      '<div class="offline-space" id="offlineSpace"></div></header>'+
-      '<label class="offline-auto"><input type="checkbox" id="offlineAuto"'+(O.autoEnabled()?' checked':'')+'>'+
-      '<span><strong>الحفظ التلقائي أثناء المشاهدة</strong><small>قد يستهلك بيانات إضافية عند تشغيل ملفات MP4 المعتمدة. يمكنك إيقافه.</small></span></label>'+
-      '<p class="offline-info">التنزيلات داخل مساحة هذا الموقع في المتصفح، وقد يحذفها النظام عند امتلاء الجهاز أو مسح بيانات الموقع. ليست جميع المصادر قابلة للتخزين: بث HLS ويوتيوب والفيديوهات المحمية تحتاج اتصالًا أو ترخيصًا خاصًا.</p>'+
-      (saved.length?'<div class="offline-list">'+saved.map(function(row){
-        var poster=row.poster?'<img loading="lazy" src="'+esc(row.poster)+'" alt="" onerror="this.remove()">':'';
-        return '<article class="offline-row"><span class="offline-poster">'+poster+'<span>▶</span></span>'+
-          '<div class="offline-row__body"><h2>'+esc(row.title)+'</h2><small>'+O.formatBytes(row.size)+' · نسخة على الجهاز</small>'+
-          '<div class="offline-row__actions"><a href="'+watchLink(row.key)+'" class="btn btn--gold">▶ تشغيل</a>'+
-          '<button type="button" class="btn btn--ghost" data-offline-remove="'+esc(row.key)+'">حذف النسخة</button></div></div></article>';
-      }).join("")+'</div>':
-      '<div class="offline-empty"><strong>لا توجد تنزيلات بعد</strong><p>افتح صفحة الفيلم أو الحلقة، واختر «تنزيل دون إنترنت».</p>'+
-      '<a href="#/movies" class="btn btn--gold">تصفح الأفلام</a></div>')+'</section>';
-  }
-
-  function relatedHTML(item) {
-    if (!item || (item.kind!=="movie" && item.kind!=="series")) return "";
-    var pool=item.kind==="movie" ? catalog.movies : catalog.series, tags=item.genreTags||[];
-    var matched=pool.filter(function(x){return x.key!==item.key && !!x.kids===!!item.kids;})
-      .map(function(x){
-        var common=0;
-        (x.genreTags||[]).forEach(function(tag){if(tags.indexOf(tag)!==-1)common++;});
-        return {item:x,score:common*5+(!!item.country&&item.country===x.country?3:0)+
-          (!!item.categoryId&&item.categoryId===x.categoryId?2:0)};
-      }).filter(function(x){return x.score>0;});
-    matched.sort(function(a,b){return b.score-a.score;});
-    var items=matched.slice(0,9).map(function(x){return x.item;});
-    return items.length?'<div class="title-page__related">'+railHTML("قد يعجبك أيضًا",items)+'</div>':"";
-  }
-
   function viewDetail(key) {
     var item = findItem(key);
     if (!item) return '<div class="route-empty"><h1>هذا العمل غير متاح الآن</h1><a href="#/home" class="btn btn--gold">الرئيسية</a></div>';
     return '<article class="title-page" id="titlePage"><div class="title-page__breadcrumb">' +
       '<a href="#/' + parentSection(key) + '" data-detail-back>← العودة للمكتبة</a></div>' +
-      detailHTML(item) + relatedHTML(item) + '</article>';
+      detailHTML(item) + '</article>';
   }
   function viewWatch(key) {
     var entry = findEpisode(key), item = entry ? entry.series : findItem(key);
     if (!item) return '<div class="route-empty"><h1>الفيديو غير متاح الآن</h1><a href="#/home">الرئيسية</a></div>';
     var title = entry ? (item.title + " — " + entry.episode.title) : item.title;
     var back = detailLink(item.key), all = entry ? entry.list : [];
-    var prev=entry&&entry.index>0?all[entry.index-1]:null, next=entry&&entry.index<all.length-1?all[entry.index+1]:null;
-    var episodeControls=entry?'<nav class="watch-episode-nav" aria-label="التنقل بين الحلقات">'+
-      (prev?'<a href="'+watchLink(prev.key)+'">→ الحلقة السابقة</a>':'<span></span>')+
-      (next?'<a class="watch-episode-nav__next" href="'+watchLink(next.key)+'">الحلقة التالية ←</a>':'<span class="watch-episode-nav__end">آخر حلقة متاحة</span>')+
-      '</nav>':"";
     var epLinks = all.length ? '<section class="watch-episodes"><div class="watch-section-head"><h2>حلقات المسلسل</h2><a href="' + back + '">كل التفاصيل</a></div>' +
       '<div class="watch-episodes__list">' + all.map(function(ep) {
         return '<a class="watch-episode' + (ep.key === key ? ' is-current' : '') + '" href="' + watchLink(ep.key) + '">' +
@@ -636,10 +554,7 @@
       '<a href="' + back + '" data-watch-back>← ' + esc(item.title) + '</a></nav>' +
       '<div class="watch-player-slot" id="watchPlayerSlot"></div>' +
       '<div class="watch-page__below"><div class="watch-page__heading"><div><span>العز TV · مشاهدة</span><h1>' +
-      esc(title) + '</h1></div><div class="watch-page__heading-actions">'+
-      '<button type="button" class="watch-share" data-share="'+esc(key)+'" data-share-route="watch">مشاركة</button>'+
-      '<a class="watch-page__details" href="' + back + '">التفاصيل</a></div></div>'+
-      episodeControls + '<div class="watch-download-area">'+offlineButton(entry?entry.episode:item,entry?item:null)+'</div>'+
+      esc(title) + '</h1></div><a class="watch-page__details" href="' + back + '">تفاصيل العمل</a></div>' +
       epLinks + '</div></div>';
   }
 
@@ -689,11 +604,7 @@
         item.seasons.map(function (s) {
           return '<button class="filter' + (s.id === firstSeason.id ? " is-on" : "") + '" data-season="' + esc(s.id) + '" aria-label="' + esc(s.title) + '">' + esc(s.title) + "</button>";
         }).join("") + "</div></div>" +
-        '<div class="episode-tools"><label class="episode-tools__search"><span aria-hidden="true">⌕</span>'+
-        '<input type="search" id="episodeSearch" placeholder="ابحث عن حلقة" autocomplete="off" aria-label="بحث الحلقات"></label>'+
-        '<span id="episodeCount" class="episode-tools__count">'+firstSeason.episodes.length+' حلقة</span></div>'+
-        '<div id="epList">' + episodesHTML(firstSeason) + '</div>'+
-        '<p id="episodeSearchEmpty" class="episode-search__empty" hidden>لا توجد حلقات مطابقة.</p></div>';
+        '<div id="epList">' + episodesHTML(firstSeason) + "</div></div>";
     }
 
     return '<div class="detail__hero">' +
@@ -714,8 +625,6 @@
       '<button class="btn btn--ghost" data-fav="' + esc(item.key) + '"><svg viewBox="0 0 24 24" aria-hidden="true">' +
       (fav ? '<path d="M5 12l5 5L19 7"/>' : '<path d="M12 5v14M5 12h14"/>') + "</svg>" +
       (fav ? "في قائمتي" : "أضف إلى قائمتي") + "</button>" +
-      '<button type="button" class="btn btn--ghost" data-share="'+esc(item.key)+'" data-share-route="title">مشاركة</button>'+
-      (item.kind==="movie"?offlineButton(item):"") +
       "</div></div></div>" +
       (item.description ? '<p class="detail__desc">' + esc(item.description) + "</p>" : "") +
       (meta.length ? '<div class="detail__meta">' + meta.map(function (m) {
@@ -731,11 +640,9 @@
 
   function episodesHTML(season) {
     if (!season || !season.episodes.length) return '<p class="search__hint">لا حلقات منشورة في هذا الموسم.</p>';
-    var first=season.episodes[0],parent=findEpisode(first.key);
-    var parentSeries=parent&&parent.series;
     return season.episodes.map(function (e) {
       var pct = progressOf(e), started = pct > 1 && pct < 97;
-      return '<div class="episode-line"><button class="ep' + (started ? ' is-playing' : '') + '" data-ep="' + esc(e.key) + '" aria-label="تشغيل ' + esc(e.title) + '">' +
+      return '<button class="ep' + (started ? ' is-playing' : '') + '" data-ep="' + esc(e.key) + '" aria-label="تشغيل ' + esc(e.title) + '">' +
         '<span class="ep__thumb">' +
         (e.poster ? '<img src="' + esc(e.poster) + '" alt="" loading="lazy" onerror="this.remove()">' : '<span class="ep__thumb-placeholder">▶</span>') +
         '<span class="ep__number">الحلقة ' + esc(e.number || "—") + '</span></span>' +
@@ -745,8 +652,7 @@
         (started ? '<span class="ep__progress"><i style="width:' + pct.toFixed(1) + '%"></i></span>' : '') +
         '</span><span class="ep__trailing">' +
         (e.duration ? '<span class="ep__dur">' + esc(fmtDuration(e.duration)) + '</span>' : '') +
-        '<span class="ep__play">▶</span></span></button>' +
-        offlineButton(e, parentSeries, "episode-download") + '</div>';
+        '<span class="ep__play">▶</span></span></button>';
     }).join("");
   }
 
@@ -843,7 +749,6 @@
     var payload = {
       key: item.key, kind: item.kind, title: item.title, subtitle: kindLabel(item.kind) + (item.year ? " · " + item.year : ""),
       poster: item.poster, art: artStyle(item), stream: item.stream, youtubeId: item.youtubeId,
-      offlinePermitted:offlineItem(item).offlinePermitted, parentKey:item.parentKey||"",
       live: !!item.live, quality: item.quality, variants: item.variants || [], kids: item.kids, age: item.age
     };
     if (opts.resumeAt) payload.resumeAt = opts.resumeAt;
@@ -878,7 +783,6 @@
       key: episode.key, kind: "episode", title: series.title + " — " + episode.title,
       subtitle: series.title, poster: series.poster, art: artStyle(series),
       stream: episode.stream, variants: episode.variants || [], youtubeId: episode.youtubeId, live: false,
-      offlinePermitted:offlineItem(episode,series).offlinePermitted, parentKey:series.key,
       quality: series.quality, kids: series.kids, age: series.age
     };
     var saved = Store.progress(episode.key);
@@ -1060,35 +964,9 @@
     });
   }
 
-  function filterVisibleEpisodes(){
-    var input=$("episodeSearch"),host=$("epList");
-    if(!input||!host)return;
-    var term=input.value.trim().toLowerCase(),lines=host.querySelectorAll(".episode-line"),shown=0;
-    Array.prototype.forEach.call(lines,function(row){
-      var matches=!term||(row.textContent||"").toLowerCase().indexOf(term)!==-1;
-      row.hidden=!matches;if(matches)shown++;
-    });
-    var count=$("episodeCount"),empty=$("episodeSearchEmpty");
-    if(count)count.textContent=shown+" من "+lines.length+" حلقة";
-    if(empty)empty.hidden=shown>0||!term;
-  }
-  function shareCurrent(key,route){
-    var entry=findEpisode(key),item=entry?entry.series:findItem(key);
-    var link=location.href.split("#")[0]+"#/"+(route==="watch"?"watch":"title")+"/"+encodeURIComponent(key);
-    if(navigator.share){
-      navigator.share({title:item?item.title:"العز TV",url:link}).catch(function(){});
-    }else if(navigator.clipboard&&navigator.clipboard.writeText){
-      navigator.clipboard.writeText(link).then(function(){toast("تم نسخ الرابط");})
-        .catch(function(){window.prompt("انسخ الرابط:",link);});
-    }else window.prompt("انسخ الرابط:",link);
-  }
-
   /* ---------------------------------------------------------------- events */
 
   function wireGlobal() {
-    document.addEventListener("input",function(e){
-      if(e.target&&e.target.id==="episodeSearch")filterVisibleEpisodes();
-    });
     document.addEventListener("change",function(e){
       var target=e.target;
       if(target&&target.getAttribute&&target.getAttribute("data-browse-select")==="main"){
@@ -1107,31 +985,6 @@
       // Dedicated TV guide and kids world own their controls.
       if (t.closest("#livePage")) return;
       if (t.closest("#kidsWorld") && Kids && Kids.handleClick(e)) return;
-      var download=t.closest("[data-offline-save]");
-      if(download&&window.AlezzOffline){
-        var key=download.getAttribute("data-offline-save"),e=findEpisode(key);
-        var candidate=offlineItem(e?e.episode:findItem(key),e?e.series:null);
-        if(window.AlezzOffline.get(key)){toast("الفيديو محفوظ بالفعل على هذا الجهاز");return;}
-        download.disabled=true;download.textContent="جارٍ التنزيل…";
-        window.AlezzOffline.save(candidate,function(n,total){
-          if(download.parentNode&&total)download.textContent="التنزيل "+Math.min(100,Math.round(n*100/total))+"%";
-        }).then(function(){
-          toast("اكتمل التنزيل — الفيديو متاح دون إنترنت");
-          if(parseHash().name==="downloads")render(true);
-          else if(download.parentNode)download.textContent="✓ محفوظ دون إنترنت";
-        }).catch(function(err){
-          toast(err&&err.message||"تعذر التنزيل","err");
-          if(download.parentNode){download.disabled=false;download.textContent="إعادة التنزيل";}
-        });return;
-      }
-      var removal=t.closest("[data-offline-remove]");
-      if(removal&&window.AlezzOffline){
-        if(!window.confirm("حذف النسخة المحلية من هذا الجهاز؟"))return;
-        window.AlezzOffline.remove(removal.getAttribute("data-offline-remove")).then(function(){render(true);toast("تم الحذف");}).catch(function(){toast("تعذّر الحذف","err");});
-        return;
-      }
-      var shareBtn=t.closest("[data-share]");
-      if(shareBtn){shareCurrent(shareBtn.getAttribute("data-share"),shareBtn.getAttribute("data-share-route"));return;}
       var playBtn = t.closest("[data-play]");
       if (playBtn) { playItem(findItem(playBtn.getAttribute("data-play"))); return; }
 
@@ -1170,12 +1023,7 @@
         var host = $("epList"), currentSeries = findItem(seriesKey);
         if (host && currentSeries && currentSeries.kind === "series") {
           currentSeries.seasons.forEach(function (season) {
-            if (season.id === sid){
-              host.innerHTML=episodesHTML(season);
-              if($("episodeSearch"))$("episodeSearch").value="";
-              if($("episodeSearchEmpty"))$("episodeSearchEmpty").hidden=true;
-              filterVisibleEpisodes();
-            }
+            if (season.id === sid) host.innerHTML = episodesHTML(season);
           });
         }
         return;
@@ -1196,12 +1044,6 @@
     $("searchBtn").addEventListener("click", openSearch);
     $("searchClose").addEventListener("click", closeSearch);
     $("searchInput").addEventListener("input", function (e) { runSearch(e.target.value); });
-    document.addEventListener("change",function(e){
-      if(e.target&&e.target.id==="offlineAuto"&&window.AlezzOffline){
-        window.AlezzOffline.setAuto(!!e.target.checked);
-        toast(e.target.checked?"تم تفعيل الحفظ التلقائي":"تم إيقاف الحفظ التلقائي");
-      }
-    });
     $("tvBtn").addEventListener("click", function () { setTvMode(!document.body.classList.contains("tv-mode")); });
 
     window.addEventListener("scroll", function () {
@@ -1209,10 +1051,6 @@
     }, { passive: true });
 
     window.addEventListener("hashchange", function () { render(); });
-    function markConnection(){document.body.classList.toggle("is-offline",navigator.onLine===false);}
-    window.addEventListener("online",markConnection);
-    window.addEventListener("offline",markConnection);
-    markConnection();
 
     document.addEventListener("keydown", function (e) {
       var openSheet = !$("sheet").hidden;
@@ -1272,11 +1110,6 @@
       render();
       if (source === "snapshot") toast("تعذّر الاتصال — تم فتح النسخة المحفوظة");
     }).catch(function () {
-      if(window.AlezzOffline&&(parseHash().name==="downloads"||parseHash().name==="watch")){
-        catalog={byKey:{},items:[],movies:[],series:[],channels:[],youtube:[],categories:[],rows:[]};
-        document.body.setAttribute("data-boot","ready");
-        render();return;
-      }
       view.innerHTML = '<div class="empty" style="padding-top:22vh"><strong>تعذّر تحميل المكتبة</strong>' +
         "<p>تحقّق من الاتصال ثم أعد تحميل الصفحة.</p>" +
         '<button class="btn btn--gold" onclick="location.reload()">إعادة المحاولة</button></div>';

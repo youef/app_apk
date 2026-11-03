@@ -56,9 +56,6 @@ jobs:
           node tests/quality-picker-smoke.cjs
           node tests/universal-ui-smoke.cjs
           node tests/web-routes-smoke.cjs
-          node tests/web-premium-smoke.cjs
-          node tests/media-recovery-smoke.cjs
-          node tests/offline-playback-smoke.cjs
           node tests/kids-world-smoke.cjs
           node tests/cast-airplay-smoke.cjs
           node tests/importer-smoke.cjs
