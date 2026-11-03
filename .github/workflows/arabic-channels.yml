@@ -1,0 +1,60 @@
+name: Al Ezz TV — Arabic Free-to-Air Channels
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/arabic_iptv_import.py'
+      - '.github/workflows/arabic-channels.yml'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Inspect and test streams without inserting records'
+        type: boolean
+        required: false
+        default: false
+  schedule:
+    - cron: '17 */6 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: al-ezz-arabic-channel-import
+  cancel-in-progress: false
+
+jobs:
+  discover-validate-import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      SUPABASE_URL: https://qyzmlwtvzzgooccqxglq.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || secrets.ALEZZ_SUPABASE_SERVICE_ROLE_KEY }}
+      DRY_RUN: ${{ inputs.dry_run || 'false' }}
+      MAX_CHANNELS: '2000'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify importer syntax
+        run: python -m py_compile scripts/arabic_iptv_import.py
+      - name: Discover Arabic channels and validate actual HLS media segments
+        run: python scripts/arabic_iptv_import.py
+      - name: Upload import/verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arabic-channel-verification
+          path: arabic-channels-report.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Summarize configuration
+        if: always()
+        run: |
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "### Import ran in inspection-only mode" >> "$GITHUB_STEP_SUMMARY"
+            echo "Set repository secret SUPABASE_SERVICE_ROLE_KEY to enable inserting verified channels." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Arabic channel verification completed" >> "$GITHUB_STEP_SUMMARY"
+            echo "New channels are staged as drafts with rights pending; technical health alone never approves rights." >> "$GITHUB_STEP_SUMMARY"
+          fi
