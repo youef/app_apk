@@ -32,3 +32,9 @@ jobs:
           grep -q '^playwright==' python-cloud-studio/requirements.txt
           grep -q 'playwright install --with-deps --only-shell chromium' Dockerfile
           grep -q 'playwright install --with-deps --only-shell chromium' python-cloud-studio/Dockerfile
+      - name: Install Python API test dependencies
+        run: python3 -m pip install -r python-cloud-studio/requirements.txt httpx
+      - name: Verify cloud browser authorization and selection
+        working-directory: python-cloud-studio
+        run: |
+          python3 -m unittest             test_web.DemoTest.test_cloud_browser_requires_admin_and_opt_in             test_web.DemoTest.test_cloud_browser_uses_headless_mode_after_admin_login
