@@ -393,13 +393,13 @@ async function deleteSavedEpisode(id,button){
  }catch(err){message("تعذّر حذف الحلقة: "+err.message,true);}
  finally{savedBusy(button,false);}
 }
-async function serverCheckSaved(ids){
+async function serverCheckSaved(ids,attempt){
  var response=await fetch(cfg.supabaseUrl+"/functions/v1/aseel-link-health",{
   method:"POST",cache:"no-store",
   headers:{"apikey":cfg.publishableKey,"Authorization":"Bearer "+session.access_token,"Content-Type":"application/json"},
   body:JSON.stringify({mode:"episodes",episode_ids:ids})
  });
- if(response.status===401&&await refresh())return serverCheckSaved(ids);
+ if(response.status===401&&!attempt&&await refresh())return serverCheckSaved(ids,1);
  var data=await response.json().catch(function(){return {};});
  if(!response.ok)throw new Error(data.error||"فشل الاتصال بخادم فحص الروابط: HTTP "+response.status);
  if(!Array.isArray(data.results))throw new Error("لم يرجع الخادم نتائج فحص للحلقات.");
