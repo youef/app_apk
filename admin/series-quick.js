@@ -221,8 +221,31 @@ function savedQuality(row){
  var match=variants.filter(function(v){return v&&v.url===row.stream_url;})[0];
  return match&&qualities.indexOf(String(match.label).toUpperCase())>=0?String(match.label).toUpperCase():"AUTO";
 }
+function cloneVariants(list){
+ return (Array.isArray(list)?list:[]).map(function(v){
+  return Object.assign({},v||{},{label:String(v&&v.label||"AUTO"),url:String(v&&v.url||"")});
+ });
+}
+function cloneSavedDraft(data){
+ return Object.assign({},data,{variants:cloneVariants(data.variants)});
+}
+function isSavedDirty(ep){
+ return JSON.stringify(ep._draft)!==JSON.stringify(ep._saved);
+}
+function sourceResult(ep,url,role){
+ var checks=Array.isArray(ep._sourceChecks)?ep._sourceChecks:[];
+ return checks.filter(function(c){return c.url===url&&(!role||c.role===role);})[0]||null;
+}
+function sourceBadge(ep,url,role){
+ if(!url)return '<small class="note">لا يوجد رابط</small>';
+ var result=sourceResult(ep,url,role);
+ if(!result)return '<small class="health-detail">لم يتم فحص هذا الرابط بعد</small>';
+ var condition=result.state==="healthy"?"healthy":result.state==="broken"?"broken":"suspect";
+ return '<small class="source-check"><span class="health '+condition+'">'+healthLabel(condition)+'</span> '+
+  esc(result.reason||"لا توجد تفاصيل")+'</small>';
+}
 function hasSavedEdits(){
- return savedEpisodes.some(function(e){return JSON.stringify(e._draft)!==JSON.stringify(e._saved);});
+ return savedEpisodes.some(isSavedDirty);
 }
 function resetSavedMax(){
  existingSeasons.forEach(function(se){existingEpisodeMax[se.number]=0;});
@@ -233,13 +256,17 @@ function resetSavedMax(){
  updateExistingSeasons();
 }
 function editSavedField(ev){
- var input=ev.target,field=input.dataset.savedField;
- if(!field)return;
+ var input=ev.target,field=input.dataset.savedField,variantField=input.dataset.variantField;
+ if(!field&&!variantField)return;
  var card=input.closest("[data-saved-id]"),episode=card&&savedById(card.dataset.savedId);
  if(!episode)return;
- if(field==="number")episode._draft.number=Number(input.value);
+ if(variantField){
+  var index=Number(input.dataset.variantIndex),variant=episode._draft.variants[index];
+  if(!variant)return;
+  variant[variantField]=input.value;
+ }else if(field==="number")episode._draft.number=Number(input.value);
  else episode._draft[field]=input.value;
- card.classList.toggle("unsaved",JSON.stringify(episode._draft)!==JSON.stringify(episode._saved));
+ card.classList.toggle("unsaved",isSavedDirty(episode));
 }
 async function loadSavedEpisodes(id){
  var token=++savedLoadVersion,panel=$("savedEpisodesPanel");
@@ -268,8 +295,9 @@ async function loadSavedEpisodes(id){
  if(token!==savedLoadVersion || $("seriesSelect").value!==id)return;
  savedEpisodes=pages.map(function(e){
   var quality=savedQuality(e);
-  e._saved={title_ar:e.title_ar||"",number:Number(e.number),stream_url:e.stream_url||"",status:e.status||"draft",quality:quality};
-  e._draft=Object.assign({},e._saved);
+  e._saved={title_ar:e.title_ar||"",number:Number(e.number),stream_url:e.stream_url||"",status:e.status||"draft",quality:quality,variants:cloneVariants(e.stream_variants)};
+  e._draft=cloneSavedDraft(e._saved);
+  e._sourceChecks=[];
   return e;
  }).sort(function(a,b){return savedSeasonNumber(a.season_id)-savedSeasonNumber(b.season_id)||a.number-b.number;});
  var filter=$("savedSeasonFilter");filter.replaceChildren();
@@ -296,8 +324,9 @@ function renderSavedEpisodes(){
  var healthy=savedEpisodes.filter(function(e){return e.link_health_status==="healthy";}).length;
  var broken=savedEpisodes.filter(function(e){return e.link_health_status==="broken";}).length;
  var uncertain=savedEpisodes.filter(function(e){return e.link_health_status==="suspect";}).length;
+ var extras=savedEpisodes.reduce(function(sum,e){return sum+(e._draft.variants||[]).length;},0);
  $("savedSummary").textContent="إجمالي "+savedEpisodes.length+" حلقة • المعروض "+list.length+
-  " • يستجيب "+healthy+" • معطوب "+broken+" • غير مؤكد "+uncertain+
+  " • "+extras+" جودة إضافية • يستجيب "+healthy+" • معطوب "+broken+" • غير مؤكد "+uncertain+
   " • لم يُفحص "+(savedEpisodes.length-healthy-broken-uncertain);
  if(!list.length){
   host.innerHTML='<p class="note">لا توجد حلقات محفوظة تطابق الاختيار. يمكنك إضافة الحلقات من القسم السابق.</p>';
@@ -310,20 +339,35 @@ function renderSavedEpisodes(){
   var statusOptions=[["published","منشورة"],["draft","مسودة"],["hidden","مخفية"]].map(function(pair){
    return '<option value="'+pair[0]+'"'+(d.status===pair[0]?' selected':'')+'>'+pair[1]+'</option>';
   }).join("");
-  var modified=JSON.stringify(d)!==JSON.stringify(ep._saved);
+  var modified=isSavedDirty(ep);
   var checked=ep.link_health_checked_at?new Date(ep.link_health_checked_at).toLocaleString("ar-SA"):"لم يتم الفحص";
+  var variants=(d.variants||[]).map(function(v,index){
+   var duplicate=d.stream_url===v.url;
+   return '<div class="saved-variant-row">'+
+    '<label>اسم الجودة أو المشغل<input type="text" maxlength="32" data-variant-field="label" data-variant-index="'+index+'" value="'+esc(v.label)+'" placeholder="مثال: 1080P"></label>'+
+    '<label>رابط الجودة<input type="url" dir="ltr" data-variant-field="url" data-variant-index="'+index+'" value="'+esc(v.url)+'" placeholder="https://…/movie.m3u8"></label>'+
+    '<div class="saved-variant-check">'+sourceBadge(ep,v.url,"variant")+
+    (duplicate?'<small class="note">نفس الرابط الأساسي</small>':'')+'</div>'+
+    '<div class="actions"><button type="button" class="ghost" data-saved-action="preview" data-url-type="variant" data-index="'+index+'" data-id="'+esc(ep.id)+'">تجربة التشغيل</button>'+
+    '<button type="button" class="danger" data-saved-action="remove-variant" data-index="'+index+'" data-id="'+esc(ep.id)+'">إزالة</button></div></div>';
+  }).join("");
   return '<article class="saved-episode'+(modified?' unsaved':'')+'" data-saved-id="'+esc(ep.id)+'">'+
    '<div class="saved-episode-head"><strong>الموسم '+number+' — الحلقة '+esc(d.number)+'</strong>'+
    '<span class="health '+condition+'">'+healthLabel(condition)+'</span></div>'+
    '<div class="saved-fields">'+
    '<label>رقم الحلقة<input type="number" min="1" max="300" data-saved-field="number" value="'+esc(d.number)+'"></label>'+
    '<label>اسم الحلقة<input type="text" maxlength="250" data-saved-field="title_ar" value="'+esc(d.title_ar)+'"></label>'+
-   '<label class="saved-url">رابط التشغيل<input type="url" dir="ltr" data-saved-field="stream_url" value="'+esc(d.stream_url)+'" placeholder="https://…/episode.m3u8"></label>'+
+   '<label class="saved-url">رابط التشغيل الأساسي<input type="url" dir="ltr" data-saved-field="stream_url" value="'+esc(d.stream_url)+'" placeholder="https://…/episode.m3u8"></label>'+
    '<label>الجودة<select data-saved-field="quality">'+options+'</select></label>'+
    '<label>الحالة<select data-saved-field="status">'+statusOptions+'</select></label></div>'+
+   '<div class="saved-primary-check">'+sourceBadge(ep,d.stream_url,"primary")+
+   ' <button type="button" class="ghost" data-saved-action="preview" data-url-type="primary" data-id="'+esc(ep.id)+'">تجربة تشغيل الأساسي</button></div>'+
+   '<div class="saved-variants"><div class="saved-variant-title"><strong>روابط الجودات والمشغلات الإضافية ('+d.variants.length+' من 8)</strong>'+
+   '<button type="button" class="ghost" data-saved-action="add-variant" data-id="'+esc(ep.id)+'"'+(d.variants.length>=8?' disabled':'')+'>+ رابط جودة / مشغل</button></div>'+
+   (variants||'<p class="note">لا توجد روابط إضافية محفوظة لهذه الحلقة.</p>')+'</div>'+
    '<div class="saved-episode-bottom"><div class="actions">'+
-   '<button type="button" class="primary" data-saved-action="save" data-id="'+esc(ep.id)+'">حفظ التعديل</button>'+
-   '<button type="button" class="ghost" data-saved-action="check" data-id="'+esc(ep.id)+'">فحص الرابط</button>'+
+   '<button type="button" class="primary" data-saved-action="save" data-id="'+esc(ep.id)+'">حفظ التعديل والروابط</button>'+
+   '<button type="button" class="ghost" data-saved-action="check" data-id="'+esc(ep.id)+'">فحص كل روابط الحلقة</button>'+
    '<button type="button" class="danger" data-saved-action="delete" data-id="'+esc(ep.id)+'">حذف الحلقة</button>'+
    '</div><small class="health-detail">'+esc(ep._checkError||ep.link_health_reason||"حالة الرابط لم تُحسم بعد")+
    ' • '+esc(checked)+'</small></div></article>';
@@ -339,27 +383,32 @@ async function saveSavedEpisode(id,button){
  var d=ep._draft,previous=ep._saved,season=savedSeasonNumber(ep.season_id);
  if(!Number.isInteger(d.number)||d.number<1||d.number>300){message("رقم الحلقة يجب أن يكون بين 1 و300.",true);return;}
  if(!String(d.title_ar).trim()){message("اسم الحلقة لا يمكن أن يكون فارغًا.",true);return;}
- if(d.stream_url!==previous.stream_url&&!urlPattern.test(String(d.stream_url).trim())){
-  message("أدخل رابط HTTPS مباشر بصيغة MP4 أو m3u8.",true);return;
+ if(d.stream_url && !urlPattern.test(String(d.stream_url).trim())){
+  message("رابط الحلقة الأساسي يجب أن يكون HTTPS بصيغة MP4 أو m3u8.",true);return;
  }
  if(savedEpisodes.some(function(e){return e.id!==id&&e.season_id===ep.season_id&&e._saved.number===d.number})){
   message("رقم الحلقة "+d.number+" موجود مسبقًا في الموسم "+season+".",true);return;
  }
- var payload={number:d.number,title_ar:String(d.title_ar).trim().slice(0,250),
-  stream_url:String(d.stream_url).trim()||null,status:d.status};
- if(d.quality!==previous.quality||d.stream_url!==previous.stream_url){
-  var oldVariants=Array.isArray(ep.stream_variants)?ep.stream_variants:[];
-  var variants=oldVariants.map(function(v){return Object.assign({},v);});
-  variants.forEach(function(v){if(v.url===previous.stream_url)v.url=d.stream_url;});
-  if(d.quality!==previous.quality&&d.stream_url){
-   var index=variants.findIndex(function(v){return v.url===d.stream_url;});
-   if(index>=0)variants[index].label=d.quality;
-   else if(variants.length<8)variants.unshift({label:d.quality,url:d.stream_url});
-   else {message("يوجد 8 جودات بالفعل؛ احذف جودة بديلة من لوحة الإدارة أولًا.",true);return;}
-  }
-  if(variants.length<=8)payload.stream_variants=variants;
+ var variants=cloneVariants(d.variants);
+ if(variants.length>8){message("لا يمكن حفظ أكثر من 8 روابط للجودات الإضافية.",true);return;}
+ for(var i=0;i<variants.length;i++){
+  var v=variants[i];
+  v.label=String(v.label||"").trim();
+  v.url=String(v.url||"").trim();
+  if(!v.label||v.label.length>32){message("أدخل اسمًا صالحًا لكل جودة (حتى 32 حرفًا).",true);return;}
+  if(!urlPattern.test(v.url)){message("رابط الجودة "+(i+1)+" غير صالح. استخدم HTTPS MP4 أو m3u8.",true);return;}
  }
- savedBusy(button,true,"جارٍ الحفظ…");
+ if(!d.stream_url&&!variants.length){message("أدخل رابطًا أساسيًا أو رابط جودة إضافيًا واحدًا على الأقل.",true);return;}
+ // Only synchronize the quality alias when the dedicated primary-quality field changed.
+ if(d.quality!==previous.quality && d.stream_url && d.quality!=="AUTO"){
+  var mainVariant=variants.filter(function(v){return v.url===d.stream_url;})[0];
+  if(mainVariant)mainVariant.label=d.quality;
+  else if(variants.length<8)variants.unshift({label:d.quality,url:d.stream_url});
+  else {message("قائمة الجودات ممتلئة (8). عدّل اسم الجودة من الروابط الموجودة.",true);return;}
+ }
+ var payload={number:d.number,title_ar:String(d.title_ar).trim().slice(0,250),
+  stream_url:String(d.stream_url).trim()||null,status:d.status,stream_variants:variants};
+ savedBusy(button,true,"جارٍ حفظ الروابط…");
  try{
   var result=await rest("aseel_episodes?id=eq."+encodeURIComponent(ep.id)+"&season_id=eq."+encodeURIComponent(ep.season_id),{
    method:"PATCH",body:payload
@@ -371,11 +420,11 @@ async function saveSavedEpisode(id,button){
   ep.link_health_status=saved.link_health_status;
   ep.link_health_reason=saved.link_health_reason;
   ep.link_health_checked_at=saved.link_health_checked_at;
-  ep._saved={title_ar:saved.title_ar||"",number:Number(saved.number),stream_url:saved.stream_url||"",status:saved.status,quality:savedQuality(saved)};
-  ep._draft=Object.assign({},ep._saved);
-  ep._checkError="";
+  ep._saved={title_ar:saved.title_ar||"",number:Number(saved.number),stream_url:saved.stream_url||"",status:saved.status,quality:savedQuality(saved),variants:cloneVariants(saved.stream_variants)};
+  ep._draft=cloneSavedDraft(ep._saved);
+  ep._checkError="";ep._sourceChecks=[];
   resetSavedMax();renderSavedEpisodes();
-  message("تم حفظ تعديل الموسم "+season+" الحلقة "+saved.number+" بنجاح.");
+  message("تم حفظ الحلقة "+saved.number+" وروابط الجودات التابعة لها.");
  }catch(err){
   message(/duplicate|23505/i.test(err.message)?"رقم هذه الحلقة مستخدم بالفعل في الموسم.":err.message,true);
  }finally{savedBusy(button,false);}
@@ -412,6 +461,9 @@ async function serverCheckSaved(ids,attempt){
   ep.link_health_failures=update.link_health_failures;
   ep._checkError=data.errors&&data.errors[update.id]||"";
  });
+ if(data.sources)Object.keys(data.sources).forEach(function(id){
+  var ep=savedById(id);if(ep)ep._sourceChecks=Array.isArray(data.sources[id])?data.sources[id]:[];
+ });
  if(data.errors)Object.keys(data.errors).forEach(function(id){
   var ep=savedById(id);if(ep)ep._checkError=data.errors[id];
  });
@@ -419,7 +471,8 @@ async function serverCheckSaved(ids,attempt){
 }
 async function checkOneSavedEpisode(id,button){
  var ep=savedById(id);if(!ep)return;
- if(ep._draft.stream_url!==ep._saved.stream_url){
+ if(ep._draft.stream_url!==ep._saved.stream_url ||
+   JSON.stringify(ep._draft.variants)!==JSON.stringify(ep._saved.variants)){
   message("احفظ رابط الحلقة المعدّل أولًا حتى يتم فحص النسخة الصحيحة في قاعدة البيانات.",true);return;
  }
  savedBusy(button,true,"جارٍ الفحص…");
@@ -436,9 +489,9 @@ async function checkAllSavedEpisodes(){
  var button=$("checkSavedAll");button.disabled=true;
  $("stopSavedCheck").classList.remove("hidden");
  try{
-  for(var i=0;i<ids.length;i+=12){
+  for(var i=0;i<ids.length;i+=4){
    if(stopSavedChecking||savedSeriesId!==selected)break;
-   var part=ids.slice(i,i+12);
+   var part=ids.slice(i,i+4);
    button.textContent="جارٍ فحص "+completed+" / "+ids.length;
    try{await serverCheckSaved(part);}catch(err){
     failed+=part.length;
@@ -529,6 +582,16 @@ function wire(){
  $("savedEpisodeList").addEventListener("click",function(ev){
   var button=ev.target.closest("button[data-saved-action]");if(!button)return;
   var action=button.dataset.savedAction,id=button.dataset.id;
+  if(action==="add-variant"){
+   var e=savedById(id);if(!e)return;
+   if(e._draft.variants.length>=8){message("الحد الأقصى 8 روابط إضافية للحلقة.",true);return;}
+   e._draft.variants.push({label:"HD",url:""});renderSavedEpisodes();return;
+  }
+  if(action==="remove-variant"){
+   var e=savedById(id),index=Number(button.dataset.index);
+   if(!e||!e._draft.variants[index])return;
+   e._draft.variants.splice(index,1);renderSavedEpisodes();return;
+  }
   if(action==="save")saveSavedEpisode(id,button);
   if(action==="delete")deleteSavedEpisode(id,button);
   if(action==="check")checkOneSavedEpisode(id,button);
