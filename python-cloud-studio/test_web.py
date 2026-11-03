@@ -94,6 +94,25 @@ class DemoTest(unittest.TestCase):
             self.assertEqual(len(fake_db.rows['aseel_series']),1)
             self.assertEqual(len(fake_db.rows['aseel_episodes']),1)
 
+    def test_cloud_browser_requires_admin_and_opt_in(self):
+        self.post('demo', {})
+        with patch.dict(server.os.environ, {'ALEZZ_PUBLIC_MODE': '1', 'ALEZZ_BROWSER_CAPTURE': '1'}):
+            self.assertEqual(self.post('edge-capture', {}).status_code, 401)
+        with patch.dict(server.os.environ, {'ALEZZ_PUBLIC_MODE': '1', 'ALEZZ_BROWSER_CAPTURE': '0'}):
+            self.assertEqual(self.post('edge-capture', {}).status_code, 503)
+
+    def test_cloud_browser_uses_headless_mode_after_admin_login(self):
+        self.post('demo', {})
+        sid = self.client.cookies.get(server.COOKIE)
+        state = server._states[sid]
+        state.db = DummyDB()
+        with patch.dict(server.os.environ, {'ALEZZ_PUBLIC_MODE': '1', 'ALEZZ_BROWSER_CAPTURE': '1'}):
+            with patch.object(server, 'collect_edge_network', return_value=2) as capture:
+                result = self.post('edge-capture', {'seconds': 2, 'max_pages': 4})
+                self.assertEqual(result.status_code, 200, result.text)
+                self.assertEqual(result.json()['detected'], 2)
+                self.assertTrue(capture.call_args.kwargs['cloud'])
+
     def test_validation(self):
         self.assertEqual(self.post('discover', {'url':'http://localhost/secret','kind':'auto'}).status_code,400)
         self.post('demo',{})

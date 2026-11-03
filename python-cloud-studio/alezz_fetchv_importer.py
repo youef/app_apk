@@ -554,45 +554,96 @@ def load_fetchv_links(path: Path, out: Catalogue) -> int:
     return count
 
 
-def collect_edge_network(out: Catalogue, seconds: int, max_pages: int=150) -> int:
-    """Optional standard-network observation via *new* Edge browser (not FetchV)."""
+def collect_edge_network(out: Catalogue, seconds: int, max_pages: int = 8, cloud: bool = False) -> int:
+    """Inspect standard public HTTPS media requests with a new browser session.
+
+    On Render this uses cloud-side Chromium headless; on a local PC, headed Edge.
+    The browser has no access to existing Safari/Edge cookies or extensions.
+    """
     try:
         from playwright.sync_api import sync_playwright
     except ImportError as exc:
-        raise ValueError("Install Playwright: python -m pip install playwright") from exc
-    targets=out.episodes if out.kind=="series" else [out]
-    count=0
-    with sync_playwright() as p:
-        browser=p.chromium.launch(channel="msedge", headless=False)
-        try:
-            for entry in targets[:max_pages]:
-                page_url=entry.page_url if isinstance(entry,Episode) else out.url
-                found=[]
-                page=browser.new_page()
-                def listen(req):
-                    uri=req.url
-                    if WEB_MEDIA.search(uri) and uri.startswith("https://") and uri not in found:
-                        found.append(uri)
-                page.on("request",listen)
-                try:
-                    page.goto(page_url,wait_until="domcontentloaded",timeout=20000)
-                    page.wait_for_timeout(seconds*1000)
-                    for selector in ("video", "button[aria-label*=play i]", "button[title*=play i]"):
-                        try:
-                            page.locator(selector).first.click(timeout=1000)
-                            page.wait_for_timeout(1300)
-                            break
-                        except Exception:pass
-                    uri=next((u for u in found if MEDIA_EXT.search(u)),"")
-                    if uri:
-                        if isinstance(entry,Episode):entry.media_url=uri
-                        else:out.media_url=uri
-                        count+=1
-                except Exception:pass
-                finally:page.close()
-        finally:browser.close()
-    return count
+        raise ValueError("Playwright غير مثبت. أعد نشر نسخة Docker المحدثة على Render.") from exc
 
+    targets = out.episodes if out.kind == "series" else [out]
+    count = 0
+    with sync_playwright() as p:
+        try:
+            browser = (
+                p.chromium.launch(headless=True, args=["--disable-dev-shm-usage"])
+                if cloud else p.chromium.launch(channel="msedge", headless=False)
+            )
+        except Exception as exc:
+            mode = "Chromium السحابي" if cloud else "Microsoft Edge المحلي"
+            raise ValueError(f"تعذر بدء {mode}: {clean(exc, 180)}") from None
+        try:
+            context = browser.new_context(accept_downloads=False, service_workers="block")
+            context.set_default_timeout(8_000)
+            checked_hosts: set[str] = set()
+
+            def safe_route(route):
+                try:
+                    address = public_url(route.request.url)
+                    host = (urlsplit(address).hostname or "").lower()
+                    if host not in checked_hosts:
+                        if len(checked_hosts) >= 35:
+                            raise ValueError("Too many external hosts")
+                        check_dns(address)
+                        checked_hosts.add(host)
+                    route.continue_()
+                except (ValueError, OSError, TypeError):
+                    route.abort("blockedbyclient")
+
+            # Best-effort guard for page and subresource URLs: no local/private hosts,
+            # ports, IP-literals, non-HTTPS or service-worker controlled traffic.
+            context.route("**/*", safe_route)
+            try:
+                for entry in targets[:min(max_pages, 8)]:
+                    raw_url = entry.page_url if isinstance(entry, Episode) else out.url
+                    if not raw_url:
+                        continue
+                    page_url = public_url(raw_url)
+                    check_dns(page_url)
+                    page = context.new_page()
+                    found: list[str] = []
+
+                    def listen(request):
+                        uri = request.url
+                        if WEB_MEDIA.search(uri) and uri.startswith("https://") and uri not in found:
+                            try:
+                                found.append(public_url(uri))
+                            except (ValueError, TypeError):
+                                pass
+                    page.on("request", listen)
+                    try:
+                        page.goto(page_url, wait_until="domcontentloaded", timeout=18_000)
+                        page.wait_for_timeout(seconds * 1000)
+                        for selector in ("video", "button[aria-label*=play i]", "button[title*=play i]"):
+                            try:
+                                page.locator(selector).first.click(timeout=1200)
+                                page.wait_for_timeout(1200)
+                                break
+                            except Exception:
+                                pass
+                        uri = next((u for u in found if MEDIA_EXT.search(u)), "")
+                        if uri:
+                            if isinstance(entry, Episode):
+                                entry.media_url = uri
+                                entry.verified = False
+                            else:
+                                out.media_url = uri
+                                out.verified = False
+                            count += 1
+                    except Exception:
+                        # A failed page should not stop the remaining episodes.
+                        pass
+                    finally:
+                        page.close()
+            finally:
+                context.close()
+        finally:
+            browser.close()
+    return count
 
 class Supabase:
     def __init__(self,url: str,key: str,access_token: str="",email: str="",password: str=""):

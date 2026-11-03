@@ -112,8 +112,8 @@
   }
   function start(){
     if(!$('episodeList')||!$('libraryWorkList'))return;
-    // The Edge network-capture implementation requires desktop Edge, not a remote iPhone.
-    if(!['localhost','127.0.0.1'].includes(location.hostname) && $('edgeCaptureBtn'))$('edgeCaptureBtn').hidden=true;
+    // Render runs the scan in headless Chromium; desktop installations use Edge.
+    if($('edgeCaptureBtn'))$('edgeCaptureBtn').hidden=false;
     const health=document.createElement('span');
     health.id='studioMobileHealth';health.className='studio-mobile-health';health.textContent='فحص الخادم...';
     document.querySelector('.studio-command-bar .command-copy')?.appendChild(health);

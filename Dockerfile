@@ -1,10 +1,12 @@
 # Render Docker build from the repository root.
 # If Render Root Directory=python-cloud-studio, use that folder's Dockerfile.
-FROM python:3.13-slim
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 ALEZZ_PUBLIC_MODE=1
+FROM python:3.13-bookworm
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 ALEZZ_PUBLIC_MODE=1 ALEZZ_BROWSER_CAPTURE=1
 WORKDIR /app
 COPY python-cloud-studio/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
+# Install Playwright's headless Chromium browser plus required Linux libraries.
+RUN python -m playwright install --with-deps --only-shell chromium
 COPY python-cloud-studio/ ./
 EXPOSE 8080
 # Cloud auth deliberately fails startup unless ALEZZ_SITE_PASSWORD (12+ chars)

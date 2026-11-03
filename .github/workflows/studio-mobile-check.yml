@@ -24,4 +24,11 @@ jobs:
           node --check python-cloud-studio/static/app.js
           node --check python-cloud-studio/static/studio-pro.js
       - name: Validate mobile interface, navigation, and PWA assets
-        run: python3 python-cloud-studio/test_mobile_ui.py
+        run: |
+          python3 -m compileall -q python-cloud-studio
+          python3 python-cloud-studio/test_mobile_ui.py
+      - name: Verify cloud browser dependency and Docker recipe
+        run: |
+          grep -q '^playwright==' python-cloud-studio/requirements.txt
+          grep -q 'playwright install --with-deps --only-shell chromium' Dockerfile
+          grep -q 'playwright install --with-deps --only-shell chromium' python-cloud-studio/Dockerfile

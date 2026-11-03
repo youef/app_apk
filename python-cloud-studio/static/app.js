@@ -392,13 +392,16 @@
     $('verifySelectedBtn').onclick=()=>verifyRows([...app.selected]);$('verifyMovieBtn').onclick=()=>verifyRows([]);
     $('edgeCaptureBtn').onclick=()=>action(async()=>{
       if(!app.catalogue)throw new Error('اكتشف العمل أولًا.');
-      if(!confirm('سيُفتح Microsoft Edge محليًا في نافذة جديدة لمراقبة طلبات الوسائط العامة لعدد محدود من الصفحات. لا يتحكم في FetchV ولا يستخدم جلسة متصفحك. متابعة؟'))return;
+      const cloud=!['localhost','127.0.0.1'].includes(location.hostname);
+      if(cloud&&!app.authenticated){$('loginToggle').click();throw new Error('سجّل دخول مسؤول Supabase أولًا لتفعيل فحص Chromium على Render.');}
+      const message=cloud?'سيعمل متصفح Chromium على خادم Render لفحص روابط HTTPS العامة فقط. لا يتحكم في Safari ولا في الإضافات. متابعة؟':'سيُفتح Microsoft Edge محليًا في نافذة جديدة لفحص طلبات الوسائط العامة. متابعة؟';
+      if(!confirm(message))return;
       await syncEdits({silent:true});
-      activity('يجري تشغيل Edge واكتشاف طلبات الوسائط القياسية...','loading');
+      activity('يجري تشغيل متصفح الفحص واكتشاف طلبات الوسائط العامة...','loading');
       const result=await API('edge-capture',{seconds:3,max_pages:8});
       updateStatus(result);
       activity(`تم التقاط ${result.detected} رابط. افحصها قبل حفظها.`,result.detected?'success':'info');
-      toast(`نتيجة Edge: ${result.detected} رابط فيديو.`,result.detected?'success':'info');
+      toast(`نتيجة فحص المتصفح: ${result.detected} رابط فيديو. افحص صلاحية الروابط قبل الحفظ.`,result.detected?'success':'info');
     });
     $('episodeSearch').oninput=()=>{if(app.catalogue?.kind==='series')renderEpisodes();};
     $('loginForm').onsubmit=doLogin;

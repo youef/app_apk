@@ -611,18 +611,22 @@ class EdgeCaptureForm(BaseModel):
 @app.post('/api/edge-capture')
 async def edge_capture(request: Request, data: EdgeCaptureForm):
     state = protected(request)
-    if os.getenv('ALEZZ_PUBLIC_MODE') == '1':
-        raise HTTPException(400, 'فحص Microsoft Edge متاح على الكمبيوتر فقط؛ على الموقع السحابي استخدم لصق روابط FetchV أو اكتشاف الروابط العامة.')
+    cloud = os.getenv('ALEZZ_PUBLIC_MODE') == '1' or bool(os.getenv('RENDER'))
+    if cloud:
+        if os.getenv('ALEZZ_BROWSER_CAPTURE') != '1':
+            raise HTTPException(503, 'ميزة Chromium السحابي غير مفعلة؛ أعد نشر Docker المحدث أو اضبط ALEZZ_BROWSER_CAPTURE=1.')
+        if state.db is None:
+            raise HTTPException(401, 'سجّل دخول مسؤول Supabase قبل استخدام فحص Chromium السحابي.')
     if state.demo:
         raise HTTPException(400, 'اكتشف رابطًا حقيقيًا قبل فحص الشبكة')
     cat = current_catalogue(state)
     def task():
         with state.lock:
-            return collect_edge_network(cat, seconds=data.seconds, max_pages=data.max_pages)
+            return collect_edge_network(cat, seconds=data.seconds, max_pages=data.max_pages, cloud=cloud)
     try:
         count = await run_in_threadpool(task)
     except Exception as exc:
-        raise HTTPException(400, 'تعذّر تشغيل Microsoft Edge: '+clean(exc,180)) from None
+        raise HTTPException(400, 'تعذّر فحص الوسائط بالمتصفح: '+clean(exc,180)) from None
     return {'detected':count, **get_summary(state)}
 
 
