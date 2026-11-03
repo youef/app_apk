@@ -256,7 +256,7 @@ Deno.serve(async(req:Request)=>{
   const selected=String(body.table||"");
   if(selected&&!tables.some(t=>t.name===selected))return reply({error:"Unknown table"},400);
   const before=typeof body.before==="string" ? body.before : "";
-  if(before && (!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$/.test(before)||isNaN(Date.parse(before))))
+  if(before && (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(before)||isNaN(Date.parse(before))))
     return reply({error:"Invalid before timestamp"},400);
   const requested=Math.max(1,Math.min(24,Number(body.per_table)||24));
   const summary:Record<string,unknown>={authenticated:github?"github_oidc":"admin",scanned:0,healthy:0,suspect:0,broken:0,skipped:0,newlyHidden:0,recovered:0,errors:[]};
