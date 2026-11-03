@@ -262,6 +262,15 @@ def main():
             continue
         to_check.append((uid, name, country, meta, links[:3]))
     max_channels = int(os.getenv("MAX_CHANNELS", "2000"))
+    # Favor researched channels in our project watchlist without bypassing
+    # either technical checks or license review.
+    with open("data/arabic-channel-watchlist.json", encoding="utf-8") as watch_file:
+        watchlist = json.load(watch_file).get("candidates", [])
+    priority_ids = {row["id"] for row in watchlist if row.get("id")}
+    to_check.sort(key=lambda x: (x[0] not in priority_ids, x[1].casefold()))
+    REPORT["watchlist_total"] = len(priority_ids)
+    REPORT["watchlist_found_in_source"] = len(priority_ids.intersection(set(grouped.keys())))
+    REPORT["watchlist_new_to_check"] = sum(item[0] in priority_ids for item in to_check)
     to_check = to_check[:max_channels]
     print("New candidates requiring verification:", len(to_check))
     def verify(item):
