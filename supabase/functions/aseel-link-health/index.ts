@@ -142,19 +142,33 @@ async function probe(raw:unknown,mode:"stream"|"official"|"youtube"):Promise<Pro
   }
   return {kind:"unknown",reason:"تحويلات كثيرة تمنع التحقق"};
 }
-function mediaList(row:Row){
+
+function mediaList(row:Row, allSources=false){
   const mode=row.playback_mode==="official_link"?"official":"stream";
-  if(mode==="official")return [{url:String(row.official_url||""),mode:"official" as const}];
-  const urls=[row.stream_url,...(Array.isArray(row.stream_variants)?row.stream_variants.map((v:any)=>v&&v.url):[])].filter(Boolean);
-  const distinct=[...new Set(urls.map(String))];
-  if(distinct.length)return distinct.slice(0,4).map(url=>({url,mode:"stream" as const}));
-  if(row.youtube_url)return [{url:String(row.youtube_url),mode:"youtube" as const}];
+  if(mode==="official")return [{url:String(row.official_url||""),mode:"official" as const,label:"الرابط الرسمي",role:"primary"}];
+  const entries:{url:string,mode:"stream",label:string,role:string}[]=[];
+  if(row.stream_url)entries.push({url:String(row.stream_url),mode:"stream",label:"الرابط الأساسي",role:"primary"});
+  if(Array.isArray(row.stream_variants)){
+    row.stream_variants.forEach((v:any,index:number)=>{
+      if(!v||typeof v.url!=="string"||!v.url.trim())return;
+      entries.push({url:v.url.trim(),mode:"stream",label:String(v.label||"الجودة "+(index+1)).slice(0,70),role:"variant"});
+    });
+  }
+  if(entries.length)return entries.slice(0,allSources?9:4);
+  if(row.youtube_url)return [{url:String(row.youtube_url),mode:"youtube" as const,label:"يوتيوب رسمي",role:"primary"}];
   return [];
 }
-async function checkRow(table:string,row:Row){
-  const urls=mediaList(row);
+async function checkRow(table:string,row:Row,allSources=false){
+  const urls=mediaList(row,allSources);
   const fingerprint=JSON.stringify(urls);
-  const probes=await Promise.all(urls.map(x=>probe(x.url,x.mode)));
+  // The same stream can be listed as both the primary and a quality variant.
+  // Report it in both places but make only one network request.
+  const pending=new Map<string,Promise<Probe>>();
+  const probes=await Promise.all(urls.map(x=>{
+    const key=x.mode+":"+x.url;
+    if(!pending.has(key))pending.set(key,probe(x.url,x.mode));
+    return pending.get(key)!;
+  }));
   const healthy=probes.some(x=>x.kind==="healthy");
   const allDefinite=probes.length>0 && probes.every(x=>x.kind==="definite");
   const prior=Number(row.link_health_failures||0);
@@ -164,16 +178,21 @@ async function checkRow(table:string,row:Row){
   const reason=healthy?"تم تأكيد استجابة مصدر واحد على الأقل":allDefinite?
     (probes[0]?.reason||"تعذر تشغيل المصدر")+" — التحقق "+failed+" من 3":
     (probes[0]?.reason||"تعذر التحقق التلقائي؛ لا يُحجب المحتوى بسبب نتيجة غير حاسمة");
-  // Re-read the source before writing; never apply stale probe after admin edits.
   const current=await rest(table,"select="+(table==="aseel_youtube_videos"?"youtube_url":"stream_url,stream_variants,youtube_url"+
     (table==="aseel_channels"?",official_url,playback_mode":""))+
     "&id=eq."+encodeURIComponent(String(row.id))+"&limit=1");
-  if(!Array.isArray(current)||!current.length||JSON.stringify(mediaList(current[0]))!==fingerprint)
+  if(!Array.isArray(current)||!current.length||JSON.stringify(mediaList(current[0],allSources))!==fingerprint)
     return {state:"skipped",title:row.title_ar};
   const payload={link_health_status:status,link_health_reason:reason.slice(0,300),
     link_health_failures:failed,link_health_checked_at:new Date().toISOString(),link_health_url:fingerprint};
   await rest(table,"id=eq."+encodeURIComponent(String(row.id)),{method:"PATCH",body:JSON.stringify(payload)});
-  return {state:status,title:row.title_ar};
+  const sources=allSources?urls.map((x,index)=>{
+    const result=probes[index];
+    return {index,role:x.role,label:x.label,url:x.url,
+      state:result.kind==="healthy"?"healthy":result.kind==="definite"?"broken":"suspect",
+      reason:result.reason};
+  }):undefined;
+  return {state:status,title:row.title_ar,sources};
 }
 async function updateSeries(){
   const series=await rest("aseel_series","select=id,link_health_status&status=eq.published&limit=200");
@@ -211,15 +230,19 @@ Deno.serve(async(req:Request)=>{
     try{
       const query="&id=in.("+ids.join(",")+")&limit="+ids.length;
       const rows=await rest("aseel_episodes","select=id,title_ar,stream_url,stream_variants,youtube_url,link_health_status,link_health_failures,link_health_checked_at,link_health_url"+query);
-      const attempts=await Promise.allSettled(rows.map((row:Row)=>checkRow("aseel_episodes",row)));
+      const attempts=await Promise.allSettled(rows.map((row:Row)=>checkRow("aseel_episodes",row,true)));
       const latest=await rest("aseel_episodes","select=id,link_health_status,link_health_reason,link_health_checked_at,link_health_failures"+query);
       const errors:Record<string,string>={};
+      const sources:Record<string,unknown[]>={};
       rows.forEach((row:Row,index:number)=>{
         const result=attempts[index];
         if(result.status==="rejected")errors[String(row.id)]=String(result.reason).slice(0,180);
-        else if(result.value.state==="skipped")errors[String(row.id)]="تغير رابط الحلقة أثناء الفحص؛ أعد الاختبار";
+        else {
+          if(result.value.state==="skipped")errors[String(row.id)]="تغير رابط الحلقة أثناء الفحص؛ أعد الاختبار";
+          else sources[String(row.id)]=result.value.sources||[];
+        }
       });
-      return reply({mode:"episodes",results:latest,errors,requested:ids.length,found:rows.length},Object.keys(errors).length?207:200);
+      return reply({mode:"episodes",results:latest,sources,errors,requested:ids.length,found:rows.length},Object.keys(errors).length?207:200);
     }catch(e){
       return reply({error:"تعذر فحص الحلقات: "+String(e).slice(0,160)},500);
     }
