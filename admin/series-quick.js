@@ -417,6 +417,7 @@ async function previewSavedSource(id,type,index){
  };
  video.oncanplay=function(){if(previewToken===token)previewNote("المشغل قادر على بدء تشغيل المصدر في هذا المتصفح؛ جرّب الصوت والصورة يدويًا.",false);};
  try{
+  var usingHls=false;
   if(/\.m3u8(?:\?|$)/i.test(url)){
    if(video.canPlayType("application/vnd.apple.mpegurl")||video.canPlayType("application/x-mpegURL")){
     video.src=url;
@@ -430,10 +431,10 @@ async function previewSavedSource(id,type,index){
     previewHls.on(Hls.Events.ERROR,function(event,data){
      if(previewToken===token&&data&&data.fatal)previewNote("فشل تشغيل HLS: "+(data.details||"المصدر/الترميز أو CORS")+".",true);
     });
-    previewHls.loadSource(url);previewHls.attachMedia(video);
+    previewHls.loadSource(url);previewHls.attachMedia(video);usingHls=true;
    }
   }else video.src=url;
-  video.load();
+  if(!usingHls)video.load();
   try{await video.play();}catch(e){
    if(previewToken===token)previewNote("اضغط تشغيل من المشغل؛ قد يمنع المتصفح التشغيل التلقائي أو يرفض هذا المصدر.",false);
   }
@@ -462,9 +463,13 @@ async function saveSavedEpisode(id,button){
   v.label=String(v.label||"").trim();
   v.url=String(v.url||"").trim();
   if(!v.label||v.label.length>32){message("أدخل اسمًا صالحًا لكل جودة (حتى 32 حرفًا).",true);return;}
-  if(!urlPattern.test(v.url)){message("رابط الجودة "+(i+1)+" غير صالح. استخدم HTTPS MP4 أو m3u8.",true);return;}
+  if(!urlPattern.test(v.url)&&!previous.variants.some(function(old){return old.url===v.url;})){
+   message("رابط الجودة "+(i+1)+" غير صالح. استخدم HTTPS MP4 أو m3u8 للرابط الجديد.",true);return;
+  }
  }
- if(!d.stream_url&&!variants.length){message("أدخل رابطًا أساسيًا أو رابط جودة إضافيًا واحدًا على الأقل.",true);return;}
+ if(!d.stream_url&&!variants.length&&d.status==="published"&&previous.status!=="published"){
+  message("لا يمكن نشر حلقة جديدة دون رابط تشغيل. أضف رابطًا أو احتفظ بها كمسودة.",true);return;
+ }
  // Only synchronize the quality alias when the dedicated primary-quality field changed.
  if(d.quality!==previous.quality && d.stream_url && d.quality!=="AUTO"){
   var mainVariant=variants.filter(function(v){return v.url===d.stream_url;})[0];
