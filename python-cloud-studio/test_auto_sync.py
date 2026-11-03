@@ -369,6 +369,17 @@ class AutoSyncTests(unittest.TestCase):
         self.assertEqual(discover.call_args.kwargs['resume_progress'],checkpoint)
         self.assertEqual(self.job(parent,'aseel_series')['checkpoint'],'{}')
 
+    def test_stale_outbox_revalidates_before_switching_primary(self):
+        row=self.row()
+        self.worker.queue.remember('aseel_movies',row['id'],dict(url=NEW,kind='direct'))
+        self.worker.queue.update('aseel_movies',row['id'],last_check=NOW-1000,
+            dirty=json.dumps({'stream_url':NEW}),upload_at=0)
+        fresh='https://cdn.example.org/latest.mp4'
+        self.resolver=FakeResolver(healthy=[fresh],fresh=[dict(url=fresh,kind='direct')])
+        self.worker.process(self.job(row))
+        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['stream_url'],fresh)
+        self.assertFalse(any(p.get('stream_url')==NEW for _,_,p in self.db.patches))
+
     def test_process_releases_claim_and_keeps_outbox_after_remote_failure(self):
         row = self.row()
         self.resolver = FakeResolver(healthy=[NEW],fresh=[dict(url=NEW,kind='direct')])

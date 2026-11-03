@@ -391,6 +391,12 @@ class AutoSync:
         table,identifier=job['table_name'],job['target_id']
         try:
             if job['dirty']:
+                # A replacement verified before an outage may already be expired
+                # when delivery resumes. Re-probe before replaying stale media.
+                stale=(table!='aseel_series' and self.clock()-job['last_check']>300)
+                if stale:
+                    self.check_target(job)
+                    return
                 if job['upload_at']<=self.clock():self.flush(job)
                 # A pending remote failure does not suppress future health checks.
             if self.stop_event.is_set():return
