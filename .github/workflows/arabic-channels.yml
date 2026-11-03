@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/arabic_iptv_import.py'
+      - 'data/arabic-channel-watchlist.json'
       - '.github/workflows/arabic-channels.yml'
   workflow_dispatch:
     inputs:
