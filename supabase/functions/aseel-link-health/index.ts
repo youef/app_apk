@@ -200,6 +200,30 @@ Deno.serve(async(req:Request)=>{
   const admin=!github && await verifyAdmin(authorization);
   if(!github&&!admin)return reply({error:"غير مصرح: يتطلب تشغيل GitHub الموثق أو تسجيل مسؤول"},403);
   const body=await req.json().catch(()=>({}));
+  // On-demand administrator-only checks for the exact saved episodes selected in Studio.
+  // No automatic deletion; results are recorded using the existing 3-strike health policy.
+  if(body.mode==="episodes"){
+    if(!admin)return reply({error:"تسجيل دخول المسؤول مطلوب لفحص الحلقات المحددة"},403);
+    const raw=Array.isArray(body.episode_ids)?body.episode_ids:[];
+    const ids=[...new Set(raw.map((id:unknown)=>String(id)))];
+    if(!ids.length||ids.length>12||ids.some((id:string)=>!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)))
+      return reply({error:"اختر من حلقة واحدة إلى 12 حلقة صحيحة في الفحص الواحد"},400);
+    try{
+      const query="&id=in.("+ids.join(",")+")&limit="+ids.length;
+      const rows=await rest("aseel_episodes","select=id,title_ar,stream_url,stream_variants,youtube_url,link_health_status,link_health_failures,link_health_checked_at,link_health_url"+query);
+      const attempts=await Promise.allSettled(rows.map((row:Row)=>checkRow("aseel_episodes",row)));
+      const latest=await rest("aseel_episodes","select=id,link_health_status,link_health_reason,link_health_checked_at,link_health_failures"+query);
+      const errors:Record<string,string>={};
+      rows.forEach((row:Row,index:number)=>{
+        const result=attempts[index];
+        if(result.status==="rejected")errors[String(row.id)]=String(result.reason).slice(0,180);
+        else if(result.value.state==="skipped")errors[String(row.id)]="تغير رابط الحلقة أثناء الفحص؛ أعد الاختبار";
+      });
+      return reply({mode:"episodes",results:latest,errors,requested:ids.length,found:rows.length},Object.keys(errors).length?207:200);
+    }catch(e){
+      return reply({error:"تعذر فحص الحلقات: "+String(e).slice(0,160)},500);
+    }
+  }
   const requested=Math.max(1,Math.min(24,Number(body.per_table)||24));
   const summary:Record<string,unknown>={authenticated:github?"github_oidc":"admin",scanned:0,healthy:0,suspect:0,broken:0,skipped:0,errors:[]};
   for(const tab of tables) {
