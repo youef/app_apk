@@ -1,14 +1,14 @@
 name: Al Ezz TV — Link Health Agent
 on:
   schedule:
-    - cron: '23 * * * *'
+    - cron: '23 */6 * * *'
   push:
     branches: [main]
     paths:
       - '.github/workflows/link-health-agent.yml'
   workflow_dispatch:
 
-# No long-lived credentials: authenticate using signed GitHub OIDC (v4 youtube coverage).
+# Short-lived GitHub OIDC verified by Supabase, never expose long-lived service keys.
 permissions:
   contents: read
   id-token: write
@@ -19,36 +19,70 @@ concurrency:
 
 jobs:
   scan:
-    name: Check published media and update viewer visibility
+    name: Sweep channels, films, episodes and series
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 25
     steps:
-      - name: Request GitHub-signed short-lived OIDC token
-        id: authenticate
-        shell: bash
-        run: |
-          set -euo pipefail
-          response="$(curl --fail --silent --show-error --max-time 15 \
-            -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=al-ezz-media-link-health")"
-          token="$(jq -er .value <<< "$response")"
-          echo "::add-mask::$token"
-          test -n "$token"
-          echo "token=$token" >> "$GITHUB_OUTPUT"
-
-      - name: Check channels, films and episodes
-        env:
-          MEDIA_OIDC_TOKEN: ${{ steps.authenticate.outputs.token }}
+      - name: Full health sweep and series recalculation
         shell: bash
         run: |
           set -euo pipefail
           endpoint="https://qyzmlwtvzzgooccqxglq.supabase.co/functions/v1/aseel-link-health"
-          response_file="$(mktemp)"
-          code="$(curl --silent --show-error --max-time 180 \
-            -o "$response_file" -w '%{http_code}' -X POST "$endpoint" \
-            -H "Authorization: Bearer ${MEDIA_OIDC_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d '{"per_table":24}')"
-          cat "$response_file" | jq '{authenticated,scanned,healthy,suspect,broken,skipped,errors}'
-          [[ "$code" == "200" ]] || { echo "::error::Link checker HTTP $code"; exit 1; }
-          jq -e '(.authenticated == "github_oidc") and (.scanned > 0) and (.errors | length == 0)' "$response_file" > /dev/null
+          # Consistent cutoff prevents multiple checks of the same source
+          # from prematurely triggering the 3-strike rule in one run.
+          before="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          total_scanned=0
+          newly_hidden=0
+          recovered=0
+
+          request() {
+            local body="$1" target="$2" response_file code oidc_response oidc_token
+            response_file="$(mktemp)"
+            oidc_response="$(curl --fail --silent --show-error --max-time 15 \
+              -H "Authorization: bearer \${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+              "\${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=al-ezz-media-link-health")"
+            oidc_token="$(jq -er '.value' <<< "$oidc_response")"
+            echo "::add-mask::$oidc_token"
+            code="$(curl --silent --show-error --max-time 150 \
+              -o "$response_file" -w '%{http_code}' -X POST "$endpoint" \
+              -H "Authorization: Bearer $oidc_token" \
+              -H "Content-Type: application/json" \
+              --data-binary "$body")"
+            jq -c --arg target "$target" '{target:$target,scanned,healthy,suspect,broken,newlyHidden,recovered,errors}' "$response_file"
+            if [[ "$code" != "200" ]]; then
+              echo "::error::Health service returned HTTP $code for $target"
+              cat "$response_file"
+              exit 1
+            fi
+            jq -e '.authenticated == "github_oidc" and ((.errors // []) | length == 0)' "$response_file" >/dev/null
+            scanned="$(jq -r '.scanned // 0' "$response_file")"
+            hidden_batch="$(jq -r '.newlyHidden // 0' "$response_file")"
+            recovered_batch="$(jq -r '.recovered // 0' "$response_file")"
+            total_scanned=$((total_scanned + scanned))
+            newly_hidden=$((newly_hidden + hidden_batch))
+            recovered=$((recovered + recovered_batch))
+            rm -f "$response_file"
+          }
+
+          # Process every published record; don't recheck the same item
+          # in this run. A 0-row result is the completion signal.
+          for table in aseel_channels aseel_movies aseel_episodes aseel_youtube_videos; do
+            batch=0
+            while (( batch < 40 )); do
+              payload="$(jq -nc --arg table "$table" --arg before "$before" \
+                '{table:$table,before:$before,per_table:24}')"
+              request "$payload" "$table"
+              batch=$((batch + 1))
+              if (( scanned == 0 )); then break; fi
+            done
+            if (( batch == 40 && scanned > 0 )); then
+              echo "::error::Full sweep of $table did not complete within 40 batches"
+              exit 1
+            fi
+          done
+
+          # Series are hidden only when all published episodes are broken.
+          request '{"mode":"series"}' "aseel_series"
+          echo "### Al Ezz TV — six-hour playback health report" >> "$GITHUB_STEP_SUMMARY"
+          echo "Checked: $total_scanned; newly hidden: $newly_hidden; recovered: $recovered" >> "$GITHUB_STEP_SUMMARY"
+          echo "Broken media stays editable in admin, but RLS hides it from public viewers." >> "$GITHUB_STEP_SUMMARY"
