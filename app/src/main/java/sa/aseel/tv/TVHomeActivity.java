@@ -43,6 +43,7 @@ public final class TVHomeActivity extends Activity {
     private final ArrayList<JSONObject> channels=new ArrayList<JSONObject>();
     private final ArrayList<JSONObject> localChannels=new ArrayList<JSONObject>();
     private int localPlaylistGeneration=0;
+    private long lastLocalPlaylistRefreshAt=0L;
     private final ArrayList<JSONObject> youtubeVideos=new ArrayList<JSONObject>();
     private CatalogApi catalog;
     private ScrollView scroller;
@@ -382,6 +383,7 @@ public final class TVHomeActivity extends Activity {
         final String epg=preferences.getString("iptv_xmltv","").trim();
         final int token=++localPlaylistGeneration;
         if(playlist.isEmpty())return;
+        lastLocalPlaylistRefreshAt=android.os.SystemClock.elapsedRealtime();
         if(interactive&&status!=null)status.setText("◌ استيراد قائمة M3U وبيانات دليل البرامج...");
         background.execute(new Runnable(){public void run(){
             ArrayList<JSONObject> fetched=null;
@@ -1174,6 +1176,10 @@ public final class TVHomeActivity extends Activity {
     }
     @Override protected void onResume(){
         super.onResume();
+        if(unlocked && !getSharedPreferences(SETTINGS,MODE_PRIVATE).getString("iptv_m3u","").isEmpty()
+            && android.os.SystemClock.elapsedRealtime()-lastLocalPlaylistRefreshAt>45L*60L*1000L){
+            refreshLocalPlaylist(false);
+        }
         if(unlocked && !loading && getSharedPreferences(SETTINGS,MODE_PRIVATE).getBoolean("auto_refresh",true)
             && android.os.SystemClock.elapsedRealtime()-lastCatalogRefreshAt>=CATALOG_REFRESH_INTERVAL_MS){
             loadCatalog();
