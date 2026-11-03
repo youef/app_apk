@@ -30,6 +30,7 @@
   var playbackToken = 0;
   var fitMode = Store.pref("videoFit", "contain") === "cover" ? "cover" : "contain";
   var offlineLoadToken=0, autoSaveStartedFor="", activeBlobURL="";
+  var failedSourceUrls=[], lastRecoveryToken=-1, offlineNetworkTried=false;
 
   function $(id) { return document.getElementById(id); }
 
@@ -167,6 +168,52 @@
     el.root.classList.remove("is-idle");
   }
 
+
+  function sourceErrorText(code) {
+    if (navigator.onLine === false) return "لا يوجد اتصال بالإنترنت. أعد الاتصال ثم حاول مجددًا.";
+    if (code === 2) return "انقطع الاتصال أثناء جلب الفيديو أو رفض الخادم طلب التشغيل (خطأ شبكة).";
+    if (code === 3) return "تعذّر فك ترميز الصوت أو الفيديو على هذا الجهاز. جرّب مصدر MP4 بترميز H.264/AAC.";
+    if (code === 4) return "المصدر لا يقدم فيديو متوافقًا: قد يكون الرابط منتهيًا أو يعيد صفحة بدل الفيديو أو بترميز غير مدعوم.";
+    return "تعذّر تحميل مصدر الفيديو. قد يكون الرابط غير متاح أو غير متوافق مع الجهاز.";
+  }
+
+  function recoverPlayback(message) {
+    if (!current || el.root.hidden || lastRecoveryToken === playbackToken) return;
+    lastRecoveryToken = playbackToken;
+    var failed = activeStreamUrl || current.stream || "";
+    if (failed && failedSourceUrls.indexOf(failed) === -1) failedSourceUrls.push(failed);
+
+    // A saved offline file can be missing/corrupt, or its service worker may not be active.
+    // Keep the download untouched and try the original URL when online.
+    if (current.offlineActive && !offlineNetworkTried && navigator.onLine !== false &&
+        /^https:\/\//i.test(current.remoteStream || "") &&
+        current.remoteStream.indexOf("__offline_media__/") === -1) {
+      offlineNetworkTried = true;
+      current.offlineActive = false;
+      current.stream = current.remoteStream;
+      current.variants = current.remoteVariants || [];
+      var staleBlob = activeBlobURL;
+      activeBlobURL = "";
+      toast("تعذّر فتح النسخة المحفوظة؛ نجرب رابط المشاهدة الأصلي.");
+      startPlayback(current);
+      if (staleBlob) try { URL.revokeObjectURL(staleBlob); } catch (_e) {}
+      return;
+    }
+    // Only real, explicitly configured alternative URLs; never fabricate playback links.
+    for (var i = 0; i < qualitySources.length; i++) {
+      var candidate = qualitySources[i];
+      if (!candidate || !isPlayableUrl(candidate.url) ||
+          failedSourceUrls.indexOf(candidate.url) !== -1) continue;
+      activeSourceIndex = i;
+      activeQuality = "source:" + i;
+      toast("المصدر الحالي لم يعمل؛ نجرب " + (candidate.label || "مصدرًا آخر") + ".");
+      switchQualitySource(candidate.url);
+      renderQualityMenu();
+      return;
+    }
+    fail(message || "لم يعمل هذا المصدر ولم تتوفر روابط بديلة صالحة. تحقق من الرابط في لوحة الإدارة.");
+  }
+
   function bindSubtitleTrack(item) {
     var btn = $("btnCaptions");
     if (btn) { btn.hidden = !item.subtitleTrack; btn.textContent = "ترجمة عربية"; }
@@ -223,8 +270,17 @@
         startLevel: -1
       });
       hls = instance;
+      instance.on(Hls.Events.MEDIA_ATTACHED, function () {
+        if (ticket === playbackToken && instance === hls) instance.loadSource(url);
+      });
       instance.on(Hls.Events.MANIFEST_PARSED, function () {
-        if (ticket === playbackToken) updateHlsLevels(instance);
+        if (ticket !== playbackToken || instance !== hls) return;
+        updateHlsLevels(instance);
+        var p = v.play();
+        if (p && p.catch) p.catch(function (err) {
+          if (ticket === playbackToken && err && err.name === "NotAllowedError")
+            toast("اضغط زر التشغيل لبدء المشاهدة في هذا المتصفح.");
+        });
       });
       instance.on(Hls.Events.ERROR, function (_event, data) {
         if (ticket !== playbackToken || instance !== hls || !data || !data.fatal) return;
@@ -234,14 +290,14 @@
             if (data.type === Hls.ErrorTypes.MEDIA_ERROR) { instance.recoverMediaError(); return; }
           } catch (e) { /* show a readable error below */ }
         }
-        fail("تعذّر تشغيل المصدر بعد إعادة المحاولة. جرّب جودة أو رابطًا آخر.");
+        var reason = data.type === Hls.ErrorTypes.NETWORK_ERROR
+          ? "تعذّر جلب ملف HLS أو أحد مقاطع البث؛ قد يكون الرابط منتهيًا أو الخادم يمنع الطلب."
+          : data.type === Hls.ErrorTypes.MEDIA_ERROR
+          ? "ترميز بث HLS غير مدعوم أو تعرض أحد المقاطع للتلف."
+          : "تعذّر تجهيز بث HLS على هذا الجهاز.";
+        recoverPlayback(reason);
       });
       instance.attachMedia(v);
-      instance.loadSource(url);
-      var p = v.play();
-      if (p && p.catch) p.catch(function () {
-        if (ticket === playbackToken) toast("اضغط تشغيل لبدء المقطع في هذا المتصفح");
-      });
       return true;
     });
   }
@@ -307,7 +363,10 @@
 
     if (/\.m3u8(\?|#|$)/i.test(url)) {
       attachHls(url).then(function (ok) {
-        if (!ok) fail("هذا الجهاز لا يدعم HLS مباشرة. افتح المصدر في مشغل خارجي أو جرّب جودة MP4.");
+        if (token === playbackToken && !ok)
+          recoverPlayback("هذا المتصفح لا يدعم HLS عبر المشغّل الأصلي أو MSE. استخدم مصدر MP4 متوافقًا.");
+      }).catch(function () {
+        if (token === playbackToken) recoverPlayback("تعذّر تهيئة مشغّل HLS.");
       });
     } else {
       attachNative(url);
@@ -330,7 +389,15 @@
 
     open: function (item, options) {
       options = options || {};
+      if (current && !el.root.hidden) persist(true);
+      clearStage();
+      if (activeBlobURL) { try { URL.revokeObjectURL(activeBlobURL); } catch (_e) {} activeBlobURL = ""; }
+      failedSourceUrls = [];
+      lastRecoveryToken = -1;
+      offlineNetworkTried = false;
       current = Object.assign({}, item);
+      current.remoteStream = item.stream || "";
+      current.remoteVariants = Array.isArray(item.variants) ? item.variants.slice() : [];
       if (options.next) nextItem = options.next; else nextItem = null;
       nextHandler = typeof options.onNext === "function" ? options.onNext : null;
       nextDismissed = false;
@@ -342,7 +409,8 @@
       var openToken=++offlineLoadToken;
       document.body.style.overflow = document.body.classList.contains("watch-route") ? "" : "hidden";
       updateFit();
-      if(window.AlezzOffline && !current.live && !current.youtubeId){
+      show("playerSpinner", true);
+      if(window.AlezzOffline && window.AlezzOffline.get(item.key) && !current.live && !current.youtubeId){
         window.AlezzOffline.resolve(item.key).then(function(url){
           if(openToken!==offlineLoadToken || el.root.hidden)return;
           if(url){
@@ -604,8 +672,12 @@
     }, { once: true });
     hlsLevels = [];
     if (/\.m3u8([?#]|$)/i.test(url)) {
+      var ticket = playbackToken;
       attachHls(url).then(function (ok) {
-        if (!ok) fail("هذه الجودة لا تعمل على هذا الجهاز، جرّب جودة أخرى.");
+        if (ticket === playbackToken && !ok)
+          recoverPlayback("هذه الجودة تستخدم HLS غير مدعوم على الجهاز.");
+      }).catch(function () {
+        if (ticket === playbackToken) recoverPlayback("تعذّر تهيئة بث HLS للجودة المختارة.");
       });
     } else attachNative(url);
   }
@@ -708,7 +780,11 @@
       setChromeIdle(false);
     });
     v.addEventListener("error", function () {
-      if (!el.root.hidden) fail("تعذّر قراءة المصدر. قد يكون الرابط منتهي الصلاحية أو الترميز غير مدعوم.");
+      if (el.root.hidden || !current || !v.error || v.error.code === 1) return;
+      // Ignore a late error raised by the old source while switching qualities.
+      if (v.currentSrc && activeStreamUrl && v.currentSrc.indexOf("blob:") !== 0 &&
+          v.currentSrc !== activeStreamUrl && v.getAttribute("src") !== activeStreamUrl) return;
+      recoverPlayback(sourceErrorText(v.error.code));
     });
     v.addEventListener("waiting", function () { show("playerSpinner", true); });
     v.addEventListener("canplay", function () { show("playerSpinner", false); });
@@ -722,7 +798,13 @@
       if (document.body.classList.contains("watch-route") && window.Alezz && window.Alezz.leaveWatch) window.Alezz.leaveWatch();
       else Player.close();
     });
-    $("playerRetry").addEventListener("click", function () { if (current) startPlayback(current); });
+    $("playerRetry").addEventListener("click", function () {
+      if (!current) return;
+      failedSourceUrls = [];
+      offlineNetworkTried = false;
+      lastRecoveryToken = -1;
+      startPlayback(current);
+    });
     $("playerExternal").addEventListener("click", function () {
       var url = current && (activeStreamUrl || current.stream || (current.youtubeId ? "https://www.youtube.com/watch?v=" + current.youtubeId : ""));
       if (!url) return;

@@ -1,5 +1,5 @@
 /* Al Ezz TV — cache app shell only, never streamed video or external APIs. */
-var CACHE="alezz-shell-cinema-refined-20261102-v8";
+var CACHE="alezz-shell-media-recovery-20261103-v9";
 var BASE=self.registration.scope;
 var MEDIA_CACHE="alezz-offline-media-v1";
 function serveSavedVideo(request){
