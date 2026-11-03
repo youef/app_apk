@@ -28,6 +28,9 @@
   var preferredQuality = "auto";
   var youtubeFrame = null;
   var playbackToken = 0;
+  var iosSafari = /iPhone|iPad|iPod/i.test(navigator.userAgent || "") ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  var rejectedSources = [], attemptedJsHls = {}, errorHandledToken = -1, usingJsHls = false;
   var fitMode = Store.pref("videoFit", "contain") === "cover" ? "cover" : "contain";
 
   function $(id) { return document.getElementById(id); }
@@ -154,6 +157,8 @@
     v.innerHTML = "";
     try { v.load(); } catch (e) {}
     v.hidden = false;
+    usingJsHls = false;
+    el.root.classList.remove("needs-user-play");
     show("playerError", false);
     show("playerSpinner", false);
     show("playerNext", false);
@@ -164,6 +169,84 @@
     show("playerError", true);
     $("playerErrorMsg").textContent = message || "قد يكون الرابط غير متاح حاليًا أو غير مدعوم على هذا الجهاز.";
     el.root.classList.remove("is-idle");
+  }
+
+
+  // iOS Safari blocks unmuted autoplay after hash navigation: this is not a bad source.
+  // A visible, trusted tap on the existing player button must always remain available.
+  function needsUserGesture() {
+    show("playerSpinner", false);
+    el.root.classList.add("needs-user-play");
+    el.root.classList.remove("is-idle");
+    var button = $("playerBigPlay");
+    if (button) {
+      button.title = "اضغط لتشغيل الفيديو على الآيفون";
+      button.setAttribute("aria-label", "اضغط لتشغيل الفيديو");
+    }
+  }
+  function requestPlayback(ticket) {
+    if (ticket !== playbackToken) return;
+    var result;
+    try { result = el.video.play(); }
+    catch (err) { if (err && err.name === "NotAllowedError") needsUserGesture(); return; }
+    if (result && result.catch) result.catch(function (err) {
+      if (ticket !== playbackToken || !current || el.root.hidden) return;
+      if (err && err.name === "NotAllowedError") needsUserGesture();
+      // AbortError is expected when a source changes, not proof that a URL is invalid.
+      else if (err && err.name === "NotSupportedError")
+        recoverSource("المتصفح لا يدعم ترميز هذا الفيديو.");
+    });
+  }
+  function sourceFailureMessage(code) {
+    if (navigator.onLine === false) return "الآيفون غير متصل بالإنترنت.";
+    if (code === 2) return "تعذّر اتصال الآيفون بخادم الفيديو؛ قد يكون الرابط محجوبًا أو منتهي الصلاحية.";
+    if (code === 3) return "ترميز الفيديو أو الصوت غير مدعوم على الآيفون؛ يلزم H.264/AAC أو بث HLS متوافق.";
+    if (code === 4) return "المصدر غير قابل للتشغيل في Safari؛ قد يكون الترميز غير مدعوم أو الخادم لا يرسل ملف فيديو صحيحًا.";
+    return "تعذّر تحميل الفيديو من هذا المصدر على الآيفون.";
+  }
+  function playSelectedSource(url, forceJs) {
+    if (!current || el.root.hidden) return;
+    activeStreamUrl = url;
+    clearStage();
+    el.video.controls = iosSafari;
+    bindSubtitleTrack(current);
+    show("playerSpinner", true);
+    var ticket = playbackToken;
+    if (/\.m3u8([?#]|$)/i.test(url)) {
+      attachHls(url, !!forceJs).then(function (ok) {
+        if (ticket === playbackToken && !ok) recoverSource(
+          "هذا الجهاز لا يدعم طريقة تشغيل HLS الحالية. جرّب مصدر MP4 بترميز H.264/AAC.");
+      }).catch(function () {
+        if (ticket === playbackToken) recoverSource("تعذّر تهيئة بث HLS.");
+      });
+    } else attachNative(url);
+  }
+  function recoverSource(message) {
+    if (!current || el.root.hidden || errorHandledToken === playbackToken) return;
+    errorHandledToken = playbackToken;
+    var failed = activeStreamUrl || current.stream || "";
+    if (failed && rejectedSources.indexOf(failed) === -1) rejectedSources.push(failed);
+    // An alternative must come from the catalogue; do not create proxy links or bypass restrictions.
+    for (var i = 0; i < qualitySources.length; i++) {
+      var option = qualitySources[i];
+      if (!option || !isPlayableUrl(option.url) || rejectedSources.indexOf(option.url) !== -1) continue;
+      activeSourceIndex = i;
+      activeQuality = "source:" + i;
+      toast("نجرب مصدرًا متاحًا آخر: " + option.label);
+      playSelectedSource(option.url, false);
+      renderQualityMenu();
+      return;
+    }
+    // On recent iOS releases Hls.js may work if native Safari rejected a HLS playlist.
+    // Try it once only, and only for a genuine HLS source.
+    if (iosSafari && /\.m3u8([?#]|$)/i.test(failed) && !attemptedJsHls[failed] && !usingJsHls) {
+      attemptedJsHls[failed] = true;
+      toast("نجرب طريقة تشغيل ثانية لبث HLS على الآيفون.");
+      playSelectedSource(failed, true);
+      return;
+    }
+    fail((message || sourceFailureMessage(0)) +
+      " إذا استمرت المشكلة، يلزم تحديث رابط المصدر بملف متوافق مع Safari من لوحة الإدارة.");
   }
 
   function bindSubtitleTrack(item) {
@@ -197,24 +280,25 @@
 
   function attachNative(url) {
     var v = el.video;
+    usingJsHls = false;
     v.src = url;
     v.load();
-    var p = v.play();
-    if (p && p.catch) p.catch(function () { /* autoplay blocked — show big play */ });
+    requestPlayback(playbackToken);
   }
 
-  function attachHls(url) {
+  function attachHls(url, forceJs) {
     var v = el.video, ticket = playbackToken;
     // Safari on iOS/iPadOS/macOS supports HLS natively and does not need to
     // download a JavaScript player before the first frame.
-    if (v.canPlayType("application/vnd.apple.mpegurl") ||
-        v.canPlayType("application/x-mpegURL")) {
+    if (!forceJs && (v.canPlayType("application/vnd.apple.mpegurl") ||
+        v.canPlayType("application/x-mpegURL"))) {
       attachNative(url);
       return Promise.resolve(true);
     }
     return loadHlsScript().then(function (Hls) {
       if (ticket !== playbackToken) return true; // a newer episode is now playing
       if (!Hls || !Hls.isSupported()) return false;
+      usingJsHls = true;
       var attempts = 0;
       var instance = new Hls({
         enableWorker: true, lowLatencyMode: !!(current && current.live),
@@ -222,8 +306,14 @@
         startLevel: -1
       });
       hls = instance;
+      instance.on(Hls.Events.MEDIA_ATTACHED, function () {
+        if (ticket === playbackToken && hls === instance) instance.loadSource(url);
+      });
       instance.on(Hls.Events.MANIFEST_PARSED, function () {
-        if (ticket === playbackToken) updateHlsLevels(instance);
+        if (ticket === playbackToken && hls === instance) {
+          updateHlsLevels(instance);
+          requestPlayback(ticket);
+        }
       });
       instance.on(Hls.Events.ERROR, function (_event, data) {
         if (ticket !== playbackToken || instance !== hls || !data || !data.fatal) return;
@@ -233,14 +323,11 @@
             if (data.type === Hls.ErrorTypes.MEDIA_ERROR) { instance.recoverMediaError(); return; }
           } catch (e) { /* show a readable error below */ }
         }
-        fail("تعذّر تشغيل المصدر بعد إعادة المحاولة. جرّب جودة أو رابطًا آخر.");
+        recoverSource(data.type === Hls.ErrorTypes.MEDIA_ERROR
+          ? "بث HLS يستخدم ترميزًا غير متوافق مع هذا الجهاز."
+          : "خادم HLS لم يوفّر بيانات فيديو قابلة للتشغيل.");
       });
       instance.attachMedia(v);
-      instance.loadSource(url);
-      var p = v.play();
-      if (p && p.catch) p.catch(function () {
-        if (ticket === playbackToken) toast("اضغط تشغيل لبدء المقطع في هذا المتصفح");
-      });
       return true;
     });
   }
@@ -288,8 +375,6 @@
       cast:"playerCast",airplay:"playerAirPlay",status:"playerCastStatus"
     });
 
-    bindSubtitleTrack(item);
-    show("playerSpinner", true);
     el.video.hidden = false;
 
     var token = playbackToken;
@@ -304,13 +389,7 @@
     };
     el.video.addEventListener("loadedmetadata", ready, { once: true });
 
-    if (/\.m3u8(\?|#|$)/i.test(url)) {
-      attachHls(url).then(function (ok) {
-        if (!ok) fail("هذا الجهاز لا يدعم HLS مباشرة. افتح المصدر في مشغل خارجي أو جرّب جودة MP4.");
-      });
-    } else {
-      attachNative(url);
-    }
+    playSelectedSource(url, false);
   }
 
   function buildBadges(item) {
@@ -329,6 +408,9 @@
 
     open: function (item, options) {
       options = options || {};
+      rejectedSources = [];
+      attemptedJsHls = {};
+      errorHandledToken = -1;
       current = Object.assign({}, item);
       if (options.next) nextItem = options.next; else nextItem = null;
       nextHandler = typeof options.onNext === "function" ? options.onNext : null;
@@ -376,6 +458,9 @@
       activeStreamUrl = "";
       hlsLevels = [];
       qualitySources = [];
+      rejectedSources = [];
+      attemptedJsHls = {};
+      el.video.controls = false;
       closeQualityMenu();
     },
 
@@ -406,7 +491,7 @@
   function togglePlay() {
     if (window.AlezzCast && window.AlezzCast.playPause()) return;
     var v = el.video;
-    if (v.paused) { var p = v.play(); if (p && p.catch) p.catch(function () {}); }
+    if (v.paused) requestPlayback(playbackToken);
     else v.pause();
     wake();
   }
@@ -590,11 +675,8 @@
       } else if (!playing) el.video.pause();
     }, { once: true });
     hlsLevels = [];
-    if (/\.m3u8([?#]|$)/i.test(url)) {
-      attachHls(url).then(function (ok) {
-        if (!ok) fail("هذه الجودة لا تعمل على هذا الجهاز، جرّب جودة أخرى.");
-      });
-    } else attachNative(url);
+    // Changing a source must also use Safari's native controls and the new HLS lifecycle.
+    playSelectedSource(url, false);
   }
   function selectQuality(id) {
     if (!current || current.youtubeId) return;
@@ -679,7 +761,12 @@
     v.setAttribute("playsinline", "");
     v.setAttribute("x-webkit-airplay", "allow");
     v.addEventListener("timeupdate", function () { if (!scrubbing) updateScrub(); persist(false); updateNextPrompt(); });
-    v.addEventListener("playing", function () { show("playerSpinner", false); setPlayIcon(true); wake(); });
+    v.addEventListener("playing", function () {
+      show("playerSpinner", false);
+      el.root.classList.remove("needs-user-play");
+      setPlayIcon(true);
+      wake();
+    });
     v.addEventListener("progress", updateScrub);
     v.addEventListener("pause", function () { setPlayIcon(false); setChromeIdle(false); });
     v.addEventListener("ended", function () {
@@ -688,7 +775,21 @@
       setChromeIdle(false);
     });
     v.addEventListener("error", function () {
-      if (!el.root.hidden) fail("تعذّر قراءة المصدر. قد يكون الرابط منتهي الصلاحية أو الترميز غير مدعوم.");
+      if (el.root.hidden || !current || !v.error || v.error.code === 1) return;
+      // On iOS, removing an old src + video.load() can dispatch an asynchronous
+      // MEDIA_ERR_SRC_NOT_SUPPORTED. Recheck after the active source settles.
+      var ticket = playbackToken, attemptedUrl = activeStreamUrl || current.stream || "";
+      setTimeout(function () {
+        if (ticket !== playbackToken || !current || el.root.hidden || !v.error) return;
+        if (!usingJsHls && (!attemptedUrl || v.getAttribute("src") !== attemptedUrl)) return;
+        if (v.readyState >= 2) return;
+        var code = v.error.code;
+        try {
+          console.warn("[Al Ezz TV] Safari playback:", {item: current.key, mediaCode: code,
+            sourceHost: new URL(attemptedUrl).hostname, ios: iosSafari});
+        } catch (_e) {}
+        recoverSource(sourceFailureMessage(code));
+      }, 120);
     });
     v.addEventListener("waiting", function () { show("playerSpinner", true); });
     v.addEventListener("canplay", function () { show("playerSpinner", false); });
@@ -702,7 +803,13 @@
       if (document.body.classList.contains("watch-route") && window.Alezz && window.Alezz.leaveWatch) window.Alezz.leaveWatch();
       else Player.close();
     });
-    $("playerRetry").addEventListener("click", function () { if (current) startPlayback(current); });
+    $("playerRetry").addEventListener("click", function () {
+      if (!current) return;
+      rejectedSources = [];
+      attemptedJsHls = {};
+      errorHandledToken = -1;
+      startPlayback(current);
+    });
     $("playerExternal").addEventListener("click", function () {
       var url = current && (activeStreamUrl || current.stream || (current.youtubeId ? "https://www.youtube.com/watch?v=" + current.youtubeId : ""));
       if (!url) return;

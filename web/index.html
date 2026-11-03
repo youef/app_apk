@@ -18,7 +18,7 @@
 <link rel="stylesheet" href="css/live.css?v=tv-studio-20261102-1">
 <link rel="stylesheet" href="css/kids.css?v=kids-direct-20261102-1">
 <link rel="stylesheet" href="css/cast.css?v=cast-airplay-20261102-1">
-<link rel="stylesheet" href="css/unified.css?v=pre-download-restore-20261103-v1">
+<link rel="stylesheet" href="css/unified.css?v=ios-safari-source-fix-20261103-v2">
 <script>
 (function () {
   try {
@@ -120,7 +120,7 @@ try {
 <!-- ============ player ============ -->
 <div class="player" id="player" hidden>
   <div class="player__stage" id="playerStage">
-    <video id="video" playsinline webkit-playsinline x-webkit-airplay="allow" preload="metadata"></video>
+    <video id="video" playsinline webkit-playsinline x-webkit-airplay="allow" preload="metadata" controlslist="nodownload" aria-label="مشغل العز TV"></video>
     <div class="player__veil" id="playerVeil"></div>
     <div class="player__spinner" id="playerSpinner" hidden>
       <span></span><p>جارٍ التحضير…</p>
@@ -235,7 +235,7 @@ try {
 <script src="js/explore.js?v=netflix-taxonomy-20261101"></script>
 <script src="js/store.js"></script>
 <script src="js/cast.js?v=cast-airplay-20261102-1"></script>
-<script src="js/player.js?v=pre-download-restore-20261103-v1"></script>
+<script src="js/player.js?v=ios-safari-source-fix-20261103-v2"></script>
 <script src="js/live.js?v=direct-streams-only-20261102"></script>
 <script src="js/kids.js?v=kids-direct-20261102-1"></script>
 <script src="js/app.js?v=pre-download-restore-20261103-v1"></script>

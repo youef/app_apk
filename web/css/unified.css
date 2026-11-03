@@ -291,3 +291,9 @@ body.watch-route #player.is-immersive,body.watch-route #player:fullscreen,body.w
  .watch-page .player__controls{flex-wrap:nowrap;overflow-x:auto;gap:4px}
  .watch-page .player__controls .iconbtn{width:34px;height:34px}
 }
+
+/* iOS Safari requires a real tap for unmuted playback after route navigation. */
+.player.needs-user-play .player__chrome { opacity: 1 !important; pointer-events: auto; }
+.player.needs-user-play .player__center { display: grid !important; pointer-events: auto !important; }
+.player.needs-user-play .player__bigplay { pointer-events: auto !important; min-width: 56px; min-height: 56px; }
+.player.needs-user-play { cursor: auto; }

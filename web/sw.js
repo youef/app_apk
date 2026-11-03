@@ -1,5 +1,5 @@
 /* Al Ezz TV — cache app shell only, never streamed video or external APIs. */
-var CACHE="alezz-shell-pre-download-rollback-20261103-v10";
+var CACHE="alezz-shell-ios-safari-fix-20261103-v11";
 var BASE=self.registration.scope;
 var FILES=[
  "./","./index.html","./manifest.webmanifest","./assets/logo.svg",
