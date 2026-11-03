@@ -1,0 +1,298 @@
+{
+  "version": 1,
+  "purpose": "Additional Arabic-language and Arab-region candidate channels to prioritize for HLS probing in Al Ezz TV.",
+  "source": "iptv-org channel directory",
+  "validation": "Metadata listing only. Every new HLS candidate must pass manifest and segment probing. Do not mark as broadcast-authorized solely because source is public.",
+  "initial_status": "draft",
+  "initial_rights_status": "pending",
+  "candidates": [
+    {
+      "id": "CBCDrama.eg",
+      "name": "CBC Drama",
+      "country": "EG",
+      "category": "series",
+      "directory_url": "https://iptv-org.github.io/channels/eg/CBCDrama",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "DMCDrama.eg",
+      "name": "DMC Drama",
+      "country": "EG",
+      "category": "series",
+      "directory_url": "https://iptv-org.github.io/channels/eg/DMCDrama",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "OnDrama.eg",
+      "name": "On Drama",
+      "country": "EG",
+      "category": "series",
+      "directory_url": "https://iptv-org.github.io/channels/eg/OnDrama",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "NileDrama.eg",
+      "name": "Nile Drama",
+      "country": "EG",
+      "category": "series",
+      "directory_url": "https://iptv-org.github.io/channels/eg/NileDrama",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "RoyaDrama.jo",
+      "name": "Roya Drama",
+      "country": "JO",
+      "category": "series",
+      "directory_url": "https://iptv-org.github.io/channels/jo/RoyaDrama",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "UToon.ae",
+      "name": "U Toon",
+      "country": "AE",
+      "category": "kids",
+      "directory_url": "https://iptv-org.github.io/channels/ae/UToon",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "Majid.ae",
+      "name": "Majid",
+      "country": "AE",
+      "category": "kids",
+      "directory_url": "https://iptv-org.github.io/channels/ae/Majid",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "AlMajdKids.sa",
+      "name": "Al-Majd Kids",
+      "country": "SA",
+      "category": "kids",
+      "directory_url": "https://iptv-org.github.io/channels/sa/AlMajdKids",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "Arryadia.ma",
+      "name": "Arryadia",
+      "country": "MA",
+      "category": "sports",
+      "directory_url": "https://iptv-org.github.io/channels/ma/Arryadia",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "AbuDhabiSports3.ae",
+      "name": "Abu Dhabi Sports 3",
+      "country": "AE",
+      "category": "sports",
+      "directory_url": "https://iptv-org.github.io/channels/ae/AbuDhabiSports3",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "AbuDhabiSports1.ae",
+      "name": "Abu Dhabi Sports 1",
+      "country": "AE",
+      "category": "sports",
+      "directory_url": "https://iptv-org.github.io/channels/ae/AbuDhabiSports1",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "SportTV.jo",
+      "name": "Sport TV",
+      "country": "JO",
+      "category": "sports",
+      "directory_url": "https://iptv-org.github.io/channels/jo/SportTV",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "KSASports1.sa",
+      "name": "KSA Sports 1",
+      "country": "SA",
+      "category": "sports",
+      "directory_url": "https://iptv-org.github.io/channels/sa/KSASports1",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "KSASports2.sa",
+      "name": "KSA Sports 2",
+      "country": "SA",
+      "category": "sports",
+      "directory_url": "https://iptv-org.github.io/channels/sa/KSASports2",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "KSASports3.sa",
+      "name": "KSA Sports 3",
+      "country": "SA",
+      "category": "sports",
+      "directory_url": "https://iptv-org.github.io/channels/sa/KSASports3",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "KSASports4.sa",
+      "name": "KSA Sports 4",
+      "country": "SA",
+      "category": "sports",
+      "directory_url": "https://iptv-org.github.io/channels/sa/KSASports4",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "DubaiSports1.ae",
+      "name": "Dubai Sports 1",
+      "country": "AE",
+      "category": "sports",
+      "directory_url": "https://iptv-org.github.io/channels/ae/DubaiSports1",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "DubaiSports2.ae",
+      "name": "Dubai Sports 2",
+      "country": "AE",
+      "category": "sports",
+      "directory_url": "https://iptv-org.github.io/channels/ae/DubaiSports2",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "DubaiSports3.ae",
+      "name": "Dubai Sports 3",
+      "country": "AE",
+      "category": "sports",
+      "directory_url": "https://iptv-org.github.io/channels/ae/DubaiSports3",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "CBCSofra.eg",
+      "name": "CBC Sofra",
+      "country": "EG",
+      "category": "cooking",
+      "directory_url": "https://iptv-org.github.io/channels/eg/CBCSofra",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "DubaiTVInternational.ae",
+      "name": "Dubai TV International",
+      "country": "AE",
+      "category": "general",
+      "directory_url": "https://iptv-org.github.io/channels/ae/DubaiTVInternational",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "AbuDhabiTV.ae",
+      "name": "Abu Dhabi TV",
+      "country": "AE",
+      "category": "general",
+      "directory_url": "https://iptv-org.github.io/channels/ae/AbuDhabiTV",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "JordanTV.jo",
+      "name": "Jordan TV",
+      "country": "JO",
+      "category": "general",
+      "directory_url": "https://iptv-org.github.io/channels/jo/JordanTV",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "2M.ma",
+      "name": "2M",
+      "country": "MA",
+      "category": "general",
+      "directory_url": "https://iptv-org.github.io/channels/ma/2M",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "AlAoula.ma",
+      "name": "Al Aoula",
+      "country": "MA",
+      "category": "general",
+      "directory_url": "https://iptv-org.github.io/channels/ma/AlAoula",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "AbuDhabiEmirates.ae",
+      "name": "Abu Dhabi Emirates",
+      "country": "AE",
+      "category": "general",
+      "directory_url": "https://iptv-org.github.io/channels/ae/AbuDhabiEmirates",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "DMC.eg",
+      "name": "DMC",
+      "country": "EG",
+      "category": "general",
+      "directory_url": "https://iptv-org.github.io/channels/eg/DMC",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "CBC.eg",
+      "name": "CBC",
+      "country": "EG",
+      "category": "general",
+      "directory_url": "https://iptv-org.github.io/channels/eg/CBC",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "ExtraLive.eg",
+      "name": "Extra Live",
+      "country": "EG",
+      "category": "news",
+      "directory_url": "https://iptv-org.github.io/channels/eg/ExtraLive",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "AlSaudiyaAlaan.sa",
+      "name": "Al Saudiya Alaan",
+      "country": "SA",
+      "category": "news",
+      "directory_url": "https://iptv-org.github.io/channels/sa/AlSaudiyaAlaan",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "Hala.jo",
+      "name": "Hala",
+      "country": "JO",
+      "category": "general",
+      "directory_url": "https://iptv-org.github.io/channels/jo/Hala",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    },
+    {
+      "id": "JosatTV.jo",
+      "name": "Josat TV",
+      "country": "JO",
+      "category": "general",
+      "directory_url": "https://iptv-org.github.io/channels/jo/JosatTV",
+      "playback_verified": false,
+      "redistribution_authorized": false
+    }
+  ]
+}
