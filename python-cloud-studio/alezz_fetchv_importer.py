@@ -18,8 +18,10 @@ import re
 import socket
 import sys
 import time
+import threading
 from urllib.parse import urljoin, urlsplit
 from pathlib import Path
+from title_cleaner import content_title
 
 try:
     import requests
@@ -48,6 +50,8 @@ class Episode:
     media_url: str = ""
     verified: bool = False
     error: str = ""
+    sources: list[dict] = field(default_factory=list)
+    source_pages: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -68,6 +72,9 @@ class Catalogue:
     verified: bool = False
     episodes: list[Episode] = field(default_factory=list)
     discovery_warnings: list[str] = field(default_factory=list)
+    error: str = ""
+    sources: list[dict] = field(default_factory=list)
+    source_pages: list[str] = field(default_factory=list)
 
 
 def clean(v: object, limit: int = 2000) -> str:
@@ -137,32 +144,60 @@ class SourceClient:
             return url, response.headers.get("Content-Type", ""), data.decode(response.encoding or "utf-8", errors="replace")
         raise ValueError("Too many redirects")
 
+    def sample(self, url: str, size: int = 8192) -> tuple[str, str, bytes]:
+        """Read a bounded prefix, validating every redirect before requesting it."""
+        for _ in range(5):
+            check_dns(url)
+            with self.session.get(url, headers={"Range": f"bytes=0-{size-1}", "Accept": "*/*"},
+                                  timeout=self.timeout, allow_redirects=False, stream=True) as response:
+                if response.status_code in (301, 302, 303, 307, 308):
+                    location = response.headers.get("Location")
+                    if not location: raise ValueError("Redirect missing Location")
+                    url = urljoin(url, location)
+                    continue
+                response.raise_for_status()
+                data = bytearray()
+                for chunk in response.iter_content(min(size, 8192)):
+                    data.extend(chunk[:size-len(data)])
+                    if len(data) >= size: break
+                return url, response.headers.get("Content-Type", "").lower(), bytes(data)
+        raise ValueError("Too many redirects")
+
     def media_verified(self, url: str) -> tuple[bool, str]:
         if not MEDIA_EXT.search(url):
             return False, "Unsupported: media must be MP4/WebM/M4V/HLS"
         try:
-            for _ in range(4):
-                check_dns(url)
-                response = self.session.get(url, headers={"Range": "bytes=0-8191", "Accept": "*/*"},
-                                            timeout=self.timeout, allow_redirects=False, stream=True)
-                if response.status_code in (301, 302, 303, 307, 308):
-                    dest = response.headers.get("Location", "")
-                    response.close()
-                    url = urljoin(url, dest)
-                    continue
-                if not response.ok:
-                    msg = "HTTP " + str(response.status_code)
-                    response.close()
-                    return False, msg
-                ctype = response.headers.get("Content-Type", "").lower()
-                sample = next(response.iter_content(8192), b"")
-                response.close()
+            # A 200 response or a MIME type alone is not proof of playable media.
+            for depth in range(3):
+                final, ctype, sample = self.sample(url, 65536)
+                if not sample: return False, "Empty response"
                 if "html" in ctype or sample.lstrip().lower().startswith((b"<!doctype html", b"<html")):
                     return False, "Returned HTML, not a video stream"
-                if ".m3u8" in url.lower() and not (b"#EXTM3U" in sample or "mpegurl" in ctype):
-                    return False, "HLS manifest not detected"
-                return True, "OK"
-            return False, "Too many redirects"
+                if b"#EXTM3U" in sample[:100]:
+                    manifest = sample.decode("utf-8-sig", errors="replace")
+                    if re.search(r'METHOD=(?:SAMPLE-AES|SAMPLE-AES-CTR)|KEYFORMAT="(?!identity)', manifest):
+                        return False, "Protected HLS is not supported"
+                    links = [line.strip() for line in manifest.splitlines()
+                             if line.strip() and not line.startswith('#')]
+                    if not links: return False, "HLS has no playlist or segment"
+                    url = urljoin(final, links[0])
+                    if '#EXT-X-STREAM-INF' in manifest:
+                        continue
+                    _, segment_type, segment = self.sample(url)
+                    valid = (len(segment)>188 and segment[0] == segment[188] == 0x47) or any(
+                        marker in segment[:64] for marker in (b'ftyp',b'styp',b'moof',b'mdat'))
+                    # fMP4 playlists can use EXT-X-MAP; check the init segment too.
+                    if not valid and '#EXT-X-MAP:' in manifest:
+                        init = re.search(r'#EXT-X-MAP:.*?URI="([^"]+)"', manifest)
+                        if init:
+                            _, _, header = self.sample(urljoin(final, init.group(1)))
+                            valid = bool(segment) and b'ftyp' in header[:32] and any(
+                                marker in segment[:64] for marker in (b'styp',b'moof',b'mdat')) and 'html' not in segment_type
+                    return (True, "HLS playlist and segment respond") if valid else (False, "HLS segment is unavailable or invalid")
+                if '.m3u8' in urlsplit(final).path.lower(): return False, "HLS manifest not detected"
+                valid = b'ftyp' in sample[:32] or sample.startswith(b'\x1aE\xdf\xa3')
+                return (True, "Media header responds") if valid else (False, "Video header not detected")
+            return False, "HLS nesting limit exceeded"
         except (requests.RequestException, ValueError, OSError, StopIteration) as exc:
             return False, str(exc)[:120]
 
@@ -227,12 +262,16 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
     nodes = json_nodes(soup)
     candidates = [n for n in nodes if "tvseries" in str(n.get("@type", "")).lower()]
     candidates += [n for n in nodes if "movie" in str(n.get("@type", "")).lower()]
-    candidates += [n for n in nodes if n not in candidates]
     main = candidates[0] if candidates else {}
     def meta(name: str) -> str:
         t = soup.select_one(f'meta[property="{name}"],meta[name="{name}"]')
         return clean(t.get("content", "") if t else "")
-    title = field_of(main, "name", "headline") or meta("og:title") or clean(soup.title.get_text() if soup.title else "", 250)
+    site_name = meta('og:site_name')
+    heading = soup.select_one('h1.entry-title,h1[itemprop="name"],h1')
+    title = next((title for value in (field_of(main, 'name', 'headline'),
+                 heading.get_text(' ', strip=True) if heading else '', meta('og:title'),
+                 soup.title.get_text() if soup.title else '')
+                 if (title := content_title(value, final, site_name))), '')
     description = field_of(main, "description") or meta("og:description") or meta("description")
     poster = absolutize(final, field_of(main, "image", "thumbnailUrl") or meta("og:image"))
     year_match = re.search(r"(?:19|20)\d{2}", field_of(main,"datePublished","startDate") or "")
@@ -345,7 +384,8 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
         if not link:return
         key=parsed
         if key not in episode_map:
-            ep=Episode(parsed[0],parsed[1],clean(display_title or label,250),link)
+            ep=Episode(parsed[0],parsed[1],content_title(display_title or label, final, site_name,
+                       fallback='الحلقة '+str(parsed[1])),link)
             if data:
                 ep.description=field_of(data,"description")
                 ep.poster_url=absolutize(final,field_of(data,"image","thumbnailUrl"))
@@ -651,10 +691,16 @@ class Supabase:
         self.session=requests.Session()
         self.session.trust_env=False
         self.session.headers.update({"apikey":key,"Accept":"application/json","Content-Type":"application/json"})
+        self.refresh_token = ''
+        self.expires_at = 0
+        self.auth_lock = threading.RLock()
         if not access_token and email and password:
             reply=self.session.post(self.root+"/auth/v1/token?grant_type=password",json={"email":email,"password":password},timeout=20)
             if not reply.ok:raise ValueError("Failed to authenticate admin: "+str(reply.status_code))
-            access_token=reply.json().get("access_token","")
+            auth = reply.json()
+            access_token=auth.get("access_token","")
+            self.refresh_token = auth.get('refresh_token', '')
+            self.expires_at = time.time() + auth.get('expires_in', 3600)
         if not access_token:
             raise ValueError("Provide ALEZZ_ACCESS_TOKEN or ALEZZ_EMAIL and ALEZZ_PASSWORD")
         self.session.headers["Authorization"]="Bearer "+access_token
@@ -666,6 +712,21 @@ class Supabase:
             raise ValueError("Authenticated user is not an active Al Ezz TV administrator")
 
     def req(self, method:str, table:str,params:dict|None=None,payload:dict|None=None):
+        with self.auth_lock:
+            if self.refresh_token and time.time() > self.expires_at - 60:
+                self._refresh()
+            return self._request(method, table, params, payload)
+
+    def _refresh(self):
+        reply = self.session.post(self.root+'/auth/v1/token?grant_type=refresh_token',
+                                  json={'refresh_token': self.refresh_token}, timeout=20)
+        if not reply.ok: raise ValueError('انتهت جلسة المسؤول؛ أعد تسجيل الدخول أو تحقق من حساب العامل')
+        auth = reply.json()
+        self.refresh_token = auth.get('refresh_token', '')
+        self.expires_at = time.time() + auth.get('expires_in', 3600)
+        self.session.headers['Authorization'] = 'Bearer ' + auth['access_token']
+
+    def _request(self, method, table, params, payload):
         url=self.root+"/rest/v1/"+table
         headers={"Prefer":"return=representation"}
         res=self.session.request(method,url,params=params,data=json.dumps(payload,ensure_ascii=False) if payload is not None else None,
@@ -714,6 +775,21 @@ def category_for_genres(categories: list[dict], genres: list[str]) -> str:
     return ""
 
 
+def playback_variants(entry, existing=None) -> list[dict]:
+    """The production player accepts at most eight {label,url} variants."""
+    rows, seen = [], {entry.media_url}
+    for source in entry.sources + (existing or []):
+        if not isinstance(source, dict): continue
+        url = source.get('url', '')
+        if url in seen: continue
+        try: public_url(url)
+        except ValueError: continue
+        if source.get('error') and not source.get('verified') and not source.get('reachable'): continue
+        seen.add(url)
+        rows.append({k: source[k] for k in ('url', 'label', 'kind', 'page_url') if k in source})
+    return rows[:8]
+
+
 def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:str="",
           license_reference:str="",source_id:str="",category_id:str="") -> dict:
     if publish and not rights:
@@ -727,15 +803,16 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
     if source_id:
         work_rights["source_id"]=source_id
         episode_rights["source_id"]=source_id
-    result={"kind":cat.kind,"title":cat.title,"works_new":0,"works_updated":0,"seasons_new":0,"episodes_new":0,"episodes_updated":0,"media_verified":0,"metadata_only":0}
+    result={"kind":cat.kind,"title":cat.title,"works_new":0,"works_updated":0,"seasons_new":0,"episodes_new":0,"episodes_updated":0,"media_verified":0,"metadata_only":0,"bindings":[]}
     fields=imported_fields(cat,category_id)
     if cat.kind=="movie":
         # Update existing match by page source to avoid a second copy of the work.
-        movie=db.single("aseel_movies",{"select":"id,title_ar","source_page_url":"eq."+cat.url})
+        movie=db.single("aseel_movies",{"select":"id,title_ar,stream_variants","source_page_url":"eq."+cat.url})
         if not movie and cat.original_title and cat.year:
             movie=db.single("aseel_movies",{"select":"id,title_ar","title_original":"eq."+cat.original_title,
                                            "release_year":"eq."+str(cat.year)})
         payload={**fields,"source_page_url":cat.url}
+        if cat.sources: payload['stream_variants'] = playback_variants(cat, (movie or {}).get('stream_variants'))
         if cat.verified and cat.media_url:
             payload["stream_url"]=cat.media_url
             payload["link_health_status"]="healthy"
@@ -745,20 +822,23 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
             db.patch("aseel_movies",movie["id"],{**payload,**({"status":"published","rights_status":"approved"} if publish and rights else {})})
             result["works_updated"]+=1
         else:
-            db.insert("aseel_movies",{**payload,**work_rights})
+            movie=db.insert("aseel_movies",{**payload,**work_rights})
             result["works_new"]+=1
+        result['work_id'] = movie['id']
+        result['bindings'].append(dict(season=0,number=0,id=movie['id'],table='aseel_movies'))
         return result
-    series=db.single("aseel_series",{"select":"id,title_ar","title_ar":"eq."+cat.title})
+    series=db.single("aseel_series",{"select":"id,title_ar","source_page_url":"eq."+cat.url})
+    if not series: series=db.single("aseel_series",{"select":"id,title_ar","title_ar":"eq."+cat.title})
     if not series and cat.original_title and cat.year:
         series=db.single("aseel_series",{"select":"id,title_ar","title_original":"eq."+cat.original_title,
                                           "release_year":"eq."+str(cat.year)})
     if series:
         # Do not silently change existing rights or publication status on draft updates.
-        patch={**fields,**(work_rights if publish else {})}
+        patch={**fields,'source_page_url':cat.url,**(work_rights if publish else {})}
         db.patch("aseel_series",series["id"],patch)
         result["works_updated"]+=1
     else:
-        series=db.insert("aseel_series",{**fields,**work_rights})
+        series=db.insert("aseel_series",{**fields,'source_page_url':cat.url,**work_rights})
         result["works_new"]+=1
     seasons={}
     for ep in cat.episodes:
@@ -769,9 +849,10 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
                 result["seasons_new"]+=1
             seasons[ep.season]=season["id"]
         season_id=seasons[ep.season]
-        old=db.single("aseel_episodes",{"select":"id,number","season_id":"eq."+season_id,"number":"eq."+str(ep.number)})
+        old=db.single("aseel_episodes",{"select":"id,number,stream_variants","season_id":"eq."+season_id,"number":"eq."+str(ep.number)})
         payload={"title_ar":ep.title[:250] or "الحلقة "+str(ep.number),"description":ep.description or cat.description or None,
-                 "poster_url":ep.poster_url or cat.poster_url or None}
+                 "poster_url":ep.poster_url or cat.poster_url or None,'source_page_url':ep.page_url}
+        if ep.sources: payload['stream_variants'] = playback_variants(ep, (old or {}).get('stream_variants'))
         payload={k:v for k,v in payload.items() if v is not None}
         if ep.verified and ep.media_url:
             payload["stream_url"]=ep.media_url
@@ -782,9 +863,11 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
             db.patch("aseel_episodes",old["id"],{**payload,**({"status":"published","rights_status":"approved"} if publish and rights else {})})
             result["episodes_updated"]+=1
         else:
-            db.insert("aseel_episodes",{"season_id":season_id,"number":ep.number,
+            old=db.insert("aseel_episodes",{"season_id":season_id,"number":ep.number,
                         **payload,**episode_rights})
             result["episodes_new"]+=1
+        result['bindings'].append(dict(season=ep.season,number=ep.number,id=old['id'],table='aseel_episodes'))
+    result['work_id'] = series['id']
     return result
 
 

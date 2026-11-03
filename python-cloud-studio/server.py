@@ -7,6 +7,7 @@ extension is local-only; server can ingest URLs copied from it.
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -36,12 +37,14 @@ from alezz_fetchv_importer import (
 from metadata_enrichment import enrich
 from library_sync import JobDB,collect_pages,collect_works
 from cloud_auth import site_auth_middleware, site_login, site_logout, site_health
+from auto_sync import AutoSync, target_key
 
 BASE = Path(__file__).resolve().parent
 DATA_DIR = Path(os.getenv("ALEZZ_DATA_DIR", str(BASE))).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 LIBRARY = JobDB(DATA_DIR / "library_sync.sqlite3")
 LIBRARY.recover()
+AUTOSYNC = AutoSync(DATA_DIR)
 _library_lock = threading.RLock()
 _library_worker = None
 DEFAULT_DB_URL = 'https://qyzmlwtvzzgooccqxglq.supabase.co'
@@ -50,13 +53,29 @@ COOKIE = 'alezz_studio_session'
 EXPIRY_SECONDS = 8 * 3600
 MAX_STATES = 50
 
+@asynccontextmanager
+async def lifespan(app):
+    AUTOSYNC.start()
+    if any(LIBRARY.snapshot()['counts'][k].get('pending',0) for k in ('pages','works')):
+        _start_library_worker()
+    try: yield
+    finally: AUTOSYNC.stop()
+
+
 app = FastAPI(title='Al Ezz TV | Python Import Studio', docs_url=None, redoc_url=None,
-              openapi_url=None)
+              openapi_url=None, lifespan=lifespan)
 app.mount('/static', StaticFiles(directory=str(BASE / 'static')), name='static')
 app.middleware('http')(site_auth_middleware)
 app.add_api_route('/login', site_login, methods=['GET', 'POST'], include_in_schema=False)
 app.add_api_route('/logout-site', site_logout, methods=['POST'], include_in_schema=False)
-app.add_api_route('/healthz', site_health, methods=['GET'], include_in_schema=False)
+async def worker_health():
+    info=AUTOSYNC.status()
+    return JSONResponse({'ok':True,'service':'al-ezz-tv-python-studio',
+        'autosync':{k:info[k] for k in ('running','enabled','connected','last_tick')},
+        'autosync_ready':bool(info['running'] and info['connected'] and info['last_import'] and not info['last_error']),
+        'version':os.getenv('RENDER_GIT_COMMIT','autosync-v1')[:40]},headers={'Cache-Control':'no-store'})
+
+app.add_api_route('/healthz', worker_health, methods=['GET'], include_in_schema=False)
 
 
 @dataclass
@@ -691,9 +710,11 @@ async def save(request: Request, body: SaveForm):
                     category_id = category_for_genres(cats, cat.genres)
                 except Exception:
                     pass
-            return store(cat, db, publish=body.publish, rights=body.rights_authorized,
+            result=store(cat, db, publish=body.publish, rights=body.rights_authorized,
                          license_holder=clean(body.rights_holder,250),
                          license_reference=clean(body.license_reference,1000), category_id=category_id)
+            AUTOSYNC.remember_saved(cat,result)
+            return result
     try:
         result = await run_in_threadpool(task)
     except Exception as exc:
@@ -724,6 +745,7 @@ async def save_batch(request:Request,body:SaveForm):
                     result=store(cat,db,publish=body.publish,rights=body.rights_authorized,
                                  license_holder=clean(body.rights_holder,250),
                                  license_reference=clean(body.license_reference,1000),category_id=category)
+                    AUTOSYNC.remember_saved(cat,result)
                     details.append({'index':index,'title':cat.title,'ok':True,'result':result})
                     for key in totals:totals[key]+=int(result.get(key,0))
                 except Exception as exc:
@@ -756,6 +778,7 @@ async def library_save(request:Request,body:SaveForm):
                     result=store(cat,db,publish=body.publish,rights=body.rights_authorized,
                                  license_holder=clean(body.rights_holder,250),
                                  license_reference=clean(body.license_reference,1000),category_id=category)
+                    AUTOSYNC.remember_saved(cat,result)
                     LIBRARY.mark_saved(row['url'])
                     details.append({'url':row['url'],'ok':True,'result':result})
                 except Exception as exc:
@@ -803,6 +826,87 @@ async def export_batch(request:Request):
 @app.get('/api/health')
 async def health():
     return {'ok':True, 'service':'Al Ezz TV Python Web Importer', 'time':datetime.now(timezone.utc).isoformat()}
+
+
+@app.get('/api/autosync/status')
+async def autosync_status(request:Request):
+    find_state(request)
+    return JSONResponse(AUTOSYNC.status(),headers={'Cache-Control':'no-store'})
+
+
+class AutoSyncControl(BaseModel):
+    action:str=Field(max_length=30)
+
+
+@app.post('/api/autosync/control')
+async def autosync_control(request:Request,body:AutoSyncControl):
+    protected(request)
+    try: AUTOSYNC.control(body.action)
+    except ValueError as exc: raise HTTPException(400,str(exc)) from None
+    return {'ok':True,**AUTOSYNC.status()}
+
+
+@app.get('/api/autosync/targets')
+async def autosync_targets(request:Request,limit:int=50,offset:int=0,q:str=''):
+    find_state(request)
+    rows=AUTOSYNC.queue.targets(max(1,min(limit,100)),max(0,offset),q[:250])
+    # Source metadata is returned separately; do not duplicate saved row payloads.
+    fields=('table_name','target_id','title','page_url','status','last_check','next_check','error','source_count','valid_sources')
+    return {'targets':[{k:row[k] for k in fields} for row in rows]}
+
+
+@app.get('/api/autosync/sources')
+async def autosync_sources(request:Request,table:str,id:str):
+    find_state(request)
+    try: rows=AUTOSYNC.queue.sources(*target_key(table,id))
+    except ValueError as exc: raise HTTPException(400,str(exc)) from None
+    return {'sources':rows}
+
+
+@app.get('/api/autosync/events')
+async def autosync_events(request:Request,limit:int=50):
+    find_state(request)
+    with AUTOSYNC.queue.db() as conn:
+        events=[dict(r) for r in conn.execute('select * from auto_events order by id desc limit ?', (max(1,min(limit,200)),))]
+    return {'events':events}
+
+
+class AutoSyncTargetForm(BaseModel):
+    table:str=Field(max_length=30)
+    id:str=Field(max_length=36)
+    action:str=Field(max_length=20)
+    url:str=Field(default='',max_length=2048)
+
+
+@app.post('/api/autosync/target')
+async def autosync_target(request:Request,body:AutoSyncTargetForm):
+    protected(request)
+    try:
+        table,identifier=target_key(body.table,body.id)
+        with AUTOSYNC.queue.db() as conn:
+            row=conn.execute('select * from auto_jobs where table_name=? and target_id=?',(table,identifier)).fetchone()
+            if not row:raise HTTPException(404,'لم تتم مزامنة العنصر من Supabase بعد')
+            job=dict(row)
+        if body.action=='sources':
+            url=public_url(body.url.strip())
+            AUTOSYNC.queue.remember(table,identifier,dict(url=url,kind='original'))
+            # Save the first original page, keeping all additional pages in history.
+            def persist():
+                db=AUTOSYNC.db or AUTOSYNC.db_factory()
+                AUTOSYNC.db=db
+                if not job['page_url']:
+                    db.patch(table,identifier,{'source_page_url':url})
+                    AUTOSYNC.queue.update(table,identifier,page_url=url)
+                AUTOSYNC.flush(job)
+            await run_in_threadpool(persist)
+            AUTOSYNC.queue.event('source_added','حُفظ مصدر أصلي إضافي لهذا العنصر',table,identifier)
+            AUTOSYNC.queue.queue(table,identifier,refresh=True)
+        elif body.action in ('check','refresh'):
+            AUTOSYNC.queue.queue(table,identifier,refresh=body.action=='refresh')
+        else:raise ValueError('أمر غير معروف')
+        AUTOSYNC.wake_event.set()
+    except ValueError as exc:raise HTTPException(400,clean(exc,180)) from None
+    return {'ok':True}
 
 
 if __name__ == '__main__':

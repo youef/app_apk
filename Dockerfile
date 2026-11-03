@@ -1,7 +1,9 @@
 # Render Docker build from the repository root.
 # If Render Root Directory=python-cloud-studio, use that folder's Dockerfile.
 FROM python:3.13-bookworm
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 ALEZZ_PUBLIC_MODE=1 ALEZZ_BROWSER_CAPTURE=1
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 ALEZZ_PUBLIC_MODE=1 ALEZZ_BROWSER_CAPTURE=1 \
+    ALEZZ_AUTOSYNC_ENABLED=1 ALEZZ_AUTOSYNC_MODE=auto ALEZZ_AUTOSYNC_INTERVAL_HOURS=24 \
+    ALEZZ_AUTOSYNC_CONCURRENCY=2
 WORKDIR /app
 COPY python-cloud-studio/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt

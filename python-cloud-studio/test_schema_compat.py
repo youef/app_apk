@@ -14,12 +14,12 @@ class SchemaCheckedDB(FakeDB):
         'title_ar', 'title_original', 'description', 'release_year', 'poster_url',
         'backdrop_url', 'country_code', 'language_code', 'genre_tags', 'category_id',
         'status', 'rights_status', 'rights_holder', 'license_reference', 'source_id',
-        'stream_url', 'link_health_status', 'source_page_url',
+        'stream_url', 'stream_variants', 'link_health_status', 'source_page_url',
     }
     EPISODE_FIELDS = {
         'season_id', 'number', 'title_ar', 'description', 'poster_url',
         'status', 'rights_status', 'license_reference', 'source_id',
-        'stream_url', 'link_health_status',
+        'stream_url', 'stream_variants', 'link_health_status', 'source_page_url',
     }
     SEASON_FIELDS = {'series_id', 'number', 'title_ar'}
 

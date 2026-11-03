@@ -20,3 +20,13 @@ services:
         sync: false
       - key: ALEZZ_SITE_SECRET
         generateValue: true
+      - key: ALEZZ_AUTOSYNC_ENABLED
+        value: "1"
+      - key: ALEZZ_AUTOSYNC_MODE
+        value: auto
+      - key: ALEZZ_AUTOSYNC_INTERVAL_HOURS
+        value: "24"
+      - key: ALEZZ_AUTOSYNC_CONCURRENCY
+        value: "2"
+      - key: ALEZZ_SUPABASE_SERVICE_ROLE_KEY
+        sync: false

@@ -66,8 +66,8 @@ with TestClient(app,base_url='https://studio.example.test') as c:
     c.post('/login',data={'password':os.environ['ALEZZ_SITE_PASSWORD']})
     csrf=c.get('/api/init').json()['csrf']
     r=c.post('/api/edge-capture',json={'seconds':3},headers={'x-csrf-token':csrf, 'origin':'https://studio.example.test'})
-    assert r.status_code==400, (r.status_code,r.text)
-    assert 'Edge' in r.text
+    assert r.status_code==503, (r.status_code,r.text)
+    assert 'Chromium' in r.text
 print('Edge disable test passed')
 '''
         result=self.subprocess(script)

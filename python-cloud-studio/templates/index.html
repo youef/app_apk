@@ -16,6 +16,8 @@
   <link rel="stylesheet" href="/static/studio-pro.css?v=studio7">
   <script src="/static/app.js?v=cloudstudio7" defer></script>
   <script src="/static/studio-pro.js?v=studio7" defer></script>
+  <link rel="stylesheet" href="/static/autosync.css?v=autosync1">
+  <script src="/static/autosync.js?v=autosync1" defer></script>
 </head>
 <body>
   <div class="app-shell" id="app">
@@ -27,6 +29,7 @@
         <a class="nav-link" href="#library"><span class="nav-icon">▤</span><span>معاينة المكتبة</span></a>
         <a class="nav-link" href="#episodes"><span class="nav-icon">▦</span><span>المواسم والحلقات</span></a>
         <a class="nav-link" href="#publish"><span class="nav-icon">⇧</span><span>الحفظ والنشر</span></a>
+        <a class="nav-link" href="#smart-sync"><span class="nav-icon">⟳</span><span>المزامنة الذكية</span></a>
       </nav>
       <div class="aside-label aside-label--second">روابط المشروع</div>
       <nav class="nav-list">
@@ -92,6 +95,19 @@ https://example.org/movie/film-one"></textarea></label>
           <p class="library-tip">تُحفظ حالة الفهرسة في SQLite على قرص الخادم الدائم؛ تستأنف المهام تلقائيًا بعد إعادة تشغيل الخدمة. إذا فشلت صفحة، تُحفظ رسالة الخطأ ويُستكمل باقي الصفحات. الحفظ العام للمحتوى يحتاج حقوق عرض؛ ويمكن حفظ البيانات كمسودات.</p>
         </section>
 
+        <section class="section-panel smart-sync" id="smart-sync" aria-labelledby="smartSyncTitle">
+          <div class="smart-sync-head"><div><div class="overline">AUTOSYNC · 24 HOURS</div><h2 id="smartSyncTitle">المزامنة الذكية</h2><p>فحص المكتبة وتجديد روابطها من المصادر المحفوظة. تستمر المهام طوال تشغيل الخادم وتُستكمل بعد الانقطاع.</p></div><span id="autoWorkerBadge" class="auto-badge" role="status">جارٍ قراءة حالة العامل</span></div>
+          <div class="auto-counters" aria-label="نتائج فحص المكتبة"><div><span>العناصر المسجلة</span><strong id="autoTotal">0</strong></div><div><span>روابط سليمة</span><strong id="autoHealthy">0</strong></div><div><span>تحتاج مراجعة</span><strong id="autoBroken">0</strong></div><div><span>تحتاج مصدرًا أصليًا</span><strong id="autoMissing">0</strong></div></div>
+          <dl class="auto-worker-details"><div><dt>وضع الاكتشاف</dt><dd id="autoMode">—</dd></div><div><dt>آخر فحص</dt><dd id="autoLastCheck">—</dd></div><div><dt>الفحص القادم</dt><dd id="autoNextCheck">—</dd></div><div><dt>تغييرات بانتظار الرفع</dt><dd id="autoPendingUploads">0</dd></div></dl>
+          <p id="autoNotice" class="auto-notice" role="status" aria-live="polite">تظهر هنا نتيجة اتصال العامل بقاعدة البيانات.</p>
+          <div class="auto-actions" role="group" aria-label="التحكم بالمزامنة"><button type="button" class="primary-btn" data-auto-action="check-all">فحص المكتبة الآن</button><button type="button" class="secondary-btn" data-auto-action="refresh-all">تجديد المصادر الآن</button><button type="button" class="secondary-btn" data-auto-action="import">تحديث المكتبة من Supabase</button><button type="button" class="small-outline" data-auto-action="pause">إيقاف مؤقت</button><button type="button" class="small-outline" data-auto-action="resume">استئناف</button></div>
+          <div class="auto-list-toolbar"><label class="field"><span class="field-label">بحث في الأفلام والحلقات</span><input type="search" id="autoSearch" placeholder="اسم الفيلم أو الحلقة" autocomplete="off"></label><button type="button" id="autoCheckSelected" class="small-gold">فحص المحدد (0)</button><button type="button" id="autoRefreshView" class="small-outline">تحديث العرض</button></div>
+          <div id="autoTargets" class="auto-targets" aria-live="polite"><p class="auto-empty">جارٍ تحميل المكتبة المسجلة…</p></div>
+          <div class="auto-pagination"><button type="button" id="autoPrev" class="small-outline" disabled>السابق</button><span id="autoPageLabel">—</span><button type="button" id="autoNext" class="small-outline" disabled>التالي</button></div>
+          <details class="auto-events"><summary>سجل التغييرات والأخطاء</summary><div id="autoEvents"><p class="auto-empty">تظهر التغييرات بعد بدء الفحص.</p></div></details>
+          <p class="library-tip">يتغير الرابط الأساسي عند التحقق من بديل صالح. تُحفظ المصادر القديمة وتاريخها، وتظهر صفحة المشغل منفصلة عن الفيديو المتحقق منه. غياب المصدر الأصلي يتطلب إضافته مرة واحدة.</p>
+        </section>
+
         <section class="workspace" id="workspace" hidden>
           <div class="section-title-row" id="library"><div><span class="overline">CONTENT OVERVIEW</span><h2>بيانات العمل <span class="muted-title">ومعاينة الهوية</span></h2></div><span id="demoBadge" class="soft-tag" hidden>نموذج تجريبي</span></div>
           <div class="preview-grid">
@@ -144,7 +160,9 @@ https://example.org/movie/film-one"></textarea></label>
     <a href="#librarySync"><span class="dock-icon" aria-hidden="true">▤</span><span>المكتبات</span></a>
     <a href="#episodes"><span class="dock-icon" aria-hidden="true">▦</span><span>الحلقات</span></a>
     <a href="#publish"><span class="dock-icon" aria-hidden="true">⇧</span><span>الحفظ</span></a>
+    <a href="#smart-sync"><span class="dock-icon" aria-hidden="true">⟳</span><span>المزامنة</span></a>
   </nav>
+  <div class="auto-modal-backdrop" id="autoSourcesModal" hidden><section class="auto-modal" role="dialog" aria-modal="true" aria-labelledby="autoSourcesTitle" tabindex="-1"><div class="smart-sync-head"><h2 id="autoSourcesTitle">مصادر التشغيل</h2><button type="button" class="small-outline" id="autoSourcesClose">إغلاق</button></div><p id="autoSourceIdentity" class="auto-source-identity"></p><form id="autoSourceForm" class="auto-source-form"><label class="field"><span class="field-label">إضافة صفحة مصدر أصلية لهذا العنصر</span><input type="url" id="autoSourceUrl" dir="ltr" placeholder="https://…/episode-page" required maxlength="2048"></label><button type="submit" class="primary-btn">حفظ المصدر وإعادة الاستخراج</button></form><p id="autoSourceNotice" role="status" aria-live="polite"></p><div id="autoSourcesList"></div></section></div>
   <div class="modal-backdrop" id="linksModal" hidden><section class="modal" role="dialog" aria-modal="true" aria-labelledby="linksTitle"><button class="modal-close" data-close="linksModal" aria-label="إغلاق">×</button><div class="modal-kicker">MEDIA LINKS</div><h2 id="linksTitle">إضافة روابط الفيديو من FetchV</h2><p>الصق رابط الفيلم مباشرة، أو اكتب لكل حلقة رقم الموسم والحلقة متبوعًا بالرابط، كل واحد في سطر. لا يتصل الموقع بإضافة FetchV تلقائيًا.</p><div class="code-example">S01E01|https://your-cdn.example/video1.m3u8<br>S01E02|https://your-cdn.example/video2.mp4</div><textarea id="linksInput" rows="8" dir="ltr" placeholder="S01E01|https://..."></textarea><div class="modal-actions"><button class="secondary-btn" data-close="linksModal">إلغاء</button><button class="primary-btn" id="applyLinksBtn">+ ربط الحلقات</button></div></section></div>
 
   <div class="modal-backdrop" id="loginModal" hidden><section class="modal modal--login" role="dialog" aria-modal="true" aria-labelledby="loginTitle"><button class="modal-close" data-close="loginModal" aria-label="إغلاق">×</button><div class="login-mark">ع <small>TV</small></div><div class="modal-kicker">ADMIN ACCESS</div><h2 id="loginTitle">دخول مسؤول العز TV</h2><p>أدخل حساب المسؤول في Supabase. تُرسل البيانات من خادم بايثون إلى Supabase مباشرة، ولا تُخزن كلمة المرور محليًا.</p><form id="loginForm"><label class="field"><span class="field-label">البريد الإلكتروني</span><input id="loginEmail" type="email" autocomplete="username" dir="ltr" placeholder="admin@example.com"></label><label class="field"><span class="field-label">كلمة المرور</span><input id="loginPassword" type="password" autocomplete="current-password" dir="ltr" placeholder="••••••••"></label><details class="token-login"><summary>الدخول باستخدام رمز جلسة Supabase بدل كلمة المرور</summary><label class="field"><span class="field-label">رمز جلسة المسؤول (Access Token)</span><textarea id="loginToken" rows="3" dir="ltr" placeholder="eyJ..."></textarea></label><p>استخدم الرمز على جهازك فقط، ولا تشاركه. يُتحقق من صلاحيات المسؤول قبل أي كتابة.</p></details><button class="primary-btn full-btn" type="submit">تسجيل الدخول الآمن</button></form></section></div>

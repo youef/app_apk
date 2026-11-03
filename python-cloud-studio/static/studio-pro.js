@@ -86,7 +86,7 @@
       if(anchor.hash==='#'+id)anchor.setAttribute('aria-current','page');
       else anchor.removeAttribute('aria-current');
     });
-    const name={import:'الاستيراد الذكي',librarySync:'مزامنة المكتبات',episodes:'المواسم والحلقات',publish:'الحفظ والنشر'};
+    const name={import:'الاستيراد الذكي',librarySync:'مزامنة المكتبات',episodes:'المواسم والحلقات',publish:'الحفظ والنشر','smart-sync':'المزامنة الذكية'};
     const crumb=document.querySelector('.breadcrumbs strong');
     if(crumb)crumb.textContent=name[id]||name.import;
   }

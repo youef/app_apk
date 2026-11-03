@@ -10,5 +10,6 @@ local.properties
 *.apk
 *.aab
 .DS_Store
+supabase/.temp/
 
 app/src/main/assets/tls/
