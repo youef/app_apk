@@ -32,4 +32,17 @@ assert.deepEqual(Array.from(migrated[0].episodes,function(x){return x.number}),[
 assert.equal(migrated[1].episodes[0].number,1,"New season should start from first episode");
 assert.throws(function(){remap([{season:1,episodes:[{url:"a",quality:"HD"}]}],{1:300});},
  /300/,"Do not overwrite a season at its 300 episode limit");
+
+for(const marker of [
+  'id="savedEpisodesPanel"','id="savedEpisodeList"','id="savedSeasonFilter"',
+  'id="savedSearch"','id="checkSavedAll"','id="reloadSaved"','id="stopSavedCheck"'
+])assert.ok(html.includes(marker),marker+" missing from saved episode editor");
+for(const feature of [
+  'function loadSavedEpisodes(','function renderSavedEpisodes(','function saveSavedEpisode(',
+  'function deleteSavedEpisode(','function checkAllSavedEpisodes(','function serverCheckSaved(',
+  'mode:"episodes"','method:"PATCH"','method:"DELETE"'
+])assert.ok(js.includes(feature),feature+" missing in saved episode manager");
+assert.ok(js.includes('id=eq.'),"Episode updates/deletes must target explicit database row IDs");
+assert.ok(js.includes('hasSavedEdits()'),"Unsaved episode edits must be protected from navigation");
+assert.ok(js.includes('link_health_reason'),"Link health diagnostics should be displayed");
 console.log("PASS: series, seasons and episodes quick editor, existing series selection and safe draft migration");
