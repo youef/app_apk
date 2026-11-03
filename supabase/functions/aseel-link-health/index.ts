@@ -201,12 +201,13 @@ async function updateSeries(){
   for(const show of series||[]){
     const seasonIds=(seasons||[]).filter((x:Row)=>x.series_id===show.id).map((x:Row)=>x.id);
     const children=(episodes||[]).filter((x:Row)=>seasonIds.includes(x.season_id)&&x.status==="published");
-    if(!children.length)continue;
-    const result=children.every((x:Row)=>x.link_health_status==="broken")?"broken":
+    const result=!children.length?"broken":
+      children.every((x:Row)=>x.link_health_status==="broken")?"broken":
       children.some((x:Row)=>x.link_health_status==="healthy")?"healthy":"unchecked";
     if(show.link_health_status!==result)await rest("aseel_series","id=eq."+encodeURIComponent(String(show.id)),{
       method:"PATCH",body:JSON.stringify({link_health_status:result,link_health_checked_at:new Date().toISOString(),
-        link_health_reason:result==="broken"?"جميع الحلقات المنشورة غير صالحة":result==="healthy"?"توجد حلقات قابلة للتشغيل":null})
+        link_health_reason:result==="broken"?(children.length?"جميع الحلقات المنشورة غير صالحة":"لا توجد أي حلقات منشورة قابلة للمشاهدة"):
+          result==="healthy"?"توجد حلقات قابلة للتشغيل":null})
     });
   }
 }
