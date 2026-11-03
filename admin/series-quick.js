@@ -5,6 +5,7 @@ var cfg=window.ALEZZ_ADMIN_CONFIG;
 var $=function(id){return document.getElementById(id);};
 var session=null, series=[], existingSeasons=[], existingEpisodeMax={}, groups=[], activeSeason=1, saving=false;
 var savedEpisodes=[], savedSeriesId="", savedLoadVersion=0, checkingSaved=false, stopSavedChecking=false;
+var previewHls=null, previewToken=0, previewHlsLoader=null;
 var urlPattern=/^https:\/\/[^\s]+\.(m3u8|mp4)(\?[^\s]*)?$/i;
 var qualities=["AUTO","SD","HD","FHD","4K","480P","720P","1080P","2160P"];
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
@@ -271,9 +272,10 @@ function editSavedField(ev){
 async function loadSavedEpisodes(id){
  var token=++savedLoadVersion,panel=$("savedEpisodesPanel");
  if(!id){
-  savedEpisodes=[];savedSeriesId="";panel.classList.add("hidden");
+  savedEpisodes=[];savedSeriesId="";panel.classList.add("hidden");stopSavedPreview();
   return;
  }
+ stopSavedPreview();
  panel.classList.remove("hidden");savedSeriesId=id;
  savedEpisodes=[];$("savedEpisodeList").replaceChildren();
  $("savedSummary").textContent="جارٍ تحميل جميع الحلقات المحفوظة…";
@@ -372,6 +374,70 @@ function renderSavedEpisodes(){
    '</div><small class="health-detail">'+esc(ep._checkError||ep.link_health_reason||"حالة الرابط لم تُحسم بعد")+
    ' • '+esc(checked)+'</small></div></article>';
  }).join("");
+}
+
+function stopSavedPreview(){
+ previewToken++;
+ if(previewHls){try{previewHls.destroy();}catch(e){}previewHls=null;}
+ var video=$("savedPreviewVideo");
+ if(video){video.pause();video.removeAttribute("src");video.load();}
+ $("savedPreviewPanel").classList.add("hidden");
+}
+function previewNote(text,error){
+ var status=$("savedPreviewStatus");status.textContent=text;
+ status.style.color=error?"var(--bad)":"var(--muted)";
+}
+function loadSavedHls(){
+ if(window.Hls)return Promise.resolve(window.Hls);
+ if(previewHlsLoader)return previewHlsLoader;
+ previewHlsLoader=new Promise(function(resolve){
+  var src=document.createElement("script");
+  src.src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js";
+  src.async=true;src.onload=function(){resolve(window.Hls||null);};
+  src.onerror=function(){resolve(null);};document.head.appendChild(src);
+ }).then(function(value){if(!value)previewHlsLoader=null;return value;});
+ return previewHlsLoader;
+}
+async function previewSavedSource(id,type,index){
+ var ep=savedById(id);if(!ep)return;
+ var isExtra=type==="variant",entry=isExtra?ep._draft.variants[index]:null;
+ if(isExtra&&!entry)return;
+ var url=String(isExtra?entry.url:ep._draft.stream_url).trim();
+ if(!urlPattern.test(url)){message("احفظ رابط MP4 أو HLS صالحًا أو أدخله أولًا للتجربة.",true);return;}
+ stopSavedPreview();
+ var token=previewToken,video=$("savedPreviewVideo");
+ var panel=$("savedPreviewPanel");
+ panel.classList.remove("hidden");
+ $("savedPreviewTitle").textContent="تجربة الحلقة "+ep._draft.number+" — "+(isExtra?entry.label:"الرابط الأساسي");
+ previewNote("جارٍ تجهيز المشغل، اضغط تشغيل إن لم يبدأ تلقائيًا…",false);
+ video.onerror=function(){
+  if(previewToken!==token)return;
+  var err=video.error;
+  previewNote("تعذر التشغيل في هذا المتصفح: "+(err&&err.code===4?"صيغة/ترميز غير مدعوم أو المصدر محجوب":"المصدر غير متاح أو يمنع الوصول للوسائط")+".",true);
+ };
+ video.oncanplay=function(){if(previewToken===token)previewNote("المشغل قادر على بدء تشغيل المصدر في هذا المتصفح؛ جرّب الصوت والصورة يدويًا.",false);};
+ try{
+  if(/\.m3u8(?:\?|$)/i.test(url)){
+   if(video.canPlayType("application/vnd.apple.mpegurl")||video.canPlayType("application/x-mpegURL")){
+    video.src=url;
+   }else{
+    var Hls=await loadSavedHls();
+    if(previewToken!==token)return;
+    if(!Hls||!Hls.isSupported()){
+     previewNote("المتصفح لا يدعم HLS أصليًا أو بواسطة hls.js. جرّبه على جهاز يدعم HLS.",true);return;
+    }
+    previewHls=new Hls({maxBufferLength:10,enableWorker:true});
+    previewHls.on(Hls.Events.ERROR,function(event,data){
+     if(previewToken===token&&data&&data.fatal)previewNote("فشل تشغيل HLS: "+(data.details||"المصدر/الترميز أو CORS")+".",true);
+    });
+    previewHls.loadSource(url);previewHls.attachMedia(video);
+   }
+  }else video.src=url;
+  video.load();
+  try{await video.play();}catch(e){
+   if(previewToken===token)previewNote("اضغط تشغيل من المشغل؛ قد يمنع المتصفح التشغيل التلقائي أو يرفض هذا المصدر.",false);
+  }
+ }catch(err){if(previewToken===token)previewNote("تعذر تهيئة التشغيل: "+err.message,true);}
 }
 function savedBusy(button,busy,label){
  if(!button)return;
@@ -577,6 +643,7 @@ function wire(){
  });
  $("checkSavedAll").addEventListener("click",checkAllSavedEpisodes);
  $("stopSavedCheck").addEventListener("click",function(){stopSavedChecking=true;});
+ $("closeSavedPreview").addEventListener("click",stopSavedPreview);
  $("savedEpisodeList").addEventListener("input",editSavedField);
  $("savedEpisodeList").addEventListener("change",editSavedField);
  $("savedEpisodeList").addEventListener("click",function(ev){
@@ -592,6 +659,7 @@ function wire(){
    if(!e||!e._draft.variants[index])return;
    e._draft.variants.splice(index,1);renderSavedEpisodes();return;
   }
+  if(action==="preview"){previewSavedSource(id,button.dataset.urlType,Number(button.dataset.index));return;}
   if(action==="save")saveSavedEpisode(id,button);
   if(action==="delete")deleteSavedEpisode(id,button);
   if(action==="check")checkOneSavedEpisode(id,button);
