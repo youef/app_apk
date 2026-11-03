@@ -147,7 +147,7 @@ def category_for(meta, title):
         aliases = {"movies": {"movies", "movie"},
                    "sports": {"sports", "sport"},
                    "kids": {"kids", "animation", "family"},
-                   "series": {"series", "entertainment"},
+                   "series": {"series", "drama"},
                    "documentary": {"documentary", "science", "nature"}}.get(group, {group})
         if tags & aliases:
             return group
@@ -182,11 +182,41 @@ def api(method, route, body=None):
 def existing_channels():
     rows = []
     for offset in range(0, 10000, 500):
-        page = api("GET", "aseel_channels?select=id,title_ar,stream_url,description,country_code&limit=500&offset=" + str(offset))
+        page = api("GET", "aseel_channels?select=id,title_ar,stream_url,description,country_code,link_health_status,link_health_failures&limit=500&offset=" + str(offset))
         rows.extend(page)
         if len(page) < 500:
             break
     return rows
+
+
+def refresh_managed_channels(rows):
+    """Recheck only auto-imported channels; never demote editor-managed sources."""
+    managed = [r for r in rows if (r.get("description") or "").startswith("IPTV-org source ID:")
+               and r.get("stream_url") and public_https(r["stream_url"])]
+    REPORT["rechecked"] = len(managed)
+    REPORT["recovered"] = 0
+    REPORT["became_suspect"] = 0
+    REPORT["became_broken"] = 0
+    if not managed or DRY_RUN:
+        return
+    with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
+        outcomes = pool.map(lambda row: (row, stream_works(row["stream_url"])), managed)
+        for row, works in outcomes:
+            previous = row.get("link_health_status") or "unchecked"
+            failures = 0 if works else int(row.get("link_health_failures") or 0) + 1
+            status = "healthy" if works else ("broken" if failures >= 3 else "suspect")
+            if previous == status and failures == 0:
+                continue
+            update = {"link_health_status": status, "link_health_failures": failures,
+                      "link_health_checked_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+                      "link_health_url": row["stream_url"]}
+            api("PATCH", "aseel_channels?id=eq." + urllib.parse.quote(row["id"]), update)
+            if status == "broken" and previous != "broken":
+                REPORT["became_broken"] += 1
+            elif status == "suspect" and previous != "suspect":
+                REPORT["became_suspect"] += 1
+            elif status == "healthy" and previous != "healthy":
+                REPORT["recovered"] += 1
 
 def main():
     print("Arabic IPTV source discovery; mode:", "DRY_RUN" if DRY_RUN else "WRITE")
@@ -219,6 +249,7 @@ def main():
     if DRY_RUN and not SERVICE_KEY:
         print("No write credential. Stream checks continue and output a report.")
     db_rows = existing_channels() if SERVICE_KEY else []
+    refresh_managed_channels(db_rows)
     urls = {r.get("stream_url") for r in db_rows if r.get("stream_url")}
     names = {(norm(r.get("title_ar") or ""), (r.get("country_code") or "").lower()) for r in db_rows}
     to_check = []
