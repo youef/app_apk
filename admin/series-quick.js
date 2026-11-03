@@ -248,6 +248,7 @@ async function loadSavedEpisodes(id){
   return;
  }
  panel.classList.remove("hidden");savedSeriesId=id;
+ savedEpisodes=[];$("savedEpisodeList").replaceChildren();
  $("savedSummary").textContent="جارٍ تحميل جميع الحلقات المحفوظة…";
  var previousFilter=$("savedSeasonFilter").value;
  var previousSeries=panel.dataset.seriesId;
