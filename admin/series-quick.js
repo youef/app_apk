@@ -575,7 +575,7 @@ async function checkAllSavedEpisodes(){
    (failed?" تعذّر فحص "+failed+" حلقة؛ يمكن إعادة المحاولة.":"")+
    (stopSavedChecking?" تم إيقاف بقية الفحص.":""));
  }finally{
-  checkingSaved=false;stopSavedChecking=false;button.disabled=false;button.textContent="فحص جميع الحلقات";
+  checkingSaved=false;stopSavedChecking=false;button.disabled=false;button.textContent="فحص كل روابط جميع الحلقات";
   $("stopSavedCheck").classList.add("hidden");
  }
 }
