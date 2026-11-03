@@ -6,7 +6,7 @@
   var state = {
     channels: [], shown: [], current: null, search: "", category: "",
     hls: null, dash: null, frame: null, request: 0, timeout: null, mounted: false,
-    hlsRecoveries: 0, favoritesOnly: false, favorites: [],
+    hlsRecoveries: 0, favoritesOnly: false, favorites: [], awaitingGesture: false,
     dial: "", dialTimer: null, qualityLevels: [], qualityChoice: -1,
     lastChannelKey: null, startAt: 0, pipActive: false
   };
@@ -152,29 +152,68 @@
       video.hidden = false;
     }
     state.hlsRecoveries = 0;
+    state.awaitingGesture = false;
     resetLiveQuality();
   }
   function error(message) {
     clearTimeout(state.timeout);
+    state.awaitingGesture = false;
     stateText(message, true);
     var stage = $("liveStage");
     if (stage) stage.classList.remove("is-loading", "is-playing");
     if ($("livePoster")) $("livePoster").hidden = false;
     if ($("liveStart")) $("liveStart").hidden = false;
   }
-  function requestPlay(video, ticket) {
+  function updateLiveMuteButton(video) {
+    var button = $("liveMute");
+    if (!video || !button) return;
+    var muted = !!video.muted;
+    button.setAttribute("aria-pressed", String(muted));
+    button.setAttribute("aria-label", muted ? "تفعيل الصوت" : "كتم الصوت");
+    button.title = muted ? "تفعيل الصوت" : "كتم الصوت";
+  }
+  function waitForPlaybackGesture(ticket) {
+    if (ticket !== state.request) return;
+    state.awaitingGesture = true;
+    clearTimeout(state.timeout);
+    state.timeout = null;
+    if ($("liveStage")) $("liveStage").classList.remove("is-loading", "is-playing");
+    if ($("livePoster")) $("livePoster").hidden = false;
+    if ($("liveStart")) $("liveStart").hidden = false;
+    stateText("اضغط «تشغيل الآن» لبدء البث؛ يتطلب المتصفح تفاعلاً مباشرًا مع المشغل.", false);
+  }
+  function handlePlayRejection(err, video, ticket, mutedRetry) {
+    if (ticket !== state.request) return;
+    var reason = (err && err.name) || "";
+    // A source change may abort a pending play() without indicating an autoplay failure.
+    if (reason === "AbortError") return;
+    if (reason === "NotAllowedError" || reason === "SecurityError") {
+      // Asynchronous HLS manifest loading loses the click gesture in Safari/Chrome.
+      // Muted inline video may autoplay; users can enable audio with the sound button.
+      if (!video.muted && !mutedRetry) {
+        video.muted = true;
+        updateLiveMuteButton(video);
+        stateText("جارٍ تشغيل القناة بدون صوت وفق سياسة المتصفح…", false);
+        requestPlay(video, ticket, true);
+        return;
+      }
+      waitForPlaybackGesture(ticket);
+      return;
+    }
+    if (reason === "NotSupportedError") {
+      error("تعذّر قراءة مصدر البث أو أن الترميز غير مدعوم على هذا الجهاز.");
+      return;
+    }
+    error("تعذّر بدء البث" + (reason ? " (" + reason + ")" : "") + ". جرّب إعادة الاتصال أو قناة أخرى.");
+  }
+  function requestPlay(video, ticket, mutedRetry) {
     if (ticket !== state.request) return;
     var p;
     try { p = video.play(); }
-    catch (e) { stateText("اضغط زر التشغيل لبدء البث.", false); return; }
-    if (p && p.catch) p.catch(function () {
-      if (ticket !== state.request) return;
-      clearTimeout(state.timeout);
-      stateText("المتصفح منع التشغيل التلقائي. اضغط تشغيل من أدوات الفيديو.", false);
-      if ($("liveStage")) $("liveStage").classList.remove("is-loading");
-      if ($("livePoster")) $("livePoster").hidden = true;
-      if ($("liveStart")) $("liveStart").hidden = false;
-    });
+    catch (e) { handlePlayRejection(e, video, ticket, !!mutedRetry); return; }
+    if (p && p.then) p.then(function () {
+      if (ticket === state.request) state.awaitingGesture = false;
+    }, function (e) { handlePlayRejection(e, video, ticket, !!mutedRetry); });
   }
   function useScript(src, globalName, timeout) {
     if (window[globalName]) return Promise.resolve(window[globalName]);
@@ -452,7 +491,20 @@
     $("liveFilters").addEventListener("change",function(event){
       if(event.target.getAttribute("data-browse-select")==="live")chooseLiveCategory(event.target.value);
     });
-    $("liveStart").addEventListener("click", function () { if (state.current) select(state.current, true); });
+    $("liveStart").addEventListener("click", function () {
+      if (!state.current) return;
+      // Resume the already-loaded media synchronously inside the user's click.
+      // Restarting async HLS setup here would lose the gesture again.
+      var video = $("liveVideo");
+      if (state.awaitingGesture && video) {
+        state.awaitingGesture = false;
+        $("liveStart").hidden = true;
+        $("liveStage").classList.add("is-loading");
+        requestPlay(video, state.request, true);
+        return;
+      }
+      select(state.current, true);
+    });
     $("liveRetry").addEventListener("click", function () { if (state.current) select(state.current, true); });
     $("livePrev").addEventListener("click", function () { navigate(-1); });
     $("liveNext").addEventListener("click", function () { navigate(1); });
@@ -493,9 +545,11 @@
       $("liveFit").setAttribute("aria-pressed","true");
     }
     $("liveMute").addEventListener("click", function () {
-      var video = $("liveVideo"); video.muted = !video.muted;
-      $("liveMute").setAttribute("aria-pressed", String(video.muted));
-      $("liveMute").title = video.muted ? "إلغاء كتم الصوت" : "كتم الصوت";
+      var video = $("liveVideo");
+      video.muted = !video.muted;
+      updateLiveMuteButton(video);
+      if ($("liveStage").classList.contains("is-playing"))
+        stateText(video.muted ? "البث يعمل الآن بدون صوت • اضغط زر الصوت لتفعيله" : "البث يعمل الآن • LIVE", false);
     });
     $("liveQuality").addEventListener("click", function () {
       var menu=$("liveQualityMenu");
@@ -524,6 +578,8 @@
     });
     $("liveRefresh").addEventListener("click", function () { if (window.Alezz) window.Alezz.reload(); });
     var video = $("liveVideo");
+    updateLiveMuteButton(video);
+    video.addEventListener("volumechange", function () { updateLiveMuteButton(video); });
     video.addEventListener("playing", function () {
       if (!state.mounted) return;
       clearTimeout(state.timeout);
@@ -531,7 +587,7 @@
       $("liveStage").classList.add("is-playing");
       $("livePoster").hidden = true;
       $("liveStart").hidden = true;
-      stateText("البث يعمل الآن • LIVE", false);
+      stateText(video.muted ? "البث يعمل الآن بدون صوت • اضغط زر الصوت لتفعيله" : "البث يعمل الآن • LIVE", false);
     });
     video.addEventListener("waiting", function () {
       if (state.mounted && state.current) stateText("جارٍ إعادة تخزين البث…", false);
