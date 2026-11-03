@@ -51,6 +51,25 @@ footer button{min-width:160px}
 .duplicate-help p{font-size:13px;margin:3px 0 0;color:#ebd8ac}
 .duplicate-help button{flex-shrink:0;max-width:100%}
 #loading{color:var(--muted);padding:40px;text-align:center}
+
+/* Saved episodes manager: independent from the new-episode publishing form. */
+.saved-episode{background:var(--card);border:1px solid #3d455b;border-radius:14px;padding:15px;margin:12px 0}
+.saved-episode.unsaved{border-color:var(--gold);box-shadow:inset 3px 0 var(--gold)}
+.saved-episode-head{display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap;margin-bottom:12px}
+.saved-episode-head strong{font-size:16px;color:#f4e3b6}
+.saved-fields{display:grid;grid-template-columns:minmax(90px,105px) minmax(145px,1.1fr) minmax(220px,2.3fr) minmax(110px,130px) minmax(110px,130px);gap:10px;align-items:end}
+.saved-fields input,.saved-fields select{padding:9px 11px;font-size:14px}
+.saved-episode-bottom{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:12px}
+.saved-episode-bottom button{padding:8px 11px;font-size:13px}
+.health{font-size:12px;border:1px solid #62687b;color:#ccd2dd;padding:3px 10px;border-radius:22px}
+.health.healthy{color:#95f1bb;border-color:#337353;background:#15352c}
+.health.broken{color:#ffb1b1;border-color:#8e394c;background:#3e1f2b}
+.health.suspect{color:#f7d69b;border-color:#8f713a;background:#43321b}
+.health-detail{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+#savedSummary{margin:14px 0;color:#d2d3db;font-size:13px}
+#savedSearch{min-width:0}
+@media(max-width:960px){.saved-fields{grid-template-columns:85px 1fr 1fr}.saved-url{grid-column:1/-1;grid-row:2}}
+@media(max-width:560px){.saved-fields{grid-template-columns:1fr 1fr}.saved-url{grid-column:1/-1;grid-row:auto}.saved-fields label:nth-child(2){grid-column:auto}.saved-episode-bottom .actions{width:100%}.saved-episode-bottom button{flex:1}.saved-episode{padding:11px}}
 @media(max-width:720px){.grid{grid-template-columns:1fr}.episode{grid-template-columns:1fr 125px}.episode-label{grid-column:1/-1;padding:0}.episode label:first-of-type{grid-column:1;}.episode .danger{align-self:end}main{padding:12px 12px 90px}.panel{padding:14px}footer button{min-width:0}}
 </style>
 </head>
@@ -98,6 +117,30 @@ footer button{min-width:160px}
 </div>
 </div>
 </section>
+<section class="panel hidden" id="savedEpisodesPanel">
+<div class="season-head">
+  <div>
+    <h2 style="margin:0 0 5px">3. إدارة جميع حلقات المسلسل المختار</h2>
+    <p class="note">استعرض الحلقات الموجودة في قاعدة البيانات، وعدّل الرقم والاسم والرابط والجودة والحالة، أو افحصها واحذفها.</p>
+  </div>
+  <div class="actions">
+    <button type="button" id="reloadSaved" class="ghost">تحديث القائمة</button>
+    <button type="button" id="checkSavedAll" class="primary">فحص جميع الحلقات</button>
+    <button type="button" id="stopSavedCheck" class="danger hidden">إيقاف الفحص</button>
+  </div>
+</div>
+<div class="grid">
+  <label>عرض حسب الموسم
+    <select id="savedSeasonFilter"><option value="">كل المواسم</option></select>
+  </label>
+  <label>بحث في الحلقات
+    <input id="savedSearch" type="search" placeholder="ابحث برقم الحلقة أو باسمها" autocomplete="off">
+  </label>
+</div>
+<div id="savedSummary" role="status" aria-live="polite">اختر مسلسلًا لعرض حلقاته.</div>
+<div id="savedEpisodeList"></div>
+<p class="note">الفحص يفحص استجابة مصدر الفيديو أو قائمة HLS عبر الخادم؛ نجاحه لا يضمن توافق الترميز مع كل شاشة. تُوسم النتائج غير الحاسمة للمراجعة بدل حذفها تلقائيًا.</p>
+</section>
 <div id="result" role="status" aria-live="polite"></div>
 <footer>
 <button id="save" type="button" class="primary">حفظ ونشر الكل</button>
@@ -107,6 +150,6 @@ footer button{min-width:160px}
 </div>
 </main>
 <script src="config.js?v=quick-series-20261101"></script>
-<script src="series-quick.js?v=series-existing-20261102-v2"></script>
+<script src="series-quick.js?v=series-editor-20261103-v1"></script>
 </body>
 </html>
