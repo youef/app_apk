@@ -40,6 +40,13 @@ jobs:
         run: python -m py_compile scripts/arabic_iptv_import.py
       - name: Discover Arabic channels and validate actual HLS media segments
         run: python scripts/arabic_iptv_import.py
+      - name: Require database write credential for scheduled imports
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::SUPABASE_SERVICE_ROLE_KEY is missing. No channels were inserted."
+            exit 1
+          fi
       - name: Upload import/verification report
         if: always()
         uses: actions/upload-artifact@v4
