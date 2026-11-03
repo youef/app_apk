@@ -135,6 +135,28 @@ public final class CinemaPlayerActivity extends Activity {
         remoteNumber="";
     }};
     private boolean live=false,started=false;
+    private long lastLivePlayhead=-1;
+    private int frozenTicks=0,liveRestarts=0;
+    private final Runnable liveHealth=new Runnable(){public void run(){
+        if(isFinishing()||engine==null)return;
+        if(live && engine.getPlaybackState()==Player.STATE_READY && engine.isPlaying()){
+            long position=engine.getCurrentPosition();
+            if(position>0 && lastLivePlayhead>0 && position<=lastLivePlayhead+50)frozenTicks++;
+            else frozenTicks=0;
+            lastLivePlayhead=position;
+            if(frozenTicks>=4){
+                frozenTicks=0;
+                if(liveRestarts<2){
+                    liveRestarts++;
+                    status.setText("توقف تقدم البث • استعادة الاتصال "+liveRestarts+"/2");
+                    playSource(index);
+                }else{
+                    tryNextOrExplain("الصورة متوقفة رغم الاتصال؛ يرجى تجربة مصدر آخر.");
+                }
+            }
+        }else{frozenTicks=0;lastLivePlayhead=-1;}
+        handler.postDelayed(this,5000L);
+    }};
     private final Runnable watchdog=new Runnable(){public void run(){
         if(isFinishing() || started || engine==null)return;
         if(tries<1){
@@ -317,8 +339,18 @@ public final class CinemaPlayerActivity extends Activity {
             .setReadTimeoutMs(18000)
             .setAllowCrossProtocolRedirects(false);
         DefaultDataSource.Factory data=new DefaultDataSource.Factory(this,http);
+        // A conservative buffer profile for low-memory Android 4.4 TVs, larger on newer devices.
+        boolean kitkat=Build.VERSION.SDK_INT<=19;
+        com.google.android.exoplayer2.DefaultLoadControl loadControl=
+            new com.google.android.exoplayer2.DefaultLoadControl.Builder()
+            .setBufferDurationsMs(kitkat?12000:22000,kitkat?35000:70000,
+                1200,kitkat?3500:5000)
+            .build();
         engine=new ExoPlayer.Builder(this)
+            .setLoadControl(loadControl)
             .setMediaSourceFactory(new DefaultMediaSourceFactory(data)).build();
+        handler.removeCallbacks(liveHealth);
+        handler.postDelayed(liveHealth,5000L);
         engine.addListener(new Player.Listener(){
             @Override public void onPlaybackStateChanged(int state){
                 if(state==Player.STATE_BUFFERING){
@@ -398,6 +430,7 @@ public final class CinemaPlayerActivity extends Activity {
     private void playSource(int which){
         if(which<0||which>=sources.size()||engine==null)return;
         index=which;currentUrl=sources.get(which).url;
+        frozenTicks=0;lastLivePlayhead=-1;
         attempted.add(which);
         started=false;handler.removeCallbacks(watchdog);
         final int token=++requestToken;
@@ -657,7 +690,7 @@ public final class CinemaPlayerActivity extends Activity {
         String quality=savedItem==null?"auto":savedItem.optString("quality","auto");
         index=StreamQuality.choose(sources,quality,Build.VERSION.SDK_INT);
         if(index<0)index=0;
-        attempted.clear();tries=0;requestToken++;
+        attempted.clear();tries=0;requestToken++;liveRestarts=0;frozenTicks=0;lastLivePlayhead=-1;
         title.setText("▶ "+itemTitle);
         updateSkipButton();
         details.setText(String.format(Locale.US,"%d / %d  •  %s",mediaIndex+1,
@@ -682,7 +715,7 @@ public final class CinemaPlayerActivity extends Activity {
         itemTitle=selected.optString("title","قناة تلفزيونية");
         sources=next;index=StreamQuality.choose(sources,"auto",Build.VERSION.SDK_INT);
         if(index<0)index=0;
-        attempted.clear();tries=0;requestToken++;
+        attempted.clear();tries=0;requestToken++;liveRestarts=0;frozenTicks=0;lastLivePlayhead=-1;
         title.setText(String.format(Locale.US,"● CH %03d  •  %s",tvChannelIndex+1,itemTitle));
         PlaybackMemory.lastChannel(this,profile,itemId);
         details.setText("بث مباشر • CH± للتنقل • اضغط MENU للدليل");
@@ -861,6 +894,7 @@ public final class CinemaPlayerActivity extends Activity {
         super.onPause();
     }
     @Override protected void onDestroy(){
+        handler.removeCallbacks(liveHealth);
         saveProgress();requestToken++;probeWorker.shutdownNow();handler.removeCallbacksAndMessages(null);
         if(surface!=null)surface.setPlayer(null);
         if(engine!=null){engine.release();engine=null;}
