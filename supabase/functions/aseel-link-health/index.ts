@@ -170,13 +170,13 @@ async function checkRow(table:string,row:Row,allSources=false){
     return pending.get(key)!;
   }));
   const healthy=probes.some(x=>x.kind==="healthy");
-  const allDefinite=probes.length>0 && probes.every(x=>x.kind==="definite");
+  const allDefinite=probes.length===0 || probes.every(x=>x.kind==="definite");
   const prior=Number(row.link_health_failures||0);
   const failed=allDefinite?(row.link_health_url===fingerprint?prior:0)+1:0;
   const status=healthy?"healthy":allDefinite?(failed>=3?"broken":"suspect") :
     row.link_health_status==="broken"&&row.link_health_url===fingerprint?"broken":"suspect";
   const reason=healthy?"تم تأكيد استجابة مصدر واحد على الأقل":allDefinite?
-    (probes[0]?.reason||"تعذر تشغيل المصدر")+" — التحقق "+failed+" من 3":
+    (probes[0]?.reason||"لا يوجد أي رابط تشغيل مباشر أو بديل")+" — التحقق "+failed+" من 3":
     (probes[0]?.reason||"تعذر التحقق التلقائي؛ لا يُحجب المحتوى بسبب نتيجة غير حاسمة");
   const current=await rest(table,"select="+(table==="aseel_youtube_videos"?"youtube_url":"stream_url,stream_variants,youtube_url"+
     (table==="aseel_channels"?",official_url,playback_mode":""))+
@@ -192,7 +192,7 @@ async function checkRow(table:string,row:Row,allSources=false){
       state:result.kind==="healthy"?"healthy":result.kind==="definite"?"broken":"suspect",
       reason:result.reason};
   }):undefined;
-  return {state:status,title:row.title_ar,sources};
+  return {state:status,title:row.title_ar,newlyHidden:status==="broken"&&row.link_health_status!=="broken",recovered:status==="healthy"&&row.link_health_status==="broken",sources};
 }
 async function updateSeries(){
   const series=await rest("aseel_series","select=id,link_health_status&status=eq.published&limit=200");
@@ -247,20 +247,35 @@ Deno.serve(async(req:Request)=>{
       return reply({error:"تعذر فحص الحلقات: "+String(e).slice(0,160)},500);
     }
   }
+  if(body.mode==="series"){
+    try{
+      await updateSeries();
+      return reply({authenticated:github?"github_oidc":"admin",mode:"series",ok:true,errors:[]});
+    }catch(e){return reply({error:"Series aggregation failed: "+String(e).slice(0,150)},500);}
+  }
+  const selected=String(body.table||"");
+  if(selected&&!tables.some(t=>t.name===selected))return reply({error:"Unknown table"},400);
+  const before=typeof body.before==="string" ? body.before : "";
+  if(before && (!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$/.test(before)||isNaN(Date.parse(before))))
+    return reply({error:"Invalid before timestamp"},400);
   const requested=Math.max(1,Math.min(24,Number(body.per_table)||24));
-  const summary:Record<string,unknown>={authenticated:github?"github_oidc":"admin",scanned:0,healthy:0,suspect:0,broken:0,skipped:0,errors:[]};
+  const summary:Record<string,unknown>={authenticated:github?"github_oidc":"admin",scanned:0,healthy:0,suspect:0,broken:0,skipped:0,newlyHidden:0,recovered:0,errors:[]};
   for(const tab of tables) {
+    if(selected&&tab.name!==selected)continue;
     try {
-      const rows=await rest(tab.name,"select="+tab.fields+"&status=eq.published&order=link_health_checked_at.asc.nullsfirst&limit="+Math.min(requested,tab.max));
+      const timeFilter=before?"&or=(link_health_checked_at.is.null,link_health_checked_at.lt."+encodeURIComponent(before)+")":"";
+      const rows=await rest(tab.name,"select="+tab.fields+"&status=eq.published"+timeFilter+"&order=link_health_checked_at.asc.nullsfirst&limit="+Math.min(requested,tab.max));
       const results=await Promise.allSettled((rows||[]).map((row:Row)=>checkRow(tab.name,row)));
       for(const item of results){
         if(item.status==="rejected"){(summary.errors as string[]).push(tab.name+": "+String(item.reason).slice(0,110));continue;}
         summary.scanned=Number(summary.scanned)+1;
         const key=item.value.state;
         summary[key]=Number(summary[key]||0)+1;
+        if(item.value.newlyHidden) summary.newlyHidden=Number(summary.newlyHidden)+1;
+        if(item.value.recovered) summary.recovered=Number(summary.recovered)+1;
       }
     }catch(e){(summary.errors as string[]).push(tab.name+": "+String(e).slice(0,170));}
   }
-  try{await updateSeries()}catch(e){(summary.errors as string[]).push("series: "+String(e).slice(0,150));}
+  if(!selected)try{await updateSeries()}catch(e){(summary.errors as string[]).push("series: "+String(e).slice(0,150));}
   return reply(summary,(summary.errors as string[]).length?207:200);
 });
