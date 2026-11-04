@@ -19,3 +19,5 @@ a{color:#d0ecad}
 :focus-visible{outline:2px solid #e4f9c2;outline-offset:3px}
 .member-alert{padding:9px 13px;background:#4d282e;color:#ffd6d6;border-radius:10px}
 @media(max-width:680px){body{padding:14px}.member-shell{grid-template-columns:1fr}.member-art{min-height:128px}.member-art span{font-size:74px}.member-art b{font-size:.65rem}}
+
+.member-switch{margin:20px 0 0;font-size:.9rem}.member-switch a{display:inline-block;padding:5px 2px}.member-panel small{display:block}
