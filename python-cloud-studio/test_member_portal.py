@@ -35,7 +35,7 @@ class PortalTests(unittest.TestCase):
 
     def test_direct_pages_and_catalogue_require_session_and_role(self):
         for path in ('/web/','/web/index.html','/web/catalog.json','/admin/','/account/customers'):
-            self.assertEqual(self.client.get(path).headers['location'],'/account/login')
+            self.assertEqual(self.client.get(path).headers['location'], '/account/login' if path.startswith('/web/') else '/account/admin')
         self.assertEqual(self.login('customer').headers['location'],'/web/')
         self.assertIn('web protected',self.client.get('/web/index.html').text)
         self.assertEqual(self.client.get('/web/catalog.json').status_code,200)
