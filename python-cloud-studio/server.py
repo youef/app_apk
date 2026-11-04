@@ -24,7 +24,7 @@ from urllib.parse import unquote, urlencode, urljoin, urlsplit, urlunsplit
 
 from bs4 import BeautifulSoup
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
@@ -38,7 +38,6 @@ from alezz_fetchv_importer import (
 
 from metadata_enrichment import enrich
 from library_sync import JobDB,collect_pages,collect_works
-from cloud_auth import site_auth_middleware, site_login, site_logout, site_health
 from auto_sync import AutoSync, target_key
 from media_resolver import MediaResolver, read_public_html, safe_error
 from title_cleaner import content_title
@@ -72,14 +71,18 @@ async def lifespan(app):
 app = FastAPI(title='Al Ezz TV | Python Import Studio', docs_url=None, redoc_url=None,
               openapi_url=None, lifespan=lifespan)
 app.mount('/static', StaticFiles(directory=str(BASE / 'static')), name='static')
-app.middleware('http')(site_auth_middleware)
 portal = Portal(os.getenv('ALEZZ_PORTAL_DIR', str(BASE.parent)),
                 os.getenv('ALEZZ_SUPABASE_URL', DEFAULT_DB_URL),
                 os.getenv('ALEZZ_SUPABASE_PUBLISHABLE_KEY', DEFAULT_PUBLIC_KEY),
                 secure=os.getenv('ALEZZ_PUBLIC_MODE') == '1')
 app.middleware('http')(portal.middleware)
-app.add_api_route('/login', site_login, methods=['GET', 'POST'], include_in_schema=False)
-app.add_api_route('/logout-site', site_logout, methods=['POST'], include_in_schema=False)
+@app.api_route('/login',methods=['GET','POST'],include_in_schema=False)
+async def legacy_login():
+    return RedirectResponse('/account/admin',status_code=303)
+
+@app.post('/logout-site',include_in_schema=False)
+async def legacy_logout():
+    return RedirectResponse('/account/admin',status_code=303)
 async def worker_health():
     info=AUTOSYNC.status()
     return JSONResponse({'ok':True,'service':'al-ezz-tv-python-studio',
@@ -170,7 +173,19 @@ def get_summary(state: UserState) -> dict:
 
 @app.get('/')
 async def homepage():
-    return FileResponse(BASE / 'templates' / 'index.html', headers={'Cache-Control': 'no-store'})
+    return FileResponse(BASE/'templates'/'landing.html',headers={'Cache-Control':'public, max-age=300'})
+
+@app.get('/studio')
+async def studio_short():
+    return RedirectResponse('/studio/',status_code=303)
+
+@app.get('/studio/')
+async def studio_homepage():
+    return FileResponse(BASE/'templates'/'index.html',headers={'Cache-Control':'private, no-store'})
+
+@app.get('/studio/sources')
+async def series_review_page():
+    return FileResponse(BASE/'templates'/'series-review.html',headers={'Cache-Control':'private, no-store'})
 
 
 @app.get('/api/init')
