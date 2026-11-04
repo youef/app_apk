@@ -1,0 +1,58 @@
+name: Al Ezz TV - Render Portal Verification
+on:
+  push:
+    branches: [main]
+    paths:
+      - "python-cloud-studio/**"
+      - "Dockerfile"
+      - "render.yaml"
+      - ".github/workflows/render-portal-smoke.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: alezz-render-portal-live
+  cancel-in-progress: true
+jobs:
+  verify-render:
+    name: Verify live customer, admin and source separation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Probe Render deployment with bounded retries
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://app-apk-oquy.onrender.com"
+          for attempt in $(seq 1 28); do
+            echo "Render portal check $attempt/28 for $GITHUB_SHA"
+            health=$(curl -sS --max-time 12 -w ' %{http_code}' "$BASE/healthz" 2>/dev/null || true)
+            code="${health##* }"
+            json="${health% *}"
+            if [[ "$code" == "200" ]] && grep -q '"member_portal":true' <<<"$json" &&
+              curl -fsS --max-time 12 "$BASE/" -o /tmp/alezz-landing.html &&
+              grep -q 'دخول المشاهدة' /tmp/alezz-landing.html &&
+              curl -fsS --max-time 12 "$BASE/account/login" -o /tmp/alezz-customer.html &&
+              grep -q 'اسم المستخدم' /tmp/alezz-customer.html &&
+              curl -fsS --max-time 12 "$BASE/account/admin" -o /tmp/alezz-admin.html &&
+              grep -q 'البريد الإلكتروني للمسؤول' /tmp/alezz-admin.html; then
+              viewer=$(curl -sS --max-time 12 -o /dev/null -w '%{http_code} %{redirect_url}' "$BASE/web/" || true)
+              admin=$(curl -sS --max-time 12 -o /dev/null -w '%{http_code} %{redirect_url}' "$BASE/admin/" || true)
+              studio=$(curl -sS --max-time 12 -o /dev/null -w '%{http_code} %{redirect_url}' "$BASE/studio/sources" || true)
+              api=$(curl -sS --max-time 12 -o /dev/null -w '%{http_code}' "$BASE/api/series-review" || true)
+              if [[ "$viewer" == *'303 '*'/account/login'* ]] &&
+                 [[ "$admin" == *'303 '*'/account/admin'* ]] &&
+                 [[ "$studio" == *'303 '*'/account/admin'* ]] &&
+                 [[ "$api" == "401" ]]; then
+                echo "PASS: Render marketing is public; viewer, admin, sources and API are protected."
+                echo "Live version (if provided): $json"
+                exit 0
+              fi
+              echo "Still upgrading: viewer=$viewer admin=$admin studio=$studio API=$api"
+            else
+              echo "Render not ready: health_code=$code"
+            fi
+            sleep 15
+          done
+          echo "::error::Render has not passed the private viewer and administration gateway checks."
+          exit 1
