@@ -112,6 +112,10 @@ def check_dns(url: str) -> None:
         raise ValueError("Private or nonpublic DNS address refused")
 
 
+class SourceConnectionError(ConnectionError):
+    """A source page could not be read after bounded retries."""
+
+
 class SourceClient:
     def __init__(self, timeout: float = 15):
         self.session = requests.Session()
@@ -120,28 +124,38 @@ class SourceClient:
         self.timeout = timeout
 
     def get(self, url: str, max_size: int = 1_500_000):
+        for attempt in range(3):
+            try:
+                return self._get_page(url, max_size)
+            except requests.exceptions.SSLError:
+                raise
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout,
+                    requests.exceptions.ChunkedEncodingError, ConnectionResetError):
+                if attempt == 2:
+                    raise SourceConnectionError(
+                        'انقطع الاتصال بالموقع المصدر بعد ثلاث محاولات. تحقق من فتح صفحة المصدر ثم أعد الفحص.'
+                    ) from None
+                time.sleep(0.4 * 2**attempt)
+
+    def _get_page(self, url: str, max_size: int):
         for _ in range(5):
             check_dns(url)
-            response = self.session.get(url, timeout=self.timeout, allow_redirects=False, stream=True)
-            if response.status_code in (301, 302, 303, 307, 308):
-                location = response.headers.get("Location")
-                response.close()
-                if not location:
-                    raise ValueError("Redirect missing Location")
-                url = urljoin(url, location)
-                continue
-            response.raise_for_status()
-            chunks, total = [], 0
-            try:
+            with self.session.get(url, timeout=self.timeout, allow_redirects=False, stream=True) as response:
+                if response.status_code in (301, 302, 303, 307, 308):
+                    location = response.headers.get("Location")
+                    if not location:
+                        raise ValueError("Redirect missing Location")
+                    url = urljoin(url, location)
+                    continue
+                response.raise_for_status()
+                chunks, total = [], 0
                 for chunk in response.iter_content(64 * 1024):
                     total += len(chunk)
                     if total > max_size:
                         raise ValueError("Page exceeds safe size limit")
                     chunks.append(chunk)
-            finally:
-                response.close()
-            data = b"".join(chunks)
-            return url, response.headers.get("Content-Type", ""), data.decode(response.encoding or "utf-8", errors="replace")
+                data = b"".join(chunks)
+                return url, response.headers.get("Content-Type", ""), data.decode(response.encoding or "utf-8", errors="replace")
         raise ValueError("Too many redirects")
 
     def sample(self, url: str, size: int = 8192) -> tuple[str, str, bytes]:
@@ -806,11 +820,11 @@ class Supabase:
         if not admins or not admins[0].get("active"):
             raise ValueError("Authenticated user is not an active Al Ezz TV administrator")
 
-    def req(self, method:str, table:str,params:dict|None=None,payload:dict|None=None):
+    def req(self, method:str, table:str,params:dict|None=None,payload:dict|None=None, *, upsert=False):
         with self.auth_lock:
             if self.refresh_token and time.time() > self.expires_at - 60:
                 self._refresh()
-            return self._request(method, table, params, payload)
+            return self._request(method, table, params, payload, upsert=upsert)
 
     def _refresh(self):
         reply = self.session.post(self.root+'/auth/v1/token?grant_type=refresh_token',
@@ -821,11 +835,11 @@ class Supabase:
         self.expires_at = time.time() + auth.get('expires_in', 3600)
         self.session.headers['Authorization'] = 'Bearer ' + auth['access_token']
 
-    def _request(self, method, table, params, payload):
+    def _request(self, method, table, params, payload, *, upsert=False):
         url=self.root+"/rest/v1/"+table
-        headers={"Prefer":"return=representation"}
+        headers={"Prefer":"return=representation"+(",resolution=merge-duplicates" if upsert else "")}
         res=self.session.request(method,url,params=params,data=json.dumps(payload,ensure_ascii=False) if payload is not None else None,
-                                 headers=headers,timeout=25)
+                                 headers=headers,timeout=25,allow_redirects=False)
         if not res.ok:
             details=""
             try:details=str(res.json().get("message",res.status_code))
@@ -833,6 +847,9 @@ class Supabase:
             raise ValueError("Supabase "+table+": "+details[:300])
         try:return res.json()
         except ValueError:return []
+
+    def upsert_source(self, payload):
+        return self.req("POST", "aseel_media_sources", {"on_conflict":"target_table,target_id,source_key"}, payload, upsert=True)
 
     def query(self,table:str,params:dict):return self.req("GET",table,params)
     def single(self,table:str,params:dict):
@@ -870,23 +887,23 @@ def category_for_genres(categories: list[dict], genres: list[str]) -> str:
     return ""
 
 
-def playback_variants(entry, existing=None) -> list[dict]:
+def playback_variants(entry, existing=None, *, primary=None) -> list[dict]:
     """The production player accepts at most eight {label,url} variants."""
-    rows, seen = [], {entry.media_url}
+    rows, seen = [], {entry.media_url if primary is None else primary}
     for source in entry.sources + (existing or []):
         if not isinstance(source, dict): continue
         url = source.get('url', '')
         if url in seen: continue
         try: public_url(url)
         except ValueError: continue
-        if source.get('error') and not source.get('verified') and not source.get('reachable'): continue
         seen.add(url)
+        if source.get('error') and not source.get('verified') and not source.get('reachable'): continue
         rows.append({k: source[k] for k in ('url', 'label', 'kind', 'page_url') if k in source})
     return rows[:8]
 
 
 def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:str="",
-          license_reference:str="",source_id:str="",category_id:str="") -> dict:
+          license_reference:str="",source_id:str="",category_id:str="",capture_merge=False) -> dict:
     if publish and not rights:
         raise ValueError("For public publishing, declare that you are authorized to display the work using --rights-authorized")
     # Parent works have a rights_holder column, but aseel_episodes does not.
@@ -900,10 +917,22 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
         episode_rights["source_id"]=source_id
     result={"kind":cat.kind,"title":cat.title,"works_new":0,"works_updated":0,"seasons_new":0,"episodes_new":0,"episodes_updated":0,"media_verified":0,"metadata_only":0,"bindings":[]}
     fields=imported_fields(cat,category_id)
+    def merge_capture(payload, old, entry):
+        if not capture_merge or not old:
+            return payload
+        primary = old.get('stream_url')
+        merged = {k:v for k,v in payload.items() if not old.get(k)}
+        if primary:
+            for key in ('stream_url','link_health_status'):
+                merged.pop(key,None)
+        if entry.sources:
+            merged['stream_variants'] = playback_variants(entry, old.get('stream_variants'), primary=primary)
+        return merged
+
     if cat.kind=="movie":
         # Update existing match by page source to avoid a second copy of the work.
-        movie=db.single("aseel_movies",{"select":"id,title_ar,stream_variants","source_page_url":"eq."+cat.url})
-        if not movie and cat.original_title and cat.year:
+        movie=db.single("aseel_movies",{"select":"*" if capture_merge else "id,title_ar,stream_variants","source_page_url":"eq."+cat.url})
+        if not movie and not capture_merge and cat.original_title and cat.year:
             movie=db.single("aseel_movies",{"select":"id,title_ar","title_original":"eq."+cat.original_title,
                                            "release_year":"eq."+str(cat.year)})
         payload={**fields,"source_page_url":cat.url}
@@ -914,23 +943,25 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
             result["media_verified"]+=1
         else:result["metadata_only"]+=1
         if movie:
-            db.patch("aseel_movies",movie["id"],{**payload,**({"status":"published","rights_status":"approved"} if publish and rights else {})})
+            db.patch("aseel_movies",movie["id"],{**merge_capture(payload,movie,cat),**({"status":"published","rights_status":"approved"} if publish and rights else {})})
             result["works_updated"]+=1
         else:
             movie=db.insert("aseel_movies",{**payload,**work_rights})
             result["works_new"]+=1
         result['work_id'] = movie['id']
         result['bindings'].append(dict(season=0,number=0,id=movie['id'],table='aseel_movies'))
+        if capture_merge: result['bindings'][-1]['stream_url']=movie.get('stream_url') or cat.media_url
         return result
-    series=db.single("aseel_series",{"select":"id,title_ar","source_page_url":"eq."+cat.url})
-    if not series: series=db.single("aseel_series",{"select":"id,title_ar","title_ar":"eq."+cat.title})
-    if not series and cat.original_title and cat.year:
+    series=db.single("aseel_series",{"select":"*" if capture_merge else "id,title_ar","source_page_url":"eq."+cat.url})
+    if not series and not capture_merge: series=db.single("aseel_series",{"select":"id,title_ar","title_ar":"eq."+cat.title})
+    if not series and not capture_merge and cat.original_title and cat.year:
         series=db.single("aseel_series",{"select":"id,title_ar","title_original":"eq."+cat.original_title,
                                           "release_year":"eq."+str(cat.year)})
     if series:
         # Do not silently change existing rights or publication status on draft updates.
         patch={**fields,'source_page_url':cat.url,**(work_rights if publish else {})}
-        db.patch("aseel_series",series["id"],patch)
+        if capture_merge: patch={key:value for key,value in patch.items() if value and not series.get(key)}
+        if patch: db.patch("aseel_series",series["id"],patch)
         result["works_updated"]+=1
     else:
         series=db.insert("aseel_series",{**fields,'source_page_url':cat.url,**work_rights})
@@ -944,7 +975,7 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
                 result["seasons_new"]+=1
             seasons[ep.season]=season["id"]
         season_id=seasons[ep.season]
-        old=db.single("aseel_episodes",{"select":"id,number,stream_variants","season_id":"eq."+season_id,"number":"eq."+str(ep.number)})
+        old=db.single("aseel_episodes",{"select":"*" if capture_merge else "id,number,stream_variants","season_id":"eq."+season_id,"number":"eq."+str(ep.number)})
         payload={"title_ar":ep.title[:250] or "الحلقة "+str(ep.number),"description":ep.description or cat.description or None,
                  "poster_url":ep.poster_url or cat.poster_url or None,'source_page_url':ep.page_url}
         if ep.sources: payload['stream_variants'] = playback_variants(ep, (old or {}).get('stream_variants'))
@@ -955,13 +986,14 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
             result["media_verified"]+=1
         else:result["metadata_only"]+=1
         if old:
-            db.patch("aseel_episodes",old["id"],{**payload,**({"status":"published","rights_status":"approved"} if publish and rights else {})})
+            db.patch("aseel_episodes",old["id"],{**merge_capture(payload,old,ep),**({"status":"published","rights_status":"approved"} if publish and rights else {})})
             result["episodes_updated"]+=1
         else:
             old=db.insert("aseel_episodes",{"season_id":season_id,"number":ep.number,
                         **payload,**episode_rights})
             result["episodes_new"]+=1
         result['bindings'].append(dict(season=ep.season,number=ep.number,id=old['id'],table='aseel_episodes'))
+        if capture_merge: result['bindings'][-1]['stream_url']=old.get('stream_url') or ep.media_url
     result['work_id'] = series['id']
     return result
 

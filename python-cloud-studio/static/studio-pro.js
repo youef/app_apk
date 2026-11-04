@@ -7,7 +7,7 @@
   let dirty = false;
   let lastKnownHealthy = null;
   let redrawScheduled = false;
-  const workspaceReady = () => !!$('workspace') && !$('workspace').hidden;
+  const workspaceReady = () => !!$('workspace') && !$('workspace').hidden && !$('workspace').inert;
   function notify(message){
     const host=$('toastArea');if(!host)return;
     const item=document.createElement('div');item.className='toast';item.textContent=message;
@@ -56,39 +56,26 @@
       empty.hidden=false;empty.textContent='لا توجد نتائج بهذا الفلتر. اختر «كل الحلقات» لعرض الجميع.';
     }else if(empty)empty.hidden=true;
   }
-  function filterLibrary(){
-    const list=$('libraryWorkList');if(!list)return;
-    const query=$('libraryWorkSearch')?.value.trim().toLocaleLowerCase()||'';
-    const mode=$('libraryWorkFilter')?.value||'all';
-    let shown=0;
-    const cards=Array.from(list.querySelectorAll('.lib-work'));
-    for(const card of cards){
-      const state=card.classList.contains('failed')?'failed':card.classList.contains('done')?'done':'pending';
-      const matches=(mode==='all'||state===mode) && (!query||card.textContent.toLocaleLowerCase().includes(query));
-      card.hidden=!matches;if(matches)shown++;
-    }
-    if($('libraryWorkCount'))$('libraryWorkCount').textContent='عرض '+shown+' من '+cards.length+' عمل';
-  }
-  function switchTo(id,event){
-    const target=$(id);
-    if(!target || target.closest('[hidden]')){
-      event.preventDefault();
-      notify('لإدارة الحلقات أو النشر، افتح عملًا من الاستيراد أو المكتبات أولًا.');
-      return;
-    }
-    event.preventDefault();
-    history.replaceState(null,'','#'+id);
-    target.scrollIntoView({behavior:'smooth',block:'start'});
-    setCurrent(id);
-  }
-  function setCurrent(id){
-    document.querySelectorAll('.mobile-dock a').forEach(anchor=>{
-      if(anchor.hash==='#'+id)anchor.setAttribute('aria-current','page');
+  const studioPages = {
+    import:'الاستيراد الذكي', library:'بيانات العمل', episodes:'المواسم والحلقات',
+    publish:'الحفظ والنشر', 'smart-sync':'المزامنة الذكية', tools:'الإضافات والمميزات'
+  };
+  function showStudioPage(){
+    const route=location.hash.slice(1);
+    const id=Object.hasOwn(studioPages,route)?route:'import';
+    document.querySelectorAll('[data-studio-page]').forEach(page=>{
+      page.hidden=page.dataset.studioPage!==id;
+    });
+    const needsWork=['library','episodes','publish'].includes(id);
+    $('studioEmptyPage').hidden=!needsWork||!$('workspace').hidden;
+    $('studioEmptyTitle').textContent=studioPages[id];
+    document.querySelector('.breadcrumbs strong').textContent=studioPages[id];
+    document.querySelectorAll('.sidebar a[href^="#"], .mobile-dock a').forEach(anchor=>{
+      const current=anchor.hash==='#'+id;
+      anchor.classList.toggle('active',current);
+      if(current)anchor.setAttribute('aria-current','page');
       else anchor.removeAttribute('aria-current');
     });
-    const name={import:'الاستيراد الذكي',librarySync:'مزامنة المكتبات',episodes:'المواسم والحلقات',publish:'الحفظ والنشر','smart-sync':'المزامنة الذكية'};
-    const crumb=document.querySelector('.breadcrumbs strong');
-    if(crumb)crumb.textContent=name[id]||name.import;
   }
   async function checkHealth(){
     const label=$('serverHealthText'),mobile=$('studioMobileHealth');
@@ -111,7 +98,7 @@
     lastKnownHealthy=healthy;
   }
   function start(){
-    if(!$('episodeList')||!$('libraryWorkList'))return;
+    if(!$('episodeList'))return;
     // Render runs the scan in headless Chromium; desktop installations use Edge.
     if($('edgeCaptureBtn'))$('edgeCaptureBtn').hidden=false;
     const health=document.createElement('span');
@@ -122,8 +109,6 @@
     document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkHealth();});
     const rowObserver=new MutationObserver(scheduleEpisodes);
     rowObserver.observe($('episodeList'),{childList:true});
-    const libraryObserver=new MutationObserver(filterLibrary);
-    libraryObserver.observe($('libraryWorkList'),{childList:true});
     const workspaceObserver=new MutationObserver(editStatus);
     workspaceObserver.observe($('workspace'),{attributes:true,attributeFilter:['hidden']});
     $('episodeList').addEventListener('change',event=>{
@@ -154,13 +139,12 @@
       applyEpisodes();
     });
     $('clearSelectionBtn').textContent='إلغاء تحديد الموسم';
-    $('libraryWorkSearch')?.addEventListener('input',filterLibrary);
-    $('libraryWorkFilter')?.addEventListener('change',filterLibrary);
-    document.querySelectorAll('.mobile-dock a').forEach(a=>a.addEventListener('click',event=>switchTo(a.hash.slice(1),event)));
     window.addEventListener('hashchange',()=>{
-      const h=location.hash.slice(1);if(['import','librarySync','episodes','publish'].includes(h))setCurrent(h);
+      showStudioPage();
+      window.scrollTo(0,0);
     });
-    setCurrent(['import','librarySync','episodes','publish'].includes(location.hash.slice(1))?location.hash.slice(1):'import');
+    document.addEventListener('studio:catalogue',()=>{showStudioPage();editStatus();});
+    showStudioPage();
     $('studioQuickSync')?.addEventListener('click',()=>{
       if(workspaceReady())$('updateBtn')?.click();
       else notify('اختر فيلمًا أو مسلسلًا قبل الحفظ.');
@@ -197,7 +181,7 @@
       }catch(_){$('sourceUrl')?.focus();notify('اضغط مطولًا على حقل الرابط ثم اختر «لصق» من لوحة الآيفون.');}
     });
     $('discoverBtn')?.insertAdjacentElement('afterend',paste);
-    applyEpisodes();filterLibrary();editStatus();
+    applyEpisodes();editStatus();
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});
   else start();

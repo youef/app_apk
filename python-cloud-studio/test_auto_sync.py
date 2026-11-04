@@ -134,6 +134,16 @@ class AutoSyncTests(unittest.TestCase):
             value = conn.execute('select * from auto_jobs where table_name=? and target_id=?', (table,row['id'])).fetchone()
             return dict(value)
 
+    def test_failed_library_import_does_not_block_queued_media_checks(self):
+        row = self.row()
+        self.resolver.healthy.add(OLD)
+        with patch.object(self.worker, 'import_remote', side_effect=ValueError('history unavailable')) as fetch:
+            self.assertTrue(self.worker.tick())
+            self.assertEqual(self.job(row)['status'], 'healthy')
+            self.assertEqual(self.worker.status()['import_error'], 'history unavailable')
+            self.worker.tick()
+            self.assertEqual(fetch.call_count, 1)
+
     def test_uuid_ingestion_deduplicates_rows_and_preserves_old_sources(self):
         row = self.row()
         self.worker.queue.ingest('aseel_movies', dict(row, source_page_url=ROOT+'/backup', stream_url=NEW))
@@ -166,6 +176,32 @@ class AutoSyncTests(unittest.TestCase):
         self.assertNotIn('rights_status', payload)
         self.assertNotIn('title_ar', payload)
 
+    def test_failed_primary_searches_source_even_when_backup_works(self):
+        row = self.row(stream_variants=[dict(url=NEW,label='backup')])
+        self.worker.queue.update('aseel_movies',row['id'],next_refresh=NOW+3600)
+        self.resolver = FakeResolver(healthy=[NEW],browser=[dict(url=NEW,kind='direct')])
+        self.worker.check_target(self.job(row))
+        self.assertTrue(any(force for _,force in self.resolver.extractions))
+        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['stream_url'],NEW)
+
+    def test_new_episode_publication_requires_opt_in_and_approved_series(self):
+        from unittest.mock import Mock
+        database = Mock()
+        identifier, series = 'fixture-episode', 'fixture-series'
+        self.worker.queue.setting('discovered-episode:'+identifier, series)
+        self.worker.publish_discovered_episode(database,identifier)
+        database.req.assert_not_called()
+        self.worker.queue.setting('publish-series:'+series, True)
+        database.single.return_value = {'status':'published','rights_status':'pending'}
+        self.worker.publish_discovered_episode(database,identifier)
+        database.req.assert_not_called()
+        database.single.return_value = {'status':'published','rights_status':'approved'}
+        database.req.return_value = [{'id':identifier}]
+        self.worker.publish_discovered_episode(database,identifier)
+        self.assertEqual(database.req.call_args.args[2]['link_health_status'],'eq.healthy')
+        self.assertEqual(database.req.call_args.args[3]['status'],'published')
+        self.assertIsNone(self.worker.queue.get_setting('discovered-episode:'+identifier))
+
     def test_healthy_primary_is_retained_even_if_backup_has_higher_confidence(self):
         row = self.row(stream_variants=[dict(url=NEW,label='backup')])
         self.resolver = FakeResolver(healthy=[OLD,NEW])
@@ -190,6 +226,32 @@ class AutoSyncTests(unittest.TestCase):
         self.assertEqual(self.db.rows['aseel_movies'][row['id']]['stream_url'], OLD)
         self.assertEqual(self.job(row)['next_check'], NOW+240)
 
+    def test_confirmed_gone_primary_and_backup_are_removed_after_separate_probes(self):
+        row = self.row(stream_variants=[dict(url=NEW,label='backup')])
+        def gone(sources):
+            return [dict(item,verified=False,error='404 Client Error: Not Found') for item in sources]
+        with patch.object(self.resolver,'check',side_effect=gone):
+            self.worker.check_target(self.job(row))
+            self.assertEqual(self.db.rows['aseel_movies'][row['id']]['stream_url'],OLD)
+            self.now += 65
+            self.worker.check_target(self.job(row))
+        remote = self.db.rows['aseel_movies'][row['id']]
+        self.assertIsNone(remote['stream_url'])
+        self.assertEqual(remote['stream_variants'],[])
+        self.assertEqual(remote['status'],'published')
+        self.assertIn(ROOT,{source['url'] for source in self.worker.queue.sources('aseel_movies',row['id'])})
+
+    def test_expired_signature_is_retired_and_replaced_with_verified_discovery(self):
+        expired = OLD+'?expires='+str(int(NOW-600))
+        row = self.row(stream=expired)
+        self.resolver = FakeResolver(healthy=[NEW],fresh=[dict(url=NEW,kind='direct')])
+        self.worker.check_target(self.job(row))
+        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['stream_url'],NEW)
+        self.resolver.checked.clear()
+        self.now += 65
+        self.worker.check_target(self.job(row))
+        self.assertNotIn(expired,self.resolver.checked)
+
     def test_embed_page_cannot_become_primary_without_video_verification(self):
         embed = 'https://player.example.org/embed/7'
         row = self.row(stream_variants=[dict(url=embed,kind='embed',label='player')])
@@ -212,16 +274,25 @@ class AutoSyncTests(unittest.TestCase):
         self.resolver = FakeResolver(healthy=[signed])
         self.worker.check_target(self.job(row))
         job = self.job(row)
-        self.assertEqual(job['next_check'], NOW+3300)
+        self.assertEqual(job['next_check'], NOW+min(3300,self.worker.check_interval))
         self.assertEqual(job['next_refresh'], NOW+3300)
         self.assertEqual(expires_at(OLD), 0)
         self.assertEqual(expires_at(signed), NOW+3600)
 
-    def test_ordinary_healthy_link_gets_daily_schedule(self):
+    def test_verified_backup_expiry_advances_refresh_for_healthy_primary(self):
+        signed=NEW+'?expires='+str(int(NOW+600))
+        row=self.row(stream_variants=[dict(url=signed,label='backup')])
+        self.resolver=FakeResolver(healthy=[OLD,signed])
+        self.worker.check_target(self.job(row))
+        self.assertEqual(self.job(row)['next_refresh'],NOW+300)
+        self.assertEqual(self.job(row)['stream_url'],OLD)
+
+    def test_ordinary_healthy_link_gets_periodic_check_and_daily_refresh(self):
         row = self.row()
         self.resolver = FakeResolver(healthy=[OLD])
         self.worker.check_target(self.job(row))
-        self.assertEqual(self.job(row)['next_check'], NOW+24*3600)
+        self.assertEqual(self.job(row)['next_check'], NOW+self.worker.check_interval)
+        self.assertEqual(self.job(row)['next_refresh'], NOW+self.worker.interval)
 
     def test_variant_limit_does_not_discard_full_source_history(self):
         backups = [dict(url=f'https://cdn.example.org/v{n}.mp4',label=str(n),kind='direct') for n in range(14)]

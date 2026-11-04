@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>العز لالتقاط الوسائط</title><link rel="stylesheet" href="popup.css"></head>
+<body>
+<header><div class="brand" aria-hidden="true">ع</div><div><h1>العز لالتقاط الوسائط</h1><p id="site">التبويب الحالي</p></div><span class="pill" id="status">جارٍ التحميل</span></header>
+<section class="setup"><button id="toggle" type="button">تفعيل الالتقاط التلقائي</button><p id="hint">فعّل الالتقاط مرة واحدة، ثم افتح أي صفحة فيديو.</p></section>
+<section class="tools"><label>الموسم <input id="season" type="number" min="1" max="99" placeholder="—"></label><label>الحلقة <input id="episode" type="number" min="1" max="999" placeholder="—"></label><button type="button" id="copyAll">نسخ الكل</button><button type="button" id="clear">مسح</button></section>
+<section class="setup">
+  <label for="seriesSource">رابط صفحة المسلسل عند إرسال حلقة</label>
+  <input class="series-url" id="seriesSource" type="url" dir="ltr" placeholder="https://…">
+  <button id="sendStudio" type="button">ربط الصفحة بالاستوديو وحفظ النتائج ↗</button>
+  <p>للفيلم اترك بيانات المسلسل والموسم والحلقة فارغة.</p>
+</section>
+<output id="notice" aria-live="polite"></output>
+<div class="list-title"><strong>الوسائط المكتشفة</strong><span id="count">٠</span></div>
+<ol id="results"></ol>
+<p id="empty">ستظهر الروابط هنا عند تحميلها في الصفحة أو عند تشغيل الفيديو.</p>
+<footer><a href="http://127.0.0.1:8765/" target="_blank" rel="noopener noreferrer">فتح استوديو العز ↗</a><button type="button" id="expand">عرض بصفحة كاملة ↗</button></footer>
+<script src="popup.js"></script>
+</body></html>

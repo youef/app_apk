@@ -7,6 +7,7 @@ extension is local-only; server can ingest URLs copied from it.
 from __future__ import annotations
 
 import asyncio
+from ipaddress import ip_address
 from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
@@ -19,8 +20,9 @@ import secrets
 import threading
 import time
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlencode, urljoin, urlsplit, urlunsplit
 
+from bs4 import BeautifulSoup
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -28,7 +30,7 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from alezz_fetchv_importer import (
-    Catalogue, Episode, MEDIA_EXT, SourceClient, Supabase, category_for_genres,
+    Catalogue, Episode, MEDIA_EXT, SourceClient, SourceConnectionError, Supabase, category_for_genres,
     hydrate_episode_metadata,
     collect_edge_network,
     clean, inspect_episodes, public_url, pull_html, store,
@@ -38,8 +40,12 @@ from metadata_enrichment import enrich
 from library_sync import JobDB,collect_pages,collect_works
 from cloud_auth import site_auth_middleware, site_login, site_logout, site_health
 from auto_sync import AutoSync, target_key
+from media_resolver import MediaResolver, read_public_html, safe_error
+from title_cleaner import content_title
+from launch import studio_revision
 
 BASE = Path(__file__).resolve().parent
+STUDIO_REVISION = studio_revision()
 DATA_DIR = Path(os.getenv("ALEZZ_DATA_DIR", str(BASE))).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 LIBRARY = JobDB(DATA_DIR / "library_sync.sqlite3")
@@ -73,7 +79,8 @@ async def worker_health():
     return JSONResponse({'ok':True,'service':'al-ezz-tv-python-studio',
         'autosync':{k:info[k] for k in ('running','enabled','connected','last_tick')},
         'autosync_ready':bool(info['running'] and info['connected'] and info['last_import'] and not info['last_error']),
-        'version':os.getenv('RENDER_GIT_COMMIT','autosync-v1')[:40]},headers={'Cache-Control':'no-store'})
+        'version':os.getenv('RENDER_GIT_COMMIT','autosync-v1')[:40],
+        'studio_revision':STUDIO_REVISION},headers={'Cache-Control':'no-store'})
 
 app.add_api_route('/healthz', worker_health, methods=['GET'], include_in_schema=False)
 
@@ -87,6 +94,8 @@ class UserState:
     current_index: int = 0
     db: Supabase | None = None
     demo: bool = False
+    scan: dict | None = None
+    scan_catalogue: Catalogue | None = None
     last_used: float = field(default_factory=time.monotonic)
     lock: Any = field(default_factory=threading.RLock)
 
@@ -134,13 +143,17 @@ def current_catalogue(state: UserState) -> Catalogue:
     return state.catalogue
 
 
+def scan_status(state: UserState) -> dict | None:
+    return dict(state.scan) if state.scan_catalogue is state.catalogue and state.scan else None
+
+
 def get_summary(state: UserState) -> dict:
     with state.lock:
         cat = state.catalogue
         n = len(cat.episodes) if cat and cat.kind == 'series' else (1 if cat else 0)
         good = (sum(x.verified for x in cat.episodes) if cat.kind == 'series' else int(cat.verified)) if cat else 0
         return dict(catalogue=asdict(cat) if cat else None, authenticated=state.db is not None,
-                    demo=state.demo, count=n, verified=good,
+                    demo=state.demo, count=n, verified=good, scan=scan_status(state),
                     batch=[dict(index=i,title=c.title,kind=c.kind,episodes=len(c.episodes),
                                 year=c.year,poster_url=c.poster_url,original_title=c.original_title,
                                 verified=sum(ep.verified for ep in c.episodes) if c.kind=='series' else int(c.verified))
@@ -170,10 +183,32 @@ async def status(request: Request):
     return JSONResponse(get_summary(state), headers={'Cache-Control': 'no-store'})
 
 
+class DiscoverySourceClient(SourceClient):
+    def __init__(self, source):
+        super().__init__(timeout=11)
+        self.source = source
+
+    def get(self, url, max_size=1_500_000):
+        try:
+            return super().get(url,max_size)
+        except SourceConnectionError:
+            if url != self.source or AUTOSYNC.mode == 'http':
+                raise
+            try:
+                return read_public_html(url,max_size)
+            except Exception as exc:
+                raise SourceConnectionError('انقطع اتصال المصدر، وتعذّرت قراءته بالمتصفح أيضًا: '+safe_error(exc)) from None
+
+
 def discover_full(source: str, kind: str='auto', deep: bool=True, enrich_metadata: bool=True,
                   resume_progress:dict|None=None,progress_hook=None) -> Catalogue:
-    cat=pull_html(public_url(source),SourceClient(timeout=11),kind,max_seasons=500,
-                  max_episodes=5000,max_pages=500,resume_progress=resume_progress,progress_hook=progress_hook)
+    source=public_url(source)
+    client=DiscoverySourceClient(source)
+    try:
+        cat=pull_html(source,client,kind,max_seasons=500,
+                      max_episodes=5000,max_pages=500,resume_progress=resume_progress,progress_hook=progress_hook)
+    finally:
+        client.session.close()
     if kind!='auto':cat.kind=kind
     if enrich_metadata:
         enrich(cat,include_episodes=True)
@@ -274,11 +309,128 @@ async def library_load(request:Request,body:LibraryLoadForm):
     return get_summary(state)
 
 
+_discovery_scans = ThreadPoolExecutor(max_workers=2, thread_name_prefix='studio-scan')
+
+
+class TitleSearchForm(BaseModel):
+    query: str = Field(min_length=2, max_length=120)
+    kind: str = 'auto'
+
+
+def search_titles(query: str, kind: str) -> list[dict]:
+    root = public_url(os.getenv('ALEZZ_TITLE_SEARCH_URL', 'https://v3.qrmzi.buzz/'))
+    parts = urlsplit(root)
+    address = urlunsplit((parts.scheme, parts.netloc, parts.path or '/', urlencode({'s': query}), ''))
+    client = SourceClient(timeout=10)
+    try:
+        final, typ, html = client.get(address)
+    finally:
+        client.session.close()
+    if 'html' not in typ.lower():
+        raise ValueError('مصدر البحث لم يُرجع صفحة نتائج.')
+    soup = BeautifulSoup(html, 'html.parser')
+    results = {}
+    for anchor in soup.select('a[href]'):
+        target = urlsplit(urljoin(final, anchor['href']))
+        if target.hostname != parts.hostname and target.hostname != urlsplit(final).hostname:
+            continue
+        path = target.path.strip('/').split('/')
+        if len(path) != 2 or path[0] not in ('movies', 'series', 'tv-series', 'movie'):
+            continue
+        item_kind = 'movie' if path[0] in ('movies', 'movie') else 'series'
+        if kind != 'auto' and kind != item_kind:
+            continue
+        try:
+            url = public_url(urlunsplit((target.scheme, target.netloc, target.path, '', '')))
+        except ValueError:
+            continue
+        key = (target.hostname, unquote(target.path).rstrip('/').casefold())
+        if key in results:
+            continue
+        title = content_title(anchor.get('title') or anchor.get_text(' ', strip=True), url,
+                              fallback=unquote(path[1]).replace('-', ' '))
+        results[key] = {'url': url, 'title': title, 'kind': item_kind}
+        if len(results) >= 40:
+            break
+    terms = query.casefold().split()
+    matching = [item for item in results.values() if all(term in item['title'].casefold() for term in terms)]
+    return matching[:18]
+
+
+@app.post('/api/title-search')
+async def title_search(request: Request, body: TitleSearchForm):
+    protected(request)
+    query = clean(body.query, 120)
+    if len(query) < 2 or body.kind not in ('auto','movie','series'):
+        raise HTTPException(400,'اكتب اسم العمل وحدد نوعًا صحيحًا.')
+    try:
+        results = await run_in_threadpool(search_titles, query, body.kind)
+    except Exception as exc:
+        raise HTTPException(502,'تعذر الوصول إلى مصدر البحث: '+safe_error(exc)) from None
+    return {'results': results}
+
+
+def scan_catalogue(state: UserState, cat: Catalogue, progress: dict):
+    targets = list(cat.episodes) if cat.kind == 'series' else [cat]
+    resolver = MediaResolver(mode=AUTOSYNC.mode)
+    for entry in targets:
+        with state.lock:
+            if state.catalogue is not cat or state.scan is not progress:
+                return
+            page = cat.url if cat.kind == 'movie' else entry.page_url
+            candidates = list(entry.sources)
+            if entry.media_url and not any(item.get('url') == entry.media_url for item in candidates):
+                candidates.append({'url':entry.media_url,'kind':'direct','page_url':page})
+        pages = []
+        try:
+            # Metadata-only episodes may point to the series page. Never assign that
+            # page's video to an episode without an episode-specific source.
+            pages = list(dict.fromkeys(url for url in [page, *entry.source_pages]
+                                       if url and (cat.kind == 'movie' or url.rstrip('/') != cat.url.rstrip('/'))))
+            checked, errors = resolver.resolve(pages, existing=candidates)
+            playable = next((item for item in checked if item.get('verified') and item.get('kind')=='direct'), None)
+            error = '' if playable else ('; '.join(errors[:2]) or 'لم يُعثر على رابط تشغيل اجتاز الفحص.')
+        except Exception as exc:
+            checked, playable, error = candidates, None, safe_error(exc)
+        with state.lock:
+            if state.catalogue is not cat or state.scan is not progress:
+                return
+            entry.sources = checked
+            entry.source_pages = pages
+            if playable:
+                entry.media_url = playable['url']
+            entry.verified = playable is not None
+            entry.error = error
+            progress['done'] += 1
+            progress['verified'] += int(entry.verified)
+    with state.lock:
+        progress['running'] = False
+
+
+def start_catalogue_scan(state: UserState, cat: Catalogue):
+    total = len(cat.episodes) if cat.kind == 'series' else 1
+    progress = {'id':secrets.token_hex(8),'running':bool(total),'done':0,'total':total,'verified':0}
+    state.scan = progress
+    state.scan_catalogue = cat
+    if total: _discovery_scans.submit(scan_catalogue,state,cat,progress)
+
+
+@app.get('/api/discovery-scan')
+async def discovery_scan(request: Request):
+    _, state = find_state(request)
+    with state.lock:
+        progress = scan_status(state)
+        if progress and not progress['running']:
+            return {'scan':progress,'summary':get_summary(state)}
+    return {'scan':progress}
+
+
 class DiscoverForm(BaseModel):
     url: str = Field(min_length=12, max_length=2048)
     kind: str = 'auto'
     deep: bool = True
     metadata: bool = True
+    scan_media: bool = False
 
 
 @app.post('/api/discover')
@@ -292,9 +444,12 @@ async def discover(request: Request, data: DiscoverForm):
         with state.lock:
             state.catalogue, state.catalogues, state.batch_errors = cat, [cat], []
             state.current_index, state.demo = 0, False
+            if data.scan_media: start_catalogue_scan(state,cat)
         return get_summary(state)
+    except SourceConnectionError as exc:
+        raise HTTPException(502, str(exc)) from None
     except Exception as exc:
-        raise HTTPException(400, 'تعذر اكتشاف المصدر: ' + clean(exc, 180)) from None
+        raise HTTPException(400, 'تعذر اكتشاف المصدر: ' + safe_error(exc)) from None
 
 
 class ListingScanForm(BaseModel):
@@ -664,6 +819,13 @@ class LoginForm(BaseModel):
     access_token: str = Field(default='', max_length=6000)
 
 
+def local_request(request: Request) -> bool:
+    if not request.client or not AUTOSYNC.desktop_mode(): return False
+    if request.url.hostname not in ("127.0.0.1", "localhost", "::1"): return False
+    try: return ip_address(request.client.host).is_loopback
+    except ValueError: return False
+
+
 @app.post('/api/login')
 async def login(request: Request, body: LoginForm):
     state = protected(request)
@@ -680,6 +842,7 @@ async def login(request: Request, body: LoginForm):
         raise HTTPException(401, 'تعذر تسجيل دخول المسؤول: ' + clean(exc, 200)) from None
     with state.lock:
         state.db = db
+    if local_request(request): AUTOSYNC.bind_local_session(db)
     return {'ok': True, 'authenticated': True}
 
 
@@ -687,8 +850,104 @@ async def login(request: Request, body: LoginForm):
 async def logout(request: Request):
     state = protected(request)
     with state.lock:
+        db=state.db
         state.db = None
+    if local_request(request): AUTOSYNC.bind_local_session(db, logout=True)
     return {'ok': True}
+
+
+class CapturedSource(BaseModel):
+    url: str = Field(max_length=2048)
+    kind: str = Field(default='media', max_length=16)
+
+
+class BrowserCaptureForm(BaseModel):
+    page: str = Field(max_length=2048)
+    series_url: str = Field(default='', max_length=2048)
+    season: int | None = Field(default=None, ge=1, le=99)
+    episode: int | None = Field(default=None, ge=1, le=999)
+    links: list[CapturedSource] = Field(default_factory=list, max_length=150)
+    auto_save: bool = False
+    background: bool = False
+
+
+_capture_write_lock = threading.Lock()
+
+
+def prepare_browser_capture(body: BrowserCaptureForm):
+    page = public_url(body.page)
+    if body.series_url or body.season is not None or body.episode is not None:
+        if not (body.series_url and body.season and body.episode):
+            raise ValueError('أدخل رابط صفحة المسلسل ورقم الموسم والحلقة معًا.')
+        series_url = public_url(body.series_url)
+        if series_url.rstrip('/') == page.rstrip('/'):
+            raise ValueError('افتح صفحة تشغيل الحلقة، وضع رابط المسلسل في الحقل المخصص.')
+        cat = discover_full(series_url, 'series', deep=False)
+        target = next((ep for ep in cat.episodes if (ep.season, ep.number)==(body.season, body.episode)), None)
+        if target is None:
+            target = Episode(body.season, body.episode, f'الحلقة {body.episode}', page)
+        target.page_url = page
+        cat.episodes = [target]
+    else:
+        cat = discover_full(page, deep=False)
+        if cat.kind != 'movie':
+            raise ValueError('هذه صفحة مسلسل. افتح الحلقة وأدخل رابط المسلسل ورقم الموسم والحلقة في الإضافة.')
+        target = cat
+
+    candidates = []
+    for item in body.links:
+        try:
+            url = public_url(item.url)
+        except ValueError:
+            continue
+        candidates.append({'url': url, 'kind': 'embed' if item.kind == 'embed' else 'direct',
+                           'label': urlsplit(url).hostname or '', 'page_url': page})
+    scan_mode = AUTOSYNC.mode if body.background else 'http' if AUTOSYNC.mode == 'http' else 'headless'
+    checked, warnings = MediaResolver(mode=scan_mode).resolve([page], existing=candidates)
+    target.sources = checked
+    target.source_pages = list(dict.fromkeys([*target.source_pages, page]))
+    playable = next((item for item in checked if item.get('verified') and item['kind']=='direct'), None)
+    target.media_url = playable['url'] if playable else ''
+    target.verified = playable is not None
+    return cat, checked, warnings
+
+
+@app.post('/api/browser-capture')
+async def browser_capture(request: Request, body: BrowserCaptureForm):
+    state = protected(request)
+    if not local_request(request):
+        raise HTTPException(403, 'الاستيراد من الإضافة مخصص للاستوديو المحلي.')
+    if body.background and (not body.auto_save or state.db is None):
+        raise HTTPException(401,'سجّل دخول المسؤول لتفعيل الربط التلقائي.')
+    try:
+        cat, checked, warnings = await run_in_threadpool(prepare_browser_capture, body)
+    except (ValueError, OSError) as exc:
+        raise HTTPException(400, safe_error(exc)) from None
+    except Exception as exc:
+        raise HTTPException(502, safe_error(exc)) from None
+    saved = False
+    def persist():
+        with _capture_write_lock, state.lock:
+            if state.db is None:
+                return False
+            result = store(cat,state.db,publish=False,rights=False,capture_merge=True)
+            AUTOSYNC.remember_saved(cat,result,capture=True)
+            return True
+    if body.auto_save:
+        try:
+            saved = await run_in_threadpool(persist)
+        except Exception as exc:
+            raise HTTPException(502,'تعذّر حفظ نتائج الإضافة: '+safe_error(exc)) from None
+    capture = {'total':len(checked), 'verified':sum(bool(item.get('verified')) for item in checked),
+               'warnings':warnings,'saved':saved,'awaiting_login':body.auto_save and not saved}
+    if body.background:
+        return {'capture':capture}
+    with state.lock:
+        state.catalogue = cat
+        state.catalogues = [cat]
+        state.current_index = 0
+        state.demo = False
+    return {**get_summary(state), 'capture':capture}
 
 
 class SaveForm(BaseModel):
@@ -708,7 +967,10 @@ async def save(request: Request, body: SaveForm):
         raise HTTPException(400, 'هذا نموذج تجريبي؛ اكتشف رابطًا حقيقيًا أولًا')
     if body.publish and not body.rights_authorized:
         raise HTTPException(400, 'يلزم تأكيد تصريح العرض قبل النشر العام')
-    cat = current_catalogue(state)
+    with state.lock:
+        cat = current_catalogue(state)
+        if (scan_status(state) or {}).get('running'):
+            raise HTTPException(409, 'انتظر انتهاء فحص هذا العمل قبل حفظه.')
     def task():
         with state.lock:
             db = state.db
@@ -839,29 +1101,46 @@ async def health():
 
 @app.get('/api/autosync/status')
 async def autosync_status(request:Request):
-    find_state(request)
-    return JSONResponse(AUTOSYNC.status(),headers={'Cache-Control':'no-store'})
+    _, state = find_state(request)
+    return JSONResponse({**AUTOSYNC.status(),'session_authenticated':state.db is not None},
+                        headers={'Cache-Control':'no-store'})
 
 
 class AutoSyncControl(BaseModel):
     action:str=Field(max_length=30)
 
+def bind_autosync_request(request: Request, state: UserState):
+    if local_request(request) and not AUTOSYNC.has_server_key():
+        with state.lock:
+            if state.db is None:
+                raise HTTPException(401,'سجّل دخول مسؤول Supabase في الاستوديو المحلي لتشغيل الفحص.')
+            AUTOSYNC.bind_local_session(state.db)
 
 @app.post('/api/autosync/control')
 async def autosync_control(request:Request,body:AutoSyncControl):
-    protected(request)
+    state = protected(request)
+    bind_autosync_request(request,state)
     try: AUTOSYNC.control(body.action)
     except ValueError as exc: raise HTTPException(400,str(exc)) from None
     return {'ok':True,**AUTOSYNC.status()}
 
 
 @app.get('/api/autosync/targets')
-async def autosync_targets(request:Request,limit:int=50,offset:int=0,q:str=''):
+async def autosync_targets(request:Request,limit:int=50,offset:int=0,q:str='',scope:str=''):
     find_state(request)
-    rows=AUTOSYNC.queue.targets(max(1,min(limit,100)),max(0,offset),q[:250])
+    scopes={'':'','movies':'aseel_movies','series':'aseel_series','episodes':'aseel_episodes'}
+    if scope not in scopes: raise HTTPException(400,'قسم غير معروف')
+    rows=AUTOSYNC.queue.targets(max(1,min(limit,100)),max(0,offset),q[:250],scopes[scope])
     # Source metadata is returned separately; do not duplicate saved row payloads.
     fields=('table_name','target_id','title','page_url','status','last_check','next_check','error','source_count','valid_sources')
-    return {'targets':[{k:row[k] for k in fields} for row in rows]}
+    targets=[{k:row[k] for k in fields} for row in rows]
+    now = time.time()
+    for item,row in zip(targets,rows):
+        if min(row['next_check'],row['next_refresh'])<=now:
+            item['scan_state']='checking' if row['lease_until']>now else 'pending'
+        if item['table_name']=='aseel_series':
+            item['auto_publish']=AUTOSYNC.queue.get_setting('publish-series:'+item['target_id'],False)
+    return {'targets':targets}
 
 
 @app.get('/api/autosync/sources')
@@ -885,28 +1164,44 @@ class AutoSyncTargetForm(BaseModel):
     id:str=Field(max_length=36)
     action:str=Field(max_length=20)
     url:str=Field(default='',max_length=2048)
+    rights_authorized: bool = False
 
 
 @app.post('/api/autosync/target')
 async def autosync_target(request:Request,body:AutoSyncTargetForm):
-    protected(request)
+    state=protected(request)
+    bind_autosync_request(request,state)
     try:
         table,identifier=target_key(body.table,body.id)
         with AUTOSYNC.queue.db() as conn:
             row=conn.execute('select * from auto_jobs where table_name=? and target_id=?',(table,identifier)).fetchone()
             if not row:raise HTTPException(404,'لم تتم مزامنة العنصر من Supabase بعد')
             job=dict(row)
-        if body.action=='sources':
+        if body.action in ('publish-enable','publish-disable'):
+            if table!='aseel_series': raise ValueError('النشر التلقائي للحلقات يضبط من المسلسل.')
+            if state.db is None: raise HTTPException(401,'سجّل دخول مسؤول Supabase أولًا.')
+            enable=body.action=='publish-enable'
+            if enable:
+                if not body.rights_authorized: raise ValueError('أكد تصريح نشر الحلقات الجديدة.')
+                series=await run_in_threadpool(state.db.single,table,{'id':'eq.'+identifier,'select':'status,rights_status'})
+                if not series or series.get('status')!='published' or series.get('rights_status')!='approved':
+                    raise ValueError('انشر المسلسل ووافق على حقوق عرضه أولًا.')
+            AUTOSYNC.queue.setting('publish-series:'+identifier,enable)
+            AUTOSYNC.queue.event('auto_publish','تفعيل نشر الحلقات المفحوصة' if enable else 'إيقاف نشر الحلقات تلقائيًا',table,identifier)
+        elif body.action=='sources':
             url=public_url(body.url.strip())
             AUTOSYNC.queue.remember(table,identifier,dict(url=url,kind='original'))
             # Save the first original page, keeping all additional pages in history.
             def persist():
-                db=AUTOSYNC.db or AUTOSYNC.db_factory()
-                AUTOSYNC.db=db
+                if local_request(request) and not AUTOSYNC.has_server_key():
+                    db=state.db
+                    if db is None: raise ValueError('سجّل دخول مسؤول Supabase أولًا')
+                else:
+                    db=AUTOSYNC.db or AUTOSYNC.db_factory()
                 if not job['page_url']:
                     db.patch(table,identifier,{'source_page_url':url})
                     AUTOSYNC.queue.update(table,identifier,page_url=url)
-                AUTOSYNC.flush(job)
+                AUTOSYNC.flush(job, db=db)
             await run_in_threadpool(persist)
             AUTOSYNC.queue.event('source_added','حُفظ مصدر أصلي إضافي لهذا العنصر',table,identifier)
             AUTOSYNC.queue.queue(table,identifier,refresh=True)
@@ -921,4 +1216,4 @@ async def autosync_target(request:Request,body:AutoSyncTargetForm):
 if __name__ == '__main__':
     import uvicorn
     uvicorn.run(app, host='127.0.0.1', port=int(os.getenv('ALEZZ_PORT','8765')),
-                log_level='warning', access_log=False)
+                log_level='warning', access_log=False, proxy_headers=False)

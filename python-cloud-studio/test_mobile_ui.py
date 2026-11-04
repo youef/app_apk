@@ -28,8 +28,7 @@ class MobileStudioTests(unittest.TestCase):
         parser.feed(HTML)
         self.assertEqual(len(parser.ids), len(set(parser.ids)), "Duplicate HTML ids")
         for control in ["studioQuickSync", "episodeViewCount", "episodeSelectionInfo",
-                        "selectVisibleBtn", "clearSelectionBtn", "libraryWorkSearch",
-                        "libraryWorkFilter", "libraryWorkList", "studioEditStatus",
+                        "selectVisibleBtn", "clearSelectionBtn", "smart-sync", "studioEditStatus",
                         "serverHealthText", "episodeList", "workspace"]:
             self.assertIn(control, parser.ids)
     def test_assets_are_linked(self):
@@ -40,13 +39,13 @@ class MobileStudioTests(unittest.TestCase):
     def test_mobile_controls_and_accessibility(self):
         for state in ["all", "verified", "missing", "pending", "failed"]:
             self.assertIn('data-episode-filter="'+state+'"', HTML)
-        for target in ['#import', '#librarySync', '#episodes', '#publish']:
+        for target in ['#import', '#smart-sync', '#episodes', '#publish']:
             self.assertIn('href="'+target+'"', HTML)
         self.assertIn('aria-label="التنقل السريع للآيفون"', HTML)
         self.assertIn("env(safe-area-inset-bottom)", CSS)
         self.assertIn("font-size:16px!important", CSS)
         self.assertIn("MutationObserver", JS)
-        self.assertIn("libraryWorkFilter", JS)
+        self.assertNotIn('id="librarySync"', HTML)
         self.assertIn("confirm", (BASE / "static/app.js").read_text(encoding="utf-8"))
     def test_manifest_and_icon(self):
         manifest = json.loads((BASE / "static/manifest.webmanifest").read_text(encoding="utf-8"))

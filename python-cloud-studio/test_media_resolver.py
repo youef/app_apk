@@ -139,6 +139,11 @@ class ResolverTests(unittest.TestCase):
 
     def test_signed_expiry_uses_explicit_timestamp_and_preserves_signature(self):
         self.assertEqual(signed_expiry(NEW), 1900000000)
+        self.assertEqual(signed_expiry('https://cdn.other.example/hls2/01/master.m3u8?t=fixture&s=1793775268&e=43200&v=1&i=0.0&sp=0'), 1793818468)
+        self.assertEqual(signed_expiry('https://afast-store2-lmy.cdnz.quest/hls2/index.m3u8?t=fixture&s=1793775777&e=18000'), 1793793777)
+        self.assertIsNone(signed_expiry('https://cdnz.quest.example.org/hls2/index.m3u8?t=fixture&s=1793775777&e=18000'))
+        self.assertEqual(signed_expiry('https://store1-mvn.brqz.online/hls/master.m3u8?t=fixture&s=1793774501&e=43200'), 1793817701)
+        self.assertIsNone(signed_expiry('https://example.org/master.m3u8?t=fixture&s=1793774501&e=43200'))
         self.assertEqual(signed_expiry('https://cdn.example.org/a.mp4?exp=1900000000000'), 1900000000)
         expected = datetime(2026, 11, 3, tzinfo=timezone.utc).timestamp()+3600
         self.assertEqual(signed_expiry('https://cdn.example.org/a.mp4?X-Amz-Date=20261103T000000Z&X-Amz-Expires=3600'), expected)
@@ -159,6 +164,26 @@ class ResolverTests(unittest.TestCase):
 
 
 class MediaProbeTests(unittest.TestCase):
+    def test_page_retry_recovers_after_connection_reset_and_truncated_body(self):
+        client = importer.SourceClient()
+        response = Mock(status_code=200, headers={'Content-Type':'text/html'}, encoding='utf-8')
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        response.iter_content.side_effect = [requests.exceptions.ChunkedEncodingError(), [b'<html>OK</html>']]
+        client.session.get = Mock(side_effect=[ConnectionResetError(10054, 'remote reset'), response, response])
+        with patch.object(importer,'check_dns') as dns, patch.object(importer.time,'sleep') as delay:
+            self.assertEqual(client.get(ROOT),(ROOT,'text/html','<html>OK</html>'))
+        self.assertEqual(dns.call_count,3)
+        self.assertEqual(delay.call_count,2)
+
+    def test_page_retry_is_bounded_and_reports_connection_error(self):
+        client = importer.SourceClient()
+        client.session.get = Mock(side_effect=requests.exceptions.ConnectionError('connection reset'))
+        with patch.object(importer,'check_dns'), patch.object(importer.time,'sleep'):
+            with self.assertRaises(importer.SourceConnectionError):
+                client.get(ROOT)
+        self.assertEqual(client.session.get.call_count,3)
+
     def client(self, samples):
         client = importer.SourceClient()
         client.sample = Mock(side_effect=lambda url, size=8192: samples[url])

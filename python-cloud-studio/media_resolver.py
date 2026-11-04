@@ -39,7 +39,18 @@ def normalized_source_url(value: str) -> str:
 def signed_expiry(url: str) -> float | None:
     """Use explicit URL timestamps only; this is a hint, not a health result."""
     try:
-        query = {k.casefold(): v[0] for k, v in parse_qs(urlsplit(url).query).items() if v}
+        parts = urlsplit(url)
+        query = {k.casefold(): v[0] for k, v in parse_qs(parts.query).items() if v}
+        host = parts.hostname or ''
+        signed_hls_host = any(host == domain or host.endswith('.' + domain)
+                              for domain in ('brqz.online', 'cdnz.quest'))
+        hls_path = parts.path.lower()
+        shared_signature = '/hls2/' in hls_path and all(query.get(key) for key in ('v', 'i', 'sp'))
+        if hls_path.endswith('.m3u8') and (signed_hls_host or shared_signature):
+            start, duration = query.get('s', ''), query.get('e', '')
+            if query.get('t') and re.fullmatch(r'\d{10}', start) and re.fullmatch(r'\d{1,6}', duration):
+                if 946684800 <= int(start) <= 4102444800 and 0 < int(duration) <= 604800:
+                    return int(start) + int(duration)
         for name in ('expires', 'expiry', 'exp', 'expire'):
             value = query.get(name, '')
             if re.fullmatch(r'\d{10}|\d{13}', value):
@@ -244,6 +255,50 @@ class MediaResolver:
             new = [x for x in browser_sources if x.get('url') not in previous]
             checked = merge_sources(checked, self.check(new))
         return checked, errors[:6]
+
+
+def read_public_html(url: str, max_size: int) -> tuple[str, str, str]:
+    """Read a public document through Chromium when the HTTP client disconnects."""
+    from playwright.sync_api import sync_playwright
+    check_dns(url)
+    with sync_playwright() as playwright:
+        options = {'headless': True}
+        if os.getenv('ALEZZ_BROWSER_CHANNEL'):
+            options['channel'] = os.environ['ALEZZ_BROWSER_CHANNEL']
+        browser = playwright.chromium.launch(**options)
+        try:
+            context = browser.new_context(java_script_enabled=False, service_workers='block', accept_downloads=False)
+            page = context.new_page()
+            devtools = context.new_cdp_session(page)
+            main_frame = devtools.send('Page.getFrameTree')['frameTree']['frame']['id']
+            navigations = 0
+            def allow_document(event):
+                nonlocal navigations
+                request_id = event['requestId']
+                try:
+                    if event['resourceType'] != 'Document' or event['frameId'] != main_frame or navigations >= 5:
+                        raise ValueError('Only the main document is allowed')
+                    check_dns(event['request']['url'])
+                    navigations += 1
+                    devtools.send('Fetch.continueRequest', {'requestId':request_id})
+                except Exception:
+                    devtools.send('Fetch.failRequest', {'requestId':request_id,'errorReason':'BlockedByClient'})
+            # Intercept each navigation hop, including redirects.
+            devtools.on('Fetch.requestPaused', allow_document)
+            devtools.send('Fetch.enable', {'patterns':[{'urlPattern':'*'}]})
+            response = page.goto(url, wait_until='domcontentloaded', timeout=15000)
+            if not response or not response.ok:
+                raise ValueError('لم يفتح المتصفح صفحة المصدر.')
+            check_dns(response.url)
+            content_type = response.headers.get('content-type','')
+            if 'html' not in content_type.lower():
+                raise ValueError('صفحة المصدر لم تُرجع HTML.')
+            html = page.evaluate('limit => document.documentElement.outerHTML.slice(0, limit + 1)', max_size)
+            if len(html.encode('utf-8')) > max_size:
+                raise ValueError('تجاوزت صفحة المصدر الحد المسموح.')
+            return response.url, content_type, html
+        finally:
+            browser.close()
 
 
 def capture_headless(url: str, *, max_seconds=35) -> list[dict]:

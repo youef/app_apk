@@ -20,6 +20,7 @@
   function activity(message, type='info'){
     $('activity').className='activity ' + type;
     $('activityText').textContent=message;
+    if(location.hash==='#tools' && type!=='loading')$('toolsStatus').textContent=message;
     if(type==='loading')$('activity').querySelector('.activity-ico').classList.add('spin');
     else $('activity').querySelector('.activity-ico').classList.remove('spin');
   }
@@ -49,6 +50,8 @@
     $('exportBtn').disabled=!cat;$('demoBadge').hidden=!app.demo;
     $('saveBtn').disabled=app.demo||app.busy;
     if(cat)renderContent();
+    $('toolsLinksBtn').disabled=!cat||$('workspace').inert;
+    document.dispatchEvent(new Event('studio:catalogue'));
   }
   function renderContent(){
     const cat=app.catalogue;
@@ -72,8 +75,32 @@
       rowField('movieMediaUrl',cat.media_url);
       const [label,cls]=mediaBadge(cat);
       $('movieMediaStatus').textContent=label+ (cat.media_url?' · '+cat.media_url.slice(0,120):'');
+      $('movieSources').replaceChildren(mediaSources(cat));
       $('seasonTabs').replaceChildren();
     } else renderSeasons();
+  }
+  function mediaSources(item){
+    const container=make('details','media-sources');
+    const sources=item.sources||[];
+    const urls=[...new Set([item.page_url||item.url,...(item.source_pages||[])].filter(Boolean))];
+    container.append(make('summary','',sources.length+' مشغّل أو رابط مكتشف'));
+    for(const url of urls){
+      container.append(make('small','','صفحة المصدر'),make('code','',url));
+    }
+    const list=make('ol');
+    for(const source of sources){
+      const row=make('li');
+      const label=source.verified?'صالح للتشغيل':source.reachable?'صفحة مشغّل متاحة':'لم يجتز الفحص';
+      const copy=make('button','small-outline','نسخ الرابط');copy.type='button';
+      copy.onclick=async()=>{
+        try{await navigator.clipboard.writeText(source.url);toast('نُسخ الرابط.','success');}
+        catch{toast('حدّد الرابط وانسخه يدويًا.','error');}
+      };
+      row.append(make('strong','',label+(source.label?' · '+source.label:'')),make('code','',source.url),copy);
+      list.append(row);
+    }
+    container.append(list);
+    return container;
   }
   function renderSeasons(){
     const cat=app.catalogue, seasons=[...new Set(cat.episodes.map(e=>e.season))].sort((a,b)=>a-b);
@@ -114,7 +141,7 @@
       const plabel=make('label','wide');plabel.append(make('span','','رابط صورة الحلقة'));const posterUrl=make('input');posterUrl.dir='ltr';posterUrl.value=ep.poster_url||'';posterUrl.type='url';
       posterUrl.onchange=()=>{app.catalogue.episodes[ep.i].poster_url=posterUrl.value.trim();};plabel.append(posterUrl);
       if(ep.error)details.append(make('small','',`نتيجة الفحص: ${ep.error}`));
-      details.append(dlabel,plabel);
+      details.append(dlabel,plabel,mediaSources(ep));
       wrapper.append(check,poster,identity,url,badge,expand,details);list.append(wrapper);
     }
   }
@@ -171,7 +198,7 @@
       if(app.catalogue)await syncEdits({silent:true});
       const result=await API('select-catalogue',{index});
       app.season=1;app.selected.clear();$('episodeSearch').value='';updateStatus(result);
-      $('workspace').scrollIntoView({behavior:'smooth',block:'start'});
+      location.hash='library';
     });
   }
   async function scanListing(){
@@ -222,17 +249,89 @@
     });
   }
 
+  let discoveryTimer, discoveryId;
+  function showDiscoveryProgress(scan){
+    clearTimeout(discoveryTimer);
+    discoveryId=scan?.id;
+    $('workspace').inert=!!scan?.running;
+    $('toolsLinksBtn').disabled=!app.catalogue||$('workspace').inert;
+    document.dispatchEvent(new Event('studio:catalogue'));
+    $('discoveryProgress').hidden=!scan;
+    if(!scan)return;
+    const bar=$('discoveryProgressBar');
+    bar.max=Math.max(1,scan.total);bar.value=scan.done;
+    $('discoveryProgressLabel').textContent=scan.running?'جارٍ فحص روابط التشغيل':'اكتمل فحص العمل';
+    $('discoveryProgressCount').textContent=scan.done+' / '+scan.total+' مفحوصة · '+scan.verified+' سليمة';
+    $('discoveryReview').hidden=scan.running;
+    if(scan.running) discoveryTimer=setTimeout(()=>pollDiscovery(scan.id),1200);
+  }
+  async function pollDiscovery(id){
+    try {
+      const result=await API('discovery-scan');
+      if(discoveryId!==id)return;
+      showDiscoveryProgress(result.scan);
+      if(result.summary){
+        updateStatus(result.summary);
+        activity(result.scan.verified?'اكتمل الفحص. راجع بيانات العمل والمشغلات ثم احفظه للمزامنة.':
+          'اكتمل الفحص. لم يُعثر على رابط تشغيل صالح. يمكنك مراجعة المصادر وحفظ البيانات كمسودة.',
+          result.scan.verified?'success':'info');
+      }
+    } catch(error) {
+      if(discoveryId!==id)return;
+      activity('تعذر تحديث التقدم. جارٍ إعادة المحاولة…','info');
+      discoveryTimer=setTimeout(()=>pollDiscovery(id),5000);
+    }
+  }
+  async function discoverWork(url, kind){
+    activity('جارٍ اكتشاف البيانات والمواسم وصفحات الحلقات…','loading');
+    const result=await API('discover',{url,kind,scan_media:true,
+      deep:$('deepScan').checked,metadata:$('autoMetadata').checked});
+    app.selected.clear();app.season=1;$('episodeSearch').value='';
+    updateStatus(result);
+    showDiscoveryProgress(result.scan);
+    activity(result.scan?.running?'بدأ فحص المشغلات. يمكنك متابعة التقدم هنا.':'تم تحميل بيانات العمل، ولم تظهر حلقات قابلة للفحص.','info');
+  }
   async function startDiscover(demo=false){
     await action(async()=>{
-      if(!demo){const url=$('sourceUrl').value.trim();if(!url)throw new Error('اكتب رابط الفيلم أو المسلسل أولًا.');}
-      activity(demo?'إعداد النموذج التجريبي...':'يتم تحليل صفحة المصدر واكتشاف المواسم والحلقات...','loading');
-      const result=demo?await API('demo',{}):await API('discover',{url:$('sourceUrl').value.trim(),kind:$('sourceKind').value,
-        deep:$('deepScan').checked,metadata:$('autoMetadata').checked});
-      app.selected.clear();app.season=1;$('episodeSearch').value='';
-      updateStatus(result);
-      activity(demo?'تم تجهيز نموذج واجهة تجريبي — لا يمكن رفعه إلى Supabase.':
-        `تم اكتشاف ${result.catalogue.kind==='series' ? result.catalogue.episodes.length+' حلقة' : 'الفيلم'}، ويمكنك الآن تعديل البيانات وفحص الروابط.`,'success');
-      $('workspace').scrollIntoView({behavior:'smooth',block:'start'});
+      if(demo){
+        const result=await API('demo',{});
+        app.selected.clear();app.season=1;
+        updateStatus(result);showDiscoveryProgress(null);
+        activity('تم تجهيز النموذج التجريبي.','success');
+        location.hash='library';
+        return;
+      }
+      const input=$('sourceUrl').value.trim(), kind=$('sourceKind').value;
+      const results=$('titleResults');results.hidden=true;results.replaceChildren();
+      if(!input)throw new Error('اكتب اسم العمل أو أدخل رابط صفحته.');
+      if(/^https?:\/\//i.test(input)){
+        await discoverWork(input,kind);
+        return;
+      }
+      activity('جارٍ البحث في فهرس المصدر…','loading');
+      const {results:matches}=await API('title-search',{query:input,kind});
+      if(!matches.length){
+        activity('لم يظهر عمل بهذا الاسم في فهرس البحث. جرّب اسمًا آخر أو أدخل رابط المصدر.','info');
+        return;
+      }
+      const matchingName=value=>value.replace(/^(فيلم|مسلسل)\s+/,'').trim().toLocaleLowerCase();
+      if(matches.length===1 && matchingName(matches[0].title)===matchingName(input)){
+        await discoverWork(matches[0].url,matches[0].kind);
+        return;
+      }
+      results.append(make('h3','', 'اختر العمل لبدء الفحص'));
+      for(const item of matches){
+        const button=make('button','title-result');
+        button.type='button';
+        button.append(make('strong','',item.title),make('span','',fmtKind(item.kind)+' ←'));
+        button.onclick=()=>action(async()=>{
+          await discoverWork(item.url,item.kind);
+          results.hidden=true;
+        });
+        results.append(button);
+      }
+      results.hidden=false;
+      activity('ظهرت '+matches.length+' نتيجة. اختر العمل الصحيح للمتابعة.','info');
     });
   }
   async function importLinks(){
@@ -285,6 +384,7 @@
       activity('تم تأكيد اتصال حساب المسؤول. يمكنك حفظ الأعمال في قاعدة البيانات.','success');
       toast('تم تسجيل الدخول بنجاح.','success');
     });
+    if(app.authenticated)await readBrowserCapture();
   }
   async function saveWork(){
     await action(async()=>{
@@ -305,89 +405,27 @@
     });
   }
   function showRights(){const publish=document.querySelector('input[name=publishMode]:checked').value==='publish';$('rightsFields').hidden=!publish;}
-  async function refreshLibrary(){
-    if(!app.csrf)return;
-    try{
-      const data=await API('library-status');
-      const p=data.counts?.pages||{}, w=data.counts?.works||{};
-      $('libPagesDone').textContent=p.done||0;
-      $('libWorksDone').textContent=w.done||0;
-      $('libPending').textContent=(p.pending||0)+(p.processing||0)+(w.pending||0)+(w.processing||0);
-      $('libFailed').textContent=(p.failed||0)+(w.failed||0);
-      $('libraryProgress').textContent=data.running?
-        `المزامنة جارية: تمت فهرسة ${p.done||0} صفحة وتحليل ${w.done||0} عمل. تستمر المهام التالية حتى عند تعطل إحدى الصفحات.`:
-        `الفهرسة متوقفة أو مكتملة. الأعمال المحللة: ${w.done||0}. اضغط «استكمال» لمتابعة المتبقي.`;
-      const host=$('libraryWorkList');host.replaceChildren();
-      (data.works||[]).slice(0,36).forEach(item=>{
-        const card=make('div','lib-work '+(item.status==='done'?'done':item.status==='failed'?'failed':''));
-        card.append(make('strong','',item.url));
-        card.append(make('small','',item.status==='done'?(item.saved?'✓ محفوظ في Supabase':'✓ البيانات جاهزة للحفظ'):
-          item.status==='failed'?'تعذر الاستيراد — يمكن إعادة المحاولة':item.status==='processing'?`جارٍ الاكتشاف · ${item.episode_progress||0} حلقة محفوظة في نقطة الاستكمال`:'في قائمة الانتظار'));
-        if(item.warnings)card.append(make('small','',`${item.warnings} صفحة حلقة تعذّر فحصها؛ راجع العمل وأعد مزامنته`));
-        if(item.error||item.save_error)card.append(make('small','',item.error||item.save_error));
-        if(item.status==='done'){
-          const btn=make('button','small-outline','فتح تفاصيل العمل');
-          btn.onclick=()=>action(async()=>{
-            const result=await API('library-load',{url:item.url});
-            app.season=1;app.selected.clear();updateStatus(result);
-            $('workspace').scrollIntoView({behavior:'smooth',block:'start'});
-          });
-          card.append(btn);
-        }
-        host.append(card);
-      });
-    }catch(_){/* Page may be reloading or session may have expired. */}
-  }
-  async function startLibrary(){
-    await action(async()=>{
-      const urls=$('libraryUrls').value.trim();
-      if(!urls)throw new Error('ضع رابط صفحة مكتبة واحدة أو أكثر، كل رابط في سطر.');
-      const r=await API('library-start',{urls,kind:$('libraryKind').value});
-      activity('بدأت فهرسة صفحات المكتبات وحلقاتها، مع حفظ نقطة التوقف على الجهاز.','success');
-      toast('تمت إضافة المكتبات إلى طابور الفهرسة.','success');
-      await refreshLibrary();
-    });
-  }
-  async function resumeLibrary(retry=false){
-    await action(async()=>{
-      await API(retry?'library-retry':'library-resume',{});
-      toast(retry?'أُعيدت المهام المتعثرة إلى الطابور.':'تم استكمال الطابور المحفوظ.','success');
-      await refreshLibrary();
-    });
-  }
-  async function saveLibrary(){
-    await action(async()=>{
-      if(!app.authenticated){openModal('loginModal');throw new Error('يلزم تسجيل دخول مسؤول العز TV قبل الحفظ.');}
-      const publish=document.querySelector('input[name=publishMode]:checked').value==='publish';
-      const rights_authorized=$('rightsAuthorized').checked;
-      if(publish&&!rights_authorized)throw new Error('النشر العام يحتاج إذن عرض. اختر حفظ المسودات بدلًا من ذلك.');
-      if(!confirm('بدء حفظ الأعمال المُكتشفة إلى قاعدة العز TV؟ (تُستبعد روابط الفيديو غير المتحقق منها)'))return;
-      let saved=0,failed=0,more=true,batches=0;
-      while(more&&batches<100){
-        const result=await API('library-save',{publish,rights_authorized,
-          rights_holder:$('rightsHolder').value.trim(),license_reference:$('licenseRef').value.trim()});
-        batches++;
-        saved+=(result.results||[]).filter(x=>x.ok).length;
-        failed+=(result.results||[]).filter(x=>!x.ok).length;
-        more=result.remaining;
-        activity(`حفظ ${saved} عمل، أخطاء ${failed}، دفعات ${batches}...`,'loading');
-        if(!result.attempted)break;
-      }
-      await refreshLibrary();
-      activity(`اكتمل حفظ ${saved} عملًا، وتعذر حفظ ${failed}. ${more?'يمكن استكمال بقية الأعمال بالنقر مجددًا.':''}`,failed?'error':'success');
-      toast(`الحفظ: ${saved} ناجح و${failed} يحتاج مراجعة.`,failed?'error':'success');
-    });
-  }
   function wire(){
-    $('libraryStart').onclick=startLibrary;$('libraryResume').onclick=()=>resumeLibrary(false);
-    $('libraryRetry').onclick=()=>resumeLibrary(true);$('librarySave').onclick=saveLibrary;
-    $('discoverBtn').onclick=()=>startDiscover(false);$('demoBtn').onclick=()=>startDiscover(true);
+    $('discoveryForm').onsubmit=event=>{event.preventDefault();startDiscover(false);};
+    $('discoveryReview').onclick=()=>location.hash='library';$('demoBtn').onclick=()=>startDiscover(true);
     $('discoverBatchBtn').onclick=importBatch;$('scanListingBtn').onclick=scanListing;$('saveBatchBtn').onclick=saveBatch;
     $('exportBatchBtn').onclick=()=>{window.location.href='/api/export-batch';};
     $('exportBtn').onclick=()=>{if(!app.catalogue)return;window.location.href='/api/export';};
     $('toastCenterBtn').onclick=()=>toast('يمكنك الاطلاع على حالة الاستيراد في الشريط أسفل قسم الاكتشاف.');
     $('updateBtn').onclick=()=>action(()=>syncEdits());
-    $('linksToggle').onclick=()=>openModal('linksModal');$('applyLinksBtn').onclick=importLinks;
+    $('linksToggle').onclick=$('toolsLinksBtn').onclick=()=>openModal('linksModal');$('applyLinksBtn').onclick=importLinks;
+    $('pasteFetchVBtn').onclick=async()=>{
+      const field=$('linksInput');
+      try {
+        const text=(await navigator.clipboard.readText()).trim();
+        if(!text){toast('انسخ رابط الفيديو من FetchV أولًا.');return;}
+        const start=field.selectionStart, end=field.selectionEnd;
+        field.setRangeText(text,start,end,'end');
+      } catch {
+        toast('اضغط Ctrl+V للصق الرابط في الحقل.');
+      }
+      field.focus();
+    };
     $('verifyAllBtn').onclick=()=>verifyRows(app.catalogue&&app.catalogue.kind==='series'?app.catalogue.episodes.map((e,i)=>i):[]);
     $('verifySelectedBtn').onclick=()=>verifyRows([...app.selected]);$('verifyMovieBtn').onclick=()=>verifyRows([]);
     $('edgeCaptureBtn').onclick=()=>action(async()=>{
@@ -444,6 +482,45 @@
     $('posterPreview').onerror=()=>{$('posterPreview').hidden=true;};
     $('metaPoster').onchange=()=>{const v=$('metaPoster').value.trim();if(v.startsWith('https://')){$('posterPreview').hidden=false;$('posterPreview').src=v;}else $('posterPreview').hidden=true;};
   }
-  async function init(){wire();try{const result=await API('init');app.csrf=result.csrf;updateStatus(result);refreshLibrary();setInterval(()=>{if(document.visibilityState==='visible')refreshLibrary();},8000);activity('الموقع جاهز. الصق رابط فيلم أو مسلسل لبدء الاكتشاف.','success');}catch(error){activity(error.message,'error');toast(error.message,'error');}}
+  async function readBrowserCapture(){
+    if(!app.csrf || app.busy)return;
+    const key='alezz:browser-capture', raw=sessionStorage.getItem(key);
+    if(!raw)return;
+    await action(async()=>{
+      activity('جارٍ جلب بيانات العمل وفحص جميع الروابط المرسلة…','info');
+      const result=await API('browser-capture',JSON.parse(raw));
+      if(!result.capture.awaiting_login && sessionStorage.getItem(key)===raw)sessionStorage.removeItem(key);
+      updateStatus(result);
+      const target=result.catalogue.kind==='movie'?result.catalogue:result.catalogue.episodes[0];
+      $('browserCaptureSummary').textContent=result.catalogue.title+' · '+result.capture.verified+
+        ' روابط تشغيل سليمة من أصل '+result.capture.total+' نتيجة. '+
+        (result.capture.saved?'حُفظت البيانات وأضيفت المصادر إلى المزامنة الذكية.':
+          result.capture.awaiting_login?'سجّل دخول المسؤول لحفظ هذه الدفعة تلقائيًا.':'راجع البيانات ثم اختر الحفظ أو النشر.');
+      const list=$('browserCaptureLinks');
+      list.replaceChildren(...target.sources.map(source=>{
+        const row=document.createElement('li');
+        const label=document.createElement('strong');
+        label.textContent=source.verified?'اجتاز الفحص':source.reachable?'صفحة مشغّل متاحة':'لم يجتز الفحص';
+        const address=document.createElement('div');
+        address.dir='ltr';
+        address.style.overflowWrap='anywhere';
+        address.textContent=source.url;
+        const copy=document.createElement('button');
+        copy.type='button';
+        copy.className='small-outline';
+        copy.textContent='نسخ الرابط';
+        copy.onclick=()=>navigator.clipboard.writeText(source.url).then(()=>toast('نُسخ الرابط.','success')).catch(()=>toast('حدّد الرابط وانسخه يدويًا.','error'));
+        row.append(label,address,copy);
+        return row;
+      }));
+      $('browserCaptureSave').onclick=()=>{location.hash='publish';};
+      $('browserCaptureResults').hidden=false;
+      location.hash='tools';
+      showDiscoveryProgress(null);
+      activity('اكتمل فحص روابط الإضافة.','success');
+    });
+  }
+  window.addEventListener('alezz-browser-capture',readBrowserCapture);
+  async function init(){wire();try{const result=await API('init');app.csrf=result.csrf;updateStatus(result);showDiscoveryProgress(result.scan);await readBrowserCapture();if(!$('browserCaptureResults').hidden||result.scan)return;activity('الموقع جاهز. ابحث بالاسم أو أدخل رابط صفحة العمل.','success');}catch(error){activity(error.message,'error');toast(error.message,'error');}}
   init();
 })();

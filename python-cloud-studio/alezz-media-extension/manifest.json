@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "العز لالتقاط الوسائط",
+  "version": "2.3.0",
+  "description": "اكتشاف تلقائي لروابط الفيديو والبث واستيرادها إلى استوديو العز.",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "webRequest",
+    "scripting"
+  ],
+  "optional_permissions": [
+    "downloads"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "background": {
+    "service_worker": "worker.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "العز لالتقاط الوسائط"
+  }
+}

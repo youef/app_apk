@@ -6,7 +6,7 @@
   const state = {offset:0, limit:50, csrf:'', selected:new Map(), target:null,
     busy:false, refreshing:false, signature:'', searchTimer:null, previousFocus:null};
   const labels = {healthy:'سليم',broken:'معطوب',suspect:'يحتاج مراجعة',unchecked:'لم يُفحص',
-    missing_source:'يحتاج مصدرًا',pending:'بانتظار الفحص',reachable:'صفحة متاحة',
+    missing_source:'يحتاج مصدرًا',pending:'بانتظار الفحص',checking:'جارٍ الفحص',discovered:'تم اكتشاف الحلقات',reachable:'صفحة متاحة',
     direct:'فيديو مباشر',embed:'صفحة مشغل',page:'صفحة المصدر',source:'صفحة المصدر',original:'صفحة المصدر'};
   const el = (tag, cls, text) => {
     const node = document.createElement(tag);
@@ -73,16 +73,20 @@
       $(id).textContent = Number(value || 0).toLocaleString('ar-SA');
     }
     const running = data.running && data.enabled;
-    $('autoWorkerBadge').textContent = !data.connected ? 'ينتظر اتصال قاعدة البيانات' :
-      !data.enabled ? 'متوقف مؤقتًا' : running ? 'العامل يعمل' : 'العامل غير نشط';
+    $('autoWorkerBadge').textContent = !data.enabled ? 'متوقف مؤقتًا' :
+      !data.connected ? 'ينتظر اتصال قاعدة البيانات' : running ? 'العامل يعمل' : 'العامل غير نشط';
     $('autoWorkerBadge').className = 'auto-badge '+(!data.connected ? 'suspect' : running ? 'running' : 'paused');
     $('autoMode').textContent = {http:'طلبات مباشرة',auto:'تلقائي · متصفح عند الحاجة',headless:'متصفح مخفي'}[data.mode] || data.mode || '—';
     $('autoLastCheck').textContent = date(data.last_check);
     $('autoNextCheck').textContent = date(data.next_check);
     $('autoPendingUploads').textContent = data.pending_uploads || 0;
-    if (data.last_error) notice(data.last_error, true);
-    else if (!data.connected) notice('العامل يحتاج مفتاح Supabase السري في إعدادات الخادم ليعمل بصورة مستقلة.');
-    else if (!data.enabled) notice('المزامنة متوقفة مؤقتًا. المصادر والمهام محفوظة ويمكن استئنافها.');
+    if (!data.enabled) notice('المزامنة متوقفة مؤقتًا. المصادر والمهام محفوظة ويمكن استئنافها.');
+    else if (!data.connected && data.local_mode && data.session_authenticated) notice('تسجيل دخول المسؤول مؤكد. جارٍ ربط جلسة الاستوديو بعامل المزامنة.');
+    else if (data.last_error) notice(data.last_error, true);
+    else if (!data.connected) notice(data.local_mode ? 'سجّل دخول مسؤول Supabase من زر تسجيل الدخول لتشغيل المزامنة على جهازك.' : 'العامل يحتاج مفتاح Supabase السري في إعدادات الخادم ليعمل بصورة مستقلة.');
+    else if (data.import_error) notice('تعذر تحديث بيانات المكتبة. يستمر فحص العناصر المسجلة. '+data.import_error,true);
+    else if (!data.last_import && !data.active_checks) notice(`جارٍ قراءة المكتبة ومصادرها من Supabase · ${data.pending_checks || 0} عنصر بانتظار الفحص.`);
+    else if (data.active_checks || data.pending_checks) notice(`جارٍ العمل على ${data.active_checks} عنصر · ${data.pending_checks} بانتظار الفحص.`);
     else if (counts.missing_source) notice(`يوجد ${counts.missing_source} عنصرًا يحتاج صفحة مصدر أصلية. يمكن فحص روابطه الحالية، ويبدأ تجديدها بعد إضافة المصدر.`);
     else notice(`آخر نبضة للعامل: ${date(data.last_tick)} · آخر تحديث للمكتبة: ${date(data.last_import)}. الفحص مجدول كل 24 ساعة مع إعادة محاولة المتعثر.`);
     const pause = document.querySelector('[data-auto-action="pause"]');
@@ -117,7 +121,7 @@
       info.append(meta);
       if (!target.page_url) info.append(el('p','auto-target-error','المصدر الأصلي مفقود؛ أضف صفحة الفيلم أو الحلقة من «المصادر».'));
       if (target.error) info.append(el('p','auto-target-error',target.error));
-      const actions = el('div','auto-target-buttons'); actions.append(badge(target.status),
+      const actions = el('div','auto-target-buttons'); actions.append(badge(target.scan_state || target.status),
         button('المصادر',()=>showSources(target)),
         button('فحص',()=>action(async()=>{
           await api('target',{table:target.table_name,id:target.target_id,action:'check'});
@@ -127,6 +131,14 @@
           await api('target',{table:target.table_name,id:target.target_id,action:'refresh'});
           notice('أضيفت صفحة المصدر إلى طابور التجديد.');
         })));
+      if (target.table_name==='aseel_series') {
+        actions.append(button(target.auto_publish?'إيقاف النشر التلقائي':'تفعيل نشر الحلقات تلقائيًا',()=>action(async()=>{
+          if (!target.auto_publish && !confirm('أؤكد أن لدي تصريحًا لنشر الحلقات الجديدة من هذا المسلسل بعد التحقق من روابطها.')) return;
+          await api('target',{table:target.table_name,id:target.target_id,
+            action:target.auto_publish?'publish-disable':'publish-enable',rights_authorized:!target.auto_publish});
+          await refresh(true);
+        })));
+      }
       row.append(check,info,actions); container.append(row);
     });
     const total = data.total;
@@ -149,7 +161,7 @@
     if (state.refreshing || document.hidden && !force) return;
     state.refreshing = true;
     try {
-      const query = new URLSearchParams({limit:state.limit,offset:state.offset,q:$('autoSearch').value.trim()});
+      const query = new URLSearchParams({limit:state.limit,offset:state.offset,q:$('autoSearch').value.trim(),scope:$('autoScope').value});
       const results = await Promise.allSettled([api('status'),api('targets?'+query),api('events?limit=40')]);
       if (results[0].status === 'fulfilled') renderStatus(results[0].value);
       else notice(results[0].reason.message, true);
@@ -238,6 +250,9 @@
     for (const target of targets) await api('target',{table:target.table_name,id:target.target_id,action:'check'});
     state.selected.clear(); selectionCount(); notice(`أضيف ${targets.length} عنصرًا إلى طابور الفحص.`);
   });
+  $('autoScope').onchange = ()=>{
+    state.offset=0; state.signature=''; state.selected.clear(); selectionCount(); refresh(true);
+  };
   $('autoSearch').oninput = ()=>{
     clearTimeout(state.searchTimer);
     state.searchTimer = setTimeout(()=>{state.offset=0;state.signature='';refresh(true);},300);
@@ -246,7 +261,8 @@
   $('autoNext').onclick = ()=>{state.offset+=state.limit;state.signature='';refresh(true);};
   $('autoRefreshView').onclick = ()=>refresh(true);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});
+  window.addEventListener('hashchange',()=>{if(location.hash==='#smart-sync')refresh(true);});
   // Let the existing studio establish its session first to avoid racing cookies.
   setTimeout(()=>refresh(),1200);
-  setInterval(()=>refresh(),12000);
+  setInterval(()=>{if(location.hash==='#smart-sync')refresh();},3000);
 })();
