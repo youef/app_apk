@@ -183,6 +183,44 @@ class JobDB:
                 counts[table]={r['status']:r['n'] for r in db.execute(f'select status,count(*) n from {table} group by status')}
             rows=[dict(r) for r in db.execute("select url,kind,status,attempts,error,saved,save_error,coalesce(case when status='done' then json_array_length(json_extract(payload,'$.discovery_warnings')) else 0 end,0) warnings,coalesce(case when checkpoint!='' then json_array_length(json_extract(checkpoint,'$.episodes')) else 0 end,0) episode_progress from works order by rowid desc limit ?", (limit,))]
             return {'counts':counts,'works':rows,'sources':[dict(r) for r in db.execute('select url,kind from sources order by added_at desc limit 30')]}
+    def series_items(self,limit=150,query=''):
+        term=query.strip().lower()
+        with self.lock,self._db() as db:
+            rows=[dict(r) for r in db.execute(
+                "select url,source_url,kind,status,error,saved,save_error,payload,attempts from works where kind!='movie' order by rowid desc limit 250")]
+        items=[]
+        for row in rows:
+            try:payload=json.loads(row['payload'] or '{}')
+            except (ValueError,TypeError):payload={}
+            if payload.get('kind')=='movie':continue
+            title=payload.get('title') or row['url'].rstrip('/').split('/')[-1].replace('-',' ') or 'مسلسل مستورد'
+            if term and term not in (title+' '+row['url']).lower():continue
+            eps=payload.get('episodes') or []
+            if not isinstance(eps,list):eps=[]
+            items.append({'origin':'library','id':row['url'],'title':title,'url':row['url'],
+               'source_url':row['source_url'],'status':row['status'],'saved':bool(row['saved']),
+               'error':row['error'] or row['save_error'],'episodes':len(eps),
+               'verified':sum(bool(e.get('verified')) for e in eps if isinstance(e,dict)),
+               'direct':sum(bool(e.get('media_url')) for e in eps if isinstance(e,dict)),
+               'attempts':row['attempts']})
+            if len(items)>=limit:break
+        return items
+
+    def retry_work(self,url):
+        url=canonical(url)
+        with self.lock,self._db() as db:
+            exists=db.execute('select 1 from works where url=?',(url,)).fetchone()
+            if not exists:return False
+            db.execute("update works set status='pending',attempts=0,error='',checkpoint='' where url=?",(url,))
+            return True
+
+    def replace_work_payload(self,url,payload):
+        url=canonical(url)
+        with self.lock,self._db() as db:
+            result=db.execute("update works set payload=? where url=? and status='done'",(payload,url))
+            if result.rowcount!=1:raise ValueError('Work is not ready')
+            return True
+
     def get_work(self,url):
         with self.lock,self._db() as db:
             row=db.execute('select * from works where url=? and status=?',(canonical(url),'done')).fetchone()
