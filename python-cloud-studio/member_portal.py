@@ -142,7 +142,9 @@ class Portal:
         path=request.url.path
         # Local development remains usable without hosting credentials. Public Render is always gated.
         if not self.secure and os.getenv('ALEZZ_ENFORCE_PORTAL_LOCAL') != '1' and path.split('/')[1] in ('api','static','studio'):
-            return await call_next(request)
+            import cloud_auth
+            if not cloud_auth.ENABLED:
+                return await call_next(request)
         if path.split('/')[1] not in ('web','admin','studio','static','api','account'):
             return await call_next(request)
         if path=='/account/theme.css':
