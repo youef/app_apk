@@ -24,8 +24,10 @@ class PortalTests(unittest.TestCase):
         self.headers={'Origin':'https://studio.example.org'}
 
     def login(self, role):
+        endpoint='/account/admin' if role=='admin' else '/account/login'
+        username='admin@example.org' if role=='admin' else 'customer1'
         with patch.object(self.portal,'authenticate',return_value=('example-id',role)):
-            result=self.client.post('/account/login',data={'username':'customer1','password':'example-password'},headers=self.headers)
+            result=self.client.post(endpoint,data={'username':username,'password':'example-password'},headers=self.headers)
         self.assertEqual(result.status_code,303)
         self.assertIn('HttpOnly',result.headers['Set-Cookie'])
         self.assertIn('Secure',result.headers['Set-Cookie'])
@@ -33,7 +35,7 @@ class PortalTests(unittest.TestCase):
 
     def test_direct_pages_and_catalogue_require_session_and_role(self):
         for path in ('/web/','/web/index.html','/web/catalog.json','/admin/','/account/customers'):
-            self.assertEqual(self.client.get(path).headers['location'],'/account/login')
+            self.assertEqual(self.client.get(path).headers['location'], '/account/login' if path.startswith('/web/') else '/account/admin')
         self.assertEqual(self.login('customer').headers['location'],'/web/')
         self.assertIn('web protected',self.client.get('/web/index.html').text)
         self.assertEqual(self.client.get('/web/catalog.json').status_code,200)
@@ -42,6 +44,20 @@ class PortalTests(unittest.TestCase):
         self.assertEqual(self.client.get('/web/index.view').status_code,404)
         self.assertEqual(self.client.post('/account/logout',headers=self.headers).status_code,303)
         self.assertEqual(self.client.get('/web/').headers['location'],'/account/login')
+
+    def test_studio_and_api_are_isolated(self):
+        for path in ('/studio/','/studio/sources','/static/app.js','/api/init'):
+            response=self.client.get(path)
+            self.assertEqual(response.status_code,401 if path.startswith('/api/') else 303)
+        self.login('customer')
+        for path in ('/studio/','/static/app.js','/api/init'):
+            self.assertEqual(self.client.get(path).status_code,403)
+        self.assertEqual(self.client.get('/account/admin').status_code,200)
+
+    def test_admin_login_has_own_route(self):
+        res=self.login('admin')
+        self.assertEqual(res.headers['location'],'/studio/')
+        self.assertEqual(self.client.get('/admin/').status_code,200)
 
     def test_admin_customer_creation_checks_csrf(self):
         self.login('admin')

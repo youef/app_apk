@@ -68,13 +68,18 @@ class Portal:
 <main class="member-shell"><div class="member-art" aria-hidden="true"><span>ع</span><b>AL EZZ TV</b></div>
 <section class="member-panel"><span class="member-brand">العز <b>TV</b></span><h1>{title}</h1>{body}</section></main></html>''',headers=HEADERS)
 
-    def login_page(self, message=''):
-        alert = '<p role="alert" class="member-alert">'+html.escape(message)+'</p>' if message else ''
-        return self.page('دخول العز TV',f'''<p>مكتبتك الخاصة للأفلام والمسلسلات والبث المباشر.</p>{alert}
-<form method="post" action="/account/login">
-<label>اسم المستخدم أو بريد المسؤول<input name="username" dir="ltr" required maxlength="254" autocomplete="username"></label>
+    def login_page(self, message='', mode='customer'):
+        admin=mode=='admin'
+        alert='<p role="alert" class="member-alert">'+html.escape(message)+'</p>' if message else ''
+        label='البريد الإلكتروني للمسؤول' if admin else 'اسم المستخدم'
+        input_attrs='type="email" maxlength="254"' if admin else 'maxlength="40" pattern="[a-zA-Z0-9][a-zA-Z0-9_.-]{2,39}"'
+        return self.page('بوابة المسؤولين' if admin else 'دخول المشاهدة',f'''<p>{'هذه البوابة مخصصة للمسؤولين المعتمدين فقط.' if admin else 'مرحبًا بعودتك. ادخل باسم المستخدم وكلمة المرور المخصصة لحسابك.'}</p>{alert}
+<form method="post" action="/account/{'admin' if admin else 'login'}">
+<label>{label}<input name="username" dir="ltr" required autocomplete="username" {input_attrs}></label>
 <label>كلمة المرور<input name="password" dir="ltr" required maxlength="128" type="password" autocomplete="current-password"></label>
-<button>تسجيل الدخول</button></form><small>يصدر حساب العميل من إدارة العز TV.</small>''')
+<button>تسجيل الدخول</button></form>
+<small>{'تُراجع صلاحيات المسؤول في قاعدة البيانات قبل السماح بالدخول.' if admin else 'يحصل كل عميل على حسابه من الإدارة.'}</small>
+<p class="member-switch"><a href="/">الصفحة الرئيسية</a> · <a href="/account/{'login' if admin else 'admin'}">{'بوابة العملاء' if admin else 'بوابة المسؤولين'}</a></p>''')
 
     async def form(self, request):
         origin=request.headers.get('origin')
@@ -135,16 +140,22 @@ class Portal:
 
     async def middleware(self, request: Request, call_next):
         path=request.url.path
-        if path.split('/')[1] not in ('web','admin','account'):
+        # Local development remains usable without hosting credentials. Public Render is always gated.
+        if not self.secure and os.getenv('ALEZZ_ENFORCE_PORTAL_LOCAL') != '1' and path.split('/')[1] in ('api','static','studio'):
+            import cloud_auth
+            if not cloud_auth.ENABLED:
+                return await call_next(request)
+        if path.split('/')[1] not in ('web','admin','studio','static','api','account'):
             return await call_next(request)
         if path=='/account/theme.css':
             return FileResponse(Path(__file__).parent/'static'/'member.css',headers=HEADERS)
-        if path=='/account/login' and request.method=='POST':
+        if path in ('/account/login','/account/admin') and request.method=='POST':
+            mode='admin' if path=='/account/admin' else 'customer'
             try:
                 form=await self.form(request)
                 username=form.get('username','').strip().lower()
                 password=form.get('password','')
-                if (not USERNAME.fullmatch(username) and not re.fullmatch(r'[^\s@]+@[^\s@]+',username)) or len(username)>254 or not 0<len(password)<=128:
+                if not (bool(re.fullmatch(r'[^\s@]+@[^\s@]+',username)) and len(username)<=254 if mode=='admin' else bool(USERNAME.fullmatch(username))) or not 0<len(password)<=128:
                     raise ValueError('Invalid credentials')
                 now=time.monotonic()
                 self.attempts={k:v for k,v in self.attempts.items() if v[0]>now}
@@ -154,8 +165,9 @@ class Portal:
                     return HTMLResponse('محاولات كثيرة. أعد المحاولة بعد خمس دقائق.',429,headers=HEADERS)
                 self.attempts[host]=(until,count+1)
                 uid,role=await run_in_threadpool(self.authenticate,username,password)
+                if role!=mode:raise ValueError('Role mismatch')
             except (ValueError,KeyError,requests.RequestException):
-                return self.login_page('تعذّر تسجيل الدخول. تحقق من بيانات الحساب.')
+                return self.login_page('تعذّر تسجيل الدخول. تحقق من بيانات الحساب.',mode=mode)
             self.attempts.pop(host,None)
             self.sessions={k:v for k,v in self.sessions.items() if v[2]>now}
             if len(self.sessions)>=4096:
@@ -163,26 +175,34 @@ class Portal:
             token=secrets.token_urlsafe(32)
             self.sessions.pop(request.cookies.get(COOKIE,''),None)
             self.sessions[token]=(uid,role,now+SESSION_SECONDS,secrets.token_urlsafe(24))
-            response=RedirectResponse('/admin/' if role=='admin' else '/web/',303,headers=HEADERS)
+            response=RedirectResponse('/studio/' if role=='admin' else '/web/',303,headers=HEADERS)
             response.set_cookie(COOKIE,token,max_age=SESSION_SECONDS,httponly=True,secure=self.secure,samesite='strict')
             return response
         token=request.cookies.get(COOKIE,'')
         session=self.sessions.get(token)
-        if path=='/account/login':
-            return self.login_page()
+        if path in ('/account/login','/account/admin'):
+            return self.login_page(mode='admin' if path=='/account/admin' else 'customer')
+        section=path.split('/')[1]
+        admin_area=section in ('admin','studio','static','api') or path=='/account/customers'
         if not session or session[2]<=time.monotonic():
             self.sessions.pop(token,None)
-            return RedirectResponse('/account/login',303,headers=HEADERS)
+            if section=='api':
+                from fastapi.responses import JSONResponse
+                return JSONResponse({'detail':'يجب تسجيل الدخول بحساب مسؤول.'},status_code=401,headers=HEADERS)
+            return RedirectResponse('/account/admin' if admin_area else '/account/login',303,headers=HEADERS)
         if path=='/account/logout' and request.method=='POST':
             if request.headers.get('origin')!=str(request.base_url).rstrip('/'):
                 return Response(status_code=403,headers=HEADERS)
             self.sessions.pop(token,None)
-            response=RedirectResponse('/account/login',303,headers={**HEADERS,'Clear-Site-Data':'"cache", "storage"'})
+            response=RedirectResponse('/',303,headers={**HEADERS,'Clear-Site-Data':'"cache", "storage"'})
             response.delete_cookie(COOKIE,secure=self.secure,httponly=True,samesite='strict')
+            response.delete_cookie('alezz_studio_session',secure=self.secure,httponly=True,samesite='strict')
             return response
-        if path=='/account/customers' or path.split('/')[1]=='admin':
-            if session[1]!='admin':
-                return HTMLResponse('هذه الصفحة مخصصة للإدارة.',403,headers=HEADERS)
+        if admin_area and session[1]!='admin':
+            if section=='api':
+                from fastapi.responses import JSONResponse
+                return JSONResponse({'detail':'صلاحية المسؤول مطلوبة.'},status_code=403,headers=HEADERS)
+            return HTMLResponse('هذه الصفحة مخصصة للإدارة.',403,headers=HEADERS)
         if path=='/account/customers':
             if request.method=='GET':
                 return self.customers_page(session)
@@ -200,6 +220,11 @@ class Portal:
                     return self.customers_page(session,str(exc))
                 except requests.RequestException:
                     return self.customers_page(session,'تعذّر تنفيذ العملية. تحقق من حالة الحساب وإعدادات Supabase.')
+        if section in ('api','studio','static'):
+            response=await call_next(request)
+            response.headers['Cache-Control']='private, no-store'
+            response.headers.setdefault('X-Content-Type-Options','nosniff')
+            return response
         if request.method not in ('GET','HEAD') or path.startswith('/account/'):
             return Response(status_code=404,headers=HEADERS)
         if path in ('/web','/admin'):

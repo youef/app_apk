@@ -31,12 +31,13 @@
         <a class="nav-link" href="#episodes"><span class="nav-icon">▦</span><span>المواسم والحلقات</span></a>
         <a class="nav-link" href="#publish"><span class="nav-icon">⇧</span><span>الحفظ والنشر</span></a>
         <a class="nav-link" href="#smart-sync"><span class="nav-icon">⟳</span><span>المزامنة الذكية</span></a>
+        <a class="nav-link" href="/studio/sources"><span class="nav-icon">▣</span><span>مراجعة مصادر المسلسلات</span></a>
         <a class="nav-link" href="#tools"><span class="nav-icon">⌘</span><span>الإضافات والمميزات</span></a>
       </nav>
       <div class="aside-label aside-label--second">روابط المشروع</div>
       <nav class="nav-list">
-        <a class="nav-link" href="https://youef.github.io/app_apk/admin/series-quick.html" target="_blank" rel="noopener"><span class="nav-icon">⌁</span><span>إدارة المسلسلات</span><span class="external">↗</span></a>
-        <a class="nav-link" href="https://youef.github.io/app_apk/admin/#movies" target="_blank" rel="noopener"><span class="nav-icon">▷</span><span>إدارة الأفلام</span><span class="external">↗</span></a>
+        <a class="nav-link" href="/admin/series-quick.html" target="_blank" rel="noopener"><span class="nav-icon">⌁</span><span>إدارة المسلسلات</span><span class="external">↗</span></a>
+        <a class="nav-link" href="/admin/#movies" target="_blank" rel="noopener"><span class="nav-icon">▷</span><span>إدارة الأفلام</span><span class="external">↗</span></a>
       </nav>
       <div class="sidebar-bottom"><div class="stack-icon">⌘</div><div><strong>Python Engine</strong><span>FASTAPI · SUPABASE</span></div><span class="live-light"></span></div>
     </aside>
@@ -44,7 +45,7 @@
     <div class="main-area">
       <header class="topbar">
         <div class="breadcrumbs"><button class="mobile-menu" id="menuBtn" title="القائمة" aria-label="فتح القائمة">☰</button><span>لوحة التحكم</span><span class="crumb-chevron">/</span><strong>الاستيراد الذكي</strong></div>
-        <div class="top-actions"><span class="server-label"><i class="status-dot"></i> <span id="serverHealthText">فحص الاتصال...</span></span><form action="/logout-site" method="POST" style="display:inline-flex;margin:0"><button type="submit" title="الخروج من الموقع" class="icon-btn" style="width:auto;padding:0 12px;white-space:nowrap">خروج الموقع</button></form><button class="icon-btn" title="عرض التنبيهات" id="toastCenterBtn">♧</button><button id="loginToggle" class="account-btn"><span class="avatar">A</span><span id="accountText">تسجيل الدخول</span><span>⌄</span></button></div>
+        <div class="top-actions"><span class="server-label"><i class="status-dot"></i> <span id="serverHealthText">فحص الاتصال...</span></span><form action="/account/logout" method="POST" style="display:inline-flex;margin:0"><button type="submit" title="الخروج من الموقع" class="icon-btn" style="width:auto;padding:0 12px;white-space:nowrap">خروج الموقع</button></form><button class="icon-btn" title="عرض التنبيهات" id="toastCenterBtn">♧</button><button id="loginToggle" class="account-btn"><span class="avatar">A</span><span id="accountText">تسجيل الدخول</span><span>⌄</span></button></div>
       </header>
       <main class="page">
         <div class="studio-command-bar" aria-label="مركز التحكم السريع">
@@ -161,7 +162,7 @@ https://example.org/movie/film-one"></textarea></label>
           <div class="publish-note"><span>ⓘ</span><p>وجود رابط لا يضمن تشغيله دائمًا. الحلقات بلا فيديو محفوظة ضمن البيانات ولا يتم اختلاق روابط لها.</p></div>
           <button class="primary-btn save-btn" id="saveBtn">⇧ حفظ العمل الحالي في Supabase <span class="btn-arrow">←</span></button>
           <button class="secondary-btn save-btn" type="button" id="saveBatchBtn" hidden>⇧ حفظ جميع الأعمال المكتشفة دفعة واحدة</button><div id="saveResult" class="save-result" hidden></div>
-          </section><section class="section-panel sync-panel"><div class="sync-graphic"><div class="sync-orbit orbit-one"></div><div class="sync-orbit orbit-two"></div><div class="sync-core">⌁</div></div><div class="sync-summary"><div class="overline">CONNECTED DESTINATION</div><h3>AL EZZ DATABASE</h3><p>Supabase · مشروع العز TV</p></div><div class="sync-details"><div><span>حالة المصادقة</span><strong id="syncAuth">غير مسجل</strong></div><div><span>المسلسلات</span><a target="_blank" rel="noopener" href="https://youef.github.io/app_apk/admin/series-quick.html">فتح الإدارة ↗</a></div><div><span>الأفلام</span><a target="_blank" rel="noopener" href="https://youef.github.io/app_apk/admin/#movies">فتح الإدارة ↗</a></div></div><button class="secondary-btn sync-login" id="syncLogin">تسجيل دخول المسؤول</button></section></div>
+          </section><section class="section-panel sync-panel"><div class="sync-graphic"><div class="sync-orbit orbit-one"></div><div class="sync-orbit orbit-two"></div><div class="sync-core">⌁</div></div><div class="sync-summary"><div class="overline">CONNECTED DESTINATION</div><h3>AL EZZ DATABASE</h3><p>Supabase · مشروع العز TV</p></div><div class="sync-details"><div><span>حالة المصادقة</span><strong id="syncAuth">غير مسجل</strong></div><div><span>المسلسلات</span><a target="_blank" rel="noopener" href="/admin/series-quick.html">فتح الإدارة ↗</a></div><div><span>الأفلام</span><a target="_blank" rel="noopener" href="/admin/#movies">فتح الإدارة ↗</a></div></div><button class="secondary-btn sync-login" id="syncLogin">تسجيل دخول المسؤول</button></section></div>
           </section>
         </section>
 
