@@ -1082,6 +1082,91 @@ async def library_save(request:Request,body:SaveForm):
     return {'ok':True,**result}
 
 
+@app.get('/api/series-review')
+async def series_review(request:Request,q:str=''):
+    find_state(request)
+    term=q.strip()[:100]
+    saved=AUTOSYNC.queue.targets(150,0,term,'aseel_series')
+    rows=[{'origin':'supabase','id':r['target_id'],'title':r['title'],
+           'url':r['page_url'],'status':r['status'],'last_check':r['last_check'],
+           'sources':r['source_count'],'verified':r['valid_sources'],
+           'error':r['error']} for r in saved]
+    return JSONResponse({'saved':rows,'imported':LIBRARY.series_items(150,term),
+                         'running':bool(_library_worker and _library_worker.is_alive())},
+                         headers={'Cache-Control':'private, no-store'})
+
+
+class SeriesReviewAction(BaseModel):
+    origin:str=Field(max_length=20)
+    id:str=Field(min_length=1,max_length=2048)
+    action:str=Field(default='refresh',max_length=20)
+    start:int=Field(default=0,ge=0,le=5000)
+
+
+@app.post('/api/series-review/recheck')
+async def series_review_recheck(request:Request,body:SeriesReviewAction):
+    protected(request)
+    if body.origin=='supabase':
+        table,identifier=target_key('aseel_series',body.id)
+        with AUTOSYNC.queue.db() as conn:
+            row=conn.execute('select 1 from auto_jobs where table_name=? and target_id=?',(table,identifier)).fetchone()
+        if not row:raise HTTPException(404,'المسلسل غير مسجل في المزامنة.')
+        AUTOSYNC.queue.queue(table,identifier,refresh=True)
+        AUTOSYNC.wake_event.set()
+        return {'ok':True,'message':'أُضيف المسلسل لطابور تجديد صفحات المصادر وروابط الفيديو.'}
+    if body.origin=='library' and body.action=='refresh':
+        try:exists=LIBRARY.retry_work(body.id)
+        except ValueError:raise HTTPException(400,'رابط المصدر غير صحيح') from None
+        if not exists:raise HTTPException(404,'العمل غير موجود في قائمة الاستيراد.')
+        _start_library_worker()
+        return {'ok':True,'message':'أُعيدت جدولة اكتشاف المواسم والحلقات من المصدر.'}
+    if body.origin=='library' and body.action=='verify':
+        try:row=LIBRARY.get_work(body.id)
+        except ValueError:raise HTTPException(400,'رابط المصدر غير صحيح') from None
+        if not row:raise HTTPException(409,'اكتشاف المسلسل لم ينته بعد.')
+        try:
+            data=json.loads(row['payload'])
+            eps=[Episode(**e) for e in data.pop('episodes',[])]
+            cat=Catalogue(**data,episodes=eps)
+        except (ValueError,TypeError,KeyError):
+            raise HTTPException(422,'بيانات المسلسل غير مكتملة.') from None
+        if cat.kind!='series':raise HTTPException(400,'هذا العنصر ليس مسلسلًا.')
+        subset=cat.episodes[body.start:body.start+4]
+        if not subset:raise HTTPException(400,'لا توجد حلقات في هذا النطاق.')
+        def work():
+            client=SourceClient(timeout=12)
+            try:
+                inspect_episodes(Catalogue(kind='series',title=cat.title,url=cat.url,episodes=subset),client,delay=0)
+            finally:
+                client.session.close()
+            LIBRARY.replace_work_payload(body.id,json.dumps(asdict(cat),ensure_ascii=False))
+            return sum(bool(ep.verified) for ep in subset)
+        try:good=await run_in_threadpool(work)
+        except Exception as exc:raise HTTPException(502,'تعذر فحص الفيديو: '+safe_error(exc)) from None
+        return {'ok':True,'checked':len(subset),'verified':good,
+                'next_start':body.start+len(subset),'total':len(cat.episodes)}
+    raise HTTPException(400,'طلب غير مدعوم.')
+
+
+@app.get('/api/series-review/details')
+async def series_review_details(request:Request,origin:str,id:str):
+    find_state(request)
+    if origin=='supabase':
+        table,identifier=target_key('aseel_series',id)
+        sources=AUTOSYNC.queue.sources(table,identifier)
+        return {'sources':[{'url':s['url'],'kind':s['kind'],'status':s['status'],
+                            'last_checked_at':s['last_checked_at'],'error':s['error']} for s in sources[:100]]}
+    if origin=='library':
+        try:row=LIBRARY.get_work(id)
+        except ValueError:raise HTTPException(400,'رابط المصدر غير صحيح') from None
+        if not row:raise HTTPException(404,'لم يكتمل استيراد هذا المسلسل.')
+        eps=json.loads(row['payload']).get('episodes',[])
+        return {'episodes':[{'season':e.get('season'),'number':e.get('number'),
+            'title':e.get('title'),'verified':e.get('verified',False),
+            'media_url':e.get('media_url') or '', 'error':e.get('error') or ''} for e in eps[:500]]}
+    raise HTTPException(400,'مصدر غير معروف.')
+
+
 @app.get('/api/categories')
 async def categories(request: Request):
     _, state = find_state(request)
