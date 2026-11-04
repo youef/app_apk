@@ -1,0 +1,39 @@
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>العز TV | الاستيراد الجماعي</title><link rel="stylesheet" href="admin.css?v=bulk20261102"><link rel="stylesheet" href="bulk-import.css?v=metadata-first-20261102"><link rel="stylesheet" href="member-ui.css?v=1">
+</head><body>
+<div class="ambient"><span class="ambient-glow ambient-glow--gold"></span></div><main class="batch">
+<header class="batch-head"><div><p class="eyebrow">AL EZZ SMART IMPORT</p><h1>جلب مسلسل كامل من رابط واحد</h1><p>اكتشاف المواسم والحلقات · تدقيق التشغيل · إزالة التكرارات · حفظ آمن</p></div><a class="btn btn-ghost" href="./#channels">العودة للقنوات</a></header>
+<p id="batchMessage" class="batch-message" role="status" aria-live="polite">جارٍ التحقق من صلاحية الإدارة...</p>
+<section class="batch-panel"><h2>01 — اكتشاف رابط المصدر</h2><div class="batch-grid"><label>رابط صفحة الفيلم أو المسلسل<input id="batchUrl" type="url" dir="ltr" placeholder="https://archive.org/details/..." required></label><label>نوع العمل<select id="batchKind"><option value="auto">تلقائي</option><option value="movie">فيلم</option><option value="series">مسلسل مع الحلقات</option></select></label></div><div class="batch-actions"><button class="btn btn-gold" id="batchDiscover">جلب وفحص تلقائي</button><button class="btn btn-ghost" id="batchVerify" disabled>افحص روابط التشغيل</button><button class="btn btn-ghost" id="batchCancel" disabled>إيقاف</button></div><p class="hint">تقبل الأداة روابط صفحات HTTPS العامة من مواقع مختلفة بعد فحص أمان النطاق. قبول الرابط للفحص لا يعني الموافقة على الحقوق أو ضمان استخلاص روابط التشغيل. لا تتجاوز تسجيل الدخول أو DRM.</p></section>
+<section class="batch-panel"><h2>02 — بيانات المسلسل والحلقات</h2><div class="batch-overview" id="batchOverview" hidden><img id="batchPoster" class="batch-poster" alt="بوستر المسلسل" hidden><div class="batch-overview__text"><h3 id="batchPreviewTitle"></h3><p id="batchPreviewDescription"></p><small id="batchPreviewMeta"></small></div></div><p class="hint">لكل حلقة يمكنك لصق رابط التشغيل الذي اكتشفته FetchV في متصفحك، ثم فحصه وحفظه. لا يمكن للوحة قراءة نتائج FetchV تلقائيًا لأنه يعمل محليًا في المتصفح.</p><div class="batch-stats"><span>المكتشف <b id="countAll">0</b></span><span>صالح <b id="countGood">0</b></span><span>غير مؤكَّد <b id="countBad">0</b></span><span>المحفوظ <b id="countSaved">0</b></span></div><div class="batch-progress"><span id="batchProgress"></span></div><div class="batch-table"><table><thead><tr><th>تحديد</th><th>العنوان</th><th>الموسم والحلقة</th><th>رابط المصدر</th><th>رابط تشغيل الحلقة (اختياري)</th><th>حالة التحقق</th></tr></thead><tbody id="batchRows"><tr><td colspan="6">ضع رابط المصدر أعلاه</td></tr></tbody></table></div></section>
+<section class="batch-panel"><h2>03 — بيانات العمل وحفظه في المكتبة</h2>
+<p class="hint">راجع بيانات العمل قبل الحفظ. تُحدّث السجلات الموجودة بدلاً من إنشاء نسخ مكررة. الحقول الفارغة لا تُختلق آليًا.</p>
+<div class="batch-grid">
+<label>عنوان العمل بالعربية<input id="batchTitle" maxlength="250" placeholder="اسم المسلسل أو الفيلم"></label>
+<label>العنوان الأصلي<input id="batchOriginal" maxlength="250" placeholder="Original title"></label>
+<label>سنة الإصدار<input id="batchYear" type="number" min="1880" max="2100" placeholder="2026"></label>
+<label>بلد الإنتاج<select id="batchCountry"><option value="">غير محدد</option>
+<option value="SA">السعودية</option><option value="EG">مصر</option><option value="TR">تركيا</option><option value="US">الولايات المتحدة</option>
+<option value="GB">بريطانيا</option><option value="KR">كوريا الجنوبية</option><option value="IN">الهند</option><option value="JP">اليابان</option>
+<option value="CN">الصين</option><option value="FR">فرنسا</option><option value="ES">إسبانيا</option><option value="DE">ألمانيا</option>
+<option value="IT">إيطاليا</option><option value="AE">الإمارات</option><option value="MA">المغرب</option><option value="CA">كندا</option></select></label>
+<label>لغة العمل<select id="batchLanguage"><option value="">غير محددة</option><option value="ar">العربية</option><option value="tr">التركية</option><option value="en">الإنجليزية</option><option value="ko">الكورية</option><option value="hi">الهندية</option><option value="ja">اليابانية</option><option value="fr">الفرنسية</option><option value="es">الإسبانية</option></select></label>
+<label>القسم في المكتبة<select id="batchCategory"><option value="">يُحدد من العنوان والوصف</option></select></label>
+<label>التصنيفات الفنية (رموز مفصولة بفواصل)<input id="batchGenres" dir="ltr" placeholder="drama, romance, thriller"></label>
+<label>رابط البوستر HTTPS<input id="batchPosterUrl" type="url" dir="ltr" placeholder="https://.../cover.jpg"></label>
+<label>رابط صورة الخلفية HTTPS<input id="batchBackdropUrl" type="url" dir="ltr" placeholder="https://.../backdrop.jpg"></label>
+<label class="batch-wide">وصف العمل<textarea id="batchDescription" rows="4" maxlength="2000" placeholder="ملخص قصة العمل"></textarea></label>
+</div>
+<div class="batch-save-types">
+<label class="batch-check"><input type="checkbox" id="batchIncludeUnverified" checked> حفظ بيانات جميع الحلقات المكتشفة حتى لو تعذّر فحص الفيديو، كمسودات قابلة للاستكمال</label>
+</div>
+<details class="batch-licensing"><summary>الحقوق والنشر للمشاهدين</summary>
+<div class="batch-grid">
+<label>المصدر الموثّق للتراخيص<select id="batchSource"><option value="">غير موثّق — مسودات فقط</option></select></label>
+<label>صاحب الحقوق<input id="batchHolder" placeholder="الجهة التي منحت الترخيص"></label>
+<label>مرجع إثبات الترخيص<input id="batchLicense" placeholder="رقم العقد أو رابط الوثيقة"></label>
+</div>
+<label class="batch-check"><input type="checkbox" id="batchRights"> أؤكد أن حقوق عرض المحتوى والصور مُصرّح بها لهذا المشروع</label>
+<label class="batch-check"><input type="checkbox" id="batchPublish"> نشر بطاقة المسلسل وبيانات جميع الحلقات، وتشغيل الصالح منها فقط بعد توثيق الحقوق</label>
+<p class="hint">يمكن عرض بيانات الحلقات بلا فيديو عند توثيق الحقوق، بينما يظل تشغيلها غير متاح حتى نجاح الفحص. لا يتم احتساب رابط صفحة الحلقة كرابط فيديو، ولا اعتماد حقوق النشر تلقائيًا.</p>
+</details><div class="batch-actions"><button class="btn btn-gold" id="batchSave" disabled>حفظ جميع البيانات المحددة دفعة واحدة</button><button class="btn btn-ghost" id="batchExport" disabled>تنزيل تقرير CSV</button></div><p class="hint">يمكن حفظ البيانات حتى لو فشلت روابط التشغيل. نشر المحتوى يتطلب التحقق من الترخيص والتشغيل. إذا لم يتوفر الفيديو ستظل الحلقة مسودة ولن يظهر زر تشغيل غير فعّال.</p></section>
+</main><script src="config.js?v=bulk20261101"></script><script src="bulk-import.js?v=metadata-first-20261102"></script></body></html>

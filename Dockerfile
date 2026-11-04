@@ -10,6 +10,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Install Playwright's headless Chromium browser plus required Linux libraries.
 RUN python -m playwright install --with-deps --only-shell chromium
 COPY python-cloud-studio/ ./
+COPY web/ /app/portal/web/
+COPY admin/ /app/portal/admin/
+ENV ALEZZ_PORTAL_DIR=/app/portal
 EXPOSE 8080
 # Cloud auth deliberately fails startup unless ALEZZ_SITE_PASSWORD (12+ chars)
 # and ALEZZ_SITE_SECRET (32+ chars) are set in Render's secret env vars.

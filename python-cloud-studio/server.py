@@ -43,6 +43,7 @@ from auto_sync import AutoSync, target_key
 from media_resolver import MediaResolver, read_public_html, safe_error
 from title_cleaner import content_title
 from launch import studio_revision
+from member_portal import Portal
 
 BASE = Path(__file__).resolve().parent
 STUDIO_REVISION = studio_revision()
@@ -72,6 +73,11 @@ app = FastAPI(title='Al Ezz TV | Python Import Studio', docs_url=None, redoc_url
               openapi_url=None, lifespan=lifespan)
 app.mount('/static', StaticFiles(directory=str(BASE / 'static')), name='static')
 app.middleware('http')(site_auth_middleware)
+portal = Portal(os.getenv('ALEZZ_PORTAL_DIR', str(BASE.parent)),
+                os.getenv('ALEZZ_SUPABASE_URL', DEFAULT_DB_URL),
+                os.getenv('ALEZZ_SUPABASE_PUBLISHABLE_KEY', DEFAULT_PUBLIC_KEY),
+                secure=os.getenv('ALEZZ_PUBLIC_MODE') == '1')
+app.middleware('http')(portal.middleware)
 app.add_api_route('/login', site_login, methods=['GET', 'POST'], include_in_schema=False)
 app.add_api_route('/logout-site', site_logout, methods=['POST'], include_in_schema=False)
 async def worker_health():
@@ -80,6 +86,7 @@ async def worker_health():
         'autosync':{k:info[k] for k in ('running','enabled','connected','last_tick')},
         'autosync_ready':bool(info['running'] and info['connected'] and info['last_import'] and not info['last_error']),
         'version':os.getenv('RENDER_GIT_COMMIT','autosync-v1')[:40],
+        'member_portal':(portal.root/'web'/'index.view').is_file() and (portal.root/'admin'/'index.view').is_file(),
         'studio_revision':STUDIO_REVISION},headers={'Cache-Control':'no-store'})
 
 app.add_api_route('/healthz', worker_health, methods=['GET'], include_in_schema=False)

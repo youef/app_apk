@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0A0E17">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="العز TV">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="format-detection" content="telephone=no">
+<title>العز TV — سينما في بيتك</title>
+<meta name="description" content="العز TV: منصة عربية للأفلام والمسلسلات والقنوات المباشرة وعالم الأطفال، بواجهة سينمائية تعمل على الويب والتلفزيون الذكي.">
+<link rel="icon" href="assets/al-ezz-app-icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="alizz-tv-transparent.png">
+<link rel="manifest" href="manifest.webmanifest?v=direct-streams-only-20261102">
+<link rel="stylesheet" href="css/app.css?v=quality-select-universal-20261102-1">
+<link rel="stylesheet" href="css/live.css?v=tv-studio-20261102-1">
+<link rel="stylesheet" href="css/kids.css?v=kids-direct-20261102-1">
+<link rel="stylesheet" href="css/cast.css?v=cast-airplay-20261102-1">
+<link rel="stylesheet" href="css/unified.css?v=ios-safari-source-fix-20261103-v2">
+<script>
+(function () {
+  try {
+    if (window.CSS && CSS.supports && CSS.supports('color', 'var(--alezz-probe)')) return;
+  } catch (e) {}
+  var link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = 'css/app-legacy.css';
+  document.head.appendChild(link);
+})();
+</script>
+<link rel="stylesheet" href="css/member-ui.css?v=1">
+</head>
+<body data-boot="loading">
+<script>
+try {
+  localStorage.removeItem("alezz.offline.items.v1");
+  localStorage.removeItem("alezz.offline.auto.v1");
+} catch (e) {}
+</script>
+
+<!-- ============ top bar ============ -->
+<header class="topbar" id="topbar">
+  <a class="brand" href="#/home" aria-label="العز TV — الرئيسية">
+    <img src="assets/logo.svg" alt="" width="42" height="42" class="brand__mark"><span class="brand__name">العز <b>TV</b></span>
+  </a>
+
+  <nav class="nav" id="mainNav" aria-label="التنقل الرئيسي">
+    <a href="#/home"   class="nav__link" data-nav="home">الرئيسية</a>
+    <a href="#/movies" class="nav__link" data-nav="movies">أفلام</a>
+    <a href="#/series" class="nav__link" data-nav="series">مسلسلات</a>
+    <a href="#/live"   class="nav__link" data-nav="live">بث مباشر</a>
+    <a href="#/kids"   class="nav__link" data-nav="kids">أطفال</a>
+    <a href="#/youtube" class="nav__link" data-nav="youtube">يوتيوب</a>
+    <a href="#/mylist" class="nav__link" data-nav="mylist">قائمتي</a>
+  </nav>
+
+  <div class="topbar__actions">
+    <form method="post" action="/account/logout"><button type="submit" class="iconbtn member-exit" aria-label="تسجيل الخروج" title="تسجيل الخروج">↪</button></form>
+    <button class="iconbtn app-install-trigger" type="button" data-install-app aria-label="تثبيت العز TV" title="تثبيت العز TV">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4M4 17v3h16v-3"/></svg>
+    </button>
+    <button class="iconbtn" id="searchBtn" aria-label="بحث" title="بحث (S)">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+    </button>
+    <button class="iconbtn" id="tvBtn" aria-label="وضع التلفزيون" title="وضع التلفزيون (T)">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2.5"/><path d="M9 21h6M12 17v4"/></svg>
+    </button>
+    <a class="iconbtn admin-link" href="../admin/" aria-label="لوحة الإدارة" title="استوديو العز">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6"/><path d="M4.5 20c1.4-3.6 4.1-5.2 7.5-5.2s6.1 1.6 7.5 5.2"/></svg>
+    </a>
+    <a class="iconbtn mylist-link" href="#/mylist" title="قائمتي" aria-label="قائمتي">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 8.2c0 4.1-8.8 10.1-8.8 10.1S3.2 12.3 3.2 8.2a4.4 4.4 0 018.8-.3 4.4 4.4 0 018.8.3z"/></svg>
+    </a>
+  </div>
+</header>
+
+<!-- ============ app views ============ -->
+<main id="view" class="view" tabindex="-1">
+  <!-- skeletons injected by JS on first paint -->
+</main>
+
+<nav class="app-dock" aria-label="التنقل بين الأقسام">
+  <a href="#/home" data-dock="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 12 3l9 8v9h-6v-6H9v6H3z"/></svg><small>الرئيسية</small></a>
+  <a href="#/movies" data-dock="movies"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 9h18M8 5l3 4m3-4 3 4"/></svg><small>أفلام</small></a>
+  <a href="#/series" data-dock="series"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4v16m5-11 4 3-4 3z"/></svg><small>مسلسلات</small></a>
+  <a href="#/live" data-dock="live"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M8 3l4 3 4-3M8 22h8"/></svg><small>مباشر</small></a>
+  <a href="#/kids" data-dock="kids"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 10h.01M16 10h.01M8 15q4 4 8 0"/></svg><small>أطفال</small></a>
+  <a href="#/youtube" data-dock="youtube"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="4"/><path d="m10 9 5 3-5 3z"/></svg><small>فيديو</small></a>
+</nav>
+<div class="install-guide" id="installGuide" role="dialog" aria-modal="true" aria-labelledby="installGuideTitle" hidden>
+ <div class="install-guide__shade" data-dismiss-install></div>
+ <div class="install-guide__panel">
+  <button class="install-guide__close" data-dismiss-install aria-label="إغلاق">×</button>
+  <img src="assets/al-ezz-app-icon.svg" width="72" height="72" alt="">
+  <span class="install-guide__eyebrow">العز TV · تطبيق على جهازك</span>
+  <h2 id="installGuideTitle">ثبّت العز TV على الشاشة الرئيسية</h2>
+  <p id="installGuideSteps">يمكنك فتح العز TV من الشاشة الرئيسية بواجهة مستقلة عن علامات تبويب المتصفح.</p>
+  <p class="install-guide__note">المكتبة والأفلام والمسلسلات والبث المباشر تحتاج اتصالًا بالإنترنت ومصادر متاحة.</p>
+  <button class="btn btn--gold" data-dismiss-install>فهمت</button>
+ </div>
+</div>
+<!-- ============ detail sheet ============ -->
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
+  <div class="sheet__scrim" data-close-sheet></div>
+  <div class="sheet__panel" id="sheetPanel"></div>
+</div>
+
+<!-- ============ search overlay ============ -->
+<div class="searchpanel" id="searchPanel" role="dialog" aria-modal="true" aria-label="بحث" hidden>
+  <div class="searchpanel__head">
+    <svg viewBox="0 0 24 24" class="searchpanel__icon" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+    <input id="searchInput" type="search" inputmode="search" autocomplete="off" placeholder="ابحث عن فيلم، مسلسل، قناة…" aria-label="عبارة البحث">
+    <button class="iconbtn" id="searchClose" aria-label="إغلاق البحث">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <div class="searchpanel__body" id="searchResults"></div>
+</div>
+
+<!-- ============ player ============ -->
+<div class="player" id="player" hidden>
+  <div class="player__stage" id="playerStage">
+    <video id="video" playsinline webkit-playsinline x-webkit-airplay="allow" preload="metadata" controlslist="nodownload" aria-label="مشغل العز TV"></video>
+    <div class="player__veil" id="playerVeil"></div>
+    <div class="player__spinner" id="playerSpinner" hidden>
+      <span></span><p>جارٍ التحضير…</p>
+    </div>
+    <div class="player__error" id="playerError" hidden>
+      <strong>تعذّر تشغيل هذا المصدر</strong>
+      <p id="playerErrorMsg">قد يكون الرابط غير متاح حاليًا أو غير مدعوم على هذا الجهاز.</p>
+      <div class="player__error-actions">
+        <button class="btn btn--gold" id="playerRetry">إعادة المحاولة</button>
+        <button class="btn btn--ghost" id="playerExternal">فتح في مشغل خارجي</button>
+      </div>
+    </div>
+
+    <div class="player__chrome" id="playerChrome">
+      <div class="player__top">
+        <button class="iconbtn iconbtn--round" id="playerClose" aria-label="إغلاق المشغل">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+        <div class="player__title">
+          <strong id="playerTitle">—</strong>
+          <span id="playerSubtitle"></span>
+        </div>
+        <div class="player__badges" id="playerBadges"></div>
+      </div>
+
+      <div class="player__center">
+        <button class="player__bigplay" id="playerBigPlay" aria-label="تشغيل">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6L20 12z"/></svg>
+        </button>
+      </div>
+
+      <div class="player__bottom">
+        <div class="scrub" id="scrub" role="slider" aria-label="موضع التشغيل" tabindex="0">
+          <div class="scrub__buffer" id="scrubBuffer"></div>
+          <div class="scrub__played" id="scrubPlayed"><i></i></div>
+        </div>
+        <div class="player__controls">
+          <button class="iconbtn iconbtn--round" id="btnPlay" aria-label="إيقاف مؤقت">
+            <svg viewBox="0 0 24 24" aria-hidden="true" id="btnPlayIcon"><path d="M8 5h3v14H8zM13 5h3v14h-3z"/></svg>
+          </button>
+          <button class="iconbtn iconbtn--round" id="btnBack10" aria-label="ترجيع 10 ثوان">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5L4 12l7 7"/><path d="M4 12h8.5a5.5 5.5 0 110 11H9"/></svg>
+          </button>
+          <button class="iconbtn iconbtn--round" id="btnFwd10" aria-label="تقديم 10 ثوان">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5l7 7-7 7"/><path d="M20 12h-8.5a5.5 5.5 0 100 11H15"/></svg>
+          </button>
+          <button class="chipbtn player__quick-next" id="playerQuickNext" aria-label="الانتقال السريع للحلقة التالية" hidden>الحلقة التالية <span aria-hidden="true">⏭</span></button>
+          <div class="player__time"><span id="tNow">0:00</span><em>/</em><span id="tTotal">0:00</span></div>
+          <div class="player__spacer"></div>
+          <div class="player__vol">
+            <button class="iconbtn iconbtn--round" id="btnMute" aria-label="كتم الصوت">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 010 7" id="volWave"/></svg>
+            </button>
+            <input id="volume" type="range" min="0" max="1" step="0.02" value="1" aria-label="مستوى الصوت">
+          </div>
+          <div class="player__quality-wrap"><button class="chipbtn" id="btnQuality" type="button" aria-label="اختيار الجودة" aria-haspopup="menu" aria-controls="playerQualityMenu" aria-expanded="false">الجودة: تلقائي</button><div class="player__quality-menu" id="playerQualityMenu" role="menu" aria-label="جودات الفيديو المتاحة" hidden></div></div>
+          <button class="chipbtn" id="btnCaptions" aria-label="الترجمة العربية" title="تفعيل أو إخفاء الترجمة العربية" hidden>ترجمة عربية</button>
+          <button class="chipbtn" id="btnFit" type="button" aria-pressed="false" title="تكبير الصورة لملء الإطار">ملء الصورة</button>
+          <google-cast-launcher id="playerCast" class="cast-launcher" title="الإرسال إلى Google Cast" aria-label="الإرسال إلى Google Cast" hidden></google-cast-launcher>
+          <button class="chipbtn cast-airplay" id="playerAirPlay" type="button" title="الإرسال عبر AirPlay" aria-label="اختيار شاشة AirPlay" hidden>AirPlay</button>
+          <span class="cast-status" id="playerCastStatus" role="status" aria-live="polite" hidden></span>
+          <button class="iconbtn iconbtn--round" id="btnFull" aria-label="ملء الشاشة" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 15v5h-5M4 15v5h5M20 9V4h-5"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <button class="player__youtube-next" id="youtubeNext" aria-label="الانتقال للحلقة التالية" hidden>⏭ الحلقة التالية</button>
+    <div class="player__next" id="playerNext" role="group" aria-label="الحلقة التالية" hidden>
+      <span class="player__next-symbol" aria-hidden="true">⏭</span>
+      <div class="player__next-info">
+        <small id="nextContext">اقتربت نهاية الحلقة</small>
+        <strong id="nextTitle"></strong>
+        <span id="nextCountdown">جاهزة للتشغيل</span>
+      </div>
+      <div class="player__next-actions">
+        <button class="btn btn--gold" id="nextPlay">شغّل التالية</button>
+        <button class="btn btn--ghost" id="nextDismiss">لاحقًا</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ activation gate ============ -->
+<div class="gate" id="gate" hidden>
+  <div class="gate__card">
+    <img src="assets/logo.svg" width="90" height="90" alt="العز TV" class="gate__mark">
+    <p class="eyebrow">تفعيل لمرة واحدة</p>
+    <h1>رمز الدخول إلى العز</h1>
+    <p class="gate__sub">أدخل الرمز المكوّن من ستة أرقام. يُحفظ التفعيل على هذا الجهاز ولا يُطلب مرة أخرى.</p>
+    <div class="gate__dots" id="gateDots" aria-hidden="true"></div>
+    <div class="gate__pad" id="gatePad">
+      <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+      <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+      <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+      <button data-k="clear" class="is-muted">مسح</button><button data-k="0">0</button><button data-k="back" class="is-muted">⌫</button>
+    </div>
+    <p class="gate__error" id="gateError" hidden>الرمز غير صحيح. حاول مرة أخرى.</p>
+    <p class="gate__hint">يعمل التفعيل على هذا المتصفح أو الجهاز فقط.</p>
+  </div>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<div class="cursor-veil" id="cursorVeil" aria-hidden="true"></div>
+
+<noscript><p style="padding:2rem;color:#eee;text-align:center">يتطلب العز TV تشغيل JavaScript.</p></noscript>
+
+<script src="js/legacy-polyfills.js"></script>
+<script src="js/config.js"></script>
+<script src="js/api.js?v=direct-streams-only-20261102"></script>
+<script src="js/explore.js?v=netflix-taxonomy-20261101"></script>
+<script src="js/store.js"></script>
+<script src="js/cast.js?v=cast-airplay-20261102-1"></script>
+<script src="js/player.js?v=ios-safari-source-fix-20261103-v3"></script>
+<script src="js/live.js?v=autoplay-recovery-20261103-v1"></script>
+<script src="js/kids.js?v=kids-direct-20261102-1"></script>
+<script src="js/app.js?v=pre-download-restore-20261103-v1"></script>
+<script src="js/install.js?v=universal-20261102-1"></script>
+</body>
+</html>

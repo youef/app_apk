@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#090b12">
+<title>العز TV | إضافة مسلسل ومواسم وحلقات بسرعة</title>
+<link rel="icon" href="../web/assets/logo.svg" type="image/svg+xml">
+<style>
+:root{color-scheme:dark;--bg:#090b12;--surface:#141824;--card:#1b2030;--line:#363b50;--gold:#f3c768;--text:#f6f4f0;--muted:#b5b9c5;--bad:#ff9b9b;--good:#76dfab}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse 1100px 500px at 80% -100px,#292135 0,transparent 70%),var(--bg);color:var(--text);font:16px/1.7 system-ui,Tahoma,Arial,sans-serif}
+a{color:var(--gold);text-decoration:none}a:hover{text-decoration:underline}
+main{max-width:1100px;margin:auto;padding:24px 18px 90px}
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:0 0 25px}
+header h1{font-size:clamp(22px,3vw,34px);margin:3px 0}.subtitle{color:var(--muted);font-size:14px;margin:0 0 17px}
+.brand{display:flex;align-items:center;gap:11px;color:var(--gold);font-weight:800}
+.brand img{width:52px;height:52px;object-fit:contain}
+.pill{border:1px solid #8b713f;background:#362b1b;padding:4px 12px;border-radius:30px;font-size:13px;color:var(--gold)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:22px;margin:0 0 18px;box-shadow:0 10px 35px #0002}
+.panel h2{font-size:19px;margin:0 0 16px}
+label{display:grid;gap:7px;color:#ece8e1;font-size:14px;font-weight:650}
+input,select,textarea{font:inherit;background:#0c111c;color:white;border:1px solid #4c5165;border-radius:10px;padding:12px;min-width:0;width:100%;outline-offset:3px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--gold);border-color:var(--gold)}
+input::placeholder,textarea::placeholder{color:#8a91a5}
+input[type=url]{direction:ltr;text-align:left}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.note{color:var(--muted);font-size:13px;margin:8px 0}
+button{font:inherit;cursor:pointer;border-radius:10px;padding:10px 15px;font-weight:700;border:1px solid #6a5c43;background:#27212b;color:var(--gold)}
+button.primary{background:var(--gold);color:#1c1720;border-color:var(--gold)}
+button.ghost{background:#192031;color:#dfdfe7;border-color:#4f566a}
+button.danger{color:var(--bad);border-color:#553b45;background:#2b1c26}
+button:disabled{opacity:.45;cursor:not-allowed}
+.actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.season{border:1px solid #49516a;border-radius:14px;padding:15px;margin:16px 0;background:var(--card)}
+.season-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.season-head h3{margin:0;color:var(--gold);font-size:18px}
+.episode{display:grid;grid-template-columns:minmax(90px,auto) 1fr minmax(120px,145px) auto;align-items:end;gap:10px;margin:12px 0;padding:10px 0;border-bottom:1px solid #35394b}
+.episode:last-child{border-bottom:none}
+.episode-label{padding-bottom:10px;color:#d2d4dd;font-weight:650;white-space:nowrap}
+.episode label{min-width:0}
+.bulk{margin-top:10px;border-top:1px solid #3c4255;padding-top:17px}
+.bulk textarea{min-height:92px;resize:vertical}
+footer{display:flex;gap:13px;align-items:center;flex-wrap:wrap;position:sticky;bottom:0;padding:12px;border:1px solid #484453;background:#151821ee;backdrop-filter:blur(12px);border-radius:15px}
+footer button{min-width:160px}
+.result{padding:12px 15px;border-radius:11px;background:#142c25;color:var(--good);border:1px solid #426454;margin:16px 0}
+.error{background:#331e25;color:#ffb9b9;border-color:#724151}
+.hidden{display:none!important}
+.duplicate-help{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:14px 0 0;
+ padding:16px;border-radius:12px;background:#272319;border:1px solid #9f8147;color:#ffe3a2}
+.duplicate-help strong{font-size:16px}
+.duplicate-help p{font-size:13px;margin:3px 0 0;color:#ebd8ac}
+.duplicate-help button{flex-shrink:0;max-width:100%}
+#loading{color:var(--muted);padding:40px;text-align:center}
+
+/* Saved episodes manager: independent from the new-episode publishing form. */
+.saved-episode{background:var(--card);border:1px solid #3d455b;border-radius:14px;padding:15px;margin:12px 0}
+.saved-episode.unsaved{border-color:var(--gold);box-shadow:inset 3px 0 var(--gold)}
+.saved-episode-head{display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap;margin-bottom:12px}
+.saved-episode-head strong{font-size:16px;color:#f4e3b6}
+.saved-fields{display:grid;grid-template-columns:minmax(90px,105px) minmax(145px,1.1fr) minmax(220px,2.3fr) minmax(110px,130px) minmax(110px,130px);gap:10px;align-items:end}
+.saved-fields input,.saved-fields select{padding:9px 11px;font-size:14px}
+.saved-episode-bottom{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:12px}
+.saved-episode-bottom button{padding:8px 11px;font-size:13px}
+.health{font-size:12px;border:1px solid #62687b;color:#ccd2dd;padding:3px 10px;border-radius:22px}
+.health.healthy{color:#95f1bb;border-color:#337353;background:#15352c}
+.health.broken{color:#ffb1b1;border-color:#8e394c;background:#3e1f2b}
+.health.suspect{color:#f7d69b;border-color:#8f713a;background:#43321b}
+.health-detail{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+#savedSummary{margin:14px 0;color:#d2d3db;font-size:13px}
+#savedSearch{min-width:0}
+.saved-primary-check{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--line)}
+.saved-primary-check .ghost{padding:6px 10px;font-size:12px}
+.saved-variants{margin:12px 0;padding:13px;border:1px dashed #4d5770;border-radius:12px;background:#121725}
+.saved-variant-title{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px}
+.saved-variant-title strong{font-size:14px;color:var(--gold)}
+.saved-variant-title button{padding:7px 10px;font-size:13px}
+.saved-variant-row{display:grid;grid-template-columns:minmax(110px,160px) minmax(230px,2fr) minmax(150px,1.15fr) auto;gap:10px;align-items:end;margin:0 0 12px;padding:0 0 12px;border-bottom:1px solid #30384a}
+.saved-variant-row:last-child{border:0;margin:0;padding:0}
+.saved-variant-row input{padding:9px 10px;font-size:13px}
+.saved-variant-row .actions{flex-wrap:nowrap}
+.saved-variant-row button{padding:8px;font-size:12px;white-space:nowrap}
+.saved-variant-check{display:grid;gap:5px;align-self:center}
+.source-check{display:inline-flex;gap:7px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.saved-preview{margin:12px 0 20px;border:1px solid #695b43;border-radius:16px;padding:16px;background:#101621}
+.saved-preview-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.saved-preview video{width:100%;max-height:55vh;min-height:150px;background:#050508;border-radius:12px;display:block;margin-top:12px}
+@media(max-width:980px){.saved-variant-row{grid-template-columns:minmax(120px,1fr) minmax(190px,2fr)}.saved-variant-check{grid-column:1/-1}.saved-variant-row .actions{grid-column:1/-1}}
+@media(max-width:560px){.saved-variant-row{grid-template-columns:1fr}.saved-variant-row label,.saved-variant-check,.saved-variant-row .actions{grid-column:1/-1}.saved-primary-check{align-items:flex-start}.saved-preview{padding:10px}}
+
+@media(max-width:960px){.saved-fields{grid-template-columns:85px 1fr 1fr}.saved-url{grid-column:1/-1;grid-row:2}}
+@media(max-width:560px){.saved-fields{grid-template-columns:1fr 1fr}.saved-url{grid-column:1/-1;grid-row:auto}.saved-fields label:nth-child(2){grid-column:auto}.saved-episode-bottom .actions{width:100%}.saved-episode-bottom button{flex:1}.saved-episode{padding:11px}}
+@media(max-width:720px){.grid{grid-template-columns:1fr}.episode{grid-template-columns:1fr 125px}.episode-label{grid-column:1/-1;padding:0}.episode label:first-of-type{grid-column:1;}.episode .danger{align-self:end}main{padding:12px 12px 90px}.panel{padding:14px}footer button{min-width:0}}
+</style>
+<link rel="stylesheet" href="member-ui.css?v=1">
+</head>
+<body>
+<main>
+<header>
+  <div class="brand"><img src="../web/assets/logo.svg" alt=""><div><h1>إضافة مسلسل سريعًا</h1><div class="subtitle">العز TV — المسلسل ← المواسم ← الحلقات في حفظ واحد</div></div></div>
+  <div class="actions"><span class="pill">نشر تلقائي</span><a href="index.html#series">العودة لإدارة المسلسلات</a><a href="index.html#seasons">المواسم والحلقات</a></div>
+</header>
+<div id="loading">جارٍ التحقق من جلسة المسؤول…</div>
+<div id="authError" class="result error hidden"></div>
+<div id="studio" class="hidden">
+<section class="panel">
+<h2>1. اختر المسلسل أو أدخل اسمه</h2>
+<div class="grid">
+<label>العمل المطلوب
+<select id="seriesSelect"><option value="">+ مسلسل جديد</option></select></label>
+<label id="seriesTitleWrap">اسم المسلسل الجديد
+<input id="seriesTitle" type="text" maxlength="250" placeholder="مثال: مسلسل جديد" autocomplete="off"></label>
+</div>
+<p class="note" id="seriesHint">إذا اخترت مسلسلًا موجودًا، تُضاف الحلقات إليه دون إنشاء مسلسل مكرر.</p>
+<div class="duplicate-help hidden" id="duplicateHint" role="status">
+ <div><strong>هذا المسلسل موجود بالفعل</strong>
+ <p>العنوان: <b id="duplicateSeriesName"></b>. يمكنك إضافة الحلقات للمسلسل الموجود دون فقدان الروابط التي كتبتها.</p></div>
+ <button type="button" id="useExistingSeries" class="primary">استخدام المسلسل الموجود وإكمال الحلقات</button>
+</div>
+</section>
+<section class="panel">
+<h2>2. المواسم والحلقات</h2>
+<div class="actions" style="margin-bottom:10px">
+<label style="min-width:220px" id="existingSeasonWrap" class="hidden">أضف إلى موسم موجود
+<select id="existingSeasonSelect"></select></label>
+<button id="addSeason" class="ghost" type="button">+ موسم جديد</button>
+<button id="addEpisode" class="ghost" type="button">+ حلقة جديدة</button>
+</div>
+<p class="note">الأسماء والأرقام تُنشأ تلقائيًا. أدخل رابط الحلقة والجودة فقط. تستطيع إضافة عدة مواسم وحلقات في نفس الحفظ.</p>
+<div id="seasonGroups"></div>
+<div class="bulk">
+<label>إضافة عدة روابط دفعة واحدة للموسم الحالي (رابط في كل سطر)
+<textarea id="bulkLinks" dir="ltr" placeholder="https://example.com/episode1.m3u8&#10;https://example.com/episode2.mp4"></textarea></label>
+<div class="actions" style="margin-top:10px">
+<label style="min-width:150px">جودة الروابط الملصوقة
+<select id="bulkQuality"><option>HD</option><option>FHD</option><option>4K</option><option>SD</option><option>720P</option><option>1080P</option><option>AUTO</option></select></label>
+<button id="addBulk" type="button">إضافة الروابط كحلقات</button>
+</div>
+</div>
+</section>
+<section class="panel hidden" id="savedEpisodesPanel">
+<div class="season-head">
+  <div>
+    <h2 style="margin:0 0 5px">3. إدارة جميع حلقات المسلسل المختار</h2>
+    <p class="note">استعرض الحلقات الموجودة في قاعدة البيانات، وعدّل الرقم والاسم والرابط والجودة والحالة، أو افحصها واحذفها.</p>
+  </div>
+  <div class="actions">
+    <button type="button" id="reloadSaved" class="ghost">تحديث القائمة</button>
+    <button type="button" id="checkSavedAll" class="primary">فحص كل روابط جميع الحلقات</button>
+    <button type="button" id="stopSavedCheck" class="danger hidden">إيقاف الفحص</button>
+  </div>
+</div>
+<div class="grid">
+  <label>عرض حسب الموسم
+    <select id="savedSeasonFilter"><option value="">كل المواسم</option></select>
+  </label>
+  <label>بحث في الحلقات
+    <input id="savedSearch" type="search" placeholder="ابحث برقم الحلقة أو باسمها" autocomplete="off">
+  </label>
+</div>
+<div id="savedSummary" role="status" aria-live="polite">اختر مسلسلًا لعرض حلقاته.</div>
+<div id="savedEpisodeList"></div>
+<div id="savedPreviewPanel" class="saved-preview hidden" aria-label="مشغل تجربة الرابط">
+  <div class="saved-preview-head"><strong id="savedPreviewTitle">تجربة تشغيل الرابط</strong><button class="ghost" id="closeSavedPreview" type="button">إغلاق المشغل</button></div>
+  <video id="savedPreviewVideo" controls playsinline preload="metadata" aria-label="معاينة تشغيل الحلقة"></video>
+  <p id="savedPreviewStatus" class="note" role="status" aria-live="polite"></p>
+</div>
+<p class="note">تُفحص كل الروابط الأساسية وروابط الجودات والمشغلات الإضافية (حتى 9 روابط للحلقة الواحدة) وتظهر نتيجة كل رابط. يمكنك أيضًا تجربة تشغيله داخل الصفحة. فحص استجابة المصدر لا يضمن توافق الترميز أو CORS مع كل جهاز.</p>
+</section>
+<div id="result" role="status" aria-live="polite"></div>
+<footer>
+<button id="save" type="button" class="primary">حفظ ونشر الكل</button>
+<span id="counter" class="note">جاهز لإضافة الحلقات</span>
+<span class="note">لا يتم تسجيل ترخيص أو تأكيد حقوق تلقائيًا؛ الروابط المعطلة تُخفى عند اكتشافها.</span>
+</footer>
+</div>
+</main>
+<script src="config.js?v=quick-series-20261101"></script>
+<script src="series-quick.js?v=series-editor-20261103-v4"></script>
+</body>
+</html>

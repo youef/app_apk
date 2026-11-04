@@ -1,0 +1,12 @@
+:root{--gold:#cceba8;--gold-2:#a6d88e}
+body{background:#0e151a}
+.ambient-glow--gold{background:#587847}
+.ambient-glow--crimson{background:#325a64}
+.sidebar,.topbar{background:#121e24;border-color:#3e555f}
+.content{padding-inline:clamp(14px,3vw,42px)}
+.login-card,.drawer,.banner,.table-wrap,.stat-card,.panel{border-color:#3c555b;background-color:#17262c}
+.btn-gold{background:#cceba8;color:#152113;border-color:#cceba8}
+.topbar-tools form{margin:0}
+.sidebar-foot{border-color:#3e555f}
+:focus-visible{outline:2px solid #d9f3ba;outline-offset:3px}
+@media(max-width:850px){.topbar-tools{flex-wrap:wrap;gap:6px}.topbar-tools form button{white-space:nowrap}}
