@@ -1,0 +1,78 @@
+<!doctype html><html lang="ar" dir="rtl"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b1018"><title>مراجعة مصادر المسلسلات | استوديو العز TV</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,Tahoma,sans-serif;background:#0a0f19;color:#f5f6f9}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 85% -10%,#293d57,transparent 45%),#0a0f19}
+button,input{font:inherit}a{color:#edc982;text-decoration:none}:focus-visible{outline:2px solid #edc982;outline-offset:3px}
+.layout{max-width:1240px;margin:auto;padding:26px 20px 70px}.bar{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid #ffffff20;padding-bottom:20px}
+.brand{font-size:1.24rem;font-weight:900}.brand b{color:#edc982}.links{display:flex;gap:15px;flex-wrap:wrap;font-size:.9rem}
+.hero{padding:42px 0 22px}.kicker{font-size:.8rem;color:#edc982;font-weight:800}h1{font-size:clamp(1.8rem,4vw,2.85rem);margin:12px 0}.hero p,.muted{color:#afbdca;line-height:1.9}
+.controls{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0}.controls input{background:#121d2b;border:1px solid #31435a;border-radius:13px;padding:13px;color:#fff;flex:1;min-width:220px}
+.btn{border:1px solid #4a5d75;border-radius:11px;padding:10px 15px;background:#1c2a3b;color:#e7edf7;cursor:pointer}
+.btn.gold{background:#edc982;color:#1c1c17;border-color:#edc982;font-weight:850}.btn:disabled{opacity:.45;cursor:wait}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:10px 0 28px}.stat{background:#111b29;border:1px solid #26384c;border-radius:16px;padding:20px}
+.stat b{display:block;font-size:1.7rem;color:#edc982}.stat small{color:#aebbc7}.heading{margin:32px 0 14px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.heading h2{margin:0}.cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.card{border:1px solid #293b50;border-radius:18px;background:#121d2b;padding:20px;min-width:0}
+.card h3{font-size:1.07rem;margin:0 0 9px;overflow-wrap:anywhere}.meta{color:#a7b9c8;font-size:.86rem;line-height:1.8}
+.status{font-size:.78rem;display:inline-block;background:#263847;color:#eac581;padding:5px 9px;border-radius:50px;margin:10px 0}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px}.source{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:ltr;text-align:left;color:#9bb7d5;font-size:.77rem;margin-top:7px}
+.notice{background:#172a36;border:1px solid #335463;padding:12px 16px;border-radius:12px;color:#d3e2ee;min-height:50px}
+.panel{position:fixed;inset:0;background:#010712bb;display:grid;place-items:center;padding:14px;z-index:30}.panel[hidden]{display:none}
+.dialog{width:min(780px,100%);background:#142031;border:1px solid #40546c;border-radius:20px;padding:25px;max-height:85vh;overflow:auto}
+.dialog header{display:flex;justify-content:space-between;align-items:center}.sources{display:grid;gap:10px}.srow{padding:13px;background:#0e1825;border:1px solid #304358;border-radius:11px;overflow-wrap:anywhere}
+.srow a{direction:ltr;display:block;text-align:left;font-size:.8rem;overflow-wrap:anywhere}
+@media(max-width:760px){.cards{grid-template-columns:1fr}.bar{align-items:flex-start;flex-wrap:wrap}.stat{padding:12px}.layout{padding-inline:14px}}
+@media(max-width:420px){.stats{grid-template-columns:repeat(2,1fr)}.stats .stat:last-child{grid-column:span 2}}
+</style></head><body><div class="layout">
+<header class="bar"><div class="brand">العز <b>TV</b> · استوديو المصادر</div>
+<nav class="links"><a href="/studio/">استوديو الاستيراد</a><a href="/studio/#smart-sync">المزامنة الذكية</a><a href="/admin/">إدارة المحتوى</a><a href="/account/customers">العملاء</a></nav></header>
+<main><section class="hero"><span class="kicker">AL EZZ · SOURCE CONTROL</span><h1>مراجعة مصادر المسلسلات والحلقات</h1>
+<p>عرض المسلسلات المستوردة والمحفوظة في Supabase، وتجديد الاستخراج من صفحات المصادر العامة، وفحص الفيديو المباشر على دفعات. تبقى صلاحيات النشر والترخيص منفصلة عن عملية الفحص.</p></section>
+<div class="stats"><div class="stat"><b id="savedCount">—</b><small>مسلسلات بالمزامنة</small></div><div class="stat"><b id="importCount">—</b><small>أعمال مستوردة</small></div><div class="stat"><b id="healthyCount">—</b><small>مصادر سليمة</small></div></div>
+<div class="controls"><input id="search" type="search" placeholder="بحث باسم المسلسل أو رابط المصدر" aria-label="بحث في المسلسلات">
+<button class="btn gold" id="refresh">تحديث القائمة</button></div>
+<p class="notice" role="status" id="notice">جارٍ تحضير البيانات...</p>
+<div class="heading"><h2>المسلسلات في Supabase</h2><span class="muted">تجديد الروابط عبر عامل المزامنة</span></div><div class="cards" id="saved"></div>
+<div class="heading"><h2>المسلسلات المكتشفة من القوائم</h2><span class="muted">فحص مباشر على دفعات من 4 حلقات</span></div><div class="cards" id="imported"></div>
+</main></div>
+<div class="panel" id="panel" hidden><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialogTitle"><header><h2 id="dialogTitle">تفاصيل المصادر</h2><button class="btn" id="close">إغلاق</button></header><div class="sources" id="sourceRows"></div></section></div>
+<script>
+(function(){'use strict';
+const el=id=>document.getElementById(id);let csrf='',busy=false;
+const make=(tag,cls,value)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(value!==undefined)n.textContent=String(value);return n};
+const notice=message=>{el('notice').textContent=message};
+async function api(path,body){const options={credentials:'same-origin',cache:'no-store'};if(body!==undefined){options.method='POST';options.headers={'Content-Type':'application/json','x-csrf-token':csrf};options.body=JSON.stringify(body)}
+const response=await fetch(path,options),t=await response.text();let result;try{result=JSON.parse(t)}catch{result={detail:t.slice(0,170)}}if(!response.ok)throw Error(result.detail||'تعذر تنفيذ الطلب');return result}
+function card(item){const box=make('article','card'),title=make('h3','',item.title||'مسلسل');box.append(title);
+box.append(make('div','meta',item.origin==='supabase'?'مسلسل من Supabase · مصادر: '+(item.sources||0)+' · سليمة: '+(item.verified||0):
+'مسلسل مستورد · حلقات: '+(item.episodes||0)+' · روابط مكتشفة: '+(item.direct||0)));
+box.append(make('span','status',item.status||'بانتظار الفحص'));if(item.error)box.append(make('p','meta',item.error));
+if(item.url)box.append(make('small','source',item.url));
+const actions=make('div','actions'),detailsBtn=make('button','btn','تفاصيل المصادر');detailsBtn.onclick=()=>details(item);actions.append(detailsBtn);
+const refreshBtn=make('button','btn gold',item.origin==='supabase'?'تجديد الروابط':'إعادة اكتشاف الحلقات');refreshBtn.onclick=()=>operate(item,'refresh',0);actions.append(refreshBtn);
+if(item.origin==='library'&&item.status==='done'&&item.episodes){const testBtn=make('button','btn','فحص فيديو أول 4 حلقات');testBtn.onclick=()=>operate(item,'verify',0);actions.append(testBtn)}
+box.append(actions);return box}
+async function load(){if(busy)return;busy=true;notice('جارٍ تحديث قائمة المصادر...');try{if(!csrf)csrf=(await api('/api/init')).csrf;
+const q=el('search').value.trim(),d=await api('/api/series-review?q='+encodeURIComponent(q));
+el('saved').replaceChildren();el('imported').replaceChildren();d.saved.forEach(r=>el('saved').append(card(r)));d.imported.forEach(r=>el('imported').append(card(r)));
+if(!d.saved.length)el('saved').append(make('p','muted','لا توجد مسلسلات متزامنة بعد. استخدم المزامنة الذكية لاستيرادها من Supabase.'));
+if(!d.imported.length)el('imported').append(make('p','muted','لا توجد مسلسلات مستوردة مطابقة.'));
+el('savedCount').textContent=d.saved.length;el('importCount').textContent=d.imported.length;el('healthyCount').textContent=d.saved.filter(r=>r.status==='healthy').length;
+notice(d.running?'عامل الاستيراد يعمل الآن، ويمكن إعادة التحديث لرؤية التقدم.':'بيانات القائمة محدثة. الفحوص المجدولة تستمر على الخادم.')}
+catch(e){notice(e.message)}finally{busy=false}}
+async function operate(item,action,start){try{notice('جارٍ إرسال طلب الفحص...');const r=await api('/api/series-review/recheck',{origin:item.origin,id:item.id,action:action,start:start||0});
+notice(r.message||('تم فحص '+r.checked+' حلقات · اجتاز '+r.verified+' منها فحص الرابط.'));
+if(action==='verify'&&r.next_start<r.total){const btn=make('button','btn','فحص الحلقات '+(r.next_start+1)+'–'+Math.min(r.total,r.next_start+4));btn.onclick=()=>{btn.remove();operate(item,'verify',r.next_start)};el('notice').append(' ',btn)}
+else if(action==='verify')await details(item);else await load()}catch(e){notice(e.message)}}
+async function details(item){el('dialogTitle').textContent=item.title||'تفاصيل المصادر';const box=el('sourceRows');box.replaceChildren(make('p','muted','جارٍ جلب التفاصيل...'));el('panel').hidden=false;
+try{const d=await api('/api/series-review/details?origin='+encodeURIComponent(item.origin)+'&id='+encodeURIComponent(item.id));box.replaceChildren();
+const rows=d.sources||d.episodes||[];if(!rows.length)box.append(make('p','muted','لا توجد مصادر مكتشفة حتى الآن، ويمكن تجديدها من الصفحة الأصلية.'));
+rows.forEach((r,i)=>{const card=make('div','srow');card.append(make('strong','',r.title||'مصدر '+(i+1)));card.append(make('div','meta',r.status||(r.verified?'رابط مباشر صالح':'لم يجتز الفحص')));
+const url=r.url||r.media_url;if(url){const link=make('a','',url);link.href=url;link.target='_blank';link.rel='noopener noreferrer';card.append(link)}
+if(r.error)card.append(make('small','muted',r.error));box.append(card)})}catch(e){box.replaceChildren(make('p','muted',e.message))}}
+el('refresh').onclick=load;let timer;el('search').oninput=()=>{clearTimeout(timer);timer=setTimeout(load,350)};
+el('close').onclick=()=>el('panel').hidden=true;el('panel').onclick=e=>{if(e.target===el('panel'))el('panel').hidden=true};
+document.addEventListener('keydown',e=>{if(e.key==='Escape')el('panel').hidden=true});load();
+})();
+</script></body></html>
