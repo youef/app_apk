@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - "python-cloud-studio/**"
+      - "admin/**"
+      - "supabase/functions/aseel-link-health/**"
       - "Dockerfile"
       - "render.yaml"
       - ".github/workflows/render-portal-smoke.yml"
