@@ -29,7 +29,8 @@ jobs:
             health=$(curl -sS --max-time 12 -w ' %{http_code}' "$BASE/healthz" 2>/dev/null || true)
             code="${health##* }"
             json="${health% *}"
-            if [[ "$code" == "200" ]] && grep -q '"member_portal":true' <<<"$json" &&
+            live_sha=$(printf '%s' "$json" | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')
+            if [[ "$code" == "200" && "$live_sha" == "$GITHUB_SHA" ]] && grep -q '"member_portal":true' <<<"$json" &&
               curl -fsS --max-time 12 "$BASE/" -o /tmp/alezz-landing.html &&
               grep -q 'دخول المشاهدة' /tmp/alezz-landing.html &&
               curl -fsS --max-time 12 "$BASE/account/login" -o /tmp/alezz-customer.html &&
@@ -50,9 +51,9 @@ jobs:
               fi
               echo "Still upgrading: viewer=$viewer admin=$admin studio=$studio API=$api"
             else
-              echo "Render not ready: health_code=$code"
+              echo "Render revision pending: HTTP=$code live=$live_sha expected=$GITHUB_SHA"
             fi
             sleep 15
           done
-          echo "::error::Render has not passed the private viewer and administration gateway checks."
+          echo "::error::Render has not deployed the requested main commit or did not pass the private portal access checks."
           exit 1
