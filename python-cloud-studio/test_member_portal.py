@@ -15,7 +15,7 @@ class PortalTests(unittest.TestCase):
         root=Path(folder.name)
         for section in ('web','admin'):
             (root/section).mkdir()
-            (root/section/'index.view').write_text(section+' protected',encoding='utf-8')
+            (root/section/'index.view').write_text(section+' protected<script src="js/store.js?v=member-scope-1"></script>',encoding='utf-8')
         (root/'web'/'catalog.json').write_text('{}',encoding='utf-8')
         self.portal=Portal(root,'https://db.example.org','public',secure=True)
         app=FastAPI()
@@ -44,6 +44,31 @@ class PortalTests(unittest.TestCase):
         self.assertEqual(self.client.get('/web/index.view').status_code,404)
         self.assertEqual(self.client.post('/account/logout',headers=self.headers).status_code,303)
         self.assertEqual(self.client.get('/web/').headers['location'],'/account/login')
+
+    def test_private_viewer_scope_changes_by_member_and_is_not_cached(self):
+        self.login('customer')
+        page=self.client.get('/web/index.html')
+        self.assertEqual(page.status_code,200)
+        self.assertIn('no-store',page.headers.get('cache-control',''))
+        self.assertIn('window.ALEZZ_MEMBER_CONTEXT',page.text)
+        self.assertLess(page.text.index('window.ALEZZ_MEMBER_CONTEXT'),page.text.index('src="js/store.js'))
+        import re
+        a=re.search(r'"accountKey":"([0-9a-f]{32})"',page.text)
+        self.assertIsNotNone(a)
+        self.assertNotIn('example-id',page.text)
+        self.assertEqual(self.client.post('/account/logout',headers=self.headers).status_code,303)
+        with patch.object(self.portal,'authenticate',return_value=('another-user','customer')):
+            response=self.client.post('/account/login',data={'username':'another','password':'example-password'},headers=self.headers)
+        self.assertEqual(response.status_code,303)
+        other=self.client.get('/web/index.html')
+        b=re.search(r'"accountKey":"([0-9a-f]{32})"',other.text)
+        self.assertIsNotNone(b)
+        self.assertNotEqual(a.group(1),b.group(1))
+        self.assertEqual(self.client.post('/account/logout',headers=self.headers).status_code,303)
+        self.login('customer')
+        same=self.client.get('/web/index.html')
+        self.assertIn(a.group(1),same.text)
+        self.assertNotIn('window.ALEZZ_MEMBER_CONTEXT',self.client.get('/web/catalog.json').text)
 
     def test_studio_and_api_are_isolated(self):
         for path in ('/studio/','/studio/sources','/static/app.js','/api/init'):
