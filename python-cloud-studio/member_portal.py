@@ -124,7 +124,7 @@ class Portal:
                 'email':username+'@'+ALIAS_DOMAIN,'password':password,'email_confirm':True,
                 'app_metadata':{'alezz_customer':'active'}})
             return 'تم إنشاء حساب '+username+'.'
-        if action not in ('disable','enable'):
+        if action not in ('disable','enable','reset-device'):
             raise ValueError('أمر غير معروف.')
         # Resolve the exact alias. Pagination prevents modifying an unrelated user.
         for page in range(1,101):
@@ -133,22 +133,19 @@ class Portal:
                 if user.get('email')!=username+'@'+ALIAS_DOMAIN:
                     continue
                 uid=str(UUID(user['id']))
-                self.upstream('PUT','/auth/v1/admin/users/'+uid,secret=True,json={
-                    'app_metadata':{'alezz_customer':'active' if action=='enable' else 'disabled'}})
+                if action=='reset-device':
+                    self.devices.reset(uid)
+                else:
+                    self.upstream('PUT','/auth/v1/admin/users/'+uid,secret=True,json={
+                        'app_metadata':{'alezz_customer':'active' if action=='enable' else 'disabled'}})
                 return uid
             if len(users)<100:
                 break
         raise ValueError('حساب العميل غير موجود.')
 
-    def customers_page(self, session, message=''):
-        notice='<p role="status">'+html.escape(message)+'</p>' if message else ''
-        return self.page('حسابات العملاء',f'''<p>إنشاء حساب مستقل لكل عميل أو إيقاف وصوله.</p>{notice}
-<form method="post"><input type="hidden" name="csrf" value="{session[3]}">
-<label>اسم العميل<input name="username" dir="ltr" required pattern="[a-zA-Z0-9][a-zA-Z0-9_.\\-]{{2,39}}" maxlength="40"></label>
-<label>كلمة مرور الحساب الجديد<input name="password" type="password" dir="ltr" minlength="12" maxlength="72" autocomplete="new-password"></label>
-<button name="action" value="create">إنشاء حساب</button>
-<button name="action" value="disable" class="secondary">إيقاف الحساب</button>
-<button name="action" value="enable" class="secondary">إعادة التفعيل</button></form><a href="/admin/">العودة إلى الإدارة</a>''')
+    def customers_page(self, session, message='', page=1):
+        from customer_directory import page as render_customer_directory
+        return render_customer_directory(self, session, message, number=page)
 
     async def middleware(self, request: Request, call_next):
         path=request.url.path
@@ -233,22 +230,25 @@ class Portal:
                 return JSONResponse({'detail':'صلاحية المسؤول مطلوبة.'},status_code=403,headers=HEADERS)
             return HTMLResponse('هذه الصفحة مخصصة للإدارة.',403,headers=HEADERS)
         if path=='/account/customers':
+            raw_page=request.query_params.get('page','1')
+            page_number=min(100,max(1,int(raw_page))) if re.fullmatch(r'[0-9]{1,3}',raw_page) else 1
             if request.method=='GET':
-                return self.customers_page(session)
+                return await run_in_threadpool(self.customers_page,session,page=page_number)
             if request.method=='POST':
                 try:
                     form=await self.form(request)
                     if not secrets.compare_digest(form.get('csrf',''),session[3]):
                         return Response(status_code=403,headers=HEADERS)
+                    action=form.get('action','')
                     result=await run_in_threadpool(self.manage,form)
-                    if form.get('action')!='create':
+                    if action!='create':
                         self.revoke(result)
-                        result='تم تحديث حالة الحساب.'
-                    return self.customers_page(session,result)
+                        result='تم فك ارتباط الجهاز. يمكن للعميل تسجيل الدخول من جهاز جديد.' if action=='reset-device' else 'تم تحديث حالة الحساب.'
+                    return await run_in_threadpool(self.customers_page,session,result,page_number)
                 except ValueError as exc:
-                    return self.customers_page(session,str(exc))
+                    return await run_in_threadpool(self.customers_page,session,str(exc),page_number)
                 except requests.RequestException:
-                    return self.customers_page(session,'تعذّر تنفيذ العملية. تحقق من حالة الحساب وإعدادات Supabase.')
+                    return await run_in_threadpool(self.customers_page,session,'تعذّر تنفيذ العملية. تحقق من حالة الحساب وإعدادات Supabase.',page_number)
         if section in ('api','studio','static'):
             response=await call_next(request)
             response.headers['Cache-Control']='private, no-store'
