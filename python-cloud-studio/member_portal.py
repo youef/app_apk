@@ -17,6 +17,7 @@ import requests
 from fastapi import Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from starlette.concurrency import run_in_threadpool
+from member_devices import DeviceRegistry, DEVICE_COOKIE, DEVICE_MAX_AGE, friendly_device
 
 COOKIE = 'alezz_member'
 SESSION_SECONDS = 8 * 3600
@@ -24,6 +25,11 @@ USERNAME = re.compile(r'[a-z0-9][a-z0-9_.-]{2,39}\Z')
 ALIAS_DOMAIN = 'members.alezz.invalid'
 HEADERS = {'Cache-Control':'private, no-store','X-Frame-Options':'DENY',
            'X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin'}
+
+
+class DeviceBindingError(ValueError):
+    """Successful credentials, but this account is bound to another device."""
+
 
 
 class Portal:
@@ -34,6 +40,9 @@ class Portal:
         self.secure = secure
         self.sessions = {}
         self.attempts = {}
+        private_dir = os.getenv('ALEZZ_DATA_DIR') or root
+        device_secret = os.getenv('ALEZZ_SITE_SECRET') or 'alezz-local-only-device-secret-not-for-hosted-production'
+        self.devices = DeviceRegistry(private_dir, device_secret)
 
     def upstream(self, method, endpoint, *, secret=False, token='', **options):
         key = (os.getenv('ALEZZ_SUPABASE_SECRET_KEY') or os.getenv('ALEZZ_SUPABASE_SERVICE_ROLE_KEY')) if secret else self.public_key
@@ -169,6 +178,16 @@ class Portal:
                 self.attempts[host]=(until,count+1)
                 uid,role=await run_in_threadpool(self.authenticate,username,password)
                 if role!=mode:raise ValueError('Role mismatch')
+                browser_token = request.cookies.get(DEVICE_COOKIE, '')
+                if role == 'customer':
+                    if not re.fullmatch(r'[A-Za-z0-9_-]{32,100}', browser_token):
+                        browser_token = secrets.token_urlsafe(32)
+                    allowed = await run_in_threadpool(
+                        self.devices.register, uid, browser_token, request.headers.get('user-agent', ''))
+                    if not allowed:
+                        raise DeviceBindingError('Device is already registered')
+            except DeviceBindingError:
+                return self.login_page('هذا الحساب مرتبط بجهاز آخر. اطلب من الإدارة فك ارتباط الجهاز قبل تغييره.',mode=mode)
             except (ValueError,KeyError,requests.RequestException):
                 return self.login_page('تعذّر تسجيل الدخول. تحقق من بيانات الحساب.',mode=mode)
             self.attempts.pop(host,None)
@@ -180,9 +199,16 @@ class Portal:
             self.sessions[token]=(uid,role,now+SESSION_SECONDS,secrets.token_urlsafe(24))
             response=RedirectResponse('/studio/' if role=='admin' else '/web/',303,headers=HEADERS)
             response.set_cookie(COOKIE,token,max_age=SESSION_SECONDS,httponly=True,secure=self.secure,samesite='strict')
+            if role == 'customer':
+                response.set_cookie(DEVICE_COOKIE,browser_token,max_age=DEVICE_MAX_AGE,
+                                    httponly=True,secure=self.secure,samesite='strict')
             return response
         token=request.cookies.get(COOKIE,'')
         session=self.sessions.get(token)
+        if session and session[1] == 'customer':
+            if not await run_in_threadpool(self.devices.matches, session[0], request.cookies.get(DEVICE_COOKIE, '')):
+                self.sessions.pop(token, None)
+                session = None
         if path in ('/account/login','/account/admin'):
             return self.login_page(mode='admin' if path=='/account/admin' else 'customer')
         section=path.split('/')[1]
