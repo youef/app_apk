@@ -72,6 +72,54 @@ class PortalTests(unittest.TestCase):
         self.assertIn(a.group(1),same.text)
         self.assertNotIn('window.ALEZZ_MEMBER_CONTEXT',self.client.get('/web/catalog.json').text)
 
+    def test_customer_is_limited_to_one_registered_browser(self):
+        self.login('customer')
+        self.assertEqual(self.client.get('/web/').status_code,200)
+        self.assertTrue(self.client.cookies.get('alezz_member_device'))
+        other=TestClient(self.client.app,base_url='https://studio.example.org',follow_redirects=False)
+        try:
+            with patch.object(self.portal,'authenticate',return_value=('example-id','customer')):
+                denied=other.post('/account/login',data={'username':'customer1',
+                       'password':'example-password'},headers=self.headers)
+            self.assertEqual(denied.status_code,200)
+            self.assertIn('مرتبط بجهاز آخر',denied.text)
+            self.assertEqual(other.get('/web/').headers['location'],'/account/login')
+            self.assertEqual(self.client.get('/web/').status_code,200)
+            self.portal.devices.reset('example-id')
+            # Removing a device also terminates existing sessions on their next request.
+            self.assertEqual(self.client.get('/web/').headers['location'],'/account/login')
+            with patch.object(self.portal,'authenticate',return_value=('example-id','customer')):
+                allowed=other.post('/account/login',data={'username':'customer1',
+                        'password':'example-password'},headers=self.headers)
+            self.assertEqual(allowed.status_code,303)
+            self.assertEqual(other.get('/web/').status_code,200)
+        finally:
+            other.close()
+
+    def test_admin_directory_shows_accounts_and_unlinks_device_with_csrf(self):
+        self.login('admin')
+        uid='12345678-1234-1234-1234-123456789abc'
+        self.portal.devices.register(uid,'test-device-cookie-aaaaaaaaaaaaaaaaaaaa',
+                                     'Mozilla/5.0 (iPhone)')
+        user={'id':uid,'email':'customer1@members.alezz.invalid',
+              'created_at':'2026-10-01T05:00:00Z','last_sign_in_at':'2026-11-05T06:00:00Z',
+              'app_metadata':{'alezz_customer':'active'}}
+        csrf=next(iter(self.portal.sessions.values()))[3]
+        with patch.object(self.portal,'upstream',return_value={'users':[user]}):
+            response=self.client.get('/account/customers')
+            self.assertEqual(response.status_code,200)
+            self.assertIn('customer1',response.text)
+            self.assertIn('iPhone',response.text)
+            self.assertIn('فك الجهاز',response.text)
+            blocked=self.client.post('/account/customers',data={'username':'customer1',
+                     'action':'reset-device'},headers=self.headers)
+            self.assertEqual(blocked.status_code,403)
+            done=self.client.post('/account/customers',data={'username':'customer1',
+                     'action':'reset-device','csrf':csrf},headers=self.headers)
+            self.assertEqual(done.status_code,200)
+            self.assertIn('تم فك ارتباط الجهاز',done.text)
+            self.assertNotIn(uid,self.portal.devices.details([uid]))
+
     def test_studio_and_api_are_isolated(self):
         for path in ('/studio/','/studio/sources','/static/app.js','/api/init'):
             response=self.client.get(path)
