@@ -23,6 +23,44 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
+      - name: Probe November playlist drafts (unpublished only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint="https://qyzmlwtvzzgooccqxglq.supabase.co/functions/v1/aseel-link-health"
+          cutoff="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          total=0
+          good=0
+          for batch in 1 2 3 4; do
+            oidc_response="$(curl --fail --silent --show-error --max-time 15 \
+              -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=al-ezz-media-link-health")"
+            oidc_token="$(jq -er '.value' <<< "$oidc_response")"
+            echo "::add-mask::$oidc_token"
+            payload="$(jq -nc --arg before "$cutoff" \
+              '{mode:"imported",before:$before,per_table:24}')"
+            response_file="$(mktemp)"
+            http="$(curl --silent --show-error --max-time 160 -o "$response_file" -w '%{http_code}' \
+              -X POST "$endpoint" -H "Authorization: Bearer $oidc_token" \
+              -H "Content-Type: application/json" --data-binary "$payload")"
+            jq -c '{mode,scanned,healthy,suspect,broken,errors}' "$response_file"
+            if [[ "$http" != "200" ]]; then
+              echo "::error::Imported stream scan returned HTTP $http"
+              cat "$response_file"
+              exit 1
+            fi
+            jq -e '.authenticated == "github_oidc" and ((.errors // []) | length == 0)' "$response_file" >/dev/null
+            scanned="$(jq -r '.scanned // 0' "$response_file")"
+            healthy="$(jq -r '.healthy // 0' "$response_file")"
+            total=$((total + scanned))
+            good=$((good + healthy))
+            rm -f "$response_file"
+            if (( scanned == 0 )); then break; fi
+          done
+          echo "### Imported M3U review" >> "$GITHUB_STEP_SUMMARY"
+          echo "Draft URLs rechecked: $total; technically healthy: $good" >> "$GITHUB_STEP_SUMMARY"
+          echo "Nothing auto-published; names, rights and actual content require independent review." >> "$GITHUB_STEP_SUMMARY"
+
       - name: Full health sweep and series recalculation
         shell: bash
         run: |
