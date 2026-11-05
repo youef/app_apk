@@ -188,6 +188,6 @@
 <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 
 <script src="config.js?v=quick-movies-20261101"></script>
-<script src="admin.js?v=bulk-delete-all-20261101-r1"></script>
+<script src="admin.js?v=health-cors-20261105-v1"></script>
 </body>
 </html>
