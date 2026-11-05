@@ -1,11 +1,16 @@
 /* ============================================================================
    AL EZZ TV — local store (favorites, progress, prefs, activation)
-   Everything is device-local: no accounts, no cookies, no tracking.
+   Each authenticated account has its own isolated device-local namespace.
    ========================================================================== */
 (function () {
   "use strict";
 
-  var NS = "alezz.v10.";
+  var ctx = window.ALEZZ_MEMBER_CONTEXT || null;
+  var accountKey = ctx && ctx.authenticated === true && /^[a-f0-9]{32}$/.test(ctx.accountKey || "")
+    ? ctx.accountKey : "";
+  // The server provides an opaque, non-credential account key after authentication.
+  // Unauthenticated legacy/native shells retain the previous device-local namespace.
+  var NS = accountKey ? "alezz.member.v1." + accountKey + "." : "alezz.v10.";
   var memory = {};
 
   function read(key) {
@@ -35,9 +40,10 @@
 
   var Store = {
     deviceId: deviceId,
+    isMember: !!accountKey,
 
     /* ---- activation ---- */
-    isActivated: function () { return read("activated") === true; },
+    isActivated: function () { return !!accountKey || read("activated") === true; },
     activate: function () { write("activated", true); },
     deactivate: function () { write("activated", false); },
 
@@ -48,6 +54,9 @@
     },
     isFavorite: function (key) {
       return this.favorites().indexOf(key) !== -1;
+    },
+    clearFavorites: function () {
+      write("favorites", []);
     },
     toggleFavorite: function (key) {
       var list = this.favorites();
@@ -82,6 +91,9 @@
         keys.slice(0, keys.length - 60).forEach(function (k) { delete map[k]; });
       }
       write("progress", map);
+    },
+    clearAllProgress: function () {
+      write("progress", {});
     },
     clearProgress: function (key) {
       var map = this.progressAll();

@@ -1,7 +1,10 @@
 """Server-gated viewer and administration pages with provisioned Supabase accounts."""
 from __future__ import annotations
 
+import hashlib
+import hmac
 import html
+import json
 import os
 import re
 import secrets
@@ -194,7 +197,7 @@ class Portal:
             if request.headers.get('origin')!=str(request.base_url).rstrip('/'):
                 return Response(status_code=403,headers=HEADERS)
             self.sessions.pop(token,None)
-            response=RedirectResponse('/',303,headers={**HEADERS,'Clear-Site-Data':'"cache", "storage"'})
+            response=RedirectResponse('/',303,headers={**HEADERS,'Clear-Site-Data':'"cache"'})
             response.delete_cookie(COOKIE,secure=self.secure,httponly=True,samesite='strict')
             response.delete_cookie('alezz_studio_session',secure=self.secure,httponly=True,samesite='strict')
             return response
@@ -245,4 +248,17 @@ class Portal:
         if not target.is_relative_to(section) or not target.is_file():
             return Response(status_code=404,headers=HEADERS)
         headers=HEADERS if relative!='web/youtube-player.html' else {**HEADERS,'X-Frame-Options':'SAMEORIGIN'}
+        if section.name=='web' and requested.name=='index.view' and request.method=='GET':
+            # The session is checked above; the opaque HMAC key only selects this
+            # account's device-local favourites and playback progress. It is not a token.
+            scope_secret=os.getenv('ALEZZ_SITE_SECRET') or 'local-development-profile-scope'
+            profile_key=hmac.new(scope_secret.encode('utf-8'),session[0].encode('utf-8'),hashlib.sha256).hexdigest()[:32]
+            context={'authenticated':True,'accountKey':profile_key}
+            script='<script>window.ALEZZ_MEMBER_CONTEXT='+json.dumps(context,separators=(',',':'))+';</script>'
+            markup=target.read_text(encoding='utf-8')
+            marker='<script src="js/store.js?v=member-scope-1"></script>'
+            # Inject before the store module so every subsequent module reads the
+            # correct account namespace, even after switching logins on one device.
+            markup=markup.replace(marker,script+marker) if marker in markup else markup+script
+            return HTMLResponse(markup,headers=headers)
         return FileResponse(target,media_type=mime,headers=headers)

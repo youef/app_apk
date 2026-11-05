@@ -11,6 +11,13 @@ on:
       - "supabase/functions/aseel-link-health/**"
       - "supabase/migrations/**"
       - ".github/workflows/admin-pages.yml"
+  pull_request:
+    paths:
+      - "web/**"
+      - "admin/**"
+      - "tests/**"
+      - "python-cloud-studio/member_portal.py"
+      - ".github/workflows/admin-pages.yml"
   workflow_dispatch:
 
 # GitHub Pages is already configured for automatic branch-based publishing.
