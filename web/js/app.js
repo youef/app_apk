@@ -260,8 +260,8 @@
       return ((map[b] && map[b].at) || 0) - ((map[a] && map[a].at) || 0);
     }).forEach(function (key) {
       var progress = map[key];
-      if (!progress || !Number.isFinite(progress.d) || progress.d <= 0 ||
-          !Number.isFinite(progress.t) || progress.t <= 0) return;
+      if (!progress || !isFinite(progress.d) || progress.d <= 0 ||
+          !isFinite(progress.t) || progress.t <= 0) return;
       var item = catalog.byKey[key] || episodeParents[key];
       // Never offer a removed, unpublished or unavailable title as playable.
       if (!item || seen[item.key]) return;
