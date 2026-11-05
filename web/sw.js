@@ -28,7 +28,7 @@ self.addEventListener("activate", function (event) {
 
 self.addEventListener("fetch", function (event) {
   var request = event.request;
-  if (request.method !== "GET" || request.mode === "navigate" ||
+  if (request.method!=="GET" || request.mode === "navigate" ||
       request.url.indexOf(BASE) !== 0) return;
   var url = new URL(request.url);
   var basePath = new URL(BASE).pathname;
