@@ -77,8 +77,8 @@ jobs:
             local body="$1" target="$2" response_file code oidc_response oidc_token
             response_file="$(mktemp)"
             oidc_response="$(curl --fail --silent --show-error --max-time 15 \
-              -H "Authorization: bearer \${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
-              "\${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=al-ezz-media-link-health")"
+              -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=al-ezz-media-link-health")"
             oidc_token="$(jq -er '.value' <<< "$oidc_response")"
             echo "::add-mask::$oidc_token"
             code="$(curl --silent --show-error --max-time 150 \
