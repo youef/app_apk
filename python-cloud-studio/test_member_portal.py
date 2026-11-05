@@ -142,8 +142,11 @@ class PortalTests(unittest.TestCase):
             data={'username':'customer1','password':'new-password-123','action':'create'}
             self.assertEqual(self.client.post('/account/customers',data=data,headers=self.headers).status_code,403)
             self.assertEqual(self.client.post('/account/customers',data={**data,'csrf':csrf},headers=self.headers).status_code,200)
-        self.assertTrue(upstream.call_args.kwargs['secret'])
-        self.assertEqual(upstream.call_args.kwargs['json']['app_metadata'],{'alezz_customer':'active'})
+        created=[call for call in upstream.call_args_list
+                 if call.args[:2]==('POST','/auth/v1/admin/users')]
+        self.assertEqual(len(created),1)
+        self.assertTrue(created[0].kwargs['secret'])
+        self.assertEqual(created[0].kwargs['json']['app_metadata'],{'alezz_customer':'active'})
 
     def test_authentication_checks_server_controlled_customer_metadata(self):
         uid='12345678-1234-1234-1234-123456789abc'
