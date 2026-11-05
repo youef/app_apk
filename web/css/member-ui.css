@@ -11,3 +11,13 @@ body{background:#0c1216}
 .card:focus-visible,.iconbtn:focus-visible,.nav__link:focus-visible{outline:2px solid #d9f3ba;outline-offset:3px}
 .member-exit{font-size:1.3rem;line-height:1}
 @media(max-width:640px){.hero{margin-inline:8px}.topbar__actions{gap:4px}.member-exit{min-width:34px}}
+
+/* Authenticated members: accessible, account-specific library controls. */
+.member-library-tools{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;margin:18px var(--pad-x,20px) 12px;padding:20px 22px;border:1px solid #53687566;border-radius:18px;background:linear-gradient(145deg,#18303a,#11212a)}
+.member-library-tools strong{display:block;font-size:1.08rem;color:#f2eee4}
+.member-library-tools p{color:#bfccd0;font-size:.87rem;line-height:1.8;margin:7px 0 0}
+.member-library-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.member-library-actions button{min-height:42px;background:#1a2b35;color:#e5eee9;border:1px solid #64807888;border-radius:11px;padding:10px 14px;cursor:pointer;font:inherit;font-size:.85rem}
+.member-library-actions button:hover{background:#294450;border-color:#a8c4b9}
+.member-library-actions button:focus-visible{outline:3px solid #d0ecad;outline-offset:3px}
+@media(max-width:600px){.member-library-tools{margin:14px 14px 10px;padding:16px}.member-library-actions,.member-library-actions button{width:100%}}
