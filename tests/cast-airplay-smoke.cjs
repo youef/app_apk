@@ -17,7 +17,7 @@ assert(cast.includes("DEFAULT_MEDIA_RECEIVER_APP_ID"),"Official default receiver
 assert(cast.includes("SESSION_STARTED")&&cast.includes("session.loadMedia(request)"),"Transfer video through receiver");
 assert(cast.includes("webkitShowPlaybackTargetPicker"),"Native Safari AirPlay selector required");
 assert(css.includes('.cast-launcher[hidden]'),"Unsupported devices must not show fake controls");
-assert(sw.includes('"./js/cast.js"')&&sw.includes('"./css/cast.css"'),"Cache local cast interface");
+assert(sw.includes('"js/cast.js"')&&sw.includes('"css/cast.css"'),"Cast interface must remain among safe static assets");
 
 const elements={};
 for(const id of ["playerCast","playerAirPlay","playerCastStatus"])
