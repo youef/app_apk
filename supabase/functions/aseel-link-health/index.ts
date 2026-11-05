@@ -263,6 +263,33 @@ Deno.serve(async(req:Request)=>{
       return reply({error:"تعذر فحص الحلقات: "+String(e).slice(0,160)},500);
     }
   }
+  // Draft sources imported by the November 5 playlist are probed without publication.
+  // This changes health metadata only; publisher approval and accurate channel identity
+  // remain separate explicit requirements.
+  if(body.mode==="imported"){
+    const before=typeof body.before==="string"?body.before:"";
+    if(before && (!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$/.test(before)||isNaN(Date.parse(before))))
+      return reply({error:"Invalid before timestamp"},400);
+    const limit=Math.max(1,Math.min(24,Number(body.per_table)||24));
+    const timeFilter=before?"&or=(link_health_checked_at.is.null,link_health_checked_at.lt."+encodeURIComponent(before)+")":"";
+    try{
+      const query="select="+tables[0].fields+"&status=eq.draft&description=like."+
+        encodeURIComponent("IMPORT_2026_11_05_M3U_REVIEW*")+timeFilter+
+        "&order=link_health_checked_at.asc.nullsfirst&limit="+limit;
+      const rows=await rest("aseel_channels",query);
+      const outcomes=await Promise.allSettled((rows||[]).map((row:Row)=>checkRow("aseel_channels",row,true)));
+      const summary:Record<string,unknown>={authenticated:github?"github_oidc":"admin",mode:"imported",
+        scanned:0,healthy:0,suspect:0,broken:0,skipped:0,newlyHidden:0,recovered:0,errors:[]};
+      for(const item of outcomes){
+        if(item.status==="rejected") {
+          (summary.errors as string[]).push(String(item.reason).slice(0,160));continue;
+        }
+        summary.scanned=Number(summary.scanned)+1;
+        summary[item.value.state]=Number(summary[item.value.state]||0)+1;
+      }
+      return reply(summary,(summary.errors as string[]).length?207:200);
+    }catch(e){return reply({error:"Imported draft scan failed: "+String(e).slice(0,160)},500);}
+  }
   if(body.mode==="series"){
     try{
       await updateSeries();
