@@ -56,7 +56,9 @@ class PortalTests(unittest.TestCase):
         a=re.search(r'"accountKey":"([0-9a-f]{32})"',page.text)
         self.assertIsNotNone(a)
         self.assertNotIn('example-id',page.text)
-        self.assertEqual(self.client.post('/account/logout',headers=self.headers).status_code,303)
+        logout=self.client.post('/account/logout',headers=self.headers)
+        self.assertEqual(logout.status_code,303)
+        self.assertNotIn('"storage"',logout.headers.get('clear-site-data',''))
         with patch.object(self.portal,'authenticate',return_value=('another-user','customer')):
             response=self.client.post('/account/login',data={'username':'another','password':'example-password'},headers=self.headers)
         self.assertEqual(response.status_code,303)
