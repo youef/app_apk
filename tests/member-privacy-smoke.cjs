@@ -50,6 +50,26 @@ const app = read("web/js/app.js");
 assert(app.includes("episodeParents[episode.key] = series"), "Saved episodes must resolve to parent series");
 assert(app.includes("clearAllProgress") && app.includes('clearFavorites()'),
   "Private history management actions are missing");
+const recommendationStart = app.indexOf("  function recommendForYou() {");
+const recommendationEnd = app.indexOf("\n  function viewHome()", recommendationStart);
+assert(recommendationStart > 0 && recommendationEnd > recommendationStart, "Private recommendations are missing");
+alice.toggleFavorite("movie:seen");
+alice.saveProgress("episode:7", {t: 32, d: 220, kind: "episode", title: "Episode 7"});
+const item = (key, category, tags) => ({
+  key, title:key, categoryId:category, genreTags:tags, featured:false, seasons:[]
+});
+const watchedSeries = item("series:watch", "drama", ["family"]);
+watchedSeries.kind = "series";
+watchedSeries.seasons = [{episodes:[{key:"episode:7"}]}];
+const context = {catalog:{movies:[
+  item("movie:seen", "drama", ["mystery"]),
+  item("movie:recommended", "drama", ["mystery"]),
+  item("movie:unrelated", "sports", ["sport"])
+],series:[watchedSeries]},Store:alice,Array,Object,String,Number};
+vm.runInNewContext(app.slice(recommendationStart,recommendationEnd) +
+  "\nresult = recommendForYou();",context);
+assert.deepEqual(Array.from(context.result.map(x=>x.key)), ["movie:recommended"],
+  "Recommendations must use private preferences without repeating seen or unrelated titles");
 const sw = read("web/sw.js");
 assert(sw.includes('request.mode === "navigate"'), "Service worker must never intercept navigation");
 assert(!sw.includes('"./index.html"') && !sw.includes('"./"'), "Service worker must not cache viewer HTML");
