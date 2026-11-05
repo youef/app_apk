@@ -298,8 +298,49 @@
       "أنت تشاهد المكتبة المحفوظة على الجهاز — سيتم التحديث تلقائيًا عند عودة الاتصال.</div>";
   }
 
+  function recommendForYou() {
+    // Deterministic recommendations from private, device-local activity only.
+    // No watch history is sent to Supabase or a third-party recommendation API.
+    var saved = Store.favorites(), progress = Store.progressAll();
+    var pool = catalog.movies.concat(catalog.series), seeds = [], excluded = Object.create(null);
+    pool.forEach(function (item) {
+      var selected = saved.indexOf(item.key) !== -1 || !!progress[item.key];
+      if (!selected && item.kind === "series") {
+        (item.seasons || []).forEach(function (season) {
+          (season.episodes || []).forEach(function (episode) {
+            if (progress[episode.key]) selected = true;
+          });
+        });
+      }
+      if (selected) { seeds.push(item); excluded[item.key] = true; }
+    });
+    if (!seeds.length) return [];
+    var tags = Object.create(null), categories = Object.create(null);
+    seeds.slice(0, 16).forEach(function (item) {
+      if (item.categoryId) categories[item.categoryId] = (categories[item.categoryId] || 0) + 1;
+      (Array.isArray(item.genreTags) ? item.genreTags : []).forEach(function (tag) {
+        var key = String(tag).toLowerCase();
+        tags[key] = (tags[key] || 0) + 1;
+      });
+    });
+    return pool.filter(function (item) { return !excluded[item.key]; })
+      .map(function (item) {
+        var score = item.categoryId ? Math.min(3, categories[item.categoryId] || 0) * 4 : 0;
+        (Array.isArray(item.genreTags) ? item.genreTags : []).forEach(function (tag) {
+          score += Math.min(3, tags[String(tag).toLowerCase()] || 0) * 2;
+        });
+        return { item: item, score: score };
+      }).filter(function (entry) { return entry.score > 0; })
+      .sort(function (a, b) {
+        return b.score - a.score || Number(!!b.item.featured) - Number(!!a.item.featured) ||
+          (a.item.title > b.item.title ? 1 : -1);
+      }).slice(0, 16).map(function (entry) { return entry.item; });
+  }
+
   function viewHome() {
     var rows = [continueRail()];
+    var suggested = recommendForYou();
+    if (suggested.length) rows.push(railHTML("قد يعجبك", suggested));
     rows.push(railHTML("أحدث الأفلام", catalog.movies.slice(0, 18), { more: "#/movies" }));
     rows.push(railHTML("المسلسلات", catalog.series.slice(0, 18), { more: "#/series" }));
     rows.push(railHTML("قنوات مباشرة", catalog.channels.filter(function(c) { return c.live && c.stream; }).slice(0, 16), { more: "#/live" }));
