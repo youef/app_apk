@@ -3,11 +3,23 @@
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const ANON = Deno.env.get("SUPABASE_ANON_KEY") || "";
-const TRUSTED_ORIGIN = "https://youef.github.io";
+// Keep browser access restricted to first-party hosts. Requests still require
+// verified Supabase administrator JWTs or signed GitHub Actions OIDC tokens.
+const TRUSTED_ORIGINS = new Set([
+  "https://youef.github.io",
+  "https://app-apk-oquy.onrender.com"
+]);
 const HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store" };
-const cors = { "Access-Control-Allow-Origin": TRUSTED_ORIGIN, "Access-Control-Allow-Methods": "POST,OPTIONS",
-  "Access-Control-Allow-Headers": "authorization,apikey,content-type", "Vary": "Origin" };
-const reply = (data: unknown, status=200) => new Response(JSON.stringify(data), {status, headers:{...HEADERS,...cors}});
+function corsFor(req: Request) {
+  const origin = req.headers.get("origin") || "";
+  const headers: Record<string,string> = {
+    "Access-Control-Allow-Methods": "POST,OPTIONS",
+    "Access-Control-Allow-Headers": "authorization,apikey,content-type",
+    "Vary": "Origin"
+  };
+  if (TRUSTED_ORIGINS.has(origin)) headers["Access-Control-Allow-Origin"] = origin;
+  return headers;
+}
 const b64 = (part: string) => {
   const text = atob(part.replace(/-/g,"+").replace(/_/g,"/").padEnd(Math.ceil(part.length/4)*4,"="));
   return Uint8Array.from(text,c=>c.charCodeAt(0));
@@ -212,6 +224,9 @@ async function updateSeries(){
   }
 }
 Deno.serve(async(req:Request)=>{
+  const cors = corsFor(req);
+  const reply = (data: unknown, status=200) => new Response(JSON.stringify(data),
+    {status, headers:{...HEADERS,...cors}});
   if(req.method==="OPTIONS")return new Response(null,{status:204,headers:cors});
   if(req.method!=="POST")return reply({error:"POST only"},405);
   if(!SUPABASE_URL||!SERVICE)return reply({error:"خادم الفحص غير مهيأ"},503);

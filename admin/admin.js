@@ -491,37 +491,87 @@
   function hasLinkHealth(tableCfg) {
     return !!tableCfg && ['aseel_channels', 'aseel_movies', 'aseel_episodes', 'aseel_series', 'aseel_youtube_videos'].indexOf(tableCfg.table) !== -1;
   }
+  function invokeLinkHealth(payload, retry) {
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, 65000);
+    return fetch(cfg.supabaseUrl + '/functions/v1/aseel-link-health', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + state.session.access_token,
+        apikey: cfg.publishableKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+      cache: 'no-store'
+    }).then(function (response) {
+      if (response.status === 401 && !retry) {
+        return refreshSession().then(function (ok) {
+          if (ok) return invokeLinkHealth(payload, true);
+          sessionExpired();
+          var expired = new Error('انتهت جلسة Supabase. سجّل الدخول مرة أخرى.');
+          expired.status = 401;
+          throw expired;
+        });
+      }
+      return response.text().then(function (text) {
+        var data = {};
+        try { data = text ? JSON.parse(text) : {}; } catch (err) {
+          var invalid = new Error('استجاب خادم الفحص برد غير مفهوم (HTTP ' + response.status + ').');
+          invalid.status = response.status;
+          throw invalid;
+        }
+        // 207 means some items failed, not that the entire scan failed.
+        if (!response.ok && response.status !== 207) {
+          var failure = new Error(data.error || data.message || 'فشل الفحص HTTP ' + response.status);
+          failure.status = response.status;
+          throw failure;
+        }
+        return data;
+      });
+    }).catch(function (err) {
+      if (err && err.name === 'AbortError') {
+        throw new Error('انتهت مهلة فحص المصادر. جرب دفعة أصغر بعد قليل، ولم تُغيّر حالة الروابط غير المفحوصة.');
+      }
+      if (err && err instanceof TypeError && !err.status) {
+        throw new Error('تعذّر الاتصال بدالة فحص الروابط. تحقق من اتصال الإنترنت وإعداد CORS أو حالة Supabase، ثم أعد المحاولة.');
+      }
+      throw err;
+    }).finally(function () { clearTimeout(timer); });
+  }
+
   function runLinkHealthScan() {
     if (state.scanBusy || !state.adminVerified || !state.session) {
       toast('يلزم تسجيل دخول مسؤول لإجراء الفحص.', 'error');
       return;
     }
+    var activeTable = state.table && state.table.table;
+    var supported = ['aseel_channels', 'aseel_movies', 'aseel_episodes', 'aseel_youtube_videos'];
+    var payload = activeTable === 'aseel_series'
+      ? { mode: 'series' }
+      : { table: supported.indexOf(activeTable) !== -1 ? activeTable : 'aseel_channels', per_table: 6 };
     var button = $('#healthScanNow'), message = $('#healthMessage');
     state.scanBusy = true;
     if (button) { button.disabled = true; button.textContent = 'جارٍ فحص الروابط…'; }
-    if (message) message.textContent = 'فحص فعلي للمصادر المنشورة وحفظ النتائج في Supabase…';
-    fetch(cfg.supabaseUrl + '/functions/v1/aseel-link-health', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + state.session.access_token,
-        apikey: cfg.publishableKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ per_table: 24 }),
-      cache: 'no-store'
-    }).then(function (response) {
-      return response.json().then(function (data) {
-        if (!response.ok && response.status !== 207) throw new Error((data && data.error) || 'فشل فحص الروابط HTTP ' + response.status);
-        return data;
-      });
-    }).then(function (data) {
-      var summary = 'تم فحص ' + Number(data.scanned || 0) + ' عنصر؛ صالح: ' + Number(data.healthy || 0) +
-        '، قيد التحقق: ' + Number(data.suspect || 0) + '، معطوب: ' + Number(data.broken || 0) + '.';
-      if (data.errors && data.errors.length) summary += ' توجد أخطاء: ' + String(data.errors[0]).slice(0, 160);
+    if (message) message.textContent = activeTable === 'aseel_series'
+      ? 'جارٍ تحديث حالة المسلسلات من نتائج فحص حلقاتها…'
+      : 'جارٍ فحص ستة مصادر بحد أقصى من هذا القسم، دون حذف أي رابط…';
+    invokeLinkHealth(payload, false).then(function (data) {
+      var summary = payload.mode === 'series'
+        ? 'تحدّثت حالة المسلسلات من نتائج الحلقات المنشورة.'
+        : 'تم فحص ' + Number(data.scanned || 0) + ' عنصر؛ صالح: ' + Number(data.healthy || 0) +
+          '، قيد التحقق: ' + Number(data.suspect || 0) + '، معطوب: ' + Number(data.broken || 0) + '.';
+      if (data.errors && (Array.isArray(data.errors) ? data.errors.length : Object.keys(data.errors).length)) {
+        summary += ' بعض المصادر تعذر فحصها؛ راجع أسبابها وأعد المحاولة.';
+      }
       if (message) message.textContent = summary;
-      toast(summary, data.errors && data.errors.length ? 'error' : 'success');
+      toast(summary, 'success');
       if (hasLinkHealth(state.table)) loadTable(state.table);
     }).catch(function (err) {
-      var text = 'فشل الفحص: ' + describeError(err);
+      var text = 'تعذّر الفحص: ' + describeError(err);
       if (message) message.textContent = text;
       toast(text, 'error');
+      // A failed network request is not proof the stream is broken.
     }).finally(function () {
       state.scanBusy = false;
       if (button) { button.disabled = false; button.textContent = 'فحص الروابط الآن'; }
