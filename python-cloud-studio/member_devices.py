@@ -5,6 +5,7 @@ hash of a random, HttpOnly per-browser cookie; never a raw device identifier.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 import hashlib
 import hmac
 import os
@@ -52,10 +53,14 @@ class DeviceRegistry:
                 last_seen_at INTEGER NOT NULL
             )""")
 
+    @contextmanager
     def db(self):
         db = sqlite3.connect(str(self.path), timeout=6, isolation_level=None)
-        db.execute('PRAGMA busy_timeout=6000')
-        return db
+        try:
+            db.execute('PRAGMA busy_timeout=6000')
+            yield db
+        finally:
+            db.close()
 
     def fingerprint(self, user_id: str, cookie: str) -> str:
         if not cookie or len(cookie) > 128:
