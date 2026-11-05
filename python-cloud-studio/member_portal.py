@@ -197,7 +197,7 @@ class Portal:
             if request.headers.get('origin')!=str(request.base_url).rstrip('/'):
                 return Response(status_code=403,headers=HEADERS)
             self.sessions.pop(token,None)
-            response=RedirectResponse('/',303,headers={**HEADERS,'Clear-Site-Data':'"cache", "storage"'})
+            response=RedirectResponse('/',303,headers={**HEADERS,'Clear-Site-Data':'"cache"'})
             response.delete_cookie(COOKIE,secure=self.secure,httponly=True,samesite='strict')
             response.delete_cookie('alezz_studio_session',secure=self.secure,httponly=True,samesite='strict')
             return response
