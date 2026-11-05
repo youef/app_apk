@@ -246,14 +246,28 @@
 
   function continueWatching() {
     var map = Store.progressAll();
-    var out = [];
-    Object.keys(map).forEach(function (key) {
-      var p = map[key];
-      if (!p || !p.d) return;
-      if (catalog.byKey[key]) out.push({ item: catalog.byKey[key], p: p });
-      else out.push({ item: { key: key, id: key, kind: p.kind || "movie", title: p.title || "متابعة", poster: p.poster, duration: 0 }, p: p });
+    var out = [], seen = Object.create(null), episodeParents = Object.create(null);
+    // A saved episode should open its parent series rather than a fictitious
+    // title page, and multiple saved episodes must not duplicate the series.
+    (catalog.series || []).forEach(function (series) {
+      (series.seasons || []).forEach(function (season) {
+        (season.episodes || []).forEach(function (episode) {
+          episodeParents[episode.key] = series;
+        });
+      });
     });
-    out.sort(function (a, b) { return (b.p.at || 0) - (a.p.at || 0); });
+    Object.keys(map).sort(function (a, b) {
+      return ((map[b] && map[b].at) || 0) - ((map[a] && map[a].at) || 0);
+    }).forEach(function (key) {
+      var progress = map[key];
+      if (!progress || !Number.isFinite(progress.d) || progress.d <= 0 ||
+          !Number.isFinite(progress.t) || progress.t <= 0) return;
+      var item = catalog.byKey[key] || episodeParents[key];
+      // Never offer a removed, unpublished or unavailable title as playable.
+      if (!item || seen[item.key]) return;
+      seen[item.key] = true;
+      out.push({ item: item, p: progress });
+    });
     return out.slice(0, 14);
   }
 
@@ -386,8 +400,15 @@
     var seen = {};
     var all = items.concat(cont).filter(function (i) { if (seen[i.key]) return false; seen[i.key] = true; return true; });
     var shown=all.filter(function(x){return itemMatches(x,filterCat);});
-    return pageHead("قائمتي", "المحفوظات وآخر ما شاهدت، محليًا على هذا الجهاز.", shown.length) +
-      classifiedFilterBar(all,filterCat,"mylist") +
+    var historyCount = Object.keys(Store.progressAll()).length;
+    var tools = '<section class="member-library-tools" aria-label="إدارة بيانات المشاهدة">' +
+      '<div><strong>مكتبتك الخاصة</strong><p>المفضلة والمتابعة لهذا الحساب على هذا الجهاز فقط. لا تتم مزامنتها بين الأجهزة.</p></div>' +
+      '<div class="member-library-actions">' +
+      (historyCount ? '<button type="button" data-history-action="clear-progress" aria-label="مسح سجل متابعة المشاهدة">مسح سجل المشاهدة</button>' : '') +
+      (keys.length ? '<button type="button" data-history-action="clear-favorites" aria-label="إفراغ قائمة المفضلة">إفراغ المفضلة</button>' : '') +
+      '</div></section>';
+    return pageHead("قائمتي", "", shown.length) +
+      tools + classifiedFilterBar(all,filterCat,"mylist") +
       (shown.length ? gridHTML(shown) : emptyHTML("لا توجد أعمال مطابقة أو محفوظة."));
   }
 
@@ -981,6 +1002,22 @@
     });
     document.addEventListener("click", function (e) {
       var t = e.target;
+
+      // Device-local history controls, isolated by the logged-in account.
+      var historyButton = t.closest("[data-history-action]");
+      if (historyButton) {
+        var action = historyButton.getAttribute("data-history-action");
+        if (action === "clear-progress" && window.confirm("هل تريد مسح سجل متابعة المشاهدة لهذا الحساب على هذا الجهاز؟")) {
+          Store.clearAllProgress();
+          toast("مُسح سجل متابعة المشاهدة");
+          render(true);
+        } else if (action === "clear-favorites" && window.confirm("هل تريد إفراغ قائمة المفضلة لهذا الحساب على هذا الجهاز؟")) {
+          Store.clearFavorites();
+          toast("أُفرغت قائمة المفضلة");
+          render(true);
+        }
+        return;
+      }
 
       // Dedicated TV guide and kids world own their controls.
       if (t.closest("#livePage")) return;
