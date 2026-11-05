@@ -17,6 +17,7 @@ import requests
 from fastapi import Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from starlette.concurrency import run_in_threadpool
+from member_devices import DeviceRegistry, DEVICE_COOKIE, DEVICE_MAX_AGE, friendly_device
 
 COOKIE = 'alezz_member'
 SESSION_SECONDS = 8 * 3600
@@ -24,6 +25,11 @@ USERNAME = re.compile(r'[a-z0-9][a-z0-9_.-]{2,39}\Z')
 ALIAS_DOMAIN = 'members.alezz.invalid'
 HEADERS = {'Cache-Control':'private, no-store','X-Frame-Options':'DENY',
            'X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin'}
+
+
+class DeviceBindingError(ValueError):
+    """Successful credentials, but this account is bound to another device."""
+
 
 
 class Portal:
@@ -34,6 +40,9 @@ class Portal:
         self.secure = secure
         self.sessions = {}
         self.attempts = {}
+        private_dir = os.getenv('ALEZZ_DATA_DIR') or root
+        device_secret = os.getenv('ALEZZ_SITE_SECRET') or 'alezz-local-only-device-secret-not-for-hosted-production'
+        self.devices = DeviceRegistry(private_dir, device_secret)
 
     def upstream(self, method, endpoint, *, secret=False, token='', **options):
         key = (os.getenv('ALEZZ_SUPABASE_SECRET_KEY') or os.getenv('ALEZZ_SUPABASE_SERVICE_ROLE_KEY')) if secret else self.public_key
@@ -115,7 +124,7 @@ class Portal:
                 'email':username+'@'+ALIAS_DOMAIN,'password':password,'email_confirm':True,
                 'app_metadata':{'alezz_customer':'active'}})
             return 'تم إنشاء حساب '+username+'.'
-        if action not in ('disable','enable'):
+        if action not in ('disable','enable','reset-device'):
             raise ValueError('أمر غير معروف.')
         # Resolve the exact alias. Pagination prevents modifying an unrelated user.
         for page in range(1,101):
@@ -124,22 +133,19 @@ class Portal:
                 if user.get('email')!=username+'@'+ALIAS_DOMAIN:
                     continue
                 uid=str(UUID(user['id']))
-                self.upstream('PUT','/auth/v1/admin/users/'+uid,secret=True,json={
-                    'app_metadata':{'alezz_customer':'active' if action=='enable' else 'disabled'}})
+                if action=='reset-device':
+                    self.devices.reset(uid)
+                else:
+                    self.upstream('PUT','/auth/v1/admin/users/'+uid,secret=True,json={
+                        'app_metadata':{'alezz_customer':'active' if action=='enable' else 'disabled'}})
                 return uid
             if len(users)<100:
                 break
         raise ValueError('حساب العميل غير موجود.')
 
-    def customers_page(self, session, message=''):
-        notice='<p role="status">'+html.escape(message)+'</p>' if message else ''
-        return self.page('حسابات العملاء',f'''<p>إنشاء حساب مستقل لكل عميل أو إيقاف وصوله.</p>{notice}
-<form method="post"><input type="hidden" name="csrf" value="{session[3]}">
-<label>اسم العميل<input name="username" dir="ltr" required pattern="[a-zA-Z0-9][a-zA-Z0-9_.\\-]{{2,39}}" maxlength="40"></label>
-<label>كلمة مرور الحساب الجديد<input name="password" type="password" dir="ltr" minlength="12" maxlength="72" autocomplete="new-password"></label>
-<button name="action" value="create">إنشاء حساب</button>
-<button name="action" value="disable" class="secondary">إيقاف الحساب</button>
-<button name="action" value="enable" class="secondary">إعادة التفعيل</button></form><a href="/admin/">العودة إلى الإدارة</a>''')
+    def customers_page(self, session, message='', page=1):
+        from customer_directory import page as render_customer_directory
+        return render_customer_directory(self, session, message, number=page)
 
     async def middleware(self, request: Request, call_next):
         path=request.url.path
@@ -169,6 +175,16 @@ class Portal:
                 self.attempts[host]=(until,count+1)
                 uid,role=await run_in_threadpool(self.authenticate,username,password)
                 if role!=mode:raise ValueError('Role mismatch')
+                browser_token = request.cookies.get(DEVICE_COOKIE, '')
+                if role == 'customer':
+                    if not re.fullmatch(r'[A-Za-z0-9_-]{32,100}', browser_token):
+                        browser_token = secrets.token_urlsafe(32)
+                    allowed = await run_in_threadpool(
+                        self.devices.register, uid, browser_token, request.headers.get('user-agent', ''))
+                    if not allowed:
+                        raise DeviceBindingError('Device is already registered')
+            except DeviceBindingError:
+                return self.login_page('هذا الحساب مرتبط بجهاز آخر. اطلب من الإدارة فك ارتباط الجهاز قبل تغييره.',mode=mode)
             except (ValueError,KeyError,requests.RequestException):
                 return self.login_page('تعذّر تسجيل الدخول. تحقق من بيانات الحساب.',mode=mode)
             self.attempts.pop(host,None)
@@ -180,9 +196,16 @@ class Portal:
             self.sessions[token]=(uid,role,now+SESSION_SECONDS,secrets.token_urlsafe(24))
             response=RedirectResponse('/studio/' if role=='admin' else '/web/',303,headers=HEADERS)
             response.set_cookie(COOKIE,token,max_age=SESSION_SECONDS,httponly=True,secure=self.secure,samesite='strict')
+            if role == 'customer':
+                response.set_cookie(DEVICE_COOKIE,browser_token,max_age=DEVICE_MAX_AGE,
+                                    httponly=True,secure=self.secure,samesite='strict')
             return response
         token=request.cookies.get(COOKIE,'')
         session=self.sessions.get(token)
+        if session and session[1] == 'customer':
+            if not await run_in_threadpool(self.devices.matches, session[0], request.cookies.get(DEVICE_COOKIE, '')):
+                self.sessions.pop(token, None)
+                session = None
         if path in ('/account/login','/account/admin'):
             return self.login_page(mode='admin' if path=='/account/admin' else 'customer')
         section=path.split('/')[1]
@@ -207,22 +230,25 @@ class Portal:
                 return JSONResponse({'detail':'صلاحية المسؤول مطلوبة.'},status_code=403,headers=HEADERS)
             return HTMLResponse('هذه الصفحة مخصصة للإدارة.',403,headers=HEADERS)
         if path=='/account/customers':
+            raw_page=request.query_params.get('page','1')
+            page_number=min(100,max(1,int(raw_page))) if re.fullmatch(r'[0-9]{1,3}',raw_page) else 1
             if request.method=='GET':
-                return self.customers_page(session)
+                return await run_in_threadpool(self.customers_page,session,page=page_number)
             if request.method=='POST':
                 try:
                     form=await self.form(request)
                     if not secrets.compare_digest(form.get('csrf',''),session[3]):
                         return Response(status_code=403,headers=HEADERS)
+                    action=form.get('action','')
                     result=await run_in_threadpool(self.manage,form)
-                    if form.get('action')!='create':
+                    if action!='create':
                         self.revoke(result)
-                        result='تم تحديث حالة الحساب.'
-                    return self.customers_page(session,result)
+                        result='تم فك ارتباط الجهاز. يمكن للعميل تسجيل الدخول من جهاز جديد.' if action=='reset-device' else 'تم تحديث حالة الحساب.'
+                    return await run_in_threadpool(self.customers_page,session,result,page_number)
                 except ValueError as exc:
-                    return self.customers_page(session,str(exc))
+                    return await run_in_threadpool(self.customers_page,session,str(exc),page_number)
                 except requests.RequestException:
-                    return self.customers_page(session,'تعذّر تنفيذ العملية. تحقق من حالة الحساب وإعدادات Supabase.')
+                    return await run_in_threadpool(self.customers_page,session,'تعذّر تنفيذ العملية. تحقق من حالة الحساب وإعدادات Supabase.',page_number)
         if section in ('api','studio','static'):
             response=await call_next(request)
             response.headers['Cache-Control']='private, no-store'
