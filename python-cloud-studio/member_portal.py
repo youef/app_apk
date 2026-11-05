@@ -256,7 +256,7 @@ class Portal:
             context={'authenticated':True,'accountKey':profile_key}
             script='<script>window.ALEZZ_MEMBER_CONTEXT='+json.dumps(context,separators=(',',':'))+';</script>'
             markup=target.read_text(encoding='utf-8')
-            marker='<script src="js/store.js"></script>'
+            marker='<script src="js/store.js?v=member-scope-1"></script>'
             # Inject before the store module so every subsequent module reads the
             # correct account namespace, even after switching logins on one device.
             markup=markup.replace(marker,script+marker) if marker in markup else markup+script
