@@ -1,0 +1,63 @@
+name: Al Ezz TV - Link Health Browser CORS
+on:
+  pull_request:
+    paths:
+      - "admin/**"
+      - "supabase/functions/aseel-link-health/**"
+      - ".github/workflows/link-health-cors-smoke.yml"
+  push:
+    branches: [main]
+    paths:
+      - "admin/**"
+      - "supabase/functions/aseel-link-health/**"
+      - ".github/workflows/link-health-cors-smoke.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-cors:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate browser scanner code
+        run: |
+          node --check admin/admin.js
+          node --check admin/series-quick.js
+          grep -q "TRUSTED_ORIGINS" supabase/functions/aseel-link-health/index.ts
+          grep -q "app-apk-oquy.onrender.com" supabase/functions/aseel-link-health/index.ts
+          grep -q "per_table: 6" admin/admin.js
+      - name: Verify real Edge Function CORS preflight without auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://qyzmlwtvzzgooccqxglq.supabase.co/functions/v1/aseel-link-health"
+          for origin in "https://app-apk-oquy.onrender.com" "https://youef.github.io"; do
+            echo "Testing allowed browser origin: $origin"
+            headers=$(curl --silent --show-error --max-time 20 -D - -o /dev/null -X OPTIONS "$URL" \
+              -H "Origin: $origin" \
+              -H "Access-Control-Request-Method: POST" \
+              -H "Access-Control-Request-Headers: authorization,apikey,content-type")
+            echo "$headers" | grep -Eqi '^HTTP/[^ ]+ 204'
+            echo "$headers" | grep -Fqi "access-control-allow-origin: $origin"
+            echo "$headers" | grep -Eqi '^access-control-allow-headers:.*authorization.*apikey.*content-type'
+          done
+          denied=$(curl --silent --show-error --max-time 20 -D - -o /dev/null -X OPTIONS "$URL" \
+            -H "Origin: https://untrusted.example.org" \
+            -H "Access-Control-Request-Method: POST" \
+            -H "Access-Control-Request-Headers: authorization,apikey,content-type")
+          if echo "$denied" | grep -qi '^access-control-allow-origin:'; then
+            echo "::error::Untrusted origins must not get CORS permission"
+            exit 1
+          fi
+          echo "PASS: Browser OPTIONS can reach deployed link scanner only from approved origins."
+      - name: Verify unauthenticated scan is rejected
+        shell: bash
+        run: |
+          set -euo pipefail
+          status=$(curl --silent --show-error --max-time 20 -o /dev/null -w '%{http_code}' \
+            -X POST "https://qyzmlwtvzzgooccqxglq.supabase.co/functions/v1/aseel-link-health" \
+            -H "Origin: https://app-apk-oquy.onrender.com" \
+            -H "Content-Type: application/json" --data '{}')
+          test "$status" = "403"
+          echo "PASS: Health scan requires valid administrator or GitHub OIDC authorization."
