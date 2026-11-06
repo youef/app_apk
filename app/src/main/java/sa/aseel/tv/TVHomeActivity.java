@@ -743,6 +743,8 @@ public final class TVHomeActivity extends Activity {
         }});
     }
     private void liveGuide(){
+        activeChannelCategory=getSharedPreferences("alezz_tv_settings_v14",MODE_PRIVATE)
+            .getString("live_selected_group",activeChannelCategory);
         heading("● تلفزيون العز المباشر",channels.size()+" قناة • اختر التصنيف، ثم اضغط OK للمشاهدة • MENU للدليل أثناء البث");
         if(channels.isEmpty()){
             heading("لا توجد قنوات منشورة","استخدم تحديث المكتبة أو راجع المصادر.");return;
