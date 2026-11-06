@@ -1088,6 +1088,8 @@ public final class TVHomeActivity extends Activity {
                     record.put("quality",value(candidate,"quality"));
                     record.put("variants",new JSONArray(variants));
                     record.put("category",channelCategory(candidate));
+                    record.put("favorite",isFavorite(candidate));
+                    record.put("poster_url",value(candidate,"poster_url"));
                     record.put("epg_now_title",epgNow(candidate));
                     record.put("epg_next_title",epgNext(candidate));
                     if(value(candidate,"id").equals(value(item,"id")))selected=playlist.length();
