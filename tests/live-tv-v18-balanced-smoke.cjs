@@ -35,7 +35,7 @@ test("Focused TV remote buttons announce their actions",player.includes('private
 test("Native live controls use compact symbols, VOD keeps old controls",player.includes('playButton=live?tvTool("⏯"') &&
     player.includes('Button guideButton=live?tvTool("☷"') &&
     player.includes('if(!live)footer.addView(externalButton'));
-test("Native favorite uses existing profile-scoped keys",player.includes('getSharedPreferences("alizz_v11_favorites"') &&
+test("Native favorite uses existing profile-scoped keys",player.includes('getSharedPreferences("alizz_v11_favorites."+MemberAuth.userId(this)') &&
     player.includes('.putBoolean(profile+".channel:"+itemId,selected)') &&
     player.includes('updateLiveFavorite()'));
 test("Native mute persists and ExoPlayer volume follows it",player.includes('putBoolean("live_mute_"+profile,liveMuted)') &&
