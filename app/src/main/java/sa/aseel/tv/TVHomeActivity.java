@@ -1266,7 +1266,7 @@ public final class TVHomeActivity extends Activity {
     }
     private String favKey(JSONObject x){return kind(x)+":"+value(x,"id");}
     private boolean isFavorite(JSONObject item){
-        SharedPreferences prefs=getSharedPreferences("alizz_v11_favorites",MODE_PRIVATE);
+        SharedPreferences prefs=getSharedPreferences("alizz_v11_favorites."+MemberAuth.userId(this),MODE_PRIVATE);
         String profile=PlaybackMemory.activeProfile(this);
         String scoped=profile+"."+favKey(item);
         if(prefs.contains(scoped))return prefs.getBoolean(scoped,false);
@@ -1274,7 +1274,7 @@ public final class TVHomeActivity extends Activity {
         return "family".equals(profile)&&prefs.getBoolean(favKey(item),false);
     }
     private void toggleFavorite(JSONObject item){
-        SharedPreferences prefs=getSharedPreferences("alizz_v11_favorites",MODE_PRIVATE);
+        SharedPreferences prefs=getSharedPreferences("alizz_v11_favorites."+MemberAuth.userId(this),MODE_PRIVATE);
         String scoped=PlaybackMemory.activeProfile(this)+"."+favKey(item);
         prefs.edit().putBoolean(scoped,!isFavorite(item)).apply();
     }
