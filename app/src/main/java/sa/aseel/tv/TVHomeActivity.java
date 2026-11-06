@@ -77,8 +77,8 @@ public final class TVHomeActivity extends Activity {
         p.setMargins(dp(m),dp(m),dp(m),dp(m));return p;
     }
     private GradientDrawable bg(int color,int border,int radius){
-        GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(radius));
-        if(border!=0)d.setStroke(dp(1),border);return d;
+        // Shared translucent glass material; Android KitKat uses gradients, not GPU blur.
+        return GlassSurface.panel(color,border,dp(radius));
     }
     private TextView text(String label,int size,int color,boolean bold){
         TextView t=new TextView(this);t.setText(label);t.setTextColor(color);t.setTextSize(size);
@@ -87,9 +87,10 @@ public final class TVHomeActivity extends Activity {
     }
     private Button button(String name){
         final Button b=new Button(this);b.setText(name);b.setAllCaps(false);b.setTextColor(WHITE);
-        b.setTextSize(15);b.setFocusable(true);b.setBackgroundDrawable(bg(0xFF252635,0xFF373341,12));
+        b.setTextSize(15);b.setFocusable(true);b.setBackgroundDrawable(bg(0xFF252D3C,0x8B65748D,12));
         b.setOnFocusChangeListener(new View.OnFocusChangeListener(){public void onFocusChange(View v,boolean focused){
-            b.setBackgroundDrawable(bg(focused?0xFF811E38:0xFF252635,focused?RED:0xFF373341,12));
+            b.setBackgroundDrawable(bg(focused?0xFF6A5132:0xFF252D3C,
+                focused?0xFFE8C385:0x8B65748D,12));
             b.setScaleX(focused?1.04f:1f);b.setScaleY(focused?1.04f:1f);
         }});return b;
     }
@@ -240,12 +241,12 @@ public final class TVHomeActivity extends Activity {
             refreshLocalPlaylist(false);
     }
     private void buildShell(){
-        LinearLayout root=column();root.setBackgroundColor(BG);
+        LinearLayout root=column();
+        root.setBackgroundDrawable(GlassSurface.canvas());
         root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
         setContentView(root);
         LinearLayout top=row();top.setPadding(dp(16),dp(6),dp(16),dp(6));
-        top.setBackgroundDrawable(new GradientDrawable(GradientDrawable.Orientation.RIGHT_LEFT,
-            new int[]{0xFF25151F,0xFF13141D,0xFF0B0C13}));
+        top.setBackgroundDrawable(GlassSurface.overlay(0x82DCC8A9,dp(0)));
         root.addView(top,new LinearLayout.LayoutParams(-1,dp(79)));
         ImageView logo=new ImageView(this);
         int logoId=getResources().getIdentifier("alizz_brand","drawable",getPackageName());
@@ -269,7 +270,7 @@ public final class TVHomeActivity extends Activity {
         top.addView(refresh,space(dp(108),dp(49),2));
         refresh.setOnClickListener(new View.OnClickListener(){public void onClick(View v){loadCatalog();}});
         navBar=row();navBar.setPadding(dp(15),dp(3),dp(15),dp(3));
-        navBar.setBackgroundColor(0xFF10121A);
+        navBar.setBackgroundDrawable(GlassSurface.overlay(0x55C7D8F3,0));
         root.addView(navBar,new LinearLayout.LayoutParams(-1,dp(57)));
         scroller=new ScrollView(this);scroller.setFillViewport(true);scroller.setVerticalScrollBarEnabled(false);
         root.addView(scroller,new LinearLayout.LayoutParams(-1,0,1));
@@ -318,7 +319,7 @@ public final class TVHomeActivity extends Activity {
             final String glyph,final String target,final int baseColor){
         final LinearLayout tile=column();tile.setPadding(dp(19),dp(13),dp(19),dp(12));
         tile.setFocusable(true);tile.setClickable(true);
-        tile.setBackgroundDrawable(bg(baseColor,0xFF474052,19));
+        tile.setBackgroundDrawable(bg(baseColor,0x7BCCD7E7,19));
         TextView symbol=text(glyph,37,WHITE,true);symbol.setGravity(Gravity.RIGHT);
         tile.addView(symbol,new LinearLayout.LayoutParams(-1,0,1));
         TextView name=text(label,27,WHITE,true);name.setGravity(Gravity.RIGHT);
@@ -327,8 +328,8 @@ public final class TVHomeActivity extends Activity {
         tile.addView(caption,space(-1,-2,0));
         tile.setOnFocusChangeListener(new View.OnFocusChangeListener(){
             public void onFocusChange(View v,boolean focused){
-                tile.setBackgroundDrawable(bg(focused?0xFF65233E:baseColor,
-                    focused?RED:0xFF474052,19));
+                tile.setBackgroundDrawable(bg(focused?0xFF665035:baseColor,
+                    focused?0xFFE8C385:0x7BCCD7E7,19));
                 tile.setScaleX(focused?1.035f:1f);
                 tile.setScaleY(focused?1.035f:1f);
                 if(android.os.Build.VERSION.SDK_INT>=21)tile.setElevation(focused?dp(8):0f);
@@ -827,7 +828,7 @@ public final class TVHomeActivity extends Activity {
         final LinearLayout line=row();
         line.setPadding(dp(16),dp(8),dp(16),dp(8));
         line.setFocusable(true);line.setClickable(true);
-        line.setBackgroundDrawable(bg(0xFF121925,0xFF303C4F,12));
+        line.setBackgroundDrawable(bg(0xFF172236,0x7B9DB2CD,12));
         LinearLayout.LayoutParams outer=space(-1,dp(83),4);
         line.setLayoutParams(outer);
         TextView number=text(String.format(Locale.US,"%03d",position+1),20,0xFFF3D293,true);
@@ -849,8 +850,8 @@ public final class TVHomeActivity extends Activity {
         line.addView(action,new LinearLayout.LayoutParams(dp(91),-1));
         line.setOnFocusChangeListener(new View.OnFocusChangeListener(){
             public void onFocusChange(View v,boolean focused){
-                line.setBackgroundDrawable(bg(focused?0xFF364353:0xFF121925,
-                    focused?0xFFF3D293:0xFF303C4F,12));
+                line.setBackgroundDrawable(bg(focused?0xFF3D4E67:0xFF172236,
+                    focused?0xFFF3D293:0x7B9DB2CD,12));
             }
         });
         line.setOnClickListener(new View.OnClickListener(){public void onClick(View v){play(channel);}});
