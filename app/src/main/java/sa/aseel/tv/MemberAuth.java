@@ -8,6 +8,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URL;
 import java.util.Locale;
+import java.util.TimeZone;
+import java.text.SimpleDateFormat;
+import java.text.ParsePosition;
 import javax.net.ssl.HttpsURLConnection;
 
 /**
@@ -85,12 +88,49 @@ public final class MemberAuth {
     public static final class AuthenticationException extends Exception{
         AuthenticationException(String message){super(message);}
     }
+    private static long subscriptionDeadline(JSONObject user)throws AuthenticationException{
+        JSONObject metadata=user.optJSONObject("app_metadata");
+        if(metadata==null)throw new AuthenticationException("بيانات صلاحية الحساب غير صالحة.");
+        String raw=metadata.optString("alezz_expires_at","");
+        if(raw.isEmpty())return 0L; // Existing accounts await an assigned admin expiry.
+        SimpleDateFormat fmt=new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'",Locale.US);
+        fmt.setTimeZone(TimeZone.getTimeZone("UTC"));
+        fmt.setLenient(false);
+        ParsePosition cursor=new ParsePosition(0);
+        java.util.Date parsed=fmt.parse(raw,cursor);
+        if(parsed==null||cursor.getIndex()!=raw.length())
+            throw new AuthenticationException("تاريخ صلاحية الحساب غير صحيح. راجع الإدارة.");
+        return parsed.getTime();
+    }
     private static JSONObject authorizedUser(Context context,String access)throws Exception{
         JSONObject user=request(context,"user",null,access);
         if(!"active".equals(user.optJSONObject("app_metadata")==null?"":user.optJSONObject("app_metadata").optString("alezz_customer","")))
-            throw new AuthenticationException("هذا الحساب غير مفعل للمشاهدة. راجع الإدارة.");
+            throw new AuthenticationException("هذا الحساب غير نشط. تواصل مع الإدارة.");
+        long deadline=subscriptionDeadline(user);
+        if(deadline>0L && deadline<=System.currentTimeMillis())
+            throw new AuthenticationException("انتهت صلاحية حسابك. تواصل مع الإدارة لتجديد الاشتراك.");
         if(user.optString("id","").isEmpty())throw new AuthenticationException("تعذّر تأكيد هوية الحساب.");
         return user;
+    }
+    public static boolean isExpiredLocally(Context context){
+        long until=preferences(context).getLong("subscription_expires_ms",0L);
+        return until>0L && System.currentTimeMillis()>=until;
+    }
+    /** Verify entitlement even during a long-lived session, not only at login. */
+    public static synchronized void validateAccount(Context context)throws Exception{
+        if(isExpiredLocally(context)){
+            logoutLocal(context);
+            throw new AuthenticationException("انتهت صلاحية حسابك. تواصل مع الإدارة.");
+        }
+        ensureFresh(context);
+        try{
+            JSONObject user=authorizedUser(context,accessToken(context));
+            preferences(context).edit()
+                .putLong("subscription_expires_ms",subscriptionDeadline(user)).commit();
+        }catch(AuthenticationException denied){
+            logoutLocal(context);
+            throw denied;
+        }
     }
     private static void save(Context context,JSONObject reply,String username)throws Exception{
         String access=reply.optString("access_token",""),refresh=reply.optString("refresh_token","");
@@ -98,6 +138,7 @@ public final class MemberAuth {
         JSONObject user=authorizedUser(context,access);
         long lifetime=Math.max(60,Math.min(86400,reply.optLong("expires_in",3600)));
         boolean stored=preferences(context).edit()
+            .putLong("subscription_expires_ms",subscriptionDeadline(user))
             .putLong("expires_at_ms",System.currentTimeMillis()+lifetime*1000L)
             .putString("user_id",user.optString("id"))
             .putString("username",username)
@@ -136,6 +177,10 @@ public final class MemberAuth {
     }
     /** Refresh only when necessary; serializing avoids refresh-token rotation races. */
     public static synchronized void ensureFresh(Context context)throws Exception{
+        if(isExpiredLocally(context)){
+            logoutLocal(context);
+            throw new AuthenticationException("انتهت صلاحية حسابك. تواصل مع الإدارة.");
+        }
         long expiry=preferences(context).getLong("expires_at_ms",0L);
         if(accessToken(context).isEmpty()||System.currentTimeMillis()>expiry-90000L)
             resume(context);
