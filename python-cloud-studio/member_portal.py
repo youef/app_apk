@@ -46,11 +46,12 @@ class Portal:
         self.devices = DeviceRegistry(private_dir, device_secret)
         self.member_sessions = MemberSessions(private_dir)
 
-    def upstream(self, method, endpoint, *, secret=False, token='', **options):
+    def upstream(self, method, endpoint, *, secret=False, token='', prefer='', **options):
         key = (os.getenv('ALEZZ_SUPABASE_SECRET_KEY') or os.getenv('ALEZZ_SUPABASE_SERVICE_ROLE_KEY')) if secret else self.public_key
         if not key:
             raise ValueError('مفتاح إدارة الحسابات غير متوفر على الخادم.')
         headers = {'apikey':key}
+        if prefer:headers['Prefer']=prefer
         if token or not key.startswith(('sb_publishable_', 'sb_secret_')):
             headers['Authorization'] = 'Bearer '+(token or key)
         with requests.Session() as client:
@@ -145,6 +146,53 @@ class Portal:
             if len(users)<100:
                 break
         raise ValueError('حساب العميل غير موجود.')
+
+    def member_sync_read(self, uid):
+        favorites=self.upstream('GET','/rest/v1/aseel_favorites',secret=True,
+            params={'user_id':'eq.'+uid,'select':'item_type,item_id','limit':400})
+        progress=self.upstream('GET','/rest/v1/aseel_watch_progress',secret=True,
+            params={'user_id':'eq.'+uid,
+                    'select':'item_type,item_id,position_ms,duration_ms,updated_at',
+                    'order':'updated_at.desc','limit':120})
+        return {'favorites':favorites,'progress':progress}
+
+    def member_sync_write(self, uid, payload):
+        if not isinstance(payload,dict):
+            raise ValueError('طلب غير صالح')
+        kind=payload.get('kind','')
+        action=payload.get('action','')
+        if kind in ('favorites_reset','progress_reset') and action=='clear':
+            table='aseel_favorites' if kind=='favorites_reset' else 'aseel_watch_progress'
+            self.upstream('DELETE','/rest/v1/'+table,secret=True,
+                params={'user_id':'eq.'+uid})
+            return {'ok':True}
+        if kind not in ('favorite','progress') or action not in ('save','remove'):
+            raise ValueError('نوع الإجراء غير صحيح')
+        item_type=payload.get('item_type','')
+        if item_type not in ('movie','series','episode','channel'):
+            raise ValueError('نوع المحتوى غير صحيح')
+        try:
+            item_id=str(UUID(payload.get('item_id','')))
+        except (ValueError,AttributeError,TypeError):
+            raise ValueError('معرف المحتوى غير صحيح')
+        table='aseel_favorites' if kind=='favorite' else 'aseel_watch_progress'
+        if action=='remove':
+            self.upstream('DELETE','/rest/v1/'+table,secret=True,
+                params={'user_id':'eq.'+uid,'item_type':'eq.'+item_type,
+                        'item_id':'eq.'+item_id})
+            return {'ok':True}
+        record={'user_id':uid,'item_type':item_type,'item_id':item_id}
+        if kind=='progress':
+            position=payload.get('position_ms')
+            duration=payload.get('duration_ms')
+            if type(position) is not int or type(duration) is not int or position<0 or duration<=0 or \
+               position>duration or duration>14*24*60*60*1000:
+                raise ValueError('موضع المشاهدة غير صالح')
+            record.update(position_ms=position,duration_ms=duration)
+        self.upstream('POST','/rest/v1/'+table,secret=True,json=record,
+            params={'on_conflict':'user_id,item_type,item_id'},
+            prefer='resolution=merge-duplicates,return=minimal')
+        return {'ok':True}
 
     def customers_page(self, session, message='', page=1):
         from customer_directory import page as render_customer_directory
@@ -267,6 +315,33 @@ class Portal:
                     return await run_in_threadpool(self.customers_page,session,str(exc),page_number)
                 except requests.RequestException:
                     return await run_in_threadpool(self.customers_page,session,'تعذّر تنفيذ العملية. تحقق من حالة الحساب وإعدادات Supabase.',page_number)
+        if path=='/account/sync':
+            from fastapi.responses import JSONResponse
+            if session[1]!='customer':
+                return JSONResponse({'detail':'صلاحية العميل مطلوبة'},status_code=403,headers=HEADERS)
+            if request.method not in ('GET','POST'):
+                return JSONResponse({'detail':'طريقة غير مدعومة'},status_code=405,headers=HEADERS)
+            if request.method=='GET':
+                try:
+                    response_data=await run_in_threadpool(self.member_sync_read,session[0])
+                    return JSONResponse(response_data,headers=HEADERS)
+                except (ValueError,requests.RequestException):
+                    return JSONResponse({'detail':'تعذرت مزامنة الحساب'},status_code=503,headers=HEADERS)
+            if (request.headers.get('origin') != str(request.base_url).rstrip('/') or
+                not secrets.compare_digest(request.headers.get('x-csrf-token',''),session[3]) or
+                not request.headers.get('content-type','').lower().startswith('application/json')):
+                return JSONResponse({'detail':'طلب غير مسموح'},status_code=403,headers=HEADERS)
+            try:
+                body=await request.body()
+                if len(body)>2048:
+                    return JSONResponse({'detail':'حجم الطلب كبير'},status_code=413,headers=HEADERS)
+                data=json.loads(body)
+                result=await run_in_threadpool(self.member_sync_write,session[0],data)
+                return JSONResponse(result,headers=HEADERS)
+            except (ValueError,TypeError,json.JSONDecodeError):
+                return JSONResponse({'detail':'بيانات غير صحيحة'},status_code=400,headers=HEADERS)
+            except requests.RequestException:
+                return JSONResponse({'detail':'تعذرت كتابة المزامنة'},status_code=503,headers=HEADERS)
         if section in ('api','studio','static'):
             response=await call_next(request)
             response.headers['Cache-Control']='private, no-store'
@@ -297,7 +372,7 @@ class Portal:
             # account's device-local favourites and playback progress. It is not a token.
             scope_secret=os.getenv('ALEZZ_SITE_SECRET') or 'local-development-profile-scope'
             profile_key=hmac.new(scope_secret.encode('utf-8'),session[0].encode('utf-8'),hashlib.sha256).hexdigest()[:32]
-            context={'authenticated':True,'accountKey':profile_key}
+            context={'authenticated':True,'accountKey':profile_key,'csrf':session[3]}
             script='<script>window.ALEZZ_MEMBER_CONTEXT='+json.dumps(context,separators=(',',':'))+';</script>'
             markup=target.read_text(encoding='utf-8')
             marker='<script src="js/store.js?v=member-scope-1"></script>'
