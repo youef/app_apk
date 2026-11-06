@@ -113,7 +113,7 @@ public final class PlayerActivity extends Activity {
         panel.setGravity(Gravity.CENTER_VERTICAL);
         panel.setPadding(dp(35),dp(18),dp(35),dp(18));
         panel.setBackgroundDrawable(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{0xF21A101C,0xF609070D}));
+            new int[]{0xE337435A,0xEA0B1424}));
         FrameLayout.LayoutParams pp=new FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM);
         root.addView(panel,pp);
         controlsPanel=panel;
