@@ -72,6 +72,28 @@ class PortalTests(unittest.TestCase):
         self.assertIn(a.group(1),same.text)
         self.assertNotIn('window.ALEZZ_MEMBER_CONTEXT',self.client.get('/web/catalog.json').text)
 
+    def test_session_persists_after_server_restart_until_explicit_logout(self):
+        self.login('customer')
+        # No in-memory customer token is needed: the private SQLite database
+        # restores the authorized session after a Render worker restart.
+        restarted = Portal(self.portal.root, self.portal.db_url,
+                           self.portal.public_key, secure=True)
+        app = FastAPI()
+        app.middleware('http')(restarted.middleware)
+        again = TestClient(app, base_url='https://studio.example.org',
+                           follow_redirects=False)
+        try:
+            again.cookies.update(self.client.cookies)
+            page = again.get('/web/index.html')
+            self.assertEqual(page.status_code, 200)
+            self.assertIn('window.ALEZZ_MEMBER_CONTEXT', page.text)
+            response = again.post('/account/logout', headers=self.headers)
+            self.assertEqual(response.status_code, 303)
+            self.assertEqual(again.get('/web/').headers['location'], '/account/login')
+            self.assertEqual(self.client.get('/web/').headers['location'], '/account/login')
+        finally:
+            again.close()
+
     def test_customer_is_limited_to_one_registered_browser(self):
         self.login('customer')
         self.assertEqual(self.client.get('/web/').status_code,200)
