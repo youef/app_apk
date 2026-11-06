@@ -449,11 +449,8 @@ public final class PlayerActivity extends Activity {
         row.addView(b,p);return b;
     }
     private GradientDrawable controlBackground(boolean focused){
-        GradientDrawable shape=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            focused?new int[]{0xFFF14C67,0xFFB71B3E}:new int[]{0xFF322232,0xFF201823});
-        shape.setCornerRadius(dp(11));
-        shape.setStroke(dp(1),focused?0xFFFFA7BB:0xFF563749);
-        return shape;
+        return GlassSurface.panel(focused?0xFF79566C:0xFF232C3D,
+            focused?0xFFF5D18A:0x65B9CBE5,dp(11));
     }
     private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
     @Override protected void onPause(){super.onPause();if(video!=null&&ready){video.pause();if(!live)savePosition(video.getCurrentPosition());}}
