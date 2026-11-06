@@ -38,10 +38,28 @@
       search: '<circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/>',
       tv: '<rect x="3" y="5" width="18" height="13" rx="3"/><path d="M8 21h8"/>',
       star: '<path d="m12 2 3.2 6.5 7.2 1.1-5.2 5.1 1.2 7.2-6.4-3.4-6.4 3.4 1.2-7.2-5.2-5.1 7.2-1.1z"/>',
-      pip: '<rect x="3" y="4" width="18" height="16" rx="2"/><rect x="11" y="12" width="8" height="6" rx="1"/>'
+      pip: '<rect x="3" y="4" width="18" height="16" rx="2"/><rect x="11" y="12" width="8" height="6" rx="1"/>',
+      prev: '<path d="m14 18-6-6 6-6"/><path d="M19 5v14"/>',
+      next: '<path d="m10 6 6 6-6 6"/><path d="M5 5v14"/>',
+      settings: '<path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="17" r="2"/>',
+      mute: '<path d="M5 9h4l5-4v14l-5-4H5zM18 9l4 6M22 9l-4 6"/>',
+      aspect: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 9l-2 3 2 3M16 9l2 3-2 3"/>',
+      list: '<rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 10h8M8 14h8"/>',
+      live: '<circle cx="12" cy="12" r="4"/><path d="M4 8a9 9 0 0 0 0 8M20 8a9 9 0 0 1 0 8"/>',
+      check: '<path d="M4 12l5 5L20 6"/>',
+      up: '<path d="m5 15 7-7 7 7"/>',
+      down: '<path d="m5 9 7 7 7-7"/>'
     };
     return '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
       (shapes[name] || shapes.play) + '</svg>';
+  }
+  // SVG actions remain icon-only visually but have Arabic text for assistive tech.
+  function setLiveAction(id, symbol, label, pressed) {
+    var button=$(id);if(!button)return;
+    button.innerHTML=icon(symbol);
+    button.title=label;
+    button.setAttribute("aria-label",label);
+    if(pressed!=null)button.setAttribute("aria-pressed",String(!!pressed));
   }
   function isOfficial(channel) { return channel.playback === "official_link" && !!https(channel.official); }
   function playable(channel) {
@@ -167,8 +185,7 @@
     var favorite = $("liveFavorite");
     if (favorite) {
       var on = key && state.favorites.indexOf(key) >= 0;
-      favorite.textContent = on ? "★ في المفضلة" : "☆ أضف للمفضلة";
-      favorite.setAttribute("aria-pressed",String(!!on));
+      setLiveAction("liveFavorite","star",on?"إزالة من المفضلة":"إضافة للمفضلة",on);
       favorite.disabled = !key;
     }
   }
@@ -224,6 +241,7 @@
     button.setAttribute("aria-pressed", String(muted));
     button.setAttribute("aria-label", muted ? "تفعيل الصوت" : "كتم الصوت");
     button.title = muted ? "تفعيل الصوت" : "كتم الصوت";
+    button.innerHTML=icon(muted?"mute":"volume");
   }
   function waitForPlaybackGesture(ticket) {
     if (ticket !== state.request) return;
@@ -307,7 +325,10 @@
     var currentLevel = state.qualityLevels.filter(function (x) {
       return x.index === state.qualityChoice;
     })[0];
-    button.textContent = "الجودة: " + (currentLevel ? currentLevel.label : "تلقائي");
+    var activeQuality=currentLevel ? currentLevel.label : "تلقائي";
+    button.innerHTML=icon("settings")+'<span class="live-quality-label">'+esc(activeQuality)+'</span>';
+    button.title="جودة البث: "+activeQuality;
+    button.setAttribute("aria-label","جودة البث: "+activeQuality);
     menu.replaceChildren();
     if (!available) return;
     [{index:-1,label:"تلقائي"}].concat(state.qualityLevels).forEach(function (level) {
@@ -499,6 +520,8 @@
       toggle.setAttribute("aria-pressed", String(state.cinemaMode));
       toggle.textContent = state.cinemaMode ? "☷ عرض دليل القنوات" : "⛶ وضع التلفزيون";
     }
+    if (toggle) setLiveAction("liveCinemaToggle",state.cinemaMode?"list":"expand",
+      state.cinemaMode?"عرض دليل القنوات":"وضع التلفزيون",state.cinemaMode);
     if (Store && Store.setPref) Store.setPref("liveCinemaMode", state.cinemaMode);
     // The last highlighted row can be hidden when entering cinema mode.
     // Keep hardware remote arrows attached to the visible player instead.
@@ -658,14 +681,12 @@
     $("liveFit").addEventListener("click", function () {
       var stage = $("liveStage"), fit = !stage.classList.contains("is-cropped");
       stage.classList.toggle("is-cropped", fit);
-      $("liveFit").textContent = fit ? "احتواء الصورة" : "ملء الصورة";
-      $("liveFit").setAttribute("aria-pressed", String(fit));
+      setLiveAction("liveFit","aspect",fit?"احتواء الصورة":"ملء الصورة",fit);
       Store.setPref("videoFit", fit ? "cover" : "contain");
     });
     if (Store.pref("videoFit","contain") === "cover") {
       $("liveStage").classList.add("is-cropped");
-      $("liveFit").textContent = "احتواء الصورة";
-      $("liveFit").setAttribute("aria-pressed","true");
+      setLiveAction("liveFit","aspect","احتواء الصورة",true);
     }
     $("liveMute").addEventListener("click", function () {
       var video = $("liveVideo");
@@ -800,14 +821,14 @@
       '<h1>البث المباشر <em>على شاشتك</em></h1>' +
       '<p>تلفزيون مباشر، قنوات مرتبة، وتنقل سريع بالريموت مع جودة متكيّفة حسب المصدر والاتصال.</p></div>' +
       '<div class="live-heading__actions"><span class="live-total">' + count + ' قناة في الدليل</span>' +
-      '<button type="button" class="live-outline live-outline--tv" id="liveCinemaToggle" aria-pressed="false">⛶ وضع التلفزيون</button>' +
-      '<button type="button" class="live-outline" id="liveRefresh">' + icon("refresh") + ' تحديث القنوات</button></div></div>' +
+      '<button type="button" class="live-outline live-outline--tv live-icon-action" id="liveCinemaToggle" aria-pressed="false" title="وضع التلفزيون" aria-label="وضع التلفزيون">' + icon("expand") + '</button>' +
+      '<button type="button" class="live-outline live-icon-action" id="liveRefresh" title="تحديث القنوات" aria-label="تحديث القنوات">' + icon("refresh") + '</button></div></div>' +
       '<div class="live-layout"><div class="live-viewer">' +
       '<div class="live-stage" id="liveStage" tabindex="0" aria-label="منطقة مشاهدة التلفزيون؛ السهم فوق وتحت لتغيير القنوات">' +
       '<video id="liveVideo" controls playsinline webkit-playsinline x-webkit-airplay="allow" preload="none" aria-label="مشغل البث المباشر"></video>' +
       '<div class="live-channel-hud" id="liveChannelHud" aria-live="off" hidden></div>' +
       '<div class="live-stage__zap" role="group" aria-label="التنقل بين قنوات الفئة"><button type="button" id="liveZapUp" aria-label="القناة التالية">▲</button><button type="button" id="liveZapDown" aria-label="القناة السابقة">▼</button></div>' +
-      '<button type="button" class="live-stage__guide-btn" id="liveGuideOverlay" aria-label="فتح دليل القنوات">☷ دليل القنوات</button>' +
+      '<button type="button" class="live-stage__guide-btn" id="liveGuideOverlay" title="فتح دليل القنوات" aria-label="فتح دليل القنوات">' + icon("list") + '</button>' +
       '<div class="live-poster" id="livePoster"><span class="live-poster__glow"></span><span class="live-emblem">' +
         icon("tv") + '</span><span class="live-poster__text">AL EZZ <b>LIVE</b></span></div>' +
       '<span class="live-stage__badge"><i></i> LIVE</span>' +
@@ -816,20 +837,22 @@
       '<small>تشاهد الآن</small><h2 id="liveCurrentTitle">اختر قناة من الدليل</h2>' +
       '<p id="liveCurrentDesc">اضغط على إحدى القنوات للبدء</p></div><span class="live-format" id="liveFormat">LIVE</span></div>' +
       '<div class="live-status" id="liveStatus" role="status" aria-live="polite">اختر القناة التي تريد مشاهدتها.</div>' +
-      '<div class="live-toolbar">' +
-      '<button id="livePrev" type="button" class="live-control">' + icon("arrow") + ' السابقة</button>' +
-      '<button id="liveNext" type="button" class="live-control">التالية ' + icon("arrow") + '</button>' +
-      '<button id="liveRetry" type="button" class="live-control">' + icon("refresh") + ' إعادة الاتصال</button>' +
-      '<button id="liveGoLive" type="button" class="live-control">● الآن</button>' +
-      '<button id="liveFavorite" type="button" class="live-control" aria-pressed="false">☆ أضف للمفضلة</button>' +
-      '<div class="live-quality-wrap"><button id="liveQuality" type="button" class="live-control" aria-haspopup="menu" aria-expanded="false" aria-controls="liveQualityMenu" disabled>الجودة: تلقائي</button><div id="liveQualityMenu" class="live-quality-menu" role="menu" hidden></div></div>' +
-      '<button id="livePip" type="button" class="live-control" title="نافذة عائمة" aria-label="عرض القناة في نافذة عائمة">' + icon("pip") + ' نافذة عائمة</button>' +
-      '<button id="liveMute" type="button" class="live-control live-control--icon" aria-pressed="false" title="كتم الصوت">' + icon("volume") + '</button>' +
-      '<button id="liveFit" type="button" class="live-control" aria-pressed="false" title="ملء الصورة مع احتمال قص الأطراف">ملء الصورة</button>' +
+      '<div class="live-toolbar" role="toolbar" aria-label="أدوات التلفزيون المباشر">' +
+      '<button id="livePrev" type="button" class="live-control live-icon-action" title="القناة السابقة" aria-label="القناة السابقة">' + icon("prev") + '</button>' +
+      '<button id="liveNext" type="button" class="live-control live-icon-action" title="القناة التالية" aria-label="القناة التالية">' + icon("next") + '</button>' +
+      '<span class="live-toolbar__divider" aria-hidden="true"></span>' +
+      '<button id="liveRetry" type="button" class="live-control live-icon-action" title="إعادة الاتصال" aria-label="إعادة الاتصال">' + icon("refresh") + '</button>' +
+      '<button id="liveGoLive" type="button" class="live-control live-icon-action" title="العودة إلى البث الآن" aria-label="العودة إلى البث الآن">' + icon("live") + '</button>' +
+      '<button id="liveFavorite" type="button" class="live-control live-icon-action" aria-pressed="false" title="إضافة للمفضلة" aria-label="إضافة للمفضلة">' + icon("star") + '</button>' +
+      '<div class="live-quality-wrap"><button id="liveQuality" type="button" class="live-control live-control--quality" aria-haspopup="menu" aria-expanded="false" aria-controls="liveQualityMenu" disabled>' + icon("settings") + '<span class="live-quality-label">تلقائي</span></button><div id="liveQualityMenu" class="live-quality-menu" role="menu" hidden></div></div>' +
+      '<span class="live-toolbar__spacer"></span>' +
+      '<button id="livePip" type="button" class="live-control live-icon-action" title="نافذة عائمة" aria-label="نافذة عائمة">' + icon("pip") + '</button>' +
+      '<button id="liveMute" type="button" class="live-control live-icon-action" aria-pressed="false" title="كتم الصوت" aria-label="كتم الصوت">' + icon("volume") + '</button>' +
+      '<button id="liveFit" type="button" class="live-control live-icon-action" aria-pressed="false" title="ملء الصورة" aria-label="ملء الصورة">' + icon("aspect") + '</button>' +
       '<google-cast-launcher id="liveCast" class="cast-launcher" title="Google Cast" aria-label="الإرسال إلى Google Cast" hidden></google-cast-launcher>' +
-      '<button id="liveAirPlay" type="button" class="live-control cast-airplay" aria-label="اختيار شاشة AirPlay" hidden>AirPlay</button>' +
+      '<button id="liveAirPlay" type="button" class="live-control live-icon-action cast-airplay" title="اختيار شاشة AirPlay" aria-label="اختيار شاشة AirPlay" hidden>AirPlay</button>' +
       '<span id="liveCastStatus" class="cast-status" role="status" aria-live="polite" hidden></span>' +
-      '<button id="liveFullscreen" type="button" class="live-control live-control--icon" title="ملء الشاشة" aria-label="ملء الشاشة">' + icon("expand") + '</button></div>' +
+      '<button id="liveFullscreen" type="button" class="live-control live-icon-action" title="ملء الشاشة" aria-label="ملء الشاشة">' + icon("expand") + '</button></div>' +
       '<a id="liveOfficial" class="live-official" target="_blank" rel="noopener noreferrer" hidden>' + icon("external") + ' فتح المصدر الرسمي</a>' +
       '<p class="live-help">البث متاح وفق المصدر وبلد المشاهدة. قد يرفض بعض الناشرين تشغيله داخل المتصفح (CORS)، كما أن iPhone وiPad يتحكمان تلقائيًا في جودات HLS الأصلية.</p>' +
       '</div><aside class="live-guide" aria-label="دليل القنوات">' +
