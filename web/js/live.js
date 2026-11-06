@@ -8,7 +8,7 @@
     hls: null, dash: null, frame: null, request: 0, timeout: null, mounted: false,
     hlsRecoveries: 0, favoritesOnly: false, favorites: [], awaitingGesture: false,
     dial: "", dialTimer: null, qualityLevels: [], qualityChoice: -1,
-    lastChannelKey: null, startAt: 0, pipActive: false, cinemaMode: false
+    lastChannelKey: null, startAt: 0, pipActive: false, cinemaMode: false, type: "الكل", lastZap: 0
   };
 
   function $(id) { return document.getElementById(id); }
@@ -63,6 +63,59 @@
       (cover ? '<img class="live-channel-art__cover" src="' + esc(cover) + '" alt="" loading="lazy" onerror="this.remove()">' : "") +
       '</span>';
   }
+  var genreOrder=["أخبار","رياضة","أفلام","مسلسلات","أطفال","وثائقيات",
+    "دينية","موسيقى","تعليمية","طبخ","منوعات","عامة"];
+  function hasAny(value,keywords) {
+    for(var i=0;i<keywords.length;i++)if(value.indexOf(keywords[i])>=0)return true;
+    return false;
+  }
+  function channelGenre(channel) {
+    if (channel.kids) return "أطفال";
+    var category=String(channel.category||"").toLowerCase();
+    var extra=Array.isArray(channel.genreTags)?channel.genreTags.join(" ").toLowerCase():"";
+    var title=String(channel.title||"").toLowerCase();
+    var text=(category+" "+extra).trim();
+    if (!text || hasAny(text,["غير مصنف","uncategorized","general","عام","other","misc"])) text=title;
+    if(hasAny(text,["أخبار","الاخبار","اخبار","news","الحدث","سياسة","politic"]))return "أخبار";
+    if(hasAny(text,["رياض","sport","football","soccer","bein","كورة","كرة","ملاعب"]))return "رياضة";
+    if(hasAny(text,["أطفال","اطفال","kids","cartoon","كرتون","spacetoon","baby","junior"]))return "أطفال";
+    if(hasAny(text,["وثائ","document","nature","wildlife","history","تاريخ","علوم","science"]))return "وثائقيات";
+    if(hasAny(text,["مسلسل","series","drama","دراما"]))return "مسلسلات";
+    if(hasAny(text,["أفلام","افلام","cinema","movie","film","أكشن","action"]))return "أفلام";
+    if(hasAny(text,["دين","quran","قرآن","قران","islam","relig","السنة","الحرمين"]))return "دينية";
+    if(hasAny(text,["موسي","music","أغاني","اغاني","song","طرب"]))return "موسيقى";
+    if(hasAny(text,["تعليم","education","learn","school"]))return "تعليمية";
+    if(hasAny(text,["طبخ","cook","food","مطبخ"]))return "طبخ";
+    if(hasAny(text,["ترفيه","entertain","منوعات","variety","comedy","كوميديا"]))return "منوعات";
+    return "عامة";
+  }
+  function categoryStats(channels) {
+    var counts={},result=[{name:"الكل",count:channels.length}];
+    channels.forEach(function(channel){
+      var type=channelGenre(channel);
+      counts[type]=(counts[type]||0)+1;
+    });
+    genreOrder.forEach(function(type){if(counts[type])result.push({name:type,count:counts[type]});});
+    return result;
+  }
+  function renderTypes() {
+    var tabs=$("liveTypeTabs");
+    if(!tabs)return;
+    var stats=categoryStats(state.channels);
+    if(!stats.some(function(x){return x.name===state.type;}))state.type="الكل";
+    tabs.innerHTML=stats.map(function(type){
+      return '<button type="button" class="live-type-tab'+(state.type===type.name?' is-on':'')+
+        '" data-live-type="'+esc(type.name)+'" aria-pressed="'+String(state.type===type.name)+'">'+
+        '<span>'+esc(type.name)+'</span><b>'+type.count+'</b></button>';
+    }).join("");
+  }
+  function channelScope() {
+    return state.channels.filter(function(c){
+      return (state.type==="الكل" || channelGenre(c)===state.type) &&
+        (!state.favoritesOnly || state.favorites.indexOf(c.key)>=0) &&
+        (!state.category || Explore.matches(c,state.category));
+    });
+  }
   function channelKind(channel) {
     return isOfficial(channel) ? "موقع الناشر" : !playable(channel) ? "رابط غير مدعوم" : "بث مباشر";
   }
@@ -71,28 +124,28 @@
     return '<button type="button" class="live-guide__item' + (on ? " is-selected" : "") +
       '" data-live-key="' + esc(channel.key) + '" aria-pressed="' + (on ? "true" : "false") +
       '" title="' + esc(channel.title) + '">' +
-      '<span class="live-guide__number">' + String(index + 1).padStart(2, "0") + '</span>' +
+      '<span class="live-guide__number">' + String(state.channels.indexOf(channel) + 1).padStart(3, "0") + '</span>' +
       '<span class="live-guide__thumb">' + poster(channel) + '</span>' +
       '<span class="live-guide__copy"><strong>' + esc(channel.title) + '</strong><small>' +
-      esc(channel.category || channelKind(channel)) + '</small></span>' +
+      esc(channelGenre(channel)) + ' · ' + esc(channel.country || "TV") + '</small></span>' +
       '<span class="live-guide__indicator">' + (state.favorites.indexOf(channel.key)>=0 ? '<span aria-label="مفضلة" class="live-guide__star">★</span>' : '') +
       (isOfficial(channel) ? icon("external") : '<i></i>') + '</span></button>';
   }
   function sortedChannels() {
-    return state.channels.filter(function (c) {
-      if (state.favoritesOnly && state.favorites.indexOf(c.key) === -1) return false;
-      if (state.category && !Explore.matches(c,state.category)) return false;
-      var query = state.search.trim().toLocaleLowerCase();
-      return !query || (c.title + " " + c.category + " " + (c.country || "")).toLocaleLowerCase().indexOf(query) !== -1;
+    var query=state.search.trim().toLocaleLowerCase();
+    return channelScope().filter(function(c){
+      return !query || (c.title+" "+(c.category||"")+" "+channelGenre(c)+" "+(c.country||""))
+        .toLocaleLowerCase().indexOf(query)>=0;
     });
   }
   function updateGuide() {
     var list = $("liveGuideItems"), count = $("liveFilteredCount");
     if (!list) return;
     state.shown = sortedChannels();
+    renderTypes();
     list.innerHTML = state.shown.length ? state.shown.map(row).join("") :
       '<p class="live-guide__empty">لم نعثر على قنوات تطابق البحث. غيّر التصنيف أو جرّب اسمًا آخر.</p>';
-    if (count) count.textContent = state.shown.length + " قناة";
+    if (count) count.textContent = state.shown.length + " قناة • " + state.type;
     var label = $("liveSearchClear");
     if (label) label.hidden = !state.search;
     var filterButton = $("liveFavoritesFilter");
@@ -123,7 +176,7 @@
     var title = $("liveCurrentTitle"), desc = $("liveCurrentDesc"), art = $("livePoster");
     if (!title || !channel) return;
     title.textContent = channel.title;
-    desc.textContent = (channel.category || "قناة تلفزيونية") + " • " + channelKind(channel);
+    desc.textContent = channelGenre(channel) + " • " + channelKind(channel);
     art.innerHTML = poster(channel);
     art.hidden = false;
     // All channels are played inside Al Ezz TV. Do not offer browser exits.
@@ -291,10 +344,10 @@
     var hud=$("liveChannelHud");
     if (!hud) return;
     clearTimeout(state.hudTimer);
-    var idx=state.shown.indexOf(channel);
-    if (idx<0)idx=state.channels.indexOf(channel);
+    var idx=state.channels.indexOf(channel);
     var num=idx<0?"TV":String(idx+1).padStart(3,"0");
-    hud.textContent=(override||num)+"   "+(channel?channel.title:"");
+    hud.textContent=(override||num)+"   "+(channel?channel.title:"")+
+      (channel?"  •  "+channelGenre(channel):"");
     hud.hidden=false;
     state.hudTimer=setTimeout(function(){if(hud)hud.hidden=true;},2600);
   }
@@ -304,9 +357,16 @@
     state.dial="";
     clearTimeout(state.dialTimer);
     state.dialTimer=null;
-    var items=state.shown.length?state.shown:state.channels;
-    if (number>=1 && number<=items.length) select(items[number-1],true);
-    else stateText("لا توجد قناة بهذا الرقم في الدليل الحالي.",true);
+    var items=state.channels;
+    if(number>=1&&number<=items.length){
+      var target=items[number-1];
+      if(channelScope().indexOf(target)<0){
+        state.type="الكل";state.category="";state.favoritesOnly=false;
+        if($("liveFilters"))$("liveFilters").innerHTML=Explore.picker(state.channels,"","live",state.catalogCategories);
+        updateGuide();
+      }
+      select(target,true);
+    }else stateText("لا توجد قناة بهذا الرقم في الدليل الحالي.",true);
   }
   function toggleLivePip() {
     var video=$("liveVideo");
@@ -448,12 +508,18 @@
     if (focus) { focus.focus(); if (selected) selected.scrollIntoView({block:"nearest"}); }
   }
   function navigate(direction) {
-    var list = state.shown.length ? state.shown : state.channels;
-    if (!list.length) return;
-    var at = -1;
-    for (var i = 0; i < list.length; i++) if (state.current && list[i].key === state.current.key) { at = i; break; }
-    var target = at<0 ? (direction<0 ? list.length-1 : 0) : (at+direction+list.length)%list.length;
-    select(list[target], true);
+    var list=channelScope();
+    if(!list.length){stateText("لا توجد قنوات متاحة ضمن الفئة المختارة.",true);return;}
+    var at=-1;
+    for(var i=0;i<list.length;i++)if(state.current&&list[i].key===state.current.key){at=i;break;}
+    var target=at<0?(direction<0?list.length-1:0):(at+direction+list.length)%list.length;
+    select(list[target],true);
+  }
+  function rapidNavigate(direction) {
+    var now=Date.now();
+    if(now-state.lastZap<130)return;
+    state.lastZap=now;
+    navigate(direction);
   }
   function mount() {
     if (!$("livePage")) return;
@@ -466,6 +532,7 @@
     state.favorites = (Store && Store.pref && Store.pref("liveFavorites",[])) || [];
     if (!Array.isArray(state.favorites)) state.favorites = [];
     state.favoritesOnly = false;
+    state.type=Store && Store.pref ? Store.pref("liveType","الكل") : "الكل";
     updateGuide();
     var last = Store && Store.pref ? Store.pref("lastLiveChannel","") : "";
     var first = null;
@@ -487,7 +554,23 @@
         if (state.channels[i].key === key) { item = state.channels[i]; break; }
       }
       select(item, true);
+      cinemaMode(true);
     });
+    $("liveTypeTabs").addEventListener("click",function(event){
+      var button=event.target.closest("[data-live-type]");
+      if(!button)return;
+      state.type=button.getAttribute("data-live-type")||"الكل";
+      state.category="";state.search="";
+      $("liveSearch").value="";
+      $("liveFilters").innerHTML=Explore.picker(state.channels,"","live",state.catalogCategories);
+      if(Store&&Store.setPref)Store.setPref("liveType",state.type);
+      updateGuide();
+      var current=state.current;
+      var scope=channelScope();
+      if(scope.length && (!current || scope.indexOf(current)<0))select(scope[0],false);
+    });
+    $("liveZapUp").addEventListener("click",function(){rapidNavigate(1);});
+    $("liveZapDown").addEventListener("click",function(){rapidNavigate(-1);});
     $("liveSearch").addEventListener("input", function (event) {
       state.search = event.target.value; updateGuide();
     });
@@ -663,16 +746,17 @@
       if (event.key === "Escape" && state.cinemaMode) {
         event.preventDefault();openGuide();return;
       }
-      if (state.cinemaMode && event.key === "ArrowUp") {
-        event.preventDefault();navigate(1);return;
-      }
-      if (state.cinemaMode && event.key === "ArrowDown") {
-        event.preventDefault();navigate(-1);return;
+      // A TV remote should change stations instantly while viewing the picture,
+      // but arrow keys must navigate normally inside a visible channel guide.
+      var guideFocus=target&&target.closest&&target.closest(".live-guide");
+      var otherControl=target&&target.closest&&target.closest(".live-toolbar, .live-heading__actions");
+      if (!guideFocus && !otherControl && (event.key==="ArrowUp"||event.key==="ArrowDown")){
+        event.preventDefault();rapidNavigate(event.key==="ArrowUp"?1:-1);return;
       }
       if (event.altKey && event.key === "ArrowUp") { event.preventDefault(); navigate(-1); }
       if (event.altKey && event.key === "ArrowDown") { event.preventDefault(); navigate(1); }
-      if (event.key === "PageUp" || event.key === "ChannelUp") { event.preventDefault(); navigate(-1); }
-      if (event.key === "PageDown" || event.key === "ChannelDown") { event.preventDefault(); navigate(1); }
+      if (event.key === "PageUp" || event.key === "ChannelUp") { event.preventDefault(); rapidNavigate(1); }
+      if (event.key === "PageDown" || event.key === "ChannelDown") { event.preventDefault(); rapidNavigate(-1); }
     };
     document.addEventListener("keydown", state.keydown);
   }
@@ -693,6 +777,7 @@
     state.catalogCategories=(catalog && catalog.categories)||[];
     state.search = "";
     state.category = initialCategory || "";
+    state.type = "الكل";
     state.shown = [];
     state.current = null;
     var count = state.channels.length;
@@ -708,6 +793,7 @@
       '<div class="live-stage" id="liveStage">' +
       '<video id="liveVideo" controls playsinline webkit-playsinline x-webkit-airplay="allow" preload="none" aria-label="مشغل البث المباشر"></video>' +
       '<div class="live-channel-hud" id="liveChannelHud" aria-live="off" hidden></div>' +
+      '<div class="live-stage__zap" role="group" aria-label="التنقل بين قنوات الفئة"><button type="button" id="liveZapUp" aria-label="القناة التالية">▲</button><button type="button" id="liveZapDown" aria-label="القناة السابقة">▼</button></div>' +
       '<button type="button" class="live-stage__guide-btn" id="liveGuideOverlay" aria-label="فتح دليل القنوات">☷ دليل القنوات</button>' +
       '<div class="live-poster" id="livePoster"><span class="live-poster__glow"></span><span class="live-emblem">' +
         icon("tv") + '</span><span class="live-poster__text">AL EZZ <b>LIVE</b></span></div>' +
@@ -736,14 +822,17 @@
       '</div><aside class="live-guide" aria-label="دليل القنوات">' +
       '<div class="live-guide__head"><div><span class="live-eyebrow">TV GUIDE</span><h2>دليل القنوات</h2></div>' +
       '<span class="live-guide__count" id="liveFilteredCount">' + count + ' قناة</span></div>' +
-      '<div class="live-discovery" id="liveFilters">' + categoryButtons + '</div>' +
+      '<div class="live-guide__category-head">اختر نوع القنوات</div>' +
+      '<div class="live-type-tabs" id="liveTypeTabs" role="group" aria-label="نوع القنوات"></div>' +
+      '<details class="live-extra-filters"><summary>الدولة والفلاتر المتقدمة</summary><div class="live-discovery" id="liveFilters">' + categoryButtons + '</div></details>' +
       '<div class="live-search">' + icon("search") + '<input id="liveSearch" type="search" placeholder="ابحث عن قناة أو دولة..." aria-label="بحث القنوات" autocomplete="off">' +
       '<button id="liveSearchClear" type="button" aria-label="مسح البحث" hidden>×</button></div>' +
       '<button id="liveFavoritesFilter" type="button" class="live-favorites-filter" aria-pressed="false">☆ عرض المفضلة</button>' +
       '<div class="live-guide__items" id="liveGuideItems" role="group" aria-label="القنوات"></div>' +
-      '<div class="live-guide__bottom">الأرقام + OK للتنقل · CH± للتبديل · G للدليل · F لتكبير الصورة</div>' +
+      '<div class="live-guide__bottom">↑↓ تغيير القنوات · OK تشغيل · CH± تنقل · الأرقام لاختيار قناة · G لفتح الدليل</div>' +
       '</aside></div></section>';
   }
 
-  window.AlezzLive = { render: render, mount: mount, destroy: destroy, playable: playable, mediaType: mediaType };
+  window.AlezzLive = { render: render, mount: mount, destroy: destroy,
+    playable: playable, mediaType: mediaType, channelGenre:channelGenre, categoryStats:categoryStats };
 })();
