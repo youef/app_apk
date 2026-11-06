@@ -13,7 +13,8 @@ public final class PlaybackMemory {
     private static final long MAX_AGE=90L*24L*60L*60L*1000L;
     private PlaybackMemory(){}
     private static SharedPreferences prefs(Context context){
-        return context.getApplicationContext().getSharedPreferences(PREF,Context.MODE_PRIVATE);
+        String user=MemberAuth.userId(context);
+        return context.getApplicationContext().getSharedPreferences(PREF+"."+(user.matches("[a-fA-F0-9-]{36}")?user:"anonymous"),Context.MODE_PRIVATE);
     }
     private static String safeProfile(String profile){
         return "kids".equals(profile)?"kids":"guest".equals(profile)?"guest":"family";
