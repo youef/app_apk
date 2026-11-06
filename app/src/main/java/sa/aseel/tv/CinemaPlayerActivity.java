@@ -28,7 +28,9 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import javax.net.ssl.HttpsURLConnection;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -50,7 +52,9 @@ import com.google.android.exoplayer2.ui.PlayerView;
 public final class CinemaPlayerActivity extends Activity {
     private static final int BG=0xFF090B11, RED=0xFFEF3658, WHITE=0xFFF7F4F8, MUTED=0xFFA7A6B4;
     private final Handler handler=new Handler();
-    private final ExecutorService probeWorker=Executors.newSingleThreadExecutor();
+    // Keep probes bounded while the remote is rapidly changing stations.
+    private final ExecutorService probeWorker=new ThreadPoolExecutor(2,2,30L,TimeUnit.SECONDS,
+        new ArrayBlockingQueue<Runnable>(2),new ThreadPoolExecutor.DiscardOldestPolicy());
     private final HashSet<Integer> attempted=new HashSet<Integer>();
     private int requestToken=0;
     private String lastSourceHint="";
@@ -93,6 +97,40 @@ public final class CinemaPlayerActivity extends Activity {
         handler.postDelayed(hideLiveHud,3800L);
     }
     private String profile="family",seriesId="",activeGroup="الكل";
+    private Button guideSelectedButton,guideFirstButton;
+    private long lastRapidZap=0L;
+    private boolean matchesGroup(JSONObject channel){
+        return "الكل".equals(activeGroup) ||
+            ("المفضلة".equals(activeGroup) && channel.optBoolean("favorite",false)) ||
+            activeGroup.equals(groupFor(channel));
+    }
+    private void stepChannel(int direction){
+        if(tvChannels.isEmpty())return;
+        int size=tvChannels.size(),at=tvChannelIndex;
+        for(int i=0;i<size;i++){
+            at=(at+direction+size)%size;
+            if(matchesGroup(tvChannels.get(at))){
+                switchChannel(at);return;
+            }
+        }
+        showLiveHud("لا توجد قنوات متاحة ضمن التصنيف "+activeGroup);
+    }
+    private void rapidZap(int direction,KeyEvent event){
+        long now=android.os.SystemClock.uptimeMillis();
+        if(event.getRepeatCount()>0 && now-lastRapidZap<135L)return;
+        lastRapidZap=now;
+        stepChannel(direction);
+    }
+    private void showLiveOptions(){
+        if(controlPanel!=null)controlPanel.setVisibility(View.GONE);
+        if(leftRail!=null)leftRail.setVisibility(View.GONE);
+        if(rightRail!=null){
+            rightRail.setVisibility(View.VISIBLE);
+            if(rightRail.getChildCount()>1)rightRail.getChildAt(1).requestFocus();
+        }
+        handler.removeCallbacks(autoHide);
+        railVisible=true;
+    }
     private boolean railVisible=false;
     private final Runnable progressTick=new Runnable(){public void run(){
         if(isFinishing())return;
@@ -221,6 +259,8 @@ public final class CinemaPlayerActivity extends Activity {
         kidsAge=intent.getIntExtra("kids_age",6);
         kidsMinutes=intent.getIntExtra("kids_minutes",60);
         if(live){
+            String chosen=intent.getStringExtra("channel_group");
+            if(chosen!=null&&!chosen.trim().isEmpty())activeGroup=chosen;
             try{
                 JSONArray list=new JSONArray(intent.getStringExtra("channel_playlist")==null
                     ? "[]" : intent.getStringExtra("channel_playlist"));
@@ -320,14 +360,7 @@ public final class CinemaPlayerActivity extends Activity {
         if(live){
             Button options=button("⚙ خيارات التلفزيون");
             footer.addView(options,new LinearLayout.LayoutParams(dp(168),-1));
-            options.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-                if(controlPanel!=null)controlPanel.setVisibility(View.GONE);
-                if(leftRail!=null)leftRail.setVisibility(View.GONE);
-                if(rightRail!=null){
-                    rightRail.setVisibility(View.VISIBLE);
-                    if(rightRail.getChildCount()>1)rightRail.getChildAt(1).requestFocus();
-                }
-            }});
+            options.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showLiveOptions();}});
         }
         Button audioButton=button("♫ صوت / ترجمة");
         footer.addView(audioButton,new LinearLayout.LayoutParams(dp(146),-1));
@@ -474,6 +507,7 @@ public final class CinemaPlayerActivity extends Activity {
         status.setText("◌ فحص رابط الفيديو قبل التشغيل...");
         showControls(false);
         probeWorker.execute(new Runnable(){public void run(){
+            if(token!=requestToken||Thread.currentThread().isInterrupted())return;
             final StreamProbe.Result probe=StreamProbe.inspect(getApplicationContext(),stream);
             handler.post(new Runnable(){public void run(){
                 if(isFinishing()||engine==null||token!=requestToken)return;
@@ -560,17 +594,17 @@ public final class CinemaPlayerActivity extends Activity {
             Button channelUp=button("▲ القناة التالية");
             rightRail.addView(channelUp,new LinearLayout.LayoutParams(-1,dp(54)));
             channelUp.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-                switchChannel(tvChannelIndex+1);
+                stepChannel(1);
             }});
             Button channelDown=button("▼ القناة السابقة");
             rightRail.addView(channelDown,new LinearLayout.LayoutParams(-1,dp(54)));
             channelDown.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-                switchChannel(tvChannelIndex-1);
+                stepChannel(-1);
             }});
             Button guide=button("☷ قائمة القنوات");
             rightRail.addView(guide,new LinearLayout.LayoutParams(-1,dp(54)));
             guide.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-                updateChannelRail();setRailsVisible(true);
+                showChannelGuide();
             }});
         }
         Button quality=button("⚙ الجودة");
@@ -586,61 +620,91 @@ public final class CinemaPlayerActivity extends Activity {
         setRailsVisible(false);
     }
     private String groupFor(JSONObject row){
-        String name=row.optString("category","");
-        if(name.isEmpty())name=row.optString("category_name","");
-        if(name.isEmpty())name=row.optString("group_title","");
-        return name.isEmpty()?"غير مصنف":name;
+        return ChannelGuideCategory.from(row);
     }
+    private void focusGuideChannel(){
+        Button next=guideSelectedButton!=null?guideSelectedButton:guideFirstButton;
+        if(next!=null)next.requestFocus();
+    }
+    /** Accessible categorized channel drawer, rebuilt only when it is opened or filtered. */
     private void updateChannelRail(){
         if(!live||leftRail==null)return;
         leftRail.removeAllViews();
-        TextView title=txt("دليل قنوات العز TV  •  "+tvChannels.size()+" قناة",18,WHITE,true);
+        guideSelectedButton=null;guideFirstButton=null;
+        TextView title=txt("☷  دليل قنوات العز TV",19,WHITE,true);
         title.setGravity(Gravity.CENTER);
-        leftRail.addView(title,new LinearLayout.LayoutParams(-1,dp(52)));
+        leftRail.addView(title,new LinearLayout.LayoutParams(-1,dp(46)));
+        final java.util.LinkedHashMap<String,Integer> counts=new java.util.LinkedHashMap<String,Integer>();
+        for(String name:new String[]{"أخبار","رياضة","أفلام","مسلسلات","أطفال",
+                "وثائقيات","دينية","موسيقى","تعليمية","طبخ","منوعات","عامة"})
+            counts.put(name,0);
+        int favorites=0;
+        for(JSONObject c:tvChannels){
+            String group=groupFor(c);
+            counts.put(group,counts.containsKey(group)?counts.get(group)+1:1);
+            if(c.optBoolean("favorite",false))favorites++;
+        }
         java.util.LinkedHashSet<String> groups=new java.util.LinkedHashSet<String>();
         groups.add("الكل");
-        for(JSONObject c:tvChannels)groups.add(groupFor(c));
+        if(favorites>0)groups.add("المفضلة");
+        for(java.util.Map.Entry<String,Integer> item:counts.entrySet())
+            if(item.getValue()>0)groups.add(item.getKey());
         if(!groups.contains(activeGroup))activeGroup="الكل";
         HorizontalScrollView types=new HorizontalScrollView(this);
         types.setHorizontalScrollBarEnabled(false);
-        leftRail.addView(types,new LinearLayout.LayoutParams(-1,dp(54)));
+        leftRail.addView(types,new LinearLayout.LayoutParams(-1,dp(51)));
         LinearLayout horizontal=new LinearLayout(this);
         horizontal.setOrientation(LinearLayout.HORIZONTAL);types.addView(horizontal);
         for(final String group:groups){
-            Button filter=button((group.equals(activeGroup)?"✓ ":"")+group);
+            int groupSize="الكل".equals(group)?tvChannels.size():
+                "المفضلة".equals(group)?favorites:counts.get(group);
+            Button filter=button((group.equals(activeGroup)?"● ":"")+group+"  "+groupSize);
             filter.setTextSize(12);
-            horizontal.addView(filter,new LinearLayout.LayoutParams(dp(116),dp(48)));
+            filter.setContentDescription("تصنيف "+group+"، "+groupSize+" قناة");
+            horizontal.addView(filter,new LinearLayout.LayoutParams(dp(127),dp(46)));
             filter.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-                activeGroup=group;updateChannelRail();
-                setRailsVisible(true);
+                activeGroup=group;
+                updateChannelRail();
+                if(leftRail!=null)leftRail.setVisibility(View.VISIBLE);
+                focusGuideChannel();
             }});
         }
+        int shown=0;
+        for(JSONObject row:tvChannels)if(matchesGroup(row))shown++;
+        TextView subtitle=txt(activeGroup+"  •  "+shown+" قناة    |    ↑↓ اختيار    OK مشاهدة",12,MUTED,false);
+        subtitle.setPadding(dp(9),dp(5),dp(9),dp(9));
+        leftRail.addView(subtitle,new LinearLayout.LayoutParams(-1,dp(39)));
         channelsScroll=new ScrollView(this);
         channelsScroll.setVerticalScrollBarEnabled(false);
         leftRail.addView(channelsScroll,new LinearLayout.LayoutParams(-1,0,1));
         LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);
         channelsScroll.addView(list);
-        int found=0;
         for(int i=0;i<tvChannels.size();i++){
             JSONObject item=tvChannels.get(i);
-            if(!"الكل".equals(activeGroup)&&!activeGroup.equals(groupFor(item)))continue;
-            found++;
-            final int index=i;
+            if(!matchesGroup(item))continue;
+            final int position=i;
             String name=item.optString("title","قناة");
             String now=item.optString("epg_now_title","");
             String next=item.optString("epg_next_title","");
-            String line=String.format(Locale.US,"%03d   %s",i+1,name);
+            String line=String.format(Locale.US,"%03d  •  %s",i+1,name);
             if(!now.isEmpty())line+="\nالآن: "+now;
-            if(!next.isEmpty())line+="\nالتالي: "+next;
-            Button channel=button((i==tvChannelIndex?"● ":"")+line);
-            channel.setAllCaps(false);channel.setTextSize(13);
+            else line+="\n"+groupFor(item);
+            if(!next.isEmpty())line+="    التالي: "+next;
+            Button channel=button((i==tvChannelIndex?"▶ ":"")+line);
+            channel.setAllCaps(false);
+            channel.setTextSize(13);
+            channel.setGravity(Gravity.CENTER_VERTICAL|Gravity.RIGHT);
+            channel.setPadding(dp(13),0,dp(13),0);
             list.addView(channel,new LinearLayout.LayoutParams(-1,dp(
-                now.isEmpty()&&next.isEmpty()?54:84)));
+                now.isEmpty()&&next.isEmpty()?66:84)));
+            if(guideFirstButton==null)guideFirstButton=channel;
+            if(i==tvChannelIndex)guideSelectedButton=channel;
             channel.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-                switchChannel(index);hideControls();
+                switchChannel(position);
+                hideControls();
             }});
         }
-        if(found==0)list.addView(txt("لا توجد قنوات بهذا التصنيف",14,MUTED,false));
+        if(shown==0)list.addView(txt("لا توجد قنوات في هذا التصنيف",14,MUTED,false));
     }
     private void updateSkipButton(){
         if(skipIntroButton==null)return;
@@ -740,14 +804,7 @@ public final class CinemaPlayerActivity extends Activity {
         if(rightRail!=null)rightRail.setVisibility(View.GONE);
         if(leftRail!=null)leftRail.setVisibility(View.VISIBLE);
         railVisible=true;
-        if(channelsScroll!=null&&channelsScroll.getChildCount()>0){
-            View list=channelsScroll.getChildAt(0);
-            if(list instanceof ViewGroup){
-                ViewGroup rows=(ViewGroup)list;
-                int choice=Math.min(Math.max(0,tvChannelIndex),rows.getChildCount()-1);
-                if(choice>=0)rows.getChildAt(choice).requestFocus();
-            }
-        }
+        focusGuideChannel();
     }
     private void switchChannel(int position){
         if(tvChannels.isEmpty())return;
@@ -775,7 +832,7 @@ public final class CinemaPlayerActivity extends Activity {
         showLiveHud(String.format(Locale.US,"● LIVE  •  CH %03d\n%s%s%s",tvChannelIndex+1,
             itemTitle,now.isEmpty()?"":"\nالآن: "+now,
             nextTitle.isEmpty()?"":"\nالتالي: "+nextTitle));
-        updateChannelRail();
+        if(leftRail!=null&&leftRail.getVisibility()==View.VISIBLE)updateChannelRail();
         playSource(index);
     }
     private void cycleAspectRatio(){
@@ -877,10 +934,10 @@ public final class CinemaPlayerActivity extends Activity {
     @Override public boolean onKeyDown(int code,KeyEvent event){
         if(live && !tvChannels.isEmpty()){
             if(code==KeyEvent.KEYCODE_CHANNEL_UP||code==KeyEvent.KEYCODE_MEDIA_NEXT){
-                switchChannel(tvChannelIndex+1);return true;
+                rapidZap(1,event);return true;
             }
             if(code==KeyEvent.KEYCODE_CHANNEL_DOWN||code==KeyEvent.KEYCODE_MEDIA_PREVIOUS){
-                switchChannel(tvChannelIndex-1);return true;
+                rapidZap(-1,event);return true;
             }
             if(code==KeyEvent.KEYCODE_MENU||code==KeyEvent.KEYCODE_GUIDE){
                 if(leftRail!=null&&leftRail.getVisibility()==View.VISIBLE)hideControls();
@@ -890,8 +947,10 @@ public final class CinemaPlayerActivity extends Activity {
             if(controlPanel!=null && controlPanel.getVisibility()!=View.VISIBLE &&
                (leftRail==null||leftRail.getVisibility()!=View.VISIBLE)&&
                (rightRail==null||rightRail.getVisibility()!=View.VISIBLE)){
-                if(code==KeyEvent.KEYCODE_DPAD_UP){switchChannel(tvChannelIndex+1);return true;}
-                if(code==KeyEvent.KEYCODE_DPAD_DOWN){switchChannel(tvChannelIndex-1);return true;}
+                if(code==KeyEvent.KEYCODE_DPAD_UP){rapidZap(1,event);return true;}
+                if(code==KeyEvent.KEYCODE_DPAD_DOWN){rapidZap(-1,event);return true;}
+                if(code==KeyEvent.KEYCODE_DPAD_LEFT){showChannelGuide();return true;}
+                if(code==KeyEvent.KEYCODE_DPAD_RIGHT){showLiveOptions();return true;}
             }
             int digit=code-KeyEvent.KEYCODE_0;
             if(digit>=0 && digit<=9){
