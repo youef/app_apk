@@ -42,5 +42,7 @@ test("Native mute persists and ExoPlayer volume follows it",player.includes('put
     player.includes('engine.setVolume(liveMuted?0f:1f)'));
 test("Browser cache keys changed but private shell policy retained",html.includes("tv-studio-v18-balanced-20261107") &&
     html.includes("tv-v18-balanced-20261107") &&
-    read("web/sw.js").includes("alezz-shell-member-privacy-20261105-v18-balanced"));
+    read("web/sw.js").includes("alezz-shell-member-privacy-20261105") &&
+    read("web/sw.js").includes("css/glass.css") &&
+    read("web/sw.js").includes('request.mode === "navigate"'));
 console.log("PASS | V18 icon-first balanced live TV static acceptance; physical-device playback still needs field verification.");
