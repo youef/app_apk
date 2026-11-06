@@ -159,8 +159,7 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams p=lp(-1,-2);p.setMargins(0,dp(top),0,dp(bottom));return p;
     }
     private GradientDrawable background(int color,int radius,int stroke){
-        GradientDrawable g=new GradientDrawable();g.setColor(color);
-        g.setCornerRadius(dp(radius));if(stroke!=0)g.setStroke(dp(1),stroke);return g;
+        return GlassSurface.panel(color,stroke,dp(radius));
     }
     private TextView text(String value,int size,int color,boolean bold){
         TextView t=new TextView(this);t.setText(value);t.setTextSize(size);t.setTextColor(color);
@@ -170,11 +169,11 @@ public final class MainActivity extends Activity {
     }
     /** Android KitKat cinema shell: native 10-foot layout, remote-first and RTL. */
     private void buildShell(){
-        root=vertical();root.setBackgroundColor(NAVY);root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+        root=vertical();root.setBackgroundDrawable(GlassSurface.canvas());
+        root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
         LinearLayout head=horizontal();
         head.setPadding(dp(27),dp(8),dp(27),dp(8));
-        head.setBackgroundDrawable(new GradientDrawable(GradientDrawable.Orientation.RIGHT_LEFT,
-            new int[]{0xFF3B101E,0xFF1B0E17,0xFF0D0A10}));
+        head.setBackgroundDrawable(GlassSurface.overlay(0x78E4C58B,dp(0)));
         root.addView(head,lp(-1,dp(78)));
         int logoResource=getResources().getIdentifier("alizz_brand","drawable",getPackageName());
         if(logoResource!=0){
@@ -210,7 +209,7 @@ public final class MainActivity extends Activity {
         root.addView(theater,new LinearLayout.LayoutParams(-1,0,1));
         LinearLayout rail=vertical();
         rail.setPadding(dp(15),dp(19),dp(15),dp(16));
-        rail.setBackgroundColor(0xFF18181B);
+        rail.setBackgroundDrawable(GlassSurface.overlay(0x61E4D6C5,dp(0)));
         theater.addView(rail,lp(dp(205),-1));
         TextView guide=text("✦  استكشف العز TV",14,0xFFFFAAB7,true);
         guide.setGravity(Gravity.RIGHT);guide.setPadding(dp(8),dp(7),0,dp(12));rail.addView(guide);
@@ -489,7 +488,7 @@ public final class MainActivity extends Activity {
         android.widget.FrameLayout spotlight=new android.widget.FrameLayout(this);
         GradientDrawable backdrop=new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
             new int[]{0xFF421528,0xFF100B14,0xFF29101C});
-        backdrop.setCornerRadius(dp(24));spotlight.setBackgroundDrawable(backdrop);
+        backdrop.setCornerRadius(dp(24));spotlight.setBackgroundDrawable(GlassSurface.overlay(0x69E0BB80,dp(24)));
         stage.addView(spotlight,lp(-1,dp(340)));
         if(featured!=null && !prefs.getBoolean("lite_mode",false)){
             ImageView visual=new ImageView(this);
