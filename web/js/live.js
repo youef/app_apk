@@ -508,6 +508,12 @@
     }
   }
   function openGuide() {
+    // Stage-only fullscreen cannot show a sibling guide; exit it before revealing categories.
+    var fullscreen=document.fullscreenElement||document.webkitFullscreenElement;
+    if(fullscreen){
+      var exit=document.exitFullscreen||document.webkitExitFullscreen;
+      if(exit){try{var done=exit.call(document);if(done&&done.catch)done.catch(function(){});}catch(e){}}
+    }
     cinemaMode(false);
     var selected = $("liveGuideItems") && $("liveGuideItems").querySelector(".is-selected");
     var focus = selected || $("liveSearch");
