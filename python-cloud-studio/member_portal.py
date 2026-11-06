@@ -18,6 +18,7 @@ from fastapi import Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from starlette.concurrency import run_in_threadpool
 from member_devices import DeviceRegistry, DEVICE_COOKIE, DEVICE_MAX_AGE, friendly_device
+from member_sessions import MemberSessions, CUSTOMER_SESSION_SECONDS
 
 COOKIE = 'alezz_member'
 SESSION_SECONDS = 8 * 3600
@@ -43,6 +44,7 @@ class Portal:
         private_dir = os.getenv('ALEZZ_DATA_DIR') or root
         device_secret = os.getenv('ALEZZ_SITE_SECRET') or 'alezz-local-only-device-secret-not-for-hosted-production'
         self.devices = DeviceRegistry(private_dir, device_secret)
+        self.member_sessions = MemberSessions(private_dir)
 
     def upstream(self, method, endpoint, *, secret=False, token='', **options):
         key = (os.getenv('ALEZZ_SUPABASE_SECRET_KEY') or os.getenv('ALEZZ_SUPABASE_SERVICE_ROLE_KEY')) if secret else self.public_key
@@ -110,6 +112,7 @@ class Portal:
         for key,value in list(self.sessions.items()):
             if value[0]==uid:
                 self.sessions.pop(key,None)
+        self.member_sessions.revoke_user(uid)
 
     def manage(self, form):
         username=form.get('username','').strip().lower()
@@ -193,18 +196,32 @@ class Portal:
                 return HTMLResponse('الخادم مشغول. حاول لاحقًا.',503,headers=HEADERS)
             token=secrets.token_urlsafe(32)
             self.sessions.pop(request.cookies.get(COOKIE,''),None)
-            self.sessions[token]=(uid,role,now+SESSION_SECONDS,secrets.token_urlsafe(24))
+            self.member_sessions.delete(request.cookies.get(COOKIE,''))
+            csrf=secrets.token_urlsafe(24)
+            if role=='customer':
+                try:
+                    await run_in_threadpool(self.member_sessions.create,token,uid,csrf)
+                except OSError:
+                    return HTMLResponse('تعذّر حفظ الجلسة بأمان، تحقق من القرص الخاص بالخادم.',503,headers=HEADERS)
+            else:
+                self.sessions[token]=(uid,role,now+SESSION_SECONDS,csrf)
             response=RedirectResponse('/studio/' if role=='admin' else '/web/',303,headers=HEADERS)
-            response.set_cookie(COOKIE,token,max_age=SESSION_SECONDS,httponly=True,secure=self.secure,samesite='strict')
+            response.set_cookie(COOKIE,token,max_age=CUSTOMER_SESSION_SECONDS if role=='customer' else SESSION_SECONDS,httponly=True,secure=self.secure,samesite='strict')
             if role == 'customer':
                 response.set_cookie(DEVICE_COOKIE,browser_token,max_age=DEVICE_MAX_AGE,
                                     httponly=True,secure=self.secure,samesite='strict')
             return response
         token=request.cookies.get(COOKIE,'')
         session=self.sessions.get(token)
+        cookie_renewed=False
+        if session is None:
+            persisted=await run_in_threadpool(self.member_sessions.get,token)
+            if persisted:
+                session,cookie_renewed=persisted
         if session and session[1] == 'customer':
             if not await run_in_threadpool(self.devices.matches, session[0], request.cookies.get(DEVICE_COOKIE, '')):
                 self.sessions.pop(token, None)
+                await run_in_threadpool(self.member_sessions.delete,token)
                 session = None
         if path in ('/account/login','/account/admin'):
             return self.login_page(mode='admin' if path=='/account/admin' else 'customer')
@@ -220,6 +237,7 @@ class Portal:
             if request.headers.get('origin')!=str(request.base_url).rstrip('/'):
                 return Response(status_code=403,headers=HEADERS)
             self.sessions.pop(token,None)
+            await run_in_threadpool(self.member_sessions.delete,token)
             response=RedirectResponse('/',303,headers={**HEADERS,'Clear-Site-Data':'"cache"'})
             response.delete_cookie(COOKIE,secure=self.secure,httponly=True,samesite='strict')
             response.delete_cookie('alezz_studio_session',secure=self.secure,httponly=True,samesite='strict')
@@ -286,5 +304,13 @@ class Portal:
             # Inject before the store module so every subsequent module reads the
             # correct account namespace, even after switching logins on one device.
             markup=markup.replace(marker,script+marker) if marker in markup else markup+script
-            return HTMLResponse(markup,headers=headers)
-        return FileResponse(target,media_type=mime,headers=headers)
+            result=HTMLResponse(markup,headers=headers)
+            if cookie_renewed:
+                result.set_cookie(COOKIE,token,max_age=CUSTOMER_SESSION_SECONDS,
+                                  httponly=True,secure=self.secure,samesite='strict')
+            return result
+        result=FileResponse(target,media_type=mime,headers=headers)
+        if cookie_renewed and session[1]=='customer':
+            result.set_cookie(COOKIE,token,max_age=CUSTOMER_SESSION_SECONDS,
+                              httponly=True,secure=self.secure,samesite='strict')
+        return result
