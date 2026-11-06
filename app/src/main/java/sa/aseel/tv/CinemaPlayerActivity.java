@@ -81,6 +81,17 @@ public final class CinemaPlayerActivity extends Activity {
     private FrameLayout rootFrame;
     private Button skipIntroButton;
     private ScrollView channelsScroll;
+    private TextView liveHud;
+    private final Runnable hideLiveHud=new Runnable(){public void run(){
+        if(liveHud!=null)liveHud.setVisibility(View.GONE);
+    }};
+    private void showLiveHud(String message){
+        if(!live||liveHud==null)return;
+        liveHud.setText(message);
+        liveHud.setVisibility(View.VISIBLE);
+        handler.removeCallbacks(hideLiveHud);
+        handler.postDelayed(hideLiveHud,3800L);
+    }
     private String profile="family",seriesId="",activeGroup="الكل";
     private boolean railVisible=false;
     private final Runnable progressTick=new Runnable(){public void run(){
@@ -108,7 +119,8 @@ public final class CinemaPlayerActivity extends Activity {
     private void showControls(boolean focusButton){
         if(controlPanel==null)return;
         controlPanel.setVisibility(View.VISIBLE);
-        setRailsVisible(true);
+        // Keep broadcast picture unobstructed; open TV guide/options only on demand.
+        setRailsVisible(!live);
         handler.removeCallbacks(autoHide);
         if(focusButton&&playButton!=null)playButton.requestFocus();
         if(engine!=null&&engine.isPlaying())handler.postDelayed(autoHide,HIDE_DELAY);
@@ -254,6 +266,16 @@ public final class CinemaPlayerActivity extends Activity {
             }
         });
         root.addView(surface,new FrameLayout.LayoutParams(-1,-1));
+        if(live){
+            liveHud=txt("● LIVE  •  العز TV",18,WHITE,true);
+            liveHud.setPadding(dp(19),dp(11),dp(19),dp(11));
+            liveHud.setBackgroundDrawable(shape(0xED0C101B,0xFFBDA16B));
+            liveHud.setMaxWidth(Math.max(dp(260),getResources().getDisplayMetrics().widthPixels*62/100));
+            liveHud.setVisibility(View.GONE);
+            FrameLayout.LayoutParams hudParams=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.RIGHT);
+            hudParams.topMargin=dp(26);hudParams.rightMargin=dp(26);
+            root.addView(liveHud,hudParams);
+        }
         LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);
         controlPanel=panel;
         panel.setPadding(dp(22),dp(13),dp(22),dp(13));
@@ -289,12 +311,24 @@ public final class CinemaPlayerActivity extends Activity {
         footer.addView(qualityButton,new LinearLayout.LayoutParams(dp(138),-1));
         qualityButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showQualityMenu();}});
         externalButton=button("مشغل بديل");
-        footer.addView(externalButton,new LinearLayout.LayoutParams(dp(138),-1));
+        if(!live)footer.addView(externalButton,new LinearLayout.LayoutParams(dp(138),-1));
         externalButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){external();}});
         Button guideButton=button(live?"☷ القنوات":"☷ المكتبة");
         footer.addView(guideButton,new LinearLayout.LayoutParams(dp(140),-1));
         guideButton.setEnabled((live && !tvChannels.isEmpty())||(!live&&!mediaPlaylist.isEmpty()));
         guideButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showContentGuide();}});
+        if(live){
+            Button options=button("⚙ خيارات التلفزيون");
+            footer.addView(options,new LinearLayout.LayoutParams(dp(168),-1));
+            options.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                if(controlPanel!=null)controlPanel.setVisibility(View.GONE);
+                if(leftRail!=null)leftRail.setVisibility(View.GONE);
+                if(rightRail!=null){
+                    rightRail.setVisibility(View.VISIBLE);
+                    if(rightRail.getChildCount()>1)rightRail.getChildAt(1).requestFocus();
+                }
+            }});
+        }
         Button audioButton=button("♫ صوت / ترجمة");
         footer.addView(audioButton,new LinearLayout.LayoutParams(dp(146),-1));
         audioButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showTrackMenu();}});
@@ -302,12 +336,13 @@ public final class CinemaPlayerActivity extends Activity {
         footer.addView(screenButton,new LinearLayout.LayoutParams(dp(135),-1));
         screenButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){cycleAspectRatio();}});
         Button speedButton=button("⏩ السرعة");
-        footer.addView(speedButton,new LinearLayout.LayoutParams(dp(135),-1));
+        if(!live)footer.addView(speedButton,new LinearLayout.LayoutParams(dp(135),-1));
         speedButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showSpeedMenu();}});
         backButton=button("رجوع");
         footer.addView(backButton,new LinearLayout.LayoutParams(dp(138),-1));
         backButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){finish();}});
         buildSideRails(root);
+        if(live)showLiveHud("● البث المباشر  •  "+itemTitle+"\nOK: التحكم    MENU: دليل القنوات    CH±: تغيير");
         handler.postDelayed(progressTick,9000L);
         if(sources.isEmpty()){
             status.setText("لا يوجد رابط MP4/HLS صالح لهذا العنوان. يرجى تحديثه في لوحة الإدارة.");
@@ -559,7 +594,7 @@ public final class CinemaPlayerActivity extends Activity {
     private void updateChannelRail(){
         if(!live||leftRail==null)return;
         leftRail.removeAllViews();
-        TextView title=txt("☷ القنوات والتصنيفات",19,WHITE,true);
+        TextView title=txt("دليل قنوات العز TV  •  "+tvChannels.size()+" قناة",18,WHITE,true);
         title.setGravity(Gravity.CENTER);
         leftRail.addView(title,new LinearLayout.LayoutParams(-1,dp(52)));
         java.util.LinkedHashSet<String> groups=new java.util.LinkedHashSet<String>();
@@ -602,7 +637,7 @@ public final class CinemaPlayerActivity extends Activity {
             list.addView(channel,new LinearLayout.LayoutParams(-1,dp(
                 now.isEmpty()&&next.isEmpty()?54:84)));
             channel.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-                switchChannel(index);setRailsVisible(true);
+                switchChannel(index);hideControls();
             }});
         }
         if(found==0)list.addView(txt("لا توجد قنوات بهذا التصنيف",14,MUTED,false));
@@ -699,7 +734,20 @@ public final class CinemaPlayerActivity extends Activity {
     }
     private void showChannelGuide(){
         if(tvChannels.isEmpty()){status.setText("دليل القنوات غير متاح.");showControls(true);return;}
-        updateChannelRail();showControls(false);setRailsVisible(true);
+        updateChannelRail();
+        handler.removeCallbacks(autoHide);
+        if(controlPanel!=null)controlPanel.setVisibility(View.GONE);
+        if(rightRail!=null)rightRail.setVisibility(View.GONE);
+        if(leftRail!=null)leftRail.setVisibility(View.VISIBLE);
+        railVisible=true;
+        if(channelsScroll!=null&&channelsScroll.getChildCount()>0){
+            View list=channelsScroll.getChildAt(0);
+            if(list instanceof ViewGroup){
+                ViewGroup rows=(ViewGroup)list;
+                int choice=Math.min(Math.max(0,tvChannelIndex),rows.getChildCount()-1);
+                if(choice>=0)rows.getChildAt(choice).requestFocus();
+            }
+        }
     }
     private void switchChannel(int position){
         if(tvChannels.isEmpty())return;
@@ -713,12 +761,20 @@ public final class CinemaPlayerActivity extends Activity {
         }
         itemId=selected.optString("id","");
         itemTitle=selected.optString("title","قناة تلفزيونية");
-        sources=next;index=StreamQuality.choose(sources,"auto",Build.VERSION.SDK_INT);
+        sources=next;
+        String preferred=getSharedPreferences("alezz_v11_player",MODE_PRIVATE)
+            .getString("quality_"+itemId,"auto");
+        index=StreamQuality.choose(sources,preferred,Build.VERSION.SDK_INT);
         if(index<0)index=0;
         attempted.clear();tries=0;requestToken++;liveRestarts=0;frozenTicks=0;lastLivePlayhead=-1;
         title.setText(String.format(Locale.US,"● CH %03d  •  %s",tvChannelIndex+1,itemTitle));
         PlaybackMemory.lastChannel(this,profile,itemId);
         details.setText("بث مباشر • CH± للتنقل • اضغط MENU للدليل");
+        String now=selected.optString("epg_now_title","");
+        String nextTitle=selected.optString("epg_next_title","");
+        showLiveHud(String.format(Locale.US,"● LIVE  •  CH %03d\n%s%s%s",tvChannelIndex+1,
+            itemTitle,now.isEmpty()?"":"\nالآن: "+now,
+            nextTitle.isEmpty()?"":"\nالتالي: "+nextTitle));
         updateChannelRail();
         playSource(index);
     }
@@ -827,7 +883,15 @@ public final class CinemaPlayerActivity extends Activity {
                 switchChannel(tvChannelIndex-1);return true;
             }
             if(code==KeyEvent.KEYCODE_MENU||code==KeyEvent.KEYCODE_GUIDE){
-                showContentGuide();return true;
+                if(leftRail!=null&&leftRail.getVisibility()==View.VISIBLE)hideControls();
+                else showContentGuide();
+                return true;
+            }
+            if(controlPanel!=null && controlPanel.getVisibility()!=View.VISIBLE &&
+               (leftRail==null||leftRail.getVisibility()!=View.VISIBLE)&&
+               (rightRail==null||rightRail.getVisibility()!=View.VISIBLE)){
+                if(code==KeyEvent.KEYCODE_DPAD_UP){switchChannel(tvChannelIndex+1);return true;}
+                if(code==KeyEvent.KEYCODE_DPAD_DOWN){switchChannel(tvChannelIndex-1);return true;}
             }
             int digit=code-KeyEvent.KEYCODE_0;
             if(digit>=0 && digit<=9){
@@ -835,7 +899,7 @@ public final class CinemaPlayerActivity extends Activity {
                 if(remoteNumber.length()>3)remoteNumber=remoteNumber.substring(remoteNumber.length()-3);
                 handler.removeCallbacks(commitRemoteNumber);
                 status.setText("اختيار القناة "+remoteNumber+"...");
-                showControls(false);
+                showLiveHud("● اختيار رقم القناة  "+remoteNumber+"  …");
                 handler.postDelayed(commitRemoteNumber,1250L);
                 return true;
             }
@@ -856,6 +920,11 @@ public final class CinemaPlayerActivity extends Activity {
             }
         }
         if(code==KeyEvent.KEYCODE_CAPTIONS){showTrackMenu();return true;}
+        if(code==KeyEvent.KEYCODE_BACK && live &&
+            ((leftRail!=null&&leftRail.getVisibility()==View.VISIBLE)||
+             (rightRail!=null&&rightRail.getVisibility()==View.VISIBLE))){
+            hideControls();return true;
+        }
         if(code==KeyEvent.KEYCODE_BACK&&controlPanel!=null
            &&controlPanel.getVisibility()==View.VISIBLE){hideControls();return true;}
         if(code==KeyEvent.KEYCODE_DPAD_CENTER||code==KeyEvent.KEYCODE_ENTER||
@@ -886,6 +955,7 @@ public final class CinemaPlayerActivity extends Activity {
     @Override protected void onPause(){
         handler.removeCallbacks(kidsClock);
         handler.removeCallbacks(autoHide);
+        handler.removeCallbacks(hideLiveHud);
         handler.removeCallbacks(commitRemoteNumber);
         if(engine!=null){
             if(!live && itemId.length()>0)saveProgress();
