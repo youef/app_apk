@@ -37,6 +37,37 @@ public final class TVHomeActivity extends Activity {
     private static final String SETTINGS="alezz_tv_settings_v14";
     private final ExecutorService background=Executors.newFixedThreadPool(4);
     private final Handler ui=new Handler();
+    private long lastEntitlementCheckAt=0L;
+    private boolean checkingEntitlement=false;
+    private final Runnable entitlementGuard=new Runnable(){public void run(){
+        if(!unlocked||isFinishing())return;
+        if(!MemberAuth.hasSession(TVHomeActivity.this) || MemberAuth.isExpiredLocally(TVHomeActivity.this)){
+            MemberAuth.logoutLocal(TVHomeActivity.this);
+            ui.removeCallbacks(this);
+            showMemberLogin("انتهت صلاحية الحساب أو أُلغيت الجلسة. تواصل مع الإدارة.");
+            return;
+        }
+        long now=android.os.SystemClock.elapsedRealtime();
+        if(!checkingEntitlement && (lastEntitlementCheckAt==0L || now-lastEntitlementCheckAt>=90000L)){
+            checkingEntitlement=true;
+            lastEntitlementCheckAt=now;
+            background.execute(new Runnable(){public void run(){
+                try{
+                    MemberAuth.validateAccount(TVHomeActivity.this);
+                }catch(final MemberAuth.AuthenticationException denied){
+                    ui.post(new Runnable(){public void run(){
+                        if(unlocked&&!isFinishing()){
+                            unlocked=false;
+                            ui.removeCallbacks(entitlementGuard);
+                            showMemberLogin(denied.getMessage());
+                        }
+                    }});
+                }catch(Exception network){ /* Keep retrying; expired local deadline is checked each tick. */ }
+                finally{ui.post(new Runnable(){public void run(){checkingEntitlement=false;}});}
+            }});
+        }
+        ui.postDelayed(this,60000L);
+    }};
     private final ArrayList<JSONObject> movies=new ArrayList<JSONObject>();
     private final ArrayList<JSONObject> series=new ArrayList<JSONObject>();
     private final ArrayList<JSONObject> episodeQueue=new ArrayList<JSONObject>();
@@ -317,6 +348,9 @@ public final class TVHomeActivity extends Activity {
         }
         unlocked=true;showingWelcome=false;
         section="home";buildShell();render();loadCatalog();
+        lastEntitlementCheckAt=0L;
+        ui.removeCallbacks(entitlementGuard);
+        ui.postDelayed(entitlementGuard,1800L);
         MemberSync.begin(this);
         if(!getSharedPreferences(SETTINGS,MODE_PRIVATE).getString("iptv_m3u","").isEmpty())
             refreshLocalPlaylist(false);
@@ -1314,6 +1348,10 @@ public final class TVHomeActivity extends Activity {
     }
     @Override protected void onResume(){
         super.onResume();
+        if(unlocked){
+            ui.removeCallbacks(entitlementGuard);
+            ui.post(entitlementGuard);
+        }
         if(unlocked && !getSharedPreferences(SETTINGS,MODE_PRIVATE).getString("iptv_m3u","").isEmpty()
             && android.os.SystemClock.elapsedRealtime()-lastLocalPlaylistRefreshAt>45L*60L*1000L){
             refreshLocalPlaylist(false);
@@ -1323,7 +1361,12 @@ public final class TVHomeActivity extends Activity {
             loadCatalog();
         }
     }
+    @Override protected void onPause(){
+        ui.removeCallbacks(entitlementGuard);
+        super.onPause();
+    }
     @Override protected void onDestroy(){
+        ui.removeCallbacks(entitlementGuard);
         generation++;episodeGeneration++;localPlaylistGeneration++;unlocked=false;background.shutdownNow();ui.removeCallbacks(remoteChannelCommit);ui.removeCallbacksAndMessages(null);
         super.onDestroy();
     }
