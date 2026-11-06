@@ -8,7 +8,7 @@
     hls: null, dash: null, frame: null, request: 0, timeout: null, mounted: false,
     hlsRecoveries: 0, favoritesOnly: false, favorites: [], awaitingGesture: false,
     dial: "", dialTimer: null, qualityLevels: [], qualityChoice: -1,
-    lastChannelKey: null, startAt: 0, pipActive: false
+    lastChannelKey: null, startAt: 0, pipActive: false, cinemaMode: false
   };
 
   function $(id) { return document.getElementById(id); }
@@ -353,14 +353,20 @@
           if (ticket !== state.request) return;
           if (!Hls || !Hls.isSupported()) { error("هذا المتصفح لا يدعم HLS أو تعذّر تحميل مكتبة التشغيل. جرّب متصفحًا حديثًا."); return; }
           var hls = state.hls = new Hls({
-            enableWorker: true, lowLatencyMode: true, backBufferLength: 30,
-            maxBufferLength: 20, liveSyncDurationCount: 3
+            enableWorker: true, lowLatencyMode: true, backBufferLength: 25,
+            capLevelToPlayerSize: false, maxBufferLength: 28, liveSyncDurationCount: 3
           });
           hls.on(Hls.Events.MEDIA_ATTACHED, function () { if (ticket === state.request) hls.loadSource(url); });
           hls.on(Hls.Events.MANIFEST_PARSED, function () {
             if (ticket !== state.request) return;
             refreshHlsQuality(hls);
             requestPlay(video, ticket);
+          });
+          hls.on(Hls.Events.LEVEL_SWITCHED, function (_event, detail) {
+            if (ticket !== state.request || !detail) return;
+            var selected = hls.levels && hls.levels[detail.level], format = $("liveFormat");
+            if (format && selected && selected.height)
+              format.textContent = selected.height + "p · HLS";
           });
           hls.on(Hls.Events.ERROR, function (_event, detail) {
             if (ticket !== state.request || !detail || !detail.fatal) return;
@@ -425,6 +431,22 @@
     if (autoplay) startVideo(channel);
     else stateText("اختر تشغيل الآن لبدء البث.", false);
   }
+  function cinemaMode(enabled) {
+    state.cinemaMode = !!enabled;
+    var page = $("livePage"), toggle = $("liveCinemaToggle");
+    if (page) page.classList.toggle("live-page--cinema", state.cinemaMode);
+    if (toggle) {
+      toggle.setAttribute("aria-pressed", String(state.cinemaMode));
+      toggle.textContent = state.cinemaMode ? "☷ عرض دليل القنوات" : "⛶ وضع التلفزيون";
+    }
+    if (Store && Store.setPref) Store.setPref("liveCinemaMode", state.cinemaMode);
+  }
+  function openGuide() {
+    cinemaMode(false);
+    var selected = $("liveGuideItems") && $("liveGuideItems").querySelector(".is-selected");
+    var focus = selected || $("liveSearch");
+    if (focus) { focus.focus(); if (selected) selected.scrollIntoView({block:"nearest"}); }
+  }
   function navigate(direction) {
     var list = state.shown.length ? state.shown : state.channels;
     if (!list.length) return;
@@ -436,6 +458,11 @@
   function mount() {
     if (!$("livePage")) return;
     state.mounted = true;
+    cinemaMode(Store && Store.pref ? Store.pref("liveCinemaMode", window.innerWidth >= 1250) : window.innerWidth >= 1250);
+    $("liveCinemaToggle").addEventListener("click", function(){
+      if (state.cinemaMode) openGuide(); else cinemaMode(true);
+    });
+    $("liveGuideOverlay").addEventListener("click", openGuide);
     state.favorites = (Store && Store.pref && Store.pref("liveFavorites",[])) || [];
     if (!Array.isArray(state.favorites)) state.favorites = [];
     state.favoritesOnly = false;
@@ -625,6 +652,23 @@
         if (next) { next.focus(); next.scrollIntoView({ block: "nearest" }); }
         return;
       }
+      if ((event.key === "g" || event.key === "G") && !event.altKey && !event.metaKey) {
+        event.preventDefault();
+        if(state.cinemaMode)openGuide();else cinemaMode(true);
+        return;
+      }
+      if ((event.key === "f" || event.key === "F") && !event.altKey && !event.metaKey) {
+        event.preventDefault();$("liveFullscreen").click();return;
+      }
+      if (event.key === "Escape" && state.cinemaMode) {
+        event.preventDefault();openGuide();return;
+      }
+      if (state.cinemaMode && event.key === "ArrowUp") {
+        event.preventDefault();navigate(1);return;
+      }
+      if (state.cinemaMode && event.key === "ArrowDown") {
+        event.preventDefault();navigate(-1);return;
+      }
       if (event.altKey && event.key === "ArrowUp") { event.preventDefault(); navigate(-1); }
       if (event.altKey && event.key === "ArrowDown") { event.preventDefault(); navigate(1); }
       if (event.key === "PageUp" || event.key === "ChannelUp") { event.preventDefault(); navigate(-1); }
@@ -656,14 +700,15 @@
     return '<section class="live-page" id="livePage" aria-label="البث المباشر">' +
       '<div class="live-heading"><div><span class="live-eyebrow"><i></i> AL EZZ TV · LIVE STATION</span>' +
       '<h1>البث المباشر <em>على شاشتك</em></h1>' +
-      '<p>شغّل القنوات التي تسمح بالتشغيل المباشر داخل التطبيق، أو افتح موقع الناشر الرسمي للقنوات ذات الوصول المقيد.</p></div>' +
+      '<p>تلفزيون مباشر، قنوات مرتبة، وتنقل سريع بالريموت مع جودة متكيّفة حسب المصدر والاتصال.</p></div>' +
       '<div class="live-heading__actions"><span class="live-total">' + count + ' قناة في الدليل</span>' +
+      '<button type="button" class="live-outline live-outline--tv" id="liveCinemaToggle" aria-pressed="false">⛶ وضع التلفزيون</button>' +
       '<button type="button" class="live-outline" id="liveRefresh">' + icon("refresh") + ' تحديث القنوات</button></div></div>' +
-      '<div class="live-discovery" id="liveFilters">' + categoryButtons + '</div>' +
       '<div class="live-layout"><div class="live-viewer">' +
       '<div class="live-stage" id="liveStage">' +
       '<video id="liveVideo" controls playsinline webkit-playsinline x-webkit-airplay="allow" preload="none" aria-label="مشغل البث المباشر"></video>' +
       '<div class="live-channel-hud" id="liveChannelHud" aria-live="off" hidden></div>' +
+      '<button type="button" class="live-stage__guide-btn" id="liveGuideOverlay" aria-label="فتح دليل القنوات">☷ دليل القنوات</button>' +
       '<div class="live-poster" id="livePoster"><span class="live-poster__glow"></span><span class="live-emblem">' +
         icon("tv") + '</span><span class="live-poster__text">AL EZZ <b>LIVE</b></span></div>' +
       '<span class="live-stage__badge"><i></i> LIVE</span>' +
@@ -691,11 +736,12 @@
       '</div><aside class="live-guide" aria-label="دليل القنوات">' +
       '<div class="live-guide__head"><div><span class="live-eyebrow">TV GUIDE</span><h2>دليل القنوات</h2></div>' +
       '<span class="live-guide__count" id="liveFilteredCount">' + count + ' قناة</span></div>' +
+      '<div class="live-discovery" id="liveFilters">' + categoryButtons + '</div>' +
       '<div class="live-search">' + icon("search") + '<input id="liveSearch" type="search" placeholder="ابحث عن قناة أو دولة..." aria-label="بحث القنوات" autocomplete="off">' +
       '<button id="liveSearchClear" type="button" aria-label="مسح البحث" hidden>×</button></div>' +
       '<button id="liveFavoritesFilter" type="button" class="live-favorites-filter" aria-pressed="false">☆ عرض المفضلة</button>' +
       '<div class="live-guide__items" id="liveGuideItems" role="group" aria-label="القنوات"></div>' +
-      '<div class="live-guide__bottom">رقم القناة + Enter للتنقل · PgUp / PgDn أو ريموت التلفزيون</div>' +
+      '<div class="live-guide__bottom">الأرقام + OK للتنقل · CH± للتبديل · G للدليل · F لتكبير الصورة</div>' +
       '</aside></div></section>';
   }
 
