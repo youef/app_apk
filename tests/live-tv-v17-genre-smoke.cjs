@@ -31,6 +31,9 @@ pass("Genre tabs and touch arrows exist",html.includes('id="liveTypeTabs"')&&
 pass("Player focusable for remote keys",html.includes('id="liveStage" tabindex="0"'));
 pass("Genre filtering changes channel scope",live.includes("function channelScope()")&&
      live.includes("channelGenre(c)===state.type"));
+pass("Changing a category does not interrupt existing playback",
+     live.includes("Changing a category only updates the guide")&&
+     !live.includes("if(scope.length && (!current || scope.indexOf(current)<0))select(scope[0],false)"));
 pass("Fast arrow switching and stable channel numbers",live.includes("rapidNavigate(event.key===")&&
      live.includes("state.channels.indexOf(channel) + 1"));
 pass("TV genre guide counts and user preference",home.includes("ChannelGuideCategory.from(x)")&&
