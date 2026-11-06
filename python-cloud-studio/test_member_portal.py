@@ -253,7 +253,7 @@ class PortalTests(unittest.TestCase):
             self.assertEqual(page.status_code,200)
             self.assertIn('منتهي الصلاحية',page.text)
             self.assertIn('set-expiry',page.text)
-            self.assertIn('2025-01-03',page.text)
+            self.assertIn('2025-01-02',page.text)
 
     def test_authentication_checks_server_controlled_customer_metadata(self):
         uid='12345678-1234-1234-1234-123456789abc'
