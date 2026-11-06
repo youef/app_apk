@@ -94,6 +94,34 @@ class PortalTests(unittest.TestCase):
         finally:
             again.close()
 
+    def test_cloud_sync_requires_customer_csrf_and_ignores_untrusted_user_id(self):
+        self.login('customer')
+        self.assertEqual(self.client.post('/account/sync',
+                         json={'kind':'favorites_reset','action':'clear'}).status_code,403)
+        self.assertEqual(self.client.post('/account/sync',
+                         json={'kind':'favorites_reset','action':'clear'},
+                         headers=self.headers).status_code,403)
+        token=self.client.cookies.get('alezz_member')
+        csrf=self.portal.member_sessions.get(token)[0][3]
+        media_id='12345678-1234-1234-1234-123456789abc'
+        with patch.object(self.portal,'upstream',return_value=[]) as upstream:
+            read=self.client.get('/account/sync')
+            self.assertEqual(read.status_code,200)
+            self.assertEqual(read.json(),{'favorites':[],'progress':[]})
+            result=self.client.post('/account/sync',
+                    json={'kind':'favorite','action':'save','item_type':'movie',
+                          'item_id':media_id,'user_id':'forged-other-user'},
+                    headers={**self.headers,'X-CSRF-Token':csrf})
+            self.assertEqual(result.status_code,200)
+            self.assertTrue(upstream.called)
+            record=[c for c in upstream.call_args_list if c.args[0]=='POST'][-1]
+            self.assertEqual(record.kwargs['json']['user_id'],'example-id')
+            self.assertNotIn('forged-other-user',str(record.kwargs))
+        self.assertEqual(self.client.post('/account/sync',
+                         json={'kind':'favorite','action':'save','item_type':'movie',
+                               'item_id':'bad-id'},
+                         headers={**self.headers,'X-CSRF-Token':csrf}).status_code,400)
+
     def test_customer_is_limited_to_one_registered_browser(self):
         self.login('customer')
         self.assertEqual(self.client.get('/web/').status_code,200)
