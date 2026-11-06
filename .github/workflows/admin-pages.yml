@@ -73,6 +73,7 @@ jobs:
           node tests/channel-catalog-smoke.cjs
           node tests/live-page-smoke.cjs
           node tests/live-studio-smoke.cjs
+          node tests/live-tv-v16-smoke.cjs
           node tests/brand-fallback-smoke.cjs
           node tests/genre-classification-smoke.cjs
           node tests/discovery-smoke.cjs
