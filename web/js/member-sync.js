@@ -24,8 +24,11 @@
     sending=true;
     function step(){
       if(!queue.length)return Promise.resolve(true);
-      return post(queue[0]).then(function(){
-        queue.shift();saveQueue();
+      var pending=queue[0];
+      return post(pending).then(function(){
+        var index=queue.indexOf(pending);
+        if(index>=0)queue.splice(index,1);
+        saveQueue();
         return step();
       });
     }
