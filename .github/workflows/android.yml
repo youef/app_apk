@@ -119,6 +119,7 @@ jobs:
           node tests/tv-figma-v14-smoke.cjs
           node tests/tv-smart-v15-smoke.cjs
           node tests/live-tv-v16-smoke.cjs
+          node tests/live-tv-v17-genre-smoke.cjs
           node tests/tv-iptv-nimbus-smoke.cjs
           node tests/quality-picker-smoke.cjs
           node tests/kids-world-smoke.cjs
