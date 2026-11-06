@@ -8,6 +8,7 @@ Admin sessions intentionally remain short-lived and memory-only.
 from __future__ import annotations
 
 import hashlib
+import re
 import sqlite3
 import time
 from pathlib import Path
@@ -40,7 +41,7 @@ class MemberSessions:
 
     @staticmethod
     def _digest(token):
-        if not isinstance(token, str) or not (32 <= len(token) <= 128):
+        if not isinstance(token, str) or re.fullmatch(r"[A-Za-z0-9_-]{32,128}",token) is None:
             return None
         return hashlib.sha256(token.encode("ascii", "strict")).hexdigest()
 
