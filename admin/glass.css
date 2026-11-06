@@ -36,7 +36,7 @@ body{
 }
 .nav-item:not(.is-active),.sidebar-link:not(.active),.tab:not(.active),
 .chip-btn,.seg-btn,.row-btn,.btn-ghost,.btn-icon,.ghost,
-button:not(.btn-gold):not(.primary):not(.btn-danger):not(.danger){
+button:not(.btn-gold):not(.primary):not(.btn-danger):not(.danger):not(.row-btn--danger):not(.row-btn--on){
   border-color:rgba(214,229,255,.17);
   background:linear-gradient(142deg,rgba(51,64,84,.68),rgba(20,29,44,.82));
   color:#f3f5f9;
