@@ -53,6 +53,36 @@ import com.google.android.exoplayer2.ui.PlayerView;
 public final class CinemaPlayerActivity extends Activity {
     private static final int BG=0xFF090B11, RED=0xFFEF3658, WHITE=0xFFF7F4F8, MUTED=0xFFA7A6B4;
     private final Handler handler=new Handler();
+    private volatile boolean entitlementCheckRunning=false;
+    private long lastEntitlementProbe=0L;
+    private final Runnable subscriptionGuard=new Runnable(){public void run(){
+        if(isFinishing())return;
+        if(!MemberAuth.hasSession(CinemaPlayerActivity.this) ||
+            MemberAuth.isExpiredLocally(CinemaPlayerActivity.this)){
+            MemberAuth.logoutLocal(CinemaPlayerActivity.this);
+            if(engine!=null)engine.pause();
+            finish();
+            return;
+        }
+        long now=android.os.SystemClock.elapsedRealtime();
+        if(!entitlementCheckRunning&&(lastEntitlementProbe==0L||now-lastEntitlementProbe>=90000L)){
+            entitlementCheckRunning=true;
+            lastEntitlementProbe=now;
+            new Thread(new Runnable(){public void run(){
+                try{MemberAuth.validateAccount(CinemaPlayerActivity.this);}
+                catch(MemberAuth.AuthenticationException denied){
+                    handler.post(new Runnable(){public void run(){
+                        if(!isFinishing()){
+                            if(engine!=null)engine.pause();
+                            finish();
+                        }
+                    }});
+                }catch(Exception offline){ /* Check the local expiry each tick; retry remotely later. */ }
+                finally{entitlementCheckRunning=false;}
+            }},"alezz-subscription-check").start();
+        }
+        handler.postDelayed(this,60000L);
+    }};
     // Keep probes bounded while the remote is rapidly changing stations.
     private final ExecutorService probeWorker=new ThreadPoolExecutor(2,2,30L,TimeUnit.SECONDS,
         new ArrayBlockingQueue<Runnable>(2),new ThreadPoolExecutor.DiscardOldestPolicy());
@@ -312,6 +342,11 @@ public final class CinemaPlayerActivity extends Activity {
     }
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
+        if(!MemberAuth.hasSession(this)||MemberAuth.isExpiredLocally(this)){
+            MemberAuth.logoutLocal(this);
+            finish();
+            return;
+        }
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().getDecorView().setSystemUiVisibility(
             View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|
@@ -1134,9 +1169,12 @@ public final class CinemaPlayerActivity extends Activity {
     }
     @Override protected void onResume(){
         super.onResume();
+        handler.removeCallbacks(subscriptionGuard);
+        handler.post(subscriptionGuard);
         if(kidsPlayback){handler.removeCallbacks(kidsClock);handler.postDelayed(kidsClock,1000L);}
     }
     @Override protected void onPause(){
+        handler.removeCallbacks(subscriptionGuard);
         handler.removeCallbacks(kidsClock);
         handler.removeCallbacks(autoHide);
         handler.removeCallbacks(hideLiveHud);
@@ -1148,6 +1186,7 @@ public final class CinemaPlayerActivity extends Activity {
         super.onPause();
     }
     @Override protected void onDestroy(){
+        handler.removeCallbacks(subscriptionGuard);
         handler.removeCallbacks(liveHealth);
         saveProgress();requestToken++;probeWorker.shutdownNow();handler.removeCallbacksAndMessages(null);
         if(surface!=null)surface.setPlayer(null);
