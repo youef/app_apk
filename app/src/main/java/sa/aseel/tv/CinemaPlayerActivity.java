@@ -19,6 +19,7 @@ import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.HorizontalScrollView;
 import android.widget.ScrollView;
 import android.widget.LinearLayout;
