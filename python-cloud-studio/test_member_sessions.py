@@ -53,6 +53,25 @@ class MemberSessionTests(unittest.TestCase):
             expiry = db.execute('SELECT expires_at FROM member_sessions WHERE token_hash=?', (digest,)).fetchone()[0]
         self.assertGreater(expiry, int(time.time()) + CUSTOMER_SESSION_SECONDS - 10)
 
+    def test_subscription_expires_despite_long_lived_browser_cookie(self):
+        deadline=int(time.time())+3600
+        self.registry.create(self.token,'member-one','csrf-one',deadline)
+        self.assertIsNotNone(self.registry.get(self.token))
+        # Simulate admin shortening the subscription to a past timestamp.
+        self.registry.set_user_expiry('member-one',int(time.time())-1)
+        self.assertIsNone(self.registry.get(self.token))
+
+    def test_new_login_rejected_on_expired_account(self):
+        with self.assertRaisesRegex(ValueError,'expired'):
+            self.registry.create(self.token,'member-one','csrf-one',int(time.time())-10)
+
+    def test_expiration_migration_keeps_existing_sessions(self):
+        self.registry.create(self.token,'member-one','csrf-one')
+        with sqlite3.connect(str(self.registry.path)) as connection:
+            self.assertIn('account_expires_at',
+                          [x[1] for x in connection.execute('PRAGMA table_info(member_sessions)')])
+        self.assertIsNotNone(self.registry.get(self.token))
+
     def test_cookie_format_validation_never_raises(self):
         for token in (None, '', '🍿' * 50, '\x00' * 40, 'a' * 900):
             self.assertIsNone(self.registry.get(token))
