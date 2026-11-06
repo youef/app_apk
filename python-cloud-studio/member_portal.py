@@ -332,10 +332,12 @@ class Portal:
                 not request.headers.get('content-type','').lower().startswith('application/json')):
                 return JSONResponse({'detail':'طلب غير مسموح'},status_code=403,headers=HEADERS)
             try:
-                body=await request.body()
-                if len(body)>2048:
-                    return JSONResponse({'detail':'حجم الطلب كبير'},status_code=413,headers=HEADERS)
-                data=json.loads(body)
+                body=bytearray()
+                async for chunk in request.stream():
+                    body.extend(chunk)
+                    if len(body)>2048:
+                        return JSONResponse({'detail':'حجم الطلب كبير'},status_code=413,headers=HEADERS)
+                data=json.loads(body.decode('utf-8'))
                 result=await run_in_threadpool(self.member_sync_write,session[0],data)
                 return JSONResponse(result,headers=HEADERS)
             except (ValueError,TypeError,json.JSONDecodeError):
