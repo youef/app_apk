@@ -11,21 +11,21 @@ new vm.Script(live,{filename:"web/js/live.js"});
 const context={window:{AlezzExplore:{picker:()=>'<button data-live-filter="">الكل</button><select data-browse-select="live"></select>',
     matches:()=>true},AlezzStore:{}},console};
 vm.runInNewContext(live,context,{filename:"web/js/live.js"});
-const module=context.window.AlezzLive;
+const liveTv=context.window.AlezzLive;
 pass("Channel types are deterministic",
-    module.channelGenre({title:"Saudi News",category:"News"})==="أخبار" &&
-    module.channelGenre({title:"Football TV",category:"Sports"})==="رياضة" &&
-    module.channelGenre({title:"Cinema",category:"أفلام"})==="أفلام" &&
-    module.channelGenre({title:"Kids",kids:true})==="أطفال" &&
-    module.channelGenre({title:"Nature",category:"Documentary"})==="وثائقيات");
+    liveTv.channelGenre({title:"Saudi News",category:"News"})==="أخبار" &&
+    liveTv.channelGenre({title:"Football TV",category:"Sports"})==="رياضة" &&
+    liveTv.channelGenre({title:"Cinema",category:"أفلام"})==="أفلام" &&
+    liveTv.channelGenre({title:"Kids",kids:true})==="أطفال" &&
+    liveTv.channelGenre({title:"Nature",category:"Documentary"})==="وثائقيات");
 const channels=[
     {key:"channel:1",title:"Sports",playback:"stream",stream:"https://example.com/live/1.m3u8",category:"رياضة"},
     {key:"channel:2",title:"News",playback:"stream",stream:"https://example.com/live/2.m3u8",category:"أخبار"}
 ];
-const stats=module.categoryStats(channels);
+const stats=liveTv.categoryStats(channels);
 pass("Genre counts are correct",stats.some(x=>x.name==="الكل"&&x.count===2) &&
      stats.some(x=>x.name==="رياضة"&&x.count===1));
-const html=module.render({channels,categories:[]},"");
+const html=liveTv.render({channels,categories:[]},"");
 pass("Genre tabs and touch arrows exist",html.includes('id="liveTypeTabs"')&&
      html.includes('id="liveZapUp"')&&html.includes('id="liveZapDown"'));
 pass("Player focusable for remote keys",html.includes('id="liveStage" tabindex="0"'));
