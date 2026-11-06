@@ -957,13 +957,16 @@ public final class CinemaPlayerActivity extends Activity {
                 else showContentGuide();
                 return true;
             }
-            if(controlPanel!=null && controlPanel.getVisibility()!=View.VISIBLE &&
-               (leftRail==null||leftRail.getVisibility()!=View.VISIBLE)&&
+            // Up/down always zap while watching, even during the short bottom HUD.
+            // A visible guide or options rail keeps normal directional focus navigation.
+            if((leftRail==null||leftRail.getVisibility()!=View.VISIBLE)&&
                (rightRail==null||rightRail.getVisibility()!=View.VISIBLE)){
                 if(code==KeyEvent.KEYCODE_DPAD_UP){rapidZap(1,event);return true;}
                 if(code==KeyEvent.KEYCODE_DPAD_DOWN){rapidZap(-1,event);return true;}
-                if(code==KeyEvent.KEYCODE_DPAD_LEFT){showChannelGuide();return true;}
-                if(code==KeyEvent.KEYCODE_DPAD_RIGHT){showLiveOptions();return true;}
+                if(controlPanel!=null&&controlPanel.getVisibility()!=View.VISIBLE){
+                    if(code==KeyEvent.KEYCODE_DPAD_LEFT){showChannelGuide();return true;}
+                    if(code==KeyEvent.KEYCODE_DPAD_RIGHT){showLiveOptions();return true;}
+                }
             }
             int digit=code-KeyEvent.KEYCODE_0;
             if(digit>=0 && digit<=9){
