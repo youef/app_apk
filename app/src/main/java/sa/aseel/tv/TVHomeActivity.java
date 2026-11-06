@@ -317,6 +317,7 @@ public final class TVHomeActivity extends Activity {
         }
         unlocked=true;showingWelcome=false;
         section="home";buildShell();render();loadCatalog();
+        MemberSync.begin(this);
         if(!getSharedPreferences(SETTINGS,MODE_PRIVATE).getString("iptv_m3u","").isEmpty())
             refreshLocalPlaylist(false);
     }
@@ -1276,7 +1277,10 @@ public final class TVHomeActivity extends Activity {
     private void toggleFavorite(JSONObject item){
         SharedPreferences prefs=getSharedPreferences("alizz_v11_favorites."+MemberAuth.userId(this),MODE_PRIVATE);
         String scoped=PlaybackMemory.activeProfile(this)+"."+favKey(item);
-        prefs.edit().putBoolean(scoped,!isFavorite(item)).apply();
+        boolean selected=!isFavorite(item);
+        prefs.edit().putBoolean(scoped,selected).apply();
+        if("family".equals(PlaybackMemory.activeProfile(this)))
+            MemberSync.favorite(this,kind(item),value(item,"id"),selected);
     }
     @Override public boolean onKeyDown(int code,KeyEvent event){
         if(code==KeyEvent.KEYCODE_BACK && showingWelcome){
