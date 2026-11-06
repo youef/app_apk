@@ -296,11 +296,16 @@ class Portal:
                 await run_in_threadpool(self.member_sessions.delete,token)
                 session = None
         if path in ('/account/login','/account/admin'):
-            return self.login_page(mode='admin' if path=='/account/admin' else 'customer')
+            expired_notice=('انتهت صلاحية حسابك وأصبح غير نشط. تواصل مع الإدارة لتجديد الصلاحية.'
+                            if path=='/account/login' and request.query_params.get('expired')=='1' else '')
+            return self.login_page(expired_notice,mode='admin' if path=='/account/admin' else 'customer')
         section=path.split('/')[1]
         admin_area=section in ('admin','studio','static','api') or path=='/account/customers'
         if not session or session[2]<=time.monotonic():
             self.sessions.pop(token,None)
+            if path=='/account/status':
+                from fastapi.responses import JSONResponse
+                return JSONResponse({'active':False,'detail':'انتهت الجلسة أو صلاحية الحساب.'},status_code=401,headers=HEADERS)
             if section=='api':
                 from fastapi.responses import JSONResponse
                 return JSONResponse({'detail':'يجب تسجيل الدخول بحساب مسؤول.'},status_code=401,headers=HEADERS)
@@ -342,6 +347,11 @@ class Portal:
                     return await run_in_threadpool(self.customers_page,session,str(exc),page_number)
                 except requests.RequestException:
                     return await run_in_threadpool(self.customers_page,session,'تعذّر تنفيذ العملية. تحقق من حالة الحساب وإعدادات Supabase.',page_number)
+        if path=='/account/status':
+            from fastapi.responses import JSONResponse
+            if request.method!='GET' or session[1]!='customer':
+                return JSONResponse({'active':False},status_code=403,headers=HEADERS)
+            return JSONResponse({'active':True},headers=HEADERS)
         if path=='/account/sync':
             from fastapi.responses import JSONResponse
             if session[1]!='customer':
