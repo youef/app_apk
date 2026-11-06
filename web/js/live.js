@@ -579,9 +579,8 @@
       updateGuide();
       var activeType=$("liveTypeTabs")&&$("liveTypeTabs").querySelector(".is-on");
       if(activeType){activeType.focus();activeType.scrollIntoView({block:"nearest",inline:"nearest"});}
-      var current=state.current;
-      var scope=channelScope();
-      if(scope.length && (!current || scope.indexOf(current)<0))select(scope[0],false);
+      // Changing a category only updates the guide. Keep the playing station alive
+      // until the viewer presses OK on a channel or uses CH+/CH-/up/down.
     });
     $("liveZapUp").addEventListener("click",function(){rapidNavigate(1);});
     $("liveZapDown").addEventListener("click",function(){rapidNavigate(-1);});
