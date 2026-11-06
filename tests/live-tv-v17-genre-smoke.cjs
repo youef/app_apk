@@ -49,6 +49,10 @@ pass("Remote menu focus and last category persisted",player.includes("guideSelec
 pass("Switching cannot flood network probes",player.includes("new ThreadPoolExecutor(2,2")&&
      player.includes("new ArrayBlockingQueue<Runnable>(2)")&&
      player.includes("if(token!=requestToken||Thread.currentThread().isInterrupted())return"));
+pass("Live channel change starts instantly without separate network preflight",
+     player.includes("if(live && StreamQuality.isDirectUrl(stream))")&&
+     player.indexOf("if(live && StreamQuality.isDirectUrl(stream))")<player.indexOf("probeWorker.execute(")&&
+     player.includes('item.setMimeType("application/x-mpegURL")'));
 pass("Native direct stream format and existing safety checks retained",player.includes("StreamProbe.inspect(")&&
      source("app/src/main/java/sa/aseel/tv/StreamQuality.java").includes("isDirectUrl"));
 pass("Category classifier uses source metadata first",category.includes("String category")&&
