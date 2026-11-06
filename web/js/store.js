@@ -66,6 +66,36 @@
       return i === -1; // true when added
     },
 
+    replaceFavorites: function (items) {
+      if (!Array.isArray(items)) return;
+      var seen={},clean=[];
+      items.forEach(function (item) {
+        if (typeof item !== "string" || !/^(movie|series|episode|channel):[a-f0-9-]{36}$/i.test(item) || seen[item]) return;
+        seen[item]=true;clean.push(item);
+      });
+      write("favorites", clean.slice(0,400));
+    },
+
+    /* Merge progress from Supabase by timestamp without overwriting newer local saves. */
+    mergeRemoteProgress: function (items) {
+      if (!Array.isArray(items)) return;
+      var map=this.progressAll();
+      items.forEach(function (item) {
+        if (!item || !/^(movie|series|episode)$/.test(item.item_type || "") ||
+            !/^[a-f0-9-]{36}$/i.test(item.item_id || "")) return;
+        var position=Number(item.position_ms),duration=Number(item.duration_ms);
+        var timestamp=Date.parse(item.updated_at || "") || 0;
+        if (!isFinite(position)||!isFinite(duration)||position<=5000||duration<=0||
+            position>duration||position/duration>=.97) return;
+        var key=item.item_type+":"+item.item_id, existing=map[key];
+        if(existing && (existing.at||0) >= timestamp) return;
+        map[key]={t:Math.round(position/1000),d:Math.round(duration/1000),
+          at:timestamp,kind:item.item_type,title:existing?existing.title:"متابعة المشاهدة",
+          poster:existing?existing.poster:null,subtitle:existing?existing.subtitle:null};
+      });
+      write("progress",map);
+    },
+
     /* ---- watch progress: {key: {t, d, at, kind, title, poster}} ---- */
     progressAll: function () {
       var map = read("progress");
