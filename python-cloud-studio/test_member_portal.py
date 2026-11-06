@@ -124,6 +124,19 @@ class PortalTests(unittest.TestCase):
                                'item_id':'bad-id'},
                          headers={**self.headers,'X-CSRF-Token':csrf}).status_code,400)
 
+    def test_customer_session_status_gates_expired_active_player(self):
+        import time
+        self.assertEqual(self.client.get('/account/status').status_code,401)
+        self.login('customer')
+        self.assertEqual(self.client.get('/account/status').json(),{'active':True})
+        # A session may still be within its 180-day cookie lifetime.
+        self.portal.member_sessions.set_user_expiry('example-id',int(time.time())-1)
+        expired=self.client.get('/account/status')
+        self.assertEqual(expired.status_code,401)
+        self.assertFalse(expired.json()['active'])
+        landing=self.client.get('/account/login?expired=1')
+        self.assertIn('انتهت صلاحية حسابك',landing.text)
+
     def test_customer_is_limited_to_one_registered_browser(self):
         self.login('customer')
         self.assertEqual(self.client.get('/web/').status_code,200)
