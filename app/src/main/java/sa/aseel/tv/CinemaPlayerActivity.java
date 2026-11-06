@@ -81,7 +81,8 @@ public final class CinemaPlayerActivity extends Activity {
     }};
     private PlayerView surface;
     private TextView status,title,details;
-    private Button playButton,qualityButton,backButton,externalButton;
+    private Button playButton,qualityButton,backButton,externalButton,liveFavoriteButton,liveMuteButton;
+    private boolean liveMuted=false;
     private LinearLayout footer,controlPanel,leftRail,rightRail;
     private FrameLayout rootFrame;
     private Button skipIntroButton;
@@ -229,6 +230,71 @@ public final class CinemaPlayerActivity extends Activity {
         v.setGravity(Gravity.CENTER_VERTICAL);v.setSingleLine(false);
         if(strong)v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return v;
     }
+    /** Icon-only live tools retain an accessible label and announce it on remote focus. */
+    private Button tvTool(String symbol,final String label){
+        final Button control=button(symbol);
+        control.setTextSize(23);
+        control.setGravity(Gravity.CENTER);
+        control.setPadding(0,0,0,0);
+        control.setContentDescription(label);
+        if(Build.VERSION.SDK_INT>=26)control.setTooltipText(label);
+        control.setBackgroundDrawable(shape(0xFF141B28,0xFF3E4B61));
+        control.setOnFocusChangeListener(new View.OnFocusChangeListener(){
+            public void onFocusChange(View view,boolean focused){
+                control.setBackgroundDrawable(shape(focused?0xFF66512A:0xFF141B28,
+                    focused?0xFFEBC47D:0xFF3E4B61));
+                control.setScaleX(focused?1.08f:1f);
+                control.setScaleY(focused?1.08f:1f);
+                if(focused)showLiveHud(label);
+                handler.removeCallbacks(autoHide);
+                if(engine!=null&&engine.isPlaying()&&!focused)handler.postDelayed(autoHide,HIDE_DELAY);
+            }
+        });
+        return control;
+    }
+    private boolean isChannelFavorite(){
+        if(itemId==null||itemId.isEmpty())return false;
+        SharedPreferences prefs=getSharedPreferences("alizz_v11_favorites",MODE_PRIVATE);
+        String key="channel:"+itemId,scoped=profile+"."+key;
+        if(prefs.contains(scoped))return prefs.getBoolean(scoped,false);
+        return "family".equals(profile)&&prefs.getBoolean(key,false);
+    }
+    private void updateLiveFavorite(){
+        if(liveFavoriteButton==null)return;
+        boolean selected=isChannelFavorite();
+        liveFavoriteButton.setText(selected?"★":"☆");
+        liveFavoriteButton.setContentDescription(selected?"إزالة القناة من المفضلة":"إضافة القناة للمفضلة");
+        if(Build.VERSION.SDK_INT>=26)liveFavoriteButton.setTooltipText(
+            selected?"إزالة القناة من المفضلة":"إضافة القناة للمفضلة");
+    }
+    private void toggleLiveFavorite(){
+        if(itemId==null||itemId.isEmpty())return;
+        boolean selected=!isChannelFavorite();
+        getSharedPreferences("alizz_v11_favorites",MODE_PRIVATE).edit()
+            .putBoolean(profile+".channel:"+itemId,selected).apply();
+        for(JSONObject channel:tvChannels)
+            if(itemId.equals(channel.optString("id",""))){
+                try{channel.put("favorite",selected);}catch(Exception ignored){}
+            }
+        updateLiveFavorite();
+        showLiveHud(selected?"★ تم حفظ القناة في المفضلة":"☆ تمت إزالة القناة من المفضلة");
+        // Rebuild only when the viewer has intentionally opened the guide.
+        if(leftRail!=null&&leftRail.getVisibility()==View.VISIBLE)updateChannelRail();
+    }
+    private void updateLiveMute(){
+        if(liveMuteButton==null)return;
+        liveMuteButton.setText(liveMuted?"◀":"♫");
+        liveMuteButton.setContentDescription(liveMuted?"تشغيل الصوت":"كتم الصوت");
+        if(Build.VERSION.SDK_INT>=26)liveMuteButton.setTooltipText(liveMuted?"تشغيل الصوت":"كتم الصوت");
+    }
+    private void toggleLiveMute(){
+        liveMuted=!liveMuted;
+        if(engine!=null)engine.setVolume(liveMuted?0f:1f);
+        getSharedPreferences("alezz_v11_player",MODE_PRIVATE).edit()
+            .putBoolean("live_mute_"+profile,liveMuted).apply();
+        updateLiveMute();
+        showLiveHud(liveMuted?"تم كتم الصوت":"تم تشغيل الصوت");
+    }
     private Button button(String name){
         final Button v=new Button(this);v.setText(name);v.setAllCaps(false);v.setTextSize(14);
         v.setTextColor(WHITE);v.setFocusable(true);v.setBackgroundDrawable(shape(0xFF2D222D,0xFF594350));
@@ -259,6 +325,8 @@ public final class CinemaPlayerActivity extends Activity {
         kidsPlayback=intent.getBooleanExtra("kids_mode",false);
         kidsAge=intent.getIntExtra("kids_age",6);
         kidsMinutes=intent.getIntExtra("kids_minutes",60);
+        if(live)liveMuted=getSharedPreferences("alezz_v11_player",MODE_PRIVATE)
+            .getBoolean("live_mute_"+profile,false);
         if(live){
             String chosen=intent.getStringExtra("channel_group");
             if(chosen!=null&&!chosen.trim().isEmpty())activeGroup=chosen;
@@ -336,44 +404,56 @@ public final class CinemaPlayerActivity extends Activity {
         controlsScroll.addView(footer,new HorizontalScrollView.LayoutParams(-2,-1));
         LinearLayout.LayoutParams fp=new LinearLayout.LayoutParams(-1,dp(55));
         fp.topMargin=dp(8);panel.addView(controlsScroll,fp);
-        playButton=button("▶ تشغيل / إيقاف");
-        footer.addView(playButton,new LinearLayout.LayoutParams(dp(138),-1));
+        playButton=live?tvTool("⏯","تشغيل أو إيقاف مؤقت"):button("▶ تشغيل / إيقاف");
+        footer.addView(playButton,new LinearLayout.LayoutParams(dp(live?69:138),-1));
         playButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
             if(engine==null)return;
             if(engine.getPlaybackState()==Player.STATE_IDLE){attempted.clear();tries=0;playSource(index);}
             else if(engine.isPlaying())engine.pause();else engine.play();
         }});
-        Button retryButton=button("↻ إعادة");
-        footer.addView(retryButton,new LinearLayout.LayoutParams(dp(138),-1));
+        Button retryButton=live?tvTool("↻","إعادة الاتصال"):button("↻ إعادة");
+        footer.addView(retryButton,new LinearLayout.LayoutParams(dp(live?69:138),-1));
         retryButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
             attempted.clear();tries=0;playSource(index);
         }});
-        qualityButton=button("الجودة");
-        footer.addView(qualityButton,new LinearLayout.LayoutParams(dp(138),-1));
+        qualityButton=live?tvTool("⚙","جودة البث"):button("الجودة");
+        footer.addView(qualityButton,new LinearLayout.LayoutParams(dp(live?69:138),-1));
         qualityButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showQualityMenu();}});
         externalButton=button("مشغل بديل");
         if(!live)footer.addView(externalButton,new LinearLayout.LayoutParams(dp(138),-1));
         externalButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){external();}});
-        Button guideButton=button(live?"☷ القنوات":"☷ المكتبة");
-        footer.addView(guideButton,new LinearLayout.LayoutParams(dp(140),-1));
+        Button guideButton=live?tvTool("☷","دليل القنوات"):button("☷ المكتبة");
+        footer.addView(guideButton,new LinearLayout.LayoutParams(dp(live?69:140),-1));
         guideButton.setEnabled((live && !tvChannels.isEmpty())||(!live&&!mediaPlaylist.isEmpty()));
         guideButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showContentGuide();}});
         if(live){
-            Button options=button("⚙ خيارات التلفزيون");
-            footer.addView(options,new LinearLayout.LayoutParams(dp(168),-1));
+            liveFavoriteButton=tvTool("☆","إضافة القناة للمفضلة");
+            footer.addView(liveFavoriteButton,new LinearLayout.LayoutParams(dp(69),-1));
+            liveFavoriteButton.setOnClickListener(new View.OnClickListener(){
+                public void onClick(View v){toggleLiveFavorite();}
+            });
+            updateLiveFavorite();
+            liveMuteButton=tvTool("♫","كتم الصوت");
+            footer.addView(liveMuteButton,new LinearLayout.LayoutParams(dp(69),-1));
+            liveMuteButton.setOnClickListener(new View.OnClickListener(){
+                public void onClick(View v){toggleLiveMute();}
+            });
+            updateLiveMute();
+            Button options=tvTool("⋮","المزيد من خيارات التلفزيون");
+            footer.addView(options,new LinearLayout.LayoutParams(dp(69),-1));
             options.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showLiveOptions();}});
         }
-        Button audioButton=button("♫ صوت / ترجمة");
-        footer.addView(audioButton,new LinearLayout.LayoutParams(dp(146),-1));
+        Button audioButton=live?tvTool("≋","الصوت والترجمة"):button("♫ صوت / ترجمة");
+        footer.addView(audioButton,new LinearLayout.LayoutParams(dp(live?69:146),-1));
         audioButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showTrackMenu();}});
-        Button screenButton=button("▣ الشاشة");
-        footer.addView(screenButton,new LinearLayout.LayoutParams(dp(135),-1));
+        Button screenButton=live?tvTool("⛶","أبعاد الشاشة"):button("▣ الشاشة");
+        footer.addView(screenButton,new LinearLayout.LayoutParams(dp(live?69:135),-1));
         screenButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){cycleAspectRatio();}});
         Button speedButton=button("⏩ السرعة");
         if(!live)footer.addView(speedButton,new LinearLayout.LayoutParams(dp(135),-1));
         speedButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showSpeedMenu();}});
-        backButton=button("رجوع");
-        footer.addView(backButton,new LinearLayout.LayoutParams(dp(138),-1));
+        backButton=live?tvTool("✕","العودة للقائمة الرئيسية"):button("رجوع");
+        footer.addView(backButton,new LinearLayout.LayoutParams(dp(live?69:138),-1));
         backButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){finish();}});
         buildSideRails(root);
         if(live)showLiveHud("● البث المباشر  •  "+itemTitle+"\nOK: التحكم    MENU: دليل القنوات    CH±: تغيير");
@@ -418,6 +498,7 @@ public final class CinemaPlayerActivity extends Activity {
         engine=new ExoPlayer.Builder(this)
             .setLoadControl(loadControl)
             .setMediaSourceFactory(new DefaultMediaSourceFactory(data)).build();
+        if(live)engine.setVolume(liveMuted?0f:1f);
         handler.removeCallbacks(liveHealth);
         handler.postDelayed(liveHealth,5000L);
         engine.addListener(new Player.Listener(){
@@ -504,7 +585,10 @@ public final class CinemaPlayerActivity extends Activity {
         started=false;handler.removeCallbacks(watchdog);
         final int token=++requestToken;
         final String stream=currentUrl;
-        qualityButton.setText("الجودة: "+sources.get(which).label);
+        if(live){
+            qualityButton.setText("⚙");
+            qualityButton.setContentDescription("جودة البث: "+sources.get(which).label);
+        }else qualityButton.setText("الجودة: "+sources.get(which).label);
         status.setText("◌ فحص رابط الفيديو قبل التشغيل...");
         if(live)hideControls();else showControls(false);
         // The live catalog already restricts sources to rights-approved direct HTTPS media.
@@ -860,6 +944,7 @@ public final class CinemaPlayerActivity extends Activity {
         if(index<0)index=0;
         attempted.clear();tries=0;requestToken++;liveRestarts=0;frozenTicks=0;lastLivePlayhead=-1;
         title.setText(String.format(Locale.US,"● CH %03d  •  %s",tvChannelIndex+1,itemTitle));
+        updateLiveFavorite();
         PlaybackMemory.lastChannel(this,profile,itemId);
         details.setText("بث مباشر • CH± للتنقل • اضغط MENU للدليل");
         String now=selected.optString("epg_now_title","");
