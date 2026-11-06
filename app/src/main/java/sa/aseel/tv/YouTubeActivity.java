@@ -69,9 +69,7 @@ public final class YouTubeActivity extends Activity {
         return t;
     }
     private GradientDrawable bg(int color,int border){
-        GradientDrawable g=new GradientDrawable();g.setColor(color);
-        g.setCornerRadius(dp(12));if(border!=0)g.setStroke(dp(1),border);
-        return g;
+        return GlassSurface.panel(color,border,dp(12));
     }
     private Button action(String label){
         Button b=new Button(this);b.setText(label);b.setTextSize(14);
@@ -129,11 +127,12 @@ public final class YouTubeActivity extends Activity {
         if(queue.isEmpty()){finish();return;}
         root=new FrameLayout(this);root.setBackgroundColor(Color.BLACK);
         body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);
-        body.setBackgroundColor(0xFF09090C);
+        body.setBackgroundDrawable(GlassSurface.canvas());
         root.addView(body,new FrameLayout.LayoutParams(-1,-1));
 
         LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setPadding(dp(13),0,dp(13),0);header.setBackgroundColor(0xFF171318);
+        header.setPadding(dp(13),0,dp(13),0);
+        header.setBackgroundDrawable(GlassSurface.overlay(0x70F0D39B,0));
         body.addView(header,new LinearLayout.LayoutParams(-1,dp(54)));
         backButton=action("رجوع  ❯");
         header.addView(backButton,new LinearLayout.LayoutParams(dp(103),dp(44)));
@@ -244,7 +243,7 @@ public final class YouTubeActivity extends Activity {
         LinearLayout controlBar=new LinearLayout(this);
         controlBar.setGravity(Gravity.CENTER_VERTICAL);
         controlBar.setPadding(dp(16),dp(4),dp(16),dp(4));
-        controlBar.setBackgroundColor(0xFF171318);
+        controlBar.setBackgroundDrawable(GlassSurface.overlay(0x6DE2D0B9,0));
         body.addView(controlBar,new LinearLayout.LayoutParams(-1,dp(58)));
         recommendButton=action("↑  المقاطع المقترحة");
         controlBar.addView(recommendButton,new LinearLayout.LayoutParams(dp(198),dp(49)));
@@ -271,12 +270,12 @@ public final class YouTubeActivity extends Activity {
 
         recommendations=new LinearLayout(this);
         recommendations.setOrientation(LinearLayout.VERTICAL);
-        recommendations.setBackgroundColor(0xFF141418);
+        recommendations.setBackgroundDrawable(GlassSurface.overlay(0x59E3D1B1,dp(10)));
         recommendations.setVisibility(View.GONE);
         body.addView(recommendations,new LinearLayout.LayoutParams(-1,dp(110)));
         status=text("",12,0xFFE6BBC7,false);
         status.setGravity(Gravity.CENTER);
-        status.setBackgroundColor(0xFF251B25);
+        status.setBackgroundDrawable(GlassSurface.panel(0xFF251B25,0x5AD4C7B7,dp(7)));
         status.setSingleLine(false);
         body.addView(status,new LinearLayout.LayoutParams(-1,dp(56)));
         setContentView(root);
