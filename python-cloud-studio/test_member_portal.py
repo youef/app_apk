@@ -1,4 +1,6 @@
 from pathlib import Path
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
@@ -189,14 +191,69 @@ class PortalTests(unittest.TestCase):
         self.assertIn('admin protected',self.client.get('/admin/').text)
         csrf=next(iter(self.portal.sessions.values()))[3]
         with patch.object(self.portal,'upstream',return_value={}) as upstream:
-            data={'username':'customer1','password':'new-password-123','action':'create'}
+            end=(datetime.now(ZoneInfo('Asia/Riyadh')).date()+timedelta(days=40)).isoformat()
+            data={'username':'customer1','password':'new-password-123','action':'create','expires_on':end}
             self.assertEqual(self.client.post('/account/customers',data=data,headers=self.headers).status_code,403)
             self.assertEqual(self.client.post('/account/customers',data={**data,'csrf':csrf},headers=self.headers).status_code,200)
         created=[call for call in upstream.call_args_list
                  if call.args[:2]==('POST','/auth/v1/admin/users')]
         self.assertEqual(len(created),1)
         self.assertTrue(created[0].kwargs['secret'])
-        self.assertEqual(created[0].kwargs['json']['app_metadata'],{'alezz_customer':'active'})
+        self.assertEqual(created[0].kwargs['json']['app_metadata']['alezz_customer'],'active')
+        self.assertTrue(created[0].kwargs['json']['app_metadata']['alezz_expires_at'].endswith('Z'))
+
+    def test_expired_customer_cannot_log_in_even_with_valid_password(self):
+        from member_expiry import expiration_from_date
+        now=datetime.now(ZoneInfo('Asia/Riyadh'))
+        expired=(now.date()-timedelta(days=2)).isoformat()
+        user={'id':'12345678-1234-1234-1234-123456789abc',
+              'app_metadata':{'alezz_customer':'active',
+                              'alezz_expires_at':expired+'T00:00:00Z'}}
+        with patch.object(self.portal,'upstream',return_value={'user':user}):
+            with self.assertRaisesRegex(ValueError,'expired'):
+                self.portal.authenticate('customer1','correct-password')
+            response=self.client.post('/account/login',headers=self.headers,
+                        data={'username':'customer1','password':'correct-password'})
+            self.assertEqual(response.status_code,200)
+            self.assertIn('انتهت صلاحية اشتراكك',response.text)
+
+    def test_admin_updates_date_and_invalidates_expired_browser_sessions(self):
+        from member_expiry import expiration_from_date, expiry_epoch
+        end=(datetime.now(ZoneInfo('Asia/Riyadh')).date()+timedelta(days=30)).isoformat()
+        old='2025-01-02T21:00:00Z'
+        uid='12345678-1234-1234-1234-123456789abc'
+        self.login('customer')
+        self.portal.member_sessions.set_user_expiry(uid,int(datetime(2025,1,1).timestamp()))
+        self.assertEqual(self.client.get('/web/').headers['location'],'/account/login')
+        self.login('admin')
+        record={'id':uid,'email':'customer1@members.alezz.invalid',
+                'app_metadata':{'alezz_customer':'active','alezz_expires_at':old,
+                                'other_attribute':'preserved'}}
+        with patch.object(self.portal,'upstream',return_value={'users':[record]}) as upstream:
+            updated=self.portal.manage({'action':'set-expiry','username':'customer1',
+                                        'expires_on':end})
+            self.assertEqual(updated,uid)
+            update=[c for c in upstream.call_args_list if c.args[0]=='PUT'][-1]
+            meta=update.kwargs['json']['app_metadata']
+            self.assertEqual(meta['alezz_expires_at'],expiration_from_date(end))
+            self.assertEqual(meta['other_attribute'],'preserved')
+            self.assertEqual(meta['alezz_customer'],'active')
+        with self.assertRaises(ValueError):
+            self.portal.manage({'action':'create','username':'newcustomer',
+                               'password':'new-password-123','expires_on':'2020-01-01'})
+
+    def test_expiration_is_visible_on_customer_directory(self):
+        self.login('admin')
+        uid='12345678-1234-1234-1234-123456789abc'
+        user={'id':uid,'email':'customer1@members.alezz.invalid',
+              'created_at':'2026-10-01T05:00:00Z',
+              'app_metadata':{'alezz_customer':'active','alezz_expires_at':'2025-01-02T21:00:00Z'}}
+        with patch.object(self.portal,'upstream',return_value={'users':[user]}):
+            page=self.client.get('/account/customers')
+            self.assertEqual(page.status_code,200)
+            self.assertIn('منتهي الصلاحية',page.text)
+            self.assertIn('set-expiry',page.text)
+            self.assertIn('2025-01-03',page.text)
 
     def test_authentication_checks_server_controlled_customer_metadata(self):
         uid='12345678-1234-1234-1234-123456789abc'
