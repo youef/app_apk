@@ -253,7 +253,7 @@ public final class CinemaPlayerActivity extends Activity {
     }
     private boolean isChannelFavorite(){
         if(itemId==null||itemId.isEmpty())return false;
-        SharedPreferences prefs=getSharedPreferences("alizz_v11_favorites",MODE_PRIVATE);
+        SharedPreferences prefs=getSharedPreferences("alizz_v11_favorites."+MemberAuth.userId(this),MODE_PRIVATE);
         String key="channel:"+itemId,scoped=profile+"."+key;
         if(prefs.contains(scoped))return prefs.getBoolean(scoped,false);
         return "family".equals(profile)&&prefs.getBoolean(key,false);
@@ -269,7 +269,7 @@ public final class CinemaPlayerActivity extends Activity {
     private void toggleLiveFavorite(){
         if(itemId==null||itemId.isEmpty())return;
         boolean selected=!isChannelFavorite();
-        getSharedPreferences("alizz_v11_favorites",MODE_PRIVATE).edit()
+        getSharedPreferences("alizz_v11_favorites."+MemberAuth.userId(this),MODE_PRIVATE).edit()
             .putBoolean(profile+".channel:"+itemId,selected).apply();
         for(JSONObject channel:tvChannels)
             if(itemId.equals(channel.optString("id",""))){
