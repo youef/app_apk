@@ -30,8 +30,12 @@ class MemberSessions:
                 csrf TEXT NOT NULL,
                 expires_at INTEGER NOT NULL,
                 created_at INTEGER NOT NULL,
-                last_seen_at INTEGER NOT NULL
+                last_seen_at INTEGER NOT NULL,
+                account_expires_at INTEGER NOT NULL DEFAULT 0
             )""")
+            fields={row[1] for row in conn.execute("PRAGMA table_info(member_sessions)")}
+            if "account_expires_at" not in fields:
+                conn.execute("ALTER TABLE member_sessions ADD COLUMN account_expires_at INTEGER NOT NULL DEFAULT 0")
             conn.execute("CREATE INDEX IF NOT EXISTS member_sessions_user_idx ON member_sessions(user_id)")
 
     def _db(self):
@@ -45,17 +49,20 @@ class MemberSessions:
             return None
         return hashlib.sha256(token.encode("ascii", "strict")).hexdigest()
 
-    def create(self, token, user_id, csrf):
+    def create(self, token, user_id, csrf, account_expires_at=0):
         digest = self._digest(token)
         if digest is None:
             raise ValueError("Invalid session identifier")
         now = int(time.time())
+        deadline = int(account_expires_at or 0)
+        if deadline and deadline <= now:
+            raise ValueError("Customer subscription has expired")
         with self._db() as conn:
-            conn.execute("DELETE FROM member_sessions WHERE expires_at<=?", (now,))
+            conn.execute("DELETE FROM member_sessions WHERE expires_at<=? OR (account_expires_at>0 AND account_expires_at<=?)", (now, now))
             conn.execute(
-                "INSERT INTO member_sessions(token_hash,user_id,role,csrf,expires_at,created_at,last_seen_at) "
-                "VALUES(?,?,'customer',?,?,?,?)",
-                (digest, user_id, csrf, now + CUSTOMER_SESSION_SECONDS, now, now),
+                "INSERT INTO member_sessions(token_hash,user_id,role,csrf,expires_at,created_at,last_seen_at,account_expires_at) "
+                "VALUES(?,?,'customer',?,?,?,?,?)",
+                (digest, user_id, csrf, now + CUSTOMER_SESSION_SECONDS, now, now, deadline),
             )
 
     def get(self, token):
@@ -64,9 +71,9 @@ class MemberSessions:
             return None
         now = int(time.time())
         with self._db() as conn:
-            row = conn.execute("SELECT user_id,role,csrf,expires_at,last_seen_at FROM member_sessions "
+            row = conn.execute("SELECT user_id,role,csrf,expires_at,last_seen_at,account_expires_at FROM member_sessions "
                                "WHERE token_hash=?", (digest,)).fetchone()
-            if not row or row[3] <= now:
+            if not row or row[3] <= now or (row[5] and row[5] <= now):
                 if row:
                     conn.execute("DELETE FROM member_sessions WHERE token_hash=?", (digest,))
                 return None
@@ -87,3 +94,12 @@ class MemberSessions:
     def revoke_user(self, user_id):
         with self._db() as conn:
             conn.execute("DELETE FROM member_sessions WHERE user_id=?", (user_id,))
+
+    def set_user_expiry(self, user_id, account_expires_at):
+        """Apply an admin renewal immediately to existing, browser-bound sessions."""
+        deadline = int(account_expires_at or 0)
+        with self._db() as conn:
+            conn.execute("UPDATE member_sessions SET account_expires_at=? WHERE user_id=?",
+                         (deadline, user_id))
+            if deadline and deadline <= int(time.time()):
+                conn.execute("DELETE FROM member_sessions WHERE user_id=?", (user_id,))
