@@ -122,6 +122,7 @@ jobs:
           node tests/live-tv-v17-genre-smoke.cjs
           node tests/live-tv-v18-balanced-smoke.cjs
           node tests/member-account-login-smoke.cjs
+          node tests/member-cloud-sync-smoke.cjs
           node tests/glass-v19-smoke.cjs
           node tests/tv-iptv-nimbus-smoke.cjs
           node tests/quality-picker-smoke.cjs
