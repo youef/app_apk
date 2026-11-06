@@ -262,4 +262,4 @@ class PortalTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.portal.authenticate('customer1','password')
             user['app_metadata']={'alezz_customer':'active'}
-            self.assertEqual(self.portal.authenticate('customer1','password'),(uid,'customer'))
+            self.assertEqual(self.portal.authenticate('customer1','password'),(uid,'customer',0))
