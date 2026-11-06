@@ -1,0 +1,179 @@
+name: Al Ezz TV v16 — Stable Android Release (API19+)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-stable.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: al-ezz-tv-v16-production
+  cancel-in-progress: false
+
+jobs:
+  android-stable:
+    name: Build and verify permanent signed universal APK
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - name: Android SDK setup
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+      - name: Install Android API 33 and build tools
+        run: sdkmanager "platforms;android-33" "build-tools;33.0.2"
+      - name: Java 11 for Gradle
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '11'
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '7.6'
+
+      - name: Require permanent signing credentials — never release debug APKs
+        shell: bash
+        env:
+          AL_EZZ_KEYSTORE_BASE64: ${{ secrets.AL_EZZ_KEYSTORE_BASE64 }}
+          AL_EZZ_STORE_PASSWORD: ${{ secrets.AL_EZZ_STORE_PASSWORD }}
+          AL_EZZ_KEY_ALIAS: ${{ secrets.AL_EZZ_KEY_ALIAS }}
+          AL_EZZ_KEY_PASSWORD: ${{ secrets.AL_EZZ_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for v in AL_EZZ_KEYSTORE_BASE64 AL_EZZ_STORE_PASSWORD AL_EZZ_KEY_ALIAS AL_EZZ_KEY_PASSWORD; do
+            if [[ -z "${!v}" ]]; then
+              echo "::error::Missing protected secret $v. Stable release blocked to prevent temporary/debug signing."
+              exit 1
+            fi
+          done
+          umask 077
+          printf '%s' "$AL_EZZ_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/al-ezz-permanent.jks"
+          test -s "$RUNNER_TEMP/al-ezz-permanent.jks"
+          keytool -list -keystore "$RUNNER_TEMP/al-ezz-permanent.jks" \
+            -storepass "$AL_EZZ_STORE_PASSWORD" -alias "$AL_EZZ_KEY_ALIAS" > /dev/null
+          echo "ORG_GRADLE_PROJECT_ezzStoreFile=$RUNNER_TEMP/al-ezz-permanent.jks" >> "$GITHUB_ENV"
+          echo "ORG_GRADLE_PROJECT_ezzStorePassword=$AL_EZZ_STORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "ORG_GRADLE_PROJECT_ezzKeyAlias=$AL_EZZ_KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "ORG_GRADLE_PROJECT_ezzKeyPassword=$AL_EZZ_KEY_PASSWORD" >> "$GITHUB_ENV"
+          echo "ORG_GRADLE_PROJECT_ezzApplicationId=sa.alezz.tv" >> "$GITHUB_ENV"
+          echo "ORG_GRADLE_PROJECT_ezzVersionCode=$((160000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+          echo "ORG_GRADLE_PROJECT_ezzVersionName=16.0.0" >> "$GITHUB_ENV"
+          echo "AL_EZZ_EXPECTED_PACKAGE=sa.alezz.tv" >> "$GITHUB_ENV"
+          echo "AL_EZZ_MIN_VERSION=$((160000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+
+      - name: Run Android TV compatibility and player smoke checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/tv-kids-playback-smoke.cjs
+          node tests/tv-remote-guide-smoke.cjs
+          node tests/tv-figma-v14-smoke.cjs
+          node tests/tv-smart-v15-smoke.cjs
+          node tests/tv-iptv-nimbus-smoke.cjs
+          node tests/quality-picker-smoke.cjs
+          node tests/kids-world-smoke.cjs
+          node tests/cast-airplay-smoke.cjs
+
+      - name: Bundle app artwork
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s web/alizz-tv-transparent.png
+          mkdir -p app/src/main/res/drawable-nodpi dist
+          cp web/alizz-tv-transparent.png app/src/main/res/drawable-nodpi/alizz_brand.png
+
+      - name: Build production variant only — API19 universal
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle clean assembleRelease --no-daemon > dist/gradle-build.log 2>&1 || {
+            grep -nE 'FAILURE:|What went wrong|Could not|FAILED|error:' dist/gradle-build.log | tail -60 || true
+            tail -120 dist/gradle-build.log
+            exit 1
+          }
+          test -s app/build/outputs/apk/release/app-release.apk
+          cp app/build/outputs/apk/release/app-release.apk dist/al-ezz-tv-v16.0.0-universal-api19.apk
+
+      - name: Verify package, Android 4.4 compatibility and real release signature
+        shell: bash
+        env:
+          AL_EZZ_CERT_SHA256: ${{ secrets.AL_EZZ_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          apk=dist/al-ezz-tv-v16.0.0-universal-api19.apk
+          python3 scripts/verify_apk.py "$apk" | tee dist/build-report.txt
+          sha256sum "$apk" | tee -a dist/build-report.txt
+          cert="$(sed -n 's/^CERTIFICATE_SHA256=//p' dist/build-report.txt | head -1)"
+          test -n "$cert"
+          if [[ -n "$AL_EZZ_CERT_SHA256" ]]; then
+            [[ "${cert,,}" == "${AL_EZZ_CERT_SHA256,,}" ]] || {
+              echo "::error::Stable signing certificate changed. Release blocked."
+              exit 1
+            }
+          fi
+          ! unzip -p "$apk" AndroidManifest.xml | strings | grep -q 'android:debuggable="true"' \
+            || { echo "::error::Debuggable package blocked."; exit 1; }
+          {
+            echo 'CHANNEL=stable'
+            echo 'SIGNING_MODE=protected_permanent_release'
+            echo 'PACKAGE=sa.alezz.tv'
+            echo 'VERSION=16.0.0'
+            echo 'MIN_SDK=19'
+            echo 'ABIS=armeabi-v7a,arm64-v8a,x86,x86_64'
+            echo "CERTIFICATE_SHA256=$cert"
+            echo "COMMIT=$GITHUB_SHA"
+            echo 'NOTE=Older test packages have distinct IDs and cannot be upgraded in place.'
+            echo 'NOTE=Actual Android TV hardware and stream compatibility must still be verified.'
+          } > dist/install-metadata.txt
+
+      - name: Upload verified production candidate
+        uses: actions/upload-artifact@v6
+        with:
+          name: al-ezz-tv-v16.0.0-signed-api19
+          path: |
+            dist/al-ezz-tv-v16.0.0-universal-api19.apk
+            dist/install-metadata.txt
+            dist/build-report.txt
+            dist/gradle-build.log
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Publish v16 stable GitHub release
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=al-ezz-tv-v16.0.0
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Stable v16.0.0 already exists. Refusing to overwrite a published release."
+            exit 1
+          fi
+          cat > dist/RELEASE-NOTES.md <<'NOTES'
+          # العز TV v16.0.0 — الإصدار النهائي
+          APK إنتاجي بتوقيع دائم ومُعرّف ثابت sa.alezz.tv، يدعم Android 4.4.4 (API19) فما فوق.
+          تطبيق مشاهدة للأفلام والمسلسلات والقنوات مع المشغل الأصلي، الريموت، متابعة المشاهدة، الجودة وملفات الأسرة والأطفال.
+          - ملف APK واحد يدعم ARMv7 وARM64 وx86 وx86_64.
+          - اجتاز فحص بنية APK وتوقيع V1 لتوافق Android 4.4 والاختبارات الآلية.
+          - الإصدارات التجريبية السابقة لها معرفات أخرى؛ ليست تحديثًا مباشرًا لها. احتفظ ببياناتها قبل الإزالة.
+          - يتطلب التحقق من التثبيت والتشغيل الفعلي على شاشة Android TV، وتختلف إتاحة المحتوى بحسب المصادر المرخصة.
+          NOTES
+          gh release create "$tag" \
+            dist/al-ezz-tv-v16.0.0-universal-api19.apk \
+            dist/install-metadata.txt \
+            dist/build-report.txt \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "العز TV v16.0.0 — الإصدار النهائي (Android 4.4+)" \
+            --notes-file dist/RELEASE-NOTES.md \
+            --latest
