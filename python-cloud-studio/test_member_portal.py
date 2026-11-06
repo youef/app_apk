@@ -223,7 +223,7 @@ class PortalTests(unittest.TestCase):
         old='2025-01-02T21:00:00Z'
         uid='12345678-1234-1234-1234-123456789abc'
         self.login('customer')
-        self.portal.member_sessions.set_user_expiry(uid,int(datetime(2025,1,1).timestamp()))
+        self.portal.member_sessions.set_user_expiry('example-id',int(datetime(2025,1,1).timestamp()))
         self.assertEqual(self.client.get('/web/').headers['location'],'/account/login')
         self.login('admin')
         record={'id':uid,'email':'customer1@members.alezz.invalid',
