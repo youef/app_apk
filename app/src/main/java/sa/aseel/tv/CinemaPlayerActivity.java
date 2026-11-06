@@ -391,7 +391,7 @@ public final class CinemaPlayerActivity extends Activity {
         index=StreamQuality.choose(sources,preferred,Build.VERSION.SDK_INT);
         if(index<0)index=0;
         initPlayer();playSource(index);
-        showControls(true);
+        if(live)hideControls();else showControls(true);
     }
     private void initPlayer(){
         try{
@@ -426,7 +426,7 @@ public final class CinemaPlayerActivity extends Activity {
                     status.setText("◌ جاري تحميل الفيديو... اضغط رجوع للخروج");started=false;
                     handler.removeCallbacks(watchdog);
                     handler.postDelayed(watchdog,22000L);
-                    showControls(false);
+                    if(live)hideControls();else showControls(false);
                 }else if(state==Player.STATE_READY){
                     handler.removeCallbacks(watchdog);started=true;tries=0;
                     if(live)PlaybackMemory.lastChannel(CinemaPlayerActivity.this,profile,itemId);
@@ -506,7 +506,7 @@ public final class CinemaPlayerActivity extends Activity {
         final String stream=currentUrl;
         qualityButton.setText("الجودة: "+sources.get(which).label);
         status.setText("◌ فحص رابط الفيديو قبل التشغيل...");
-        showControls(false);
+        if(live)hideControls();else showControls(false);
         probeWorker.execute(new Runnable(){public void run(){
             if(token!=requestToken||Thread.currentThread().isInterrupted())return;
             final StreamProbe.Result probe=StreamProbe.inspect(getApplicationContext(),stream);
