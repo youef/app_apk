@@ -507,6 +507,28 @@ public final class CinemaPlayerActivity extends Activity {
         qualityButton.setText("الجودة: "+sources.get(which).label);
         status.setText("◌ فحص رابط الفيديو قبل التشغيل...");
         if(live)hideControls();else showControls(false);
+        // The live catalog already restricts sources to rights-approved direct HTTPS media.
+        // Don't block every remote-arrow change on a separate HTTP preflight request.
+        // ExoPlayer validates the response and preserves the existing error/fallback path.
+        if(live && StreamQuality.isDirectUrl(stream)){
+            try{
+                String path=stream.split("[?#]",2)[0].toLowerCase(Locale.US);
+                MediaItem.Builder item=new MediaItem.Builder().setUri(Uri.parse(stream));
+                if(path.endsWith(".m3u8"))item.setMimeType("application/x-mpegURL");
+                else if(path.endsWith(".mpd"))item.setMimeType("application/dash+xml");
+                else if(path.endsWith(".ts"))item.setMimeType("video/mp2t");
+                lastSourceHint="البث المباشر: جارٍ التحقق من اتصال القناة";
+                status.setText("◌ جارٍ فتح القناة مباشرة…");
+                engine.setMediaItem(item.build());
+                engine.prepare();
+                engine.play();
+                handler.postDelayed(watchdog,22000L);
+            }catch(Exception immediateError){
+                Log.w("AlEzzTV","Unable to tune direct live source",immediateError);
+                tryNextOrExplain("تعذرت تهيئة القناة مباشرة.");
+            }
+            return;
+        }
         probeWorker.execute(new Runnable(){public void run(){
             if(token!=requestToken||Thread.currentThread().isInterrupted())return;
             final StreamProbe.Result probe=StreamProbe.inspect(getApplicationContext(),stream);
