@@ -59,9 +59,9 @@ def page(portal,session,message='',number=1):
             actions+='<button class="minor" name="action" value="reset-device" onclick="return confirm(\'فك ارتباط الجهاز الحالي وإنهاء جلسة العميل؟\')">فك الجهاز</button>'
         actions+='<button class="minor" name="action" value="'+('disable' if user['enabled'] else 'enable')+'">'+('إيقاف الحساب' if user['enabled'] else 'تفعيل الحساب')+'</button></form>'
         valid_date=user['expiry'] if user['expiry'] not in (None,'invalid') else ''
-        renewal='<form method="post" class="expiry-actions"><input type="hidden" name="csrf" value="'+csrf+'"><input type="hidden" name="username" value="'+name+'">'+(
-            '<label>تاريخ الانتهاء (شامل يوم الانتهاء، بتوقيت السعودية)<input type="date" name="expires_on" required value="'+escape(valid_date,quote=True)+'"></label>')+
-            '<button class="minor" name="action" value="set-expiry">حفظ / تجديد الصلاحية</button></form>'
+        renewal=('<form method="post" class="expiry-actions"><input type="hidden" name="csrf" value="'+csrf+'"><input type="hidden" name="username" value="'+name+'">'+
+            '<label>تاريخ الانتهاء (شامل يوم الانتهاء، بتوقيت السعودية)<input type="date" name="expires_on" required value="'+escape(valid_date,quote=True)+'"></label>'+
+            '<button class="minor" name="action" value="set-expiry">حفظ / تجديد الصلاحية</button></form>')
         subtitle=('تنتهي الصلاحية: '+user['expiry'] if valid_date
                   else 'انتهاء الصلاحية غير محدد — حساب قديم' if user['expiry'] is None
                   else 'تاريخ الصلاحية غير صالح — يُمنع الدخول')
