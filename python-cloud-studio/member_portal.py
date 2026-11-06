@@ -206,10 +206,10 @@ class Portal:
             else:
                 self.sessions[token]=(uid,role,now+SESSION_SECONDS,csrf)
             response=RedirectResponse('/studio/' if role=='admin' else '/web/',303,headers=HEADERS)
-            response.set_cookie(COOKIE,token,max_age=CUSTOMER_SESSION_SECONDS if role=='customer' else SESSION_SECONDS,httponly=True,secure=self.secure,samesite='strict')
+            response.set_cookie(COOKIE,token,max_age=CUSTOMER_SESSION_SECONDS if role=='customer' else SESSION_SECONDS,httponly=True,secure=self.secure,samesite='lax' if role=='customer' else 'strict')
             if role == 'customer':
                 response.set_cookie(DEVICE_COOKIE,browser_token,max_age=DEVICE_MAX_AGE,
-                                    httponly=True,secure=self.secure,samesite='strict')
+                                    httponly=True,secure=self.secure,samesite='lax')
             return response
         token=request.cookies.get(COOKIE,'')
         session=self.sessions.get(token)
@@ -307,10 +307,14 @@ class Portal:
             result=HTMLResponse(markup,headers=headers)
             if cookie_renewed:
                 result.set_cookie(COOKIE,token,max_age=CUSTOMER_SESSION_SECONDS,
-                                  httponly=True,secure=self.secure,samesite='strict')
+                                  httponly=True,secure=self.secure,samesite='lax')
+                result.set_cookie(DEVICE_COOKIE,request.cookies.get(DEVICE_COOKIE,''),max_age=DEVICE_MAX_AGE,
+                                  httponly=True,secure=self.secure,samesite='lax')
             return result
         result=FileResponse(target,media_type=mime,headers=headers)
         if cookie_renewed and session[1]=='customer':
             result.set_cookie(COOKIE,token,max_age=CUSTOMER_SESSION_SECONDS,
-                              httponly=True,secure=self.secure,samesite='strict')
+                              httponly=True,secure=self.secure,samesite='lax')
+            result.set_cookie(DEVICE_COOKIE,request.cookies.get(DEVICE_COOKIE,''),max_age=DEVICE_MAX_AGE,
+                              httponly=True,secure=self.secure,samesite='lax')
         return result
