@@ -719,14 +719,7 @@ public final class TVHomeActivity extends Activity {
             }});
         }
     }
-    private String channelCategory(JSONObject x){
-        String value=value(x,"category_name");
-        if(value.isEmpty())value=value(x,"category_label");
-        if(value.isEmpty())value=value(x,"group_title");
-        if(value.isEmpty())value=value(x,"genre");
-        if(value.isEmpty())value=value(x,"category");
-        return value.isEmpty()||value.length()>40?"غير مصنف":value;
-    }
+    private String channelCategory(JSONObject x){return ChannelGuideCategory.from(x);}
     private String epgNow(JSONObject x){
         String s=value(x,"epg_now_title");
         if(s.isEmpty())s=value(x,"current_program");
@@ -762,20 +755,37 @@ public final class TVHomeActivity extends Activity {
             resume.setOnClickListener(new View.OnClickListener(){public void onClick(View v){play(recent);}});
             break;
         }
+        java.util.LinkedHashMap<String,Integer> counts=new java.util.LinkedHashMap<String,Integer>();
+        for(String group:new String[]{"أخبار","رياضة","أفلام","مسلسلات","أطفال",
+                "وثائقيات","دينية","موسيقى","تعليمية","طبخ","منوعات","عامة"})
+            counts.put(group,0);
+        int favoriteCount=0;
+        for(JSONObject x:channels){
+            String group=channelCategory(x);
+            counts.put(group,counts.containsKey(group)?counts.get(group)+1:1);
+            if(isFavorite(x))favoriteCount++;
+        }
         java.util.LinkedHashSet<String> types=new java.util.LinkedHashSet<String>();
         types.add("الكل");
-        for(JSONObject x:channels)if(isFavorite(x)){types.add("المفضلة");break;}
-        for(JSONObject x:channels)types.add(channelCategory(x));
+        if(favoriteCount>0)types.add("المفضلة");
+        for(java.util.Map.Entry<String,Integer> entry:counts.entrySet())
+            if(entry.getValue()>0)types.add(entry.getKey());
         if(!types.contains(activeChannelCategory))activeChannelCategory="الكل";
         HorizontalScrollView scroll=new HorizontalScrollView(this);
         scroll.setHorizontalScrollBarEnabled(false);
         content.addView(scroll,space(-1,dp(60),3));
         LinearLayout filters=row();scroll.addView(filters);
         for(final String type:types){
-            Button b=button((type.equals(activeChannelCategory)?"✓ ":"")+type);
-            filters.addView(b,space(dp(150),dp(52),3));
+            int count="الكل".equals(type)?channels.size():
+                "المفضلة".equals(type)?favoriteCount:counts.get(type);
+            Button b=button((type.equals(activeChannelCategory)?"✓ ":"")+type+"  "+count);
+            b.setContentDescription("تصنيف "+type+"، "+count+" قناة");
+            filters.addView(b,space(dp(156),dp(52),3));
             b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-                activeChannelCategory=type;liveGuideLimit=48;render();
+                activeChannelCategory=type;liveGuideLimit=48;
+                getSharedPreferences("alezz_tv_settings_v14",MODE_PRIVATE).edit()
+                    .putString("live_selected_group",type).apply();
+                render();
             }});
         }
         int displayed=0,matching=0;
@@ -1055,6 +1065,7 @@ public final class TVHomeActivity extends Activity {
             intent.putExtra("media_kind",kind(item));
         }
         if("channel".equals(kind(item))){
+            intent.putExtra("channel_group","live".equals(section)?activeChannelCategory:"الكل");
             JSONArray playlist=new JSONArray();
             int selected=0;
             // Keep Android Binder intents below the transaction limit for large local IPTV lists.
