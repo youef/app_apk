@@ -616,7 +616,7 @@ public final class CinemaPlayerActivity extends Activity {
         Button close=button("✕ إخفاء القوائم");
         rightRail.addView(close,new LinearLayout.LayoutParams(-1,dp(52)));
         close.setOnClickListener(new View.OnClickListener(){public void onClick(View v){hideControls();}});
-        if(live)updateChannelRail();
+        // Build the guide only after the user requests it; start live video first.
         setRailsVisible(false);
     }
     private String groupFor(JSONObject row){
@@ -690,13 +690,25 @@ public final class CinemaPlayerActivity extends Activity {
             if(!now.isEmpty())line+="\nالآن: "+now;
             else line+="\n"+groupFor(item);
             if(!next.isEmpty())line+="    التالي: "+next;
+            final int height=now.isEmpty()&&next.isEmpty()?68:86;
+            LinearLayout card=new LinearLayout(this);
+            card.setOrientation(LinearLayout.HORIZONTAL);
+            card.setGravity(Gravity.CENTER_VERTICAL);
+            card.setPadding(dp(6),dp(3),dp(6),dp(3));
+            ImageView logo=new ImageView(this);
+            logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            logo.setBackgroundDrawable(shape(0xFF212A38,0));
+            String poster=item.optString("poster_url","");
+            if(poster.startsWith("https://"))PosterLoader.load(logo,poster);
+            card.addView(logo,new LinearLayout.LayoutParams(dp(53),dp(48)));
             Button channel=button((i==tvChannelIndex?"▶ ":"")+line);
             channel.setAllCaps(false);
             channel.setTextSize(13);
             channel.setGravity(Gravity.CENTER_VERTICAL|Gravity.RIGHT);
-            channel.setPadding(dp(13),0,dp(13),0);
-            list.addView(channel,new LinearLayout.LayoutParams(-1,dp(
-                now.isEmpty()&&next.isEmpty()?66:84)));
+            channel.setPadding(dp(12),0,dp(12),0);
+            if(i==tvChannelIndex)channel.setBackgroundDrawable(shape(0xFF4A3B26,0xFFE6BE77));
+            card.addView(channel,new LinearLayout.LayoutParams(0,dp(height-7),1));
+            list.addView(card,new LinearLayout.LayoutParams(-1,dp(height)));
             if(guideFirstButton==null)guideFirstButton=channel;
             if(i==tvChannelIndex)guideSelectedButton=channel;
             channel.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
