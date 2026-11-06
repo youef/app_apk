@@ -500,6 +500,12 @@
       toggle.textContent = state.cinemaMode ? "☷ عرض دليل القنوات" : "⛶ وضع التلفزيون";
     }
     if (Store && Store.setPref) Store.setPref("liveCinemaMode", state.cinemaMode);
+    // The last highlighted row can be hidden when entering cinema mode.
+    // Keep hardware remote arrows attached to the visible player instead.
+    if(state.cinemaMode && state.current){
+      var stage=$("liveStage");
+      if(stage && stage.focus)stage.focus();
+    }
   }
   function openGuide() {
     cinemaMode(false);
@@ -565,6 +571,8 @@
       $("liveFilters").innerHTML=Explore.picker(state.channels,"","live",state.catalogCategories);
       if(Store&&Store.setPref)Store.setPref("liveType",state.type);
       updateGuide();
+      var activeType=$("liveTypeTabs")&&$("liveTypeTabs").querySelector(".is-on");
+      if(activeType){activeType.focus();activeType.scrollIntoView({block:"nearest",inline:"nearest"});}
       var current=state.current;
       var scope=channelScope();
       if(scope.length && (!current || scope.indexOf(current)<0))select(scope[0],false);
@@ -790,7 +798,7 @@
       '<button type="button" class="live-outline live-outline--tv" id="liveCinemaToggle" aria-pressed="false">⛶ وضع التلفزيون</button>' +
       '<button type="button" class="live-outline" id="liveRefresh">' + icon("refresh") + ' تحديث القنوات</button></div></div>' +
       '<div class="live-layout"><div class="live-viewer">' +
-      '<div class="live-stage" id="liveStage">' +
+      '<div class="live-stage" id="liveStage" tabindex="0" aria-label="منطقة مشاهدة التلفزيون؛ السهم فوق وتحت لتغيير القنوات">' +
       '<video id="liveVideo" controls playsinline webkit-playsinline x-webkit-airplay="allow" preload="none" aria-label="مشغل البث المباشر"></video>' +
       '<div class="live-channel-hud" id="liveChannelHud" aria-live="off" hidden></div>' +
       '<div class="live-stage__zap" role="group" aria-label="التنقل بين قنوات الفئة"><button type="button" id="liveZapUp" aria-label="القناة التالية">▲</button><button type="button" id="liveZapDown" aria-label="القناة السابقة">▼</button></div>' +
