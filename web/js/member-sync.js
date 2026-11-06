@@ -61,6 +61,9 @@
       var favorites=(data.favorites||[]).filter(function(x){return x&&validKey(x.item_type+":"+x.item_id);})
         .map(function(x){return x.item_type+":"+x.item_id;});
       Store.replaceFavorites(favorites);
+      originalSetPref.call(Store,"liveFavorites",favorites.filter(function(key){
+        return key.indexOf("channel:")===0;
+      }));
       Store.mergeRemoteProgress(data.progress||[]);
       hasLoaded=true;
       // The app is already mounted by this point; update visible shelves if supported.
@@ -68,6 +71,27 @@
       return true;
     },function(){return false;});
   }
+  var originalSetPref=Store.setPref;
+  Store.setPref=function(name,value){
+    if(name!=="liveFavorites" || !Array.isArray(value))
+      return originalSetPref.call(Store,name,value);
+    var before=Store.pref("liveFavorites",[]);
+    if(!Array.isArray(before))before=[];
+    originalSetPref.call(Store,name,value);
+    var oldKeys=before.filter(validKey),newKeys=value.filter(validKey);
+    newKeys.forEach(function(key){
+      if(oldKeys.indexOf(key)>=0)return;
+      var item=splitKey(key);
+      if(item.item_type==="channel")
+        enqueue({kind:"favorite",action:"save",item_type:"channel",item_id:item.item_id},900);
+    });
+    oldKeys.forEach(function(key){
+      if(newKeys.indexOf(key)>=0)return;
+      var item=splitKey(key);
+      if(item.item_type==="channel")
+        enqueue({kind:"favorite",action:"remove",item_type:"channel",item_id:item.item_id},900);
+    });
+  };
   var originalFav=Store.toggleFavorite;
   Store.toggleFavorite=function(key){
     var added=originalFav.call(Store,key);
