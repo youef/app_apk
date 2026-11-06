@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Resp
 from starlette.concurrency import run_in_threadpool
 from member_devices import DeviceRegistry, DEVICE_COOKIE, DEVICE_MAX_AGE, friendly_device
 from member_sessions import MemberSessions, CUSTOMER_SESSION_SECONDS
+from member_expiry import account_state, expiration_from_date, expiry_epoch, EXPIRES_KEY
 
 COOKIE = 'alezz_member'
 SESSION_SECONDS = 8 * 3600
@@ -66,9 +67,12 @@ class Portal:
         user = result['user']
         uid = str(UUID(user['id']))
         if '@' not in username:
-            if user.get('app_metadata',{}).get('alezz_customer') != 'active':
+            state=account_state(user.get('app_metadata',{}))
+            if state == 'expired':
+                raise ValueError('Customer subscription expired')
+            if state != 'active':
                 raise ValueError('Inactive customer')
-            return uid,'customer'
+            return uid,'customer',expiry_epoch(user.get('app_metadata',{}))
         rows = self.upstream('GET','/rest/v1/aseel_admins',token=result['access_token'],
                              params={'user_id':'eq.'+uid,'active':'eq.true','select':'user_id','limit':1})
         if not rows:
@@ -124,12 +128,14 @@ class Portal:
             password=form.get('password','')
             if not 12<=len(password)<=72 or len(password.encode('utf-8'))>72:
                 raise ValueError('اختر كلمة مرور من 12 إلى 72 بايت.')
+            expires=expiration_from_date(form.get('expires_on',''))
             self.upstream('POST','/auth/v1/admin/users',secret=True,json={
                 'email':username+'@'+ALIAS_DOMAIN,'password':password,'email_confirm':True,
-                'app_metadata':{'alezz_customer':'active'}})
-            return 'تم إنشاء حساب '+username+'.'
-        if action not in ('disable','enable','reset-device'):
+                'app_metadata':{'alezz_customer':'active',EXPIRES_KEY:expires}})
+            return 'تم إنشاء العميل '+username+'، وتنتهي صلاحيته في '+form['expires_on']+'.'
+        if action not in ('disable','enable','reset-device','set-expiry'):
             raise ValueError('أمر غير معروف.')
+        expires=expiration_from_date(form.get('expires_on','')) if action=='set-expiry' else None
         # Resolve the exact alias. Pagination prevents modifying an unrelated user.
         for page in range(1,101):
             users=self.upstream('GET','/auth/v1/admin/users',secret=True,params={'page':page,'per_page':100}).get('users',[])
@@ -137,11 +143,21 @@ class Portal:
                 if user.get('email')!=username+'@'+ALIAS_DOMAIN:
                     continue
                 uid=str(UUID(user['id']))
+                current_meta=user.get('app_metadata') or {}
+                metadata=dict(current_meta)
                 if action=='reset-device':
                     self.devices.reset(uid)
-                else:
+                elif action=='set-expiry':
+                    metadata[EXPIRES_KEY]=expires
                     self.upstream('PUT','/auth/v1/admin/users/'+uid,secret=True,json={
-                        'app_metadata':{'alezz_customer':'active' if action=='enable' else 'disabled'}})
+                        'app_metadata':metadata})
+                    self.member_sessions.set_user_expiry(uid,expiry_epoch(metadata))
+                else:
+                    if action=='enable' and account_state({**metadata,'alezz_customer':'active'})=='expired':
+                        raise ValueError('صلاحية هذا الحساب منتهية. جدّد التاريخ أولًا قبل التفعيل.')
+                    metadata['alezz_customer']='active' if action=='enable' else 'disabled'
+                    self.upstream('PUT','/auth/v1/admin/users/'+uid,secret=True,json={
+                        'app_metadata':metadata})
                 return uid
             if len(users)<100:
                 break
@@ -224,7 +240,9 @@ class Portal:
                 if count>=10 or len(self.attempts)>=4096 and host not in self.attempts:
                     return HTMLResponse('محاولات كثيرة. أعد المحاولة بعد خمس دقائق.',429,headers=HEADERS)
                 self.attempts[host]=(until,count+1)
-                uid,role=await run_in_threadpool(self.authenticate,username,password)
+                identity=await run_in_threadpool(self.authenticate,username,password)
+                uid,role=identity[:2]
+                account_deadline=identity[2] if len(identity)>2 else 0
                 if role!=mode:raise ValueError('Role mismatch')
                 browser_token = request.cookies.get(DEVICE_COOKIE, '')
                 if role == 'customer':
@@ -236,8 +254,14 @@ class Portal:
                         raise DeviceBindingError('Device is already registered')
             except DeviceBindingError:
                 return self.login_page('هذا الحساب مرتبط بجهاز آخر. اطلب من الإدارة فك ارتباط الجهاز قبل تغييره.',mode=mode)
-            except (ValueError,KeyError,requests.RequestException):
+            except ValueError as error:
+                if str(error)=='Customer subscription expired':
+                    return self.login_page('انتهت صلاحية اشتراكك، وحسابك غير نشط. تواصل مع الإدارة لتجديد الصلاحية.',mode=mode)
+                if str(error)=='Inactive customer':
+                    return self.login_page('حسابك غير نشط. تواصل مع الإدارة.',mode=mode)
                 return self.login_page('تعذّر تسجيل الدخول. تحقق من بيانات الحساب.',mode=mode)
+            except (KeyError,requests.RequestException):
+                return self.login_page('تعذّر الاتصال بخادم الحسابات. حاول مجددًا.',mode=mode)
             self.attempts.pop(host,None)
             self.sessions={k:v for k,v in self.sessions.items() if v[2]>now}
             if len(self.sessions)>=4096:
@@ -248,7 +272,7 @@ class Portal:
             csrf=secrets.token_urlsafe(24)
             if role=='customer':
                 try:
-                    await run_in_threadpool(self.member_sessions.create,token,uid,csrf)
+                    await run_in_threadpool(self.member_sessions.create,token,uid,csrf,account_deadline)
                 except OSError:
                     return HTMLResponse('تعذّر حفظ الجلسة بأمان، تحقق من القرص الخاص بالخادم.',503,headers=HEADERS)
             else:
@@ -308,8 +332,11 @@ class Portal:
                     action=form.get('action','')
                     result=await run_in_threadpool(self.manage,form)
                     if action!='create':
-                        self.revoke(result)
-                        result='تم فك ارتباط الجهاز. يمكن للعميل تسجيل الدخول من جهاز جديد.' if action=='reset-device' else 'تم تحديث حالة الحساب.'
+                        if action!='set-expiry':
+                            self.revoke(result)
+                        result=('تم تحديث تاريخ صلاحية الحساب.' if action=='set-expiry'
+                                else 'تم فك ارتباط الجهاز. يمكن للعميل تسجيل الدخول من جهاز جديد.' if action=='reset-device'
+                                else 'تم تحديث حالة الحساب.')
                     return await run_in_threadpool(self.customers_page,session,result,page_number)
                 except ValueError as exc:
                     return await run_in_threadpool(self.customers_page,session,str(exc),page_number)
