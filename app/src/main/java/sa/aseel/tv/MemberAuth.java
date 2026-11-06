@@ -96,7 +96,9 @@ public final class MemberAuth {
         String access=reply.optString("access_token",""),refresh=reply.optString("refresh_token","");
         if(access.length()<30||refresh.length()<15)throw new AuthenticationException("فشل استلام جلسة صالحة.");
         JSONObject user=authorizedUser(context,access);
+        long lifetime=Math.max(60,Math.min(86400,reply.optLong("expires_in",3600)));
         boolean stored=preferences(context).edit()
+            .putLong("expires_at_ms",System.currentTimeMillis()+lifetime*1000L)
             .putString("user_id",user.optString("id"))
             .putString("username",username)
             .putString("access_token",access)
@@ -120,7 +122,7 @@ public final class MemberAuth {
             if(password!=null)java.util.Arrays.fill(password,'\0');
         }
     }
-    public static void resume(Context context)throws Exception{
+    public static synchronized void resume(Context context)throws Exception{
         String refresh=preferences(context).getString("refresh_token","");
         if(refresh.isEmpty())throw new AuthenticationException("يلزم تسجيل الدخول.");
         JSONObject body=new JSONObject();body.put("refresh_token",refresh);
@@ -131,6 +133,12 @@ public final class MemberAuth {
             logoutLocal(context);
             throw invalid;
         }
+    }
+    /** Refresh only when necessary; serializing avoids refresh-token rotation races. */
+    public static synchronized void ensureFresh(Context context)throws Exception{
+        long expiry=preferences(context).getLong("expires_at_ms",0L);
+        if(accessToken(context).isEmpty()||System.currentTimeMillis()>expiry-90000L)
+            resume(context);
     }
     public static void logoutLocal(Context context){
         preferences(context).edit().clear().commit();
