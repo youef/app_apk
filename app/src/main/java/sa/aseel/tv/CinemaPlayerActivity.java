@@ -276,6 +276,7 @@ public final class CinemaPlayerActivity extends Activity {
                 try{channel.put("favorite",selected);}catch(Exception ignored){}
             }
         updateLiveFavorite();
+        if("family".equals(profile))MemberSync.favorite(this,"channel",itemId,selected);
         showLiveHud(selected?"★ تم حفظ القناة في المفضلة":"☆ تمت إزالة القناة من المفضلة");
         // Rebuild only when the viewer has intentionally opened the guide.
         if(leftRail!=null&&leftRail.getVisibility()==View.VISIBLE)updateChannelRail();
@@ -650,6 +651,7 @@ public final class CinemaPlayerActivity extends Activity {
             long duration=Math.max(0L,engine.getDuration());
             String quality=(sources!=null&&index>=0&&index<sources.size())?sources.get(index).label:"auto";
             PlaybackMemory.save(this,profile,itemId,mediaKind,seriesId,itemTitle,position,duration,quality);
+            MemberSync.progress(this,profile,mediaKind,itemId,position,duration);
         }catch(Exception ignored){}
     }
     private void setRailsVisible(boolean visible){
