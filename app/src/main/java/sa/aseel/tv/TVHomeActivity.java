@@ -53,6 +53,7 @@ public final class TVHomeActivity extends Activity {
     private boolean detailVisible=false, showingWelcome=false;
     private String detailOrigin="home";
     private String pendingResumeEpisodeId="",activeChannelCategory="الكل";
+    private int liveGuideLimit=48;
     private int kidsAge=6,kidsDailyMinutes=60;
     private String lastLoadError="";
     private boolean loading=false,unlocked=false;
@@ -749,7 +750,7 @@ public final class TVHomeActivity extends Activity {
         }});
     }
     private void liveGuide(){
-        heading("دليل القنوات • LIVE TV","قنوات يسار المشغل وأزرار يمينه • OK / CH± / الأرقام");
+        heading("● تلفزيون العز المباشر",channels.size()+" قناة • اختر التصنيف، ثم اضغط OK للمشاهدة • MENU للدليل أثناء البث");
         if(channels.isEmpty()){
             heading("لا توجد قنوات منشورة","استخدم تحديث المكتبة أو راجع المصادر.");return;
         }
@@ -762,7 +763,9 @@ public final class TVHomeActivity extends Activity {
             break;
         }
         java.util.LinkedHashSet<String> types=new java.util.LinkedHashSet<String>();
-        types.add("الكل");for(JSONObject x:channels)types.add(channelCategory(x));
+        types.add("الكل");
+        for(JSONObject x:channels)if(isFavorite(x)){types.add("المفضلة");break;}
+        for(JSONObject x:channels)types.add(channelCategory(x));
         if(!types.contains(activeChannelCategory))activeChannelCategory="الكل";
         HorizontalScrollView scroll=new HorizontalScrollView(this);
         scroll.setHorizontalScrollBarEnabled(false);
@@ -772,47 +775,70 @@ public final class TVHomeActivity extends Activity {
             Button b=button((type.equals(activeChannelCategory)?"✓ ":"")+type);
             filters.addView(b,space(dp(150),dp(52),3));
             b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-                activeChannelCategory=type;render();
+                activeChannelCategory=type;liveGuideLimit=48;render();
             }});
         }
-        int displayed=0;
+        int displayed=0,matching=0;
+        boolean twoColumns=getResources().getDisplayMetrics().widthPixels>=dp(1000);
+        LinearLayout pair=null;
         for(int i=0;i<channels.size();i++){
             JSONObject x=channels.get(i);
-            if("الكل".equals(activeChannelCategory)||activeChannelCategory.equals(channelCategory(x))){
-                if(++displayed>350)break;
-                content.addView(channelLine(x,i));
-            }
+            boolean match="الكل".equals(activeChannelCategory) ||
+                ("المفضلة".equals(activeChannelCategory)&&isFavorite(x)) ||
+                activeChannelCategory.equals(channelCategory(x));
+            if(!match)continue;
+            matching++;
+            if(displayed>=Math.min(350,liveGuideLimit))continue;
+            if(displayed>350)break; // Safety bound for the legacy TV memory profile.
+            LinearLayout card=channelLine(x,i);
+            if(twoColumns){
+                if(displayed%2==0){
+                    pair=row();
+                    content.addView(pair,space(-1,dp(92),3));
+                }
+                pair.addView(card,new LinearLayout.LayoutParams(0,dp(84),1));
+            }else content.addView(card);
+            displayed++;
         }
-        if(displayed>350)heading("عرض أول 350 قناة من هذا التصنيف","يمكن الوصول إلى بقية القنوات من البحث.");
+        if(matching>displayed){
+            final int remaining=matching-displayed;
+            Button more=button("＋ عرض المزيد من القنوات  ("+remaining+" متبقية)");
+            content.addView(more,space(-1,dp(56),6));
+            more.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                liveGuideLimit=Math.min(350,liveGuideLimit+48);render();
+            }});
+        }
+        if(matching>350&&liveGuideLimit>=350)
+            heading("عرض أول 350 قناة من هذا التصنيف","استخدم البحث للوصول إلى بقية القنوات.");
     }
     private LinearLayout channelLine(final JSONObject channel,final int position){
         final LinearLayout line=row();
         line.setPadding(dp(16),dp(8),dp(16),dp(8));
         line.setFocusable(true);line.setClickable(true);
-        line.setBackgroundDrawable(bg(0xFF1D1923,0xFF39313D,13));
+        line.setBackgroundDrawable(bg(0xFF121925,0xFF303C4F,12));
         LinearLayout.LayoutParams outer=space(-1,dp(83),4);
         line.setLayoutParams(outer);
-        TextView number=text(String.format(Locale.US,"%03d",position+1),23,0xFFFFB9C9,true);
+        TextView number=text(String.format(Locale.US,"%03d",position+1),20,0xFFF3D293,true);
         number.setGravity(Gravity.CENTER);
-        line.addView(number,new LinearLayout.LayoutParams(dp(79),-1));
+        line.addView(number,new LinearLayout.LayoutParams(dp(59),-1));
         ImageView poster=new ImageView(this);poster.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        poster.setBackgroundDrawable(bg(0xFF362333,0,8));
+        poster.setBackgroundDrawable(bg(0xFF1E2634,0,8));
         String image=value(channel,"poster_url");
         if(image.startsWith("https://"))PosterLoader.load(poster,image);
-        line.addView(poster,new LinearLayout.LayoutParams(dp(100),dp(64)));
+        line.addView(poster,new LinearLayout.LayoutParams(dp(76),dp(55)));
         LinearLayout information=column();information.setPadding(dp(14),0,dp(14),0);
-        information.addView(text(label(channel),20,WHITE,true));
+        information.addView(text(label(channel),17,WHITE,true));
         information.addView(text("● بث مباشر   •   "+channelCategory(channel),12,0xFF9FE2BF,false));
         String now=epgNow(channel),next=epgNext(channel);
         if(!now.isEmpty()||!next.isEmpty())information.addView(text(
             (!now.isEmpty()?"الآن: "+now:"")+(!next.isEmpty()?"  التالي: "+next:""),12,MUTED,false));
         line.addView(information,new LinearLayout.LayoutParams(0,-2,1));
-        TextView action=text("▶  مشاهدة",15,0xFFFFA2BB,true);
-        line.addView(action,new LinearLayout.LayoutParams(dp(130),-1));
+        TextView action=text("▶  تشغيل",13,0xFFE6C786,true);
+        line.addView(action,new LinearLayout.LayoutParams(dp(91),-1));
         line.setOnFocusChangeListener(new View.OnFocusChangeListener(){
             public void onFocusChange(View v,boolean focused){
-                line.setBackgroundDrawable(bg(focused?0xFF75213D:0xFF1D1923,
-                    focused?0xFFFFAABB:0xFF39313D,13));
+                line.setBackgroundDrawable(bg(focused?0xFF364353:0xFF121925,
+                    focused?0xFFF3D293:0xFF303C4F,12));
             }
         });
         line.setOnClickListener(new View.OnClickListener(){public void onClick(View v){play(channel);}});
