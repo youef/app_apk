@@ -208,33 +208,113 @@ public final class TVHomeActivity extends Activity {
             if(!isFinishing()&&showingWelcome&&!unlocked)showWelcome();
         }},1100L);
     }
+    /** Login once; on later launches refresh the persisted session transparently. */
     private void showWelcome(){
-        final LinearLayout panel=column();panel.setGravity(Gravity.CENTER);
+        if(MemberAuth.hasSession(this))restoreMember();
+        else showMemberLogin("");
+    }
+    private void restoreMember(){
+        showingWelcome=true;
+        final LinearLayout panel=column();
+        panel.setGravity(Gravity.CENTER);
         panel.setBackgroundDrawable(new GradientDrawable(
-            GradientDrawable.Orientation.TL_BR,
-            new int[]{0xFF0B0E18,0xFF342033,0xFF090B11}));
+            GradientDrawable.Orientation.TL_BR,new int[]{0xFF0B0E18,0xFF302331,0xFF090B11}));
         setContentView(panel);
-        ImageView icon=new ImageView(this);
-        int mark=getResources().getIdentifier("alizz_brand","drawable",getPackageName());
-        if(mark!=0)icon.setImageResource(mark);
-        icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        panel.addView(icon,new LinearLayout.LayoutParams(dp(172),dp(172)));
-        TextView hello=text("أهلًا بك في عالم العز TV",35,WHITE,true);
-        hello.setGravity(Gravity.CENTER);
-        panel.addView(hello,space(-1,dp(80),10));
-        TextView note=text("مسلسلات  •  أفلام  •  بث مباشر  •  أطفال",20,MUTED,false);
-        note.setGravity(Gravity.CENTER);panel.addView(note,space(-1,dp(49),2));
-        Button start=button("▶   ابدأ المشاهدة");
-        start.setTextSize(23);
-        panel.addView(start,space(dp(300),dp(66),12));
-        start.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-            showingWelcome=false;startViewer();
+        TextView message=text("◌  التحقق من الجلسة المحفوظة...",22,WHITE,true);
+        message.setGravity(Gravity.CENTER);
+        panel.addView(message,space(-1,dp(72),8));
+        background.execute(new Runnable(){public void run(){
+            try{
+                MemberAuth.resume(TVHomeActivity.this);
+                ui.post(new Runnable(){public void run(){
+                    if(isFinishing())return;
+                    startViewer();
+                }});
+            }catch(final Exception error){
+                ui.post(new Runnable(){public void run(){
+                    if(isFinishing())return;
+                    showMemberLogin(MemberAuth.hasSession(TVHomeActivity.this)?
+                        "تعذر التحقق من الجلسة. تأكد من الاتصال ثم اضغط إعادة المحاولة.":
+                        "انتهت الجلسة أو توقف الحساب. يرجى تسجيل الدخول.");
+                }});
+            }
         }});
-        TextView guest=text("دون حساب أو رمز دخول",15,0xFF44C892,false);
-        guest.setGravity(Gravity.CENTER);panel.addView(guest,space(-1,dp(40),4));
-        start.requestFocus();
+    }
+    private void showMemberLogin(String notice){
+        showingWelcome=true;unlocked=false;
+        final LinearLayout panel=column();
+        panel.setGravity(Gravity.CENTER);
+        panel.setPadding(dp(32),dp(15),dp(32),dp(15));
+        panel.setBackgroundDrawable(new GradientDrawable(
+            GradientDrawable.Orientation.TL_BR,new int[]{0xFF0B0E18,0xFF302331,0xFF090B11}));
+        setContentView(panel);
+        ImageView logo=new ImageView(this);
+        int resource=getResources().getIdentifier("alizz_brand","drawable",getPackageName());
+        if(resource!=0)logo.setImageResource(resource);
+        logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        panel.addView(logo,space(dp(116),dp(110),3));
+        TextView title=text("دخول العز TV",30,WHITE,true);
+        title.setGravity(Gravity.CENTER);
+        panel.addView(title,space(-1,dp(56),2));
+        TextView sub=text("اسم المستخدم وكلمة المرور مرة واحدة، ثم يبدأ التطبيق بحسابك تلقائيًا.",15,MUTED,false);
+        sub.setGravity(Gravity.CENTER);
+        panel.addView(sub,space(-1,dp(42),3));
+        final EditText username=new EditText(this),password=new EditText(this);
+        for(EditText input:new EditText[]{username,password}){
+            input.setSingleLine(true);input.setTextColor(WHITE);input.setHintTextColor(MUTED);
+            input.setTextSize(18);input.setPadding(dp(17),dp(3),dp(17),dp(3));
+            input.setBackgroundDrawable(bg(PANEL,0xFF7B6041,10));
+            panel.addView(input,space(dp(430),dp(57),5));
+        }
+        username.setHint("اسم المستخدم");username.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
+        username.setText(getSharedPreferences(SETTINGS,MODE_PRIVATE).getString("last_username",""));
+        password.setHint("كلمة المرور");
+        password.setInputType(android.text.InputType.TYPE_CLASS_TEXT|
+            android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        final TextView feedback=text(notice,13,0xFFE9BF7A,false);
+        feedback.setGravity(Gravity.CENTER);
+        panel.addView(feedback,space(-1,dp(43),3));
+        final Button signIn=button("دخول حسابي  ❯");
+        panel.addView(signIn,space(dp(300),dp(62),7));
+        signIn.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            final String name=username.getText().toString().trim();
+            final char[] secret=password.getText().toString().toCharArray();
+            password.setText("");
+            if(name.length()<3||secret.length==0){
+                java.util.Arrays.fill(secret,'\0');
+                feedback.setText("أدخل اسم المستخدم وكلمة المرور.");return;
+            }
+            signIn.setEnabled(false);feedback.setText("جارٍ التحقق من الحساب...");
+            background.execute(new Runnable(){public void run(){
+                try{
+                    MemberAuth.login(TVHomeActivity.this,name,secret);
+                    getSharedPreferences(SETTINGS,MODE_PRIVATE).edit().putString("last_username",name).apply();
+                    ui.post(new Runnable(){public void run(){
+                        if(isFinishing())return;
+                        PlaybackMemory.prune(TVHomeActivity.this);
+                        startViewer();
+                    }});
+                }catch(final Exception error){
+                    ui.post(new Runnable(){public void run(){
+                        if(isFinishing())return;
+                        feedback.setText(error instanceof MemberAuth.AuthenticationException?
+                            error.getMessage():"تعذر الاتصال. تحقق من الإنترنت ثم حاول مجددًا.");
+                        signIn.setEnabled(true);
+                    }});
+                }finally{java.util.Arrays.fill(secret,'\0');}
+            }});
+        }});
+        if(MemberAuth.hasSession(this)){
+            Button retry=button("↻ إعادة محاولة استعادة الجلسة");
+            panel.addView(retry,space(dp(330),dp(55),4));
+            retry.setOnClickListener(new View.OnClickListener(){public void onClick(View v){restoreMember();}});
+        }
+        username.requestFocus();
     }
     private void startViewer(){
+        if(!MemberAuth.hasSession(this)){
+            showMemberLogin("يرجى تسجيل الدخول بحساب عميل مفعل.");return;
+        }
         unlocked=true;showingWelcome=false;
         section="home";buildShell();render();loadCatalog();
         if(!getSharedPreferences(SETTINGS,MODE_PRIVATE).getString("iptv_m3u","").isEmpty())
@@ -563,9 +643,21 @@ public final class TVHomeActivity extends Activity {
     }
     private void settingsScreen(){
         heading("الإعدادات","تخصيص تجربة العز TV • التفضيلات محفوظة على هذا الجهاز فقط");
+        heading("حساب المشاهدة","مسجل الدخول: "+MemberAuth.username(this));
+        Button logout=button("↪ تسجيل الخروج من الحساب");
+        content.addView(logout,space(-1,dp(58),6));
+        logout.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            unlocked=false;showingWelcome=true;
+            background.execute(new Runnable(){public void run(){
+                MemberAuth.logout(TVHomeActivity.this);
+                ui.post(new Runnable(){public void run(){
+                    if(!isFinishing())showMemberLogin("تم تسجيل الخروج من الحساب.");
+                }});
+            }});
+        }});
         final SharedPreferences prefs=getSharedPreferences(SETTINGS,MODE_PRIVATE);
         final String active=PlaybackMemory.activeProfile(this);
-        heading("ملفات مشاهدة محلية","ملف مستقل للمفضلة والتقدم وآخر قناة • بدون تسجيل دخول");
+        heading("ملفات المشاهدة","ملفات مستقلة للعائلة والأطفال والضيف داخل حسابك");
         LinearLayout profiles=row();content.addView(profiles,space(-1,-2,4));
         for(final String profile:new String[]{"family","kids","guest"}){
             Button choice=button((active.equals(profile)?"✓ ":"")+PlaybackMemory.profileName(profile));
@@ -638,7 +730,7 @@ public final class TVHomeActivity extends Activity {
         youtube.setOnClickListener(new View.OnClickListener(){public void onClick(View v){goTo("youtube");}});
         TextView data=text("Android "+android.os.Build.VERSION.RELEASE+
             "  •  API "+android.os.Build.VERSION.SDK_INT+
-            "  •  المحتوى من Supabase  •  المشاهدة بدون حساب",14,MUTED,false);
+            "  •  المحتوى من Supabase  •  حساب "+MemberAuth.username(this),14,MUTED,false);
         content.addView(data,space(-1,dp(51),8));
         next.requestFocus();
     }
