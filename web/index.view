@@ -31,7 +31,6 @@
 })();
 </script>
 <link rel="stylesheet" href="css/member-ui.css?v=2">
-<link rel="stylesheet" href="css/glass.css?v=glass-cinema-v19-20261107">
 <link rel="stylesheet" href="css/glass.css?v=glass-v19-20261107">
 </head>
 <body data-boot="loading">
