@@ -146,7 +146,7 @@ class QueueDB:
             db.execute('insert into auto_events(at,table_name,target_id,kind,message) values(?,?,?,?,?)',
                        (time.time(),table,identifier,kind,safe_error(message)))
 
-    def ingest(self, table, row):
+    def ingest(self, table, row, restored=False):
         table, identifier = target_key(table, row['id'])
         now = time.time()
         page = row.get('source_page_url') or ''
@@ -165,10 +165,13 @@ class QueueDB:
             else:
                 db.execute('insert into auto_jobs(table_name,target_id,title,page_url,stream_url,data) values(?,?,?,?,?,?)',
                            (table,identifier,row.get('title_ar') or '',page,row.get('stream_url') or '',json.dumps(row,ensure_ascii=False)))
-        if page: self.remember(table,identifier,dict(url=page,kind='original'))
-        if row.get('stream_url'): self.remember(table,identifier,dict(url=row['stream_url'],kind=supported_source_kind(row['stream_url']) or 'direct'))
+        if page: self.remember(table,identifier,dict(url=page,kind='original'),restored=restored)
+        if row.get('stream_url'):
+            self.remember(table,identifier,
+                          dict(url=row['stream_url'],kind=supported_source_kind(row['stream_url']) or 'direct'),
+                          restored=restored)
         for item in row.get('stream_variants') or []:
-            if isinstance(item,dict): self.remember(table,identifier,item)
+            if isinstance(item,dict): self.remember(table,identifier,item,restored=restored)
 
     def remember(self, table, identifier, source, restored=False):
         table, identifier = target_key(table, identifier)
@@ -185,13 +188,22 @@ class QueueDB:
             old = db.execute('select * from auto_sources where table_name=? and target_id=? and source_key=?',
                              (table,identifier,key)).fetchone()
             if old:
-                db.execute('update auto_sources set last_seen_at=?,page_url=case when ?!=\'\' then ? else page_url end,'
-                           'kind=case when ?=\'original\' then \'original\' when kind=\'original\' then kind else ? end,'
-                           'label=case when ?!=\'\' then ? else label end,synced=0 '
-                           'where table_name=? and target_id=? and source_key=?',
-                           (max(now,old['last_seen_at']),page,page,kind,kind,str(source.get('label') or '')[:80],
-                            str(source.get('label') or '')[:80],table,identifier,key))
+                if not restored:
+                    db.execute('update auto_sources set last_seen_at=?,page_url=case when ?!=\'\' then ? else page_url end,'
+                               'kind=case when ?=\'original\' then \'original\' when kind=\'original\' then kind else ? end,'
+                               'label=case when ?!=\'\' then ? else label end,synced=0 '
+                               'where table_name=? and target_id=? and source_key=?',
+                               (max(now,old['last_seen_at']),page,page,kind,kind,str(source.get('label') or '')[:80],
+                                str(source.get('label') or '')[:80],table,identifier,key))
                 if restored:
+                    if kind=='original' and old['kind']!='original':
+                        db.execute("update auto_sources set kind='original' "
+                                   "where table_name=? and target_id=? and source_key=?",
+                                   (table,identifier,key))
+                    if page and page!=old['page_url']:
+                        db.execute("update auto_sources set page_url=? "
+                                   "where table_name=? and target_id=? and source_key=?",
+                                   (page,table,identifier,key))
                     first=min(old['first_seen_at'],stamp(source.get('first_seen_at')) or old['first_seen_at'])
                     db.execute('update auto_sources set first_seen_at=? where table_name=? and target_id=? and source_key=?',
                                (first,table,identifier,key))
@@ -214,7 +226,7 @@ class QueueDB:
                             float(source.get('confidence',0.5)) if restored else 0.5,stamp(source.get('last_checked_at')) if restored else 0,
                             int(restored),int(source.get('consecutive_failures',0)) if restored else 0,
                             safe_error(source.get('error','')) if restored else ''))
-        if page and page != url: self.remember(table,identifier,dict(url=page,kind='original'))
+        if page and page != url: self.remember(table,identifier,dict(url=page,kind='original'),restored=restored)
 
     def sources(self, table, identifier):
         table,identifier=target_key(table,identifier)
@@ -425,7 +437,7 @@ class AutoSync:
     def import_remote(self):
         for table in TABLES:
             for row in self._rows(table,{'select':'*'}):
-                self.queue.ingest(table,row)
+                self.queue.ingest(table,row,restored=True)
         # Restore every history row as well as the current eight public variants.
         for row in self._rows('aseel_media_sources',{'select':'*'}):
             self.queue.remember(row['target_table'],row['target_id'],row,restored=True)
