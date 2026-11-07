@@ -140,11 +140,62 @@ public final class MemberAuth {
                 preferences(context).getLong("session_started_ms",0L));
             preferences(context).edit()
                 .putLong("subscription_expires_ms",subscriptionDeadline(user)).commit();
+            registerDevice(context);
         }catch(AuthenticationException denied){
             logoutLocal(context);
             throw denied;
         }
     }
+    /** Report this authenticated Android TV device to the owner's RLS-protected
+     * Supabase device list. Only an irreversible SHA-256 of a private random id
+     * leaves the device; failure never blocks customer playback. */
+    private static void registerDevice(Context context){
+        try{
+            SharedPreferences pref=preferences(context);
+            long now=System.currentTimeMillis();
+            if(now-pref.getLong("device_seen_ms",0L)<300000L)return;
+            String uid=userId(context),token=accessToken(context);
+            if(!uid.matches("[a-fA-F0-9-]{36}")||token.isEmpty())return;
+            String seed=pref.getString("device_seed","");
+            if(seed.isEmpty()){
+                byte[] random=new byte[32];new java.security.SecureRandom().nextBytes(random);
+                StringBuilder result=new StringBuilder();
+                for(byte b:random)result.append(String.format(Locale.US,"%02x",b&0xff));
+                seed=result.toString();
+                if(!pref.edit().putString("device_seed",seed).commit())return;
+            }
+            byte[] digest=java.security.MessageDigest.getInstance("SHA-256").digest(seed.getBytes("UTF-8"));
+            StringBuilder hash=new StringBuilder();
+            for(byte b:digest)hash.append(String.format(Locale.US,"%02x",b&0xff));
+            JSONObject row=new JSONObject();
+            row.put("user_id",uid);row.put("device_hash",hash.toString());
+            row.put("platform","android_tv");
+            row.put("device_model",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL);
+            row.put("app_version","API"+android.os.Build.VERSION.SDK_INT);
+            SimpleDateFormat timeFormat=new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'",Locale.US);
+            timeFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
+            row.put("last_seen_at",timeFormat.format(new java.util.Date(now)));
+            URL url=new URL(AppConfig.API_ROOT+
+                "aseel_device_sessions?on_conflict=user_id%2Cdevice_hash");
+            HttpsURLConnection conn=(HttpsURLConnection)url.openConnection();
+            conn.setSSLSocketFactory(LegacyTls.factory(context));
+            conn.setConnectTimeout(9000);conn.setReadTimeout(9000);
+            conn.setInstanceFollowRedirects(false);
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("apikey",AppConfig.PUBLISHABLE_KEY);
+            conn.setRequestProperty("Authorization","Bearer "+token);
+            conn.setRequestProperty("Content-Type","application/json; charset=utf-8");
+            conn.setRequestProperty("Prefer","resolution=merge-duplicates,return=minimal");
+            conn.setDoOutput(true);
+            try{
+                OutputStream out=conn.getOutputStream();
+                try{out.write(row.toString().getBytes("UTF-8"));}finally{out.close();}
+                int code=conn.getResponseCode();
+                if(code>=200&&code<300)pref.edit().putLong("device_seen_ms",now).apply();
+            }finally{conn.disconnect();}
+        }catch(Exception ignored){/* Device inventory is best effort, never auth. */}
+    }
+
     private static void save(Context context,JSONObject reply,String username,long sessionStarted)throws Exception{
         String access=reply.optString("access_token",""),refresh=reply.optString("refresh_token","");
         if(access.length()<30||refresh.length()<15)throw new AuthenticationException("فشل استلام جلسة صالحة.");
@@ -174,6 +225,7 @@ public final class MemberAuth {
             long sessionStarted=System.currentTimeMillis();
             JSONObject reply=request(context,"token?grant_type=password",body,null);
             save(context,reply,name,sessionStarted);
+            registerDevice(context);
         }finally{
             if(password!=null)java.util.Arrays.fill(password,'\0');
         }
@@ -186,6 +238,7 @@ public final class MemberAuth {
             JSONObject reply=request(context,"token?grant_type=refresh_token",body,null);
             save(context,reply,username(context),
                 preferences(context).getLong("session_started_ms",0L));
+            registerDevice(context);
         }catch(AuthenticationException invalid){
             logoutLocal(context);
             throw invalid;
