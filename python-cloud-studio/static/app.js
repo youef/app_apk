@@ -366,9 +366,11 @@
       }
       $('verifyProgressWrap').hidden=true;
       const current=app.catalogue;
-      const count=current.kind==='movie'?Number(current.verified):current.episodes.filter(e=>e.verified).length;
-      activity(`انتهى الفحص. تم التحقق من ${count} رابط، والبقية محفوظة كبيانات للمراجعة.`,'success');
-      toast('اكتمل فحص الروابط الحالية.','success');
+      const entries=current.kind==='movie'?[current]:current.episodes;
+      const count=entries.filter(e=>e.verified).length;
+      const embeds=entries.filter(e=>(e.sources||[]).some(src=>src.kind==='embed'&&src.reachable&&src.url===e.media_url)).length;
+      activity(`انتهى الفحص: ${count} فيديو مباشر مُتحقق، ${embeds} صفحة Embed متاحة (تشغيلها غير مؤكد).`,'success');
+      toast('اكتمل فحص الروابط وصفحات التضمين.','success');
     });
   }
   async function doLogin(event){
