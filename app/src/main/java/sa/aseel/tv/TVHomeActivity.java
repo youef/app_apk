@@ -1189,25 +1189,35 @@ public final class TVHomeActivity extends Activity {
                 "القناة تعرض رابطًا رسميًا خارجيًا وليست لديها وصلة بث مرخصة مباشرة. حدّث المصدر من لوحة الإدارة.");
             return;
         }
+        // A title can have an MP4/HLS stream, several approved alternatives, and/or
+        // an official YouTube or Embed player. Prefer a compatible native source.
         String youtube=value(item,"youtube_url");
-        if(YouTubeLink.usable(youtube) && !kidsMode){openYouTube(item);return;}
-        String url=value(item,"stream_url");
-        // Embed playback is a separate WebView route: never send HTML pages to ExoPlayer.
-        if (EmbedPlayerActivity.isAllowed(url)) {
-            if (kidsMode || !"approved".equals(value(item, "rights_status"))) {
-                heading("المصدر غير معتمد", "مشغلات Embed تتطلب اعتماد الحقوق ولا تعمل في وضع الأطفال.");
-                return;
-            }
-            Intent embed = new Intent(this, EmbedPlayerActivity.class);
-            embed.putExtra("stream_url", url);
-            embed.putExtra("title", label(item));
-            embed.putExtra("kids_mode", false);
-            startActivity(embed);
-            return;
+        String variantsJson=item.optJSONArray("stream_variants")==null?
+            "[]":item.optJSONArray("stream_variants").toString();
+        ArrayList<PlaybackSources.Source> available=PlaybackSources.collect(
+            value(item,"stream_url"),value(item,"quality"),variantsJson,youtube,kidsMode);
+        if(available.isEmpty()){
+            heading("لا يوجد مصدر صالح للتشغيل",
+                "أضف مصدر MP4/HLS أو Embed/YouTube معتمدًا من لوحة الإدارة.");return;
         }
-        if(StreamQuality.parse(url,value(item,"quality"),
-            item.optJSONArray("stream_variants")==null?"[]":item.optJSONArray("stream_variants").toString()).isEmpty()){
-            heading("لا يوجد مصدر صالح للتشغيل","تأكد من وجود رابط HTTPS MP4/HLS لهذا العنوان في لوحة الإدارة.");
+        PlaybackSources.Source selected=available.get(PlaybackSources.preferred(available));
+        String url=selected.url;
+        String sourceList=PlaybackSources.encode(available);
+        if("embed".equals(selected.kind)||"youtube".equals(selected.kind)){
+            if(kidsMode || !"approved".equals(value(item,"rights_status"))){
+                heading("المصدر غير معتمد",
+                    "مشغلات Embed وYouTube تتطلب اعتماد الحقوق ولا تعمل في وضع الأطفال.");return;
+            }
+            Intent embedded=new Intent(this,EmbedPlayerActivity.class);
+            embedded.putExtra("stream_url",url);
+            embedded.putExtra("available_sources",sourceList);
+            embedded.putExtra("stream_variants",variantsJson);
+            embedded.putExtra("youtube_url",youtube);
+            embedded.putExtra("item_id",value(item,"id"));
+            embedded.putExtra("title",label(item));
+            embedded.putExtra("profile",PlaybackMemory.activeProfile(this));
+            embedded.putExtra("kids_mode",false);
+            startActivity(embedded);
             return;
         }
         Intent intent=new Intent(this,CinemaPlayerActivity.class);
@@ -1216,11 +1226,12 @@ public final class TVHomeActivity extends Activity {
         intent.putExtra("series_id",value(item,"_series_id"));
         intent.putExtra("profile","kids".equals(section)?"kids":PlaybackMemory.activeProfile(this));
         intent.putExtra("stream_url",url);
+        intent.putExtra("available_sources",sourceList);
         intent.putExtra("is_live","channel".equals(kind(item)));
         intent.putExtra("kids_mode",kidsMode);
         intent.putExtra("kids_age",kidsAge);
         intent.putExtra("kids_minutes",kidsDailyMinutes);
-        intent.putExtra("quality",value(item,"quality"));
+        intent.putExtra("quality","default");
         intent.putExtra("stream_variants",item.optJSONArray("stream_variants")==null?"[]":item.optJSONArray("stream_variants").toString());
         if("movie".equals(kind(item)) || "episode".equals(kind(item))){
             JSONArray mediaQueue=new JSONArray();
