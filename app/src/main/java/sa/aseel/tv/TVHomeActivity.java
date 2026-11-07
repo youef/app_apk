@@ -1502,17 +1502,150 @@ public final class TVHomeActivity extends Activity {
                 if(!resumeId.isEmpty()){
                     for(JSONObject ep:episodes)if(resumeId.equals(value(ep,"id"))){play(ep);return;}
                 }
-                for(final JSONObject ep:episodes){
-                    Button b=button("▶ الموسم "+ep.optInt("_season",1)+" — الحلقة "+
-                        ep.optInt("number",0)+"  |  "+label(ep));
-                    content.addView(b,space(-1,dp(60),5));
-                    b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){play(ep);}});
+                int chosenSeason=1;
+                if(!episodes.isEmpty())chosenSeason=episodes.get(0).optInt("_season",1);
+                JSONObject lastEpisode=null;
+                for(JSONObject progress:PlaybackMemory.recent(TVHomeActivity.this,
+                        PlaybackMemory.activeProfile(TVHomeActivity.this))){
+                    if(seriesId.equals(progress.optString("series_id",""))){
+                        for(JSONObject ep:episodes)if(value(ep,"id").equals(progress.optString("id",""))){
+                            lastEpisode=ep;break;
+                        }
+                        if(lastEpisode!=null)break;
+                    }
                 }
-                Button back=button("↩ رجوع إلى المسلسلات");content.addView(back,space(dp(260),dp(54),5));
-                back.setOnClickListener(new View.OnClickListener(){public void onClick(View v){goTo(detailOrigin);}});
-                if(!episodes.isEmpty() && content.getChildCount()>2)content.getChildAt(2).requestFocus();else back.requestFocus();
+                if(lastEpisode!=null)chosenSeason=lastEpisode.optInt("_season",chosenSeason);
+                renderSeriesSeason(show,episodes,chosenSeason,true);
             }});
         }});
+    }
+    /** A single stable seasons screen; selecting a capsule never refetches or reorders data. */
+    private void renderSeriesSeason(final JSONObject show,final ArrayList<JSONObject> entries,
+                                    final int selectedSeason,final boolean initial){
+        if(!detailVisible)return;
+        final String seriesId=value(show,"id");
+        content.removeAllViews();
+        FrameLayout backdrop=new FrameLayout(this);
+        backdrop.setBackgroundDrawable(bg(0xFF261421,0xA66F4759,18));
+        backdrop.setClipChildren(true);
+        ImageView cover=new ImageView(this);cover.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        String source=value(show,"backdrop_url");
+        if(source.isEmpty())source=value(show,"poster_url");
+        if(source.startsWith("https://"))PosterLoader.load(cover,source);
+        cover.setAlpha(.46f);
+        backdrop.addView(cover,new FrameLayout.LayoutParams(-1,-1));
+        View dim=new View(this);
+        dim.setBackgroundDrawable(new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+            new int[]{0x90100A12,0xBB120B15,0xF0150C17}));
+        backdrop.addView(dim,new FrameLayout.LayoutParams(-1,-1));
+        LinearLayout intro=column();intro.setPadding(dp(25),dp(13),dp(25),dp(10));
+        intro.addView(text("العز TV  •  مكتبة المسلسلات",13,0xFFFF7C91,true));
+        TextView name=text(label(show),29,WHITE,true);name.setMaxLines(2);
+        intro.addView(name,space(-1,dp(63),2));
+        String description=value(show,"description");
+        if(description.length()>140)description=description.substring(0,140)+"…";
+        intro.addView(text(description.isEmpty()?"استمتع بمواسم وحلقات هذا المسلسل":description,
+            14,0xFFF1D9E0,false),space(-1,dp(54),2));
+        FrameLayout.LayoutParams introPos=new FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM);
+        backdrop.addView(intro,introPos);
+        content.addView(backdrop,space(-1,dp(204),5));
+
+        java.util.LinkedHashSet<Integer> seasonNumbers=new java.util.LinkedHashSet<Integer>();
+        for(JSONObject ep:entries)seasonNumbers.add(ep.optInt("_season",1));
+        TextView subtitle=text("المواسم والحلقات  •  "+seasonNumbers.size()+" موسم  •  "+
+            entries.size()+" حلقة",17,WHITE,true);
+        content.addView(subtitle,space(-1,dp(40),6));
+        HorizontalScrollView seasonsScroll=new HorizontalScrollView(this);
+        seasonsScroll.setHorizontalScrollBarEnabled(false);
+        LinearLayout chips=row();
+        chips.setFocusable(false);chips.setPadding(dp(4),0,dp(4),0);
+        seasonsScroll.addView(chips,new HorizontalScrollView.LayoutParams(-2,-1));
+        content.addView(seasonsScroll,space(-1,dp(67),3));
+        View selectedChip=null;
+        for(final Integer no:seasonNumbers){
+            final Button capsule=button("الموسم "+no);
+            capsule.setTag("season:"+no);
+            capsule.setContentDescription("عرض حلقات الموسم "+no);
+            if(no.intValue()==selectedSeason){
+                capsule.setBackgroundDrawable(new CinemaGlassButtonDrawable(true,true,0xFF87283B));
+                selectedChip=capsule;
+            }
+            chips.addView(capsule,space(dp(156),dp(53),4));
+            capsule.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                renderSeriesSeason(show,entries,no.intValue(),false);
+            }});
+        }
+        String lastEpisodeId="";
+        for(JSONObject record:PlaybackMemory.recent(this,PlaybackMemory.activeProfile(this))){
+            if(seriesId.equals(record.optString("series_id",""))){
+                lastEpisodeId=record.optString("id","");break;
+            }
+        }
+        int count=0;
+        View firstEpisode=null,lastWatched=null;
+        for(final JSONObject ep:entries){
+            if(ep.optInt("_season",1)!=selectedSeason)continue;
+            count++;
+            final String id=value(ep,"id");
+            final boolean resume=id.equals(lastEpisodeId);
+            final JSONObject saved=PlaybackMemory.entry(this,PlaybackMemory.activeProfile(this),id);
+            int number=ep.optInt("number",count);
+            long minutes=ep.optLong("duration_minutes",0L);
+            if(minutes<=0)minutes=ep.optLong("runtime_minutes",0L);
+            final LinearLayout card=row();
+            card.setPadding(dp(10),dp(7),dp(10),dp(7));
+            card.setFocusable(true);card.setClickable(true);
+            card.setTag("episode:"+id);
+            card.setBackgroundDrawable(bg(resume?0xFF532039:0xFF241C28,
+                resume?0xFFFF728B:0x665C4B5D,15));
+            ImageView thumb=new ImageView(this);
+            thumb.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            thumb.setBackgroundDrawable(bg(0xFF402333,0,9));
+            String image=value(ep,"poster_url");
+            if(image.isEmpty())image=value(show,"poster_url");
+            if(image.startsWith("https://"))PosterLoader.load(thumb,image);
+            card.addView(thumb,new LinearLayout.LayoutParams(dp(106),dp(69)));
+            LinearLayout info=column();info.setPadding(dp(12),0,dp(12),0);
+            TextView title=text("الحلقة "+number+"  •  "+label(ep),16,WHITE,true);
+            title.setSingleLine(true);title.setEllipsize(TextUtils.TruncateAt.END);
+            info.addView(title,space(-1,dp(30),0));
+            String durationLabel=minutes>0?("  •  "+minutes+" دقيقة"):"";
+            info.addView(text(resume?"● آخر حلقة شاهدتها"+durationLabel:
+                "الموسم "+selectedSeason+durationLabel,12,resume?0xFFFF8999:MUTED,false));
+            if(saved!=null&&saved.optLong("duration")>0){
+                long duration=saved.optLong("duration"),position=saved.optLong("position");
+                int percent=(int)Math.min(100,100L*position/duration);
+                if(percent>0&&percent<100)
+                    info.addView(text("متابعة المشاهدة  •  "+percent+"٪",12,0xFFFF8999,false));
+            }
+            card.addView(info,new LinearLayout.LayoutParams(0,-2,1));
+            ImageView action=new ImageView(this);
+            action.setImageDrawable(new CinemaGlyph("play",0xFFFF8798));
+            card.addView(action,new LinearLayout.LayoutParams(dp(30),dp(30)));
+            card.setOnFocusChangeListener(new View.OnFocusChangeListener(){
+                public void onFocusChange(View v,boolean focused){
+                    card.setBackgroundDrawable(bg(focused?0xFF75243E:
+                        resume?0xFF532039:0xFF241C28,
+                        focused?0xFFFFA0AE:resume?0xFFFF728B:0x665C4B5D,15));
+                    card.setScaleX(focused?1.018f:1f);card.setScaleY(focused?1.018f:1f);
+                }
+            });
+            card.setOnClickListener(new View.OnClickListener(){public void onClick(View v){play(ep);}});
+            content.addView(card,space(-1,dp(88),3));
+            if(firstEpisode==null)firstEpisode=card;
+            if(resume)lastWatched=card;
+        }
+        if(count==0)heading("لا توجد حلقات في هذا الموسم","اختر موسمًا آخر.");
+        Button back=button("العودة إلى قائمة المسلسلات");
+        back.setTag("series:back");
+        content.addView(back,space(dp(290),dp(55),5));
+        back.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            goTo(detailOrigin);
+        }});
+        final View focusTarget=initial?(lastWatched!=null?lastWatched:
+            firstEpisode!=null?firstEpisode:selectedChip):selectedChip;
+        if(focusTarget!=null)focusTarget.requestFocus();
+        if(scroller!=null&&!initial)scroller.scrollTo(0,0);
     }
     private void play(JSONObject item){
         boolean kidsMode="kids".equals(section);
