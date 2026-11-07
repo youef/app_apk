@@ -197,9 +197,15 @@ body{
   .topbar{gap:clamp(10px,1.8vw,28px)}
   .nav__link{font-size:13px}
 }
-@media(max-width:850px){
+@media(max-width:900px){
   .topbar,.topbar.is-stuck{background:rgba(15,16,25,.96)!important}
   .topbar .nav{display:none!important}
+  .app-dock{display:grid!important;grid-template-columns:repeat(6,minmax(0,1fr));
+    position:fixed;left:12px;right:12px;bottom:max(8px,env(safe-area-inset-bottom));
+    z-index:57;padding:7px;gap:2px}
+  .view{padding-bottom:calc(85px + env(safe-area-inset-bottom))}
+}
+@media(max-width:850px){
   .hero{border-radius:18px!important}
   .hero__title{font-size:clamp(25px,6vw,39px)}
   .card{border-radius:14px!important}
