@@ -175,7 +175,7 @@ class PortalTests(unittest.TestCase):
             self.assertEqual(response.status_code,200)
             self.assertIn('customer1',response.text)
             self.assertIn('iPhone',response.text)
-            self.assertIn('فك الجهاز',response.text)
+            self.assertIn('فك الأجهزة',response.text)
             blocked=self.client.post('/account/customers',data={'username':'customer1',
                      'action':'reset-device'},headers=self.headers)
             self.assertEqual(blocked.status_code,403)
@@ -184,6 +184,27 @@ class PortalTests(unittest.TestCase):
             self.assertEqual(done.status_code,200)
             self.assertIn('تم فك ارتباط الجهاز',done.text)
             self.assertNotIn(uid,self.portal.devices.details([uid]))
+
+    def test_device_directory_lists_native_tv_without_exposing_full_fingerprints(self):
+        self.login('admin')
+        uid='12345678-1234-1234-1234-123456789abc'
+        user={'id':uid,'email':'customer1@members.alezz.invalid',
+              'created_at':'2026-11-01T00:00:00Z',
+              'app_metadata':{'alezz_customer':'active'}}
+        def mock_fetch(method,endpoint,**kwargs):
+            if endpoint=='/auth/v1/admin/users':
+                return {'users':[user]}
+            if endpoint=='/rest/v1/aseel_device_sessions':
+                return [{'user_id':uid,'platform':'android_tv',
+                         'device_model':'Samsung Smart TV','last_seen_at':'2026-11-07T01:00:00Z',
+                         'device_hash':'hidden-unique-hash-abcdef'}]
+            return {}
+        with patch.object(self.portal,'upstream',side_effect=mock_fetch):
+            page=self.client.get('/account/customers')
+        self.assertEqual(page.status_code,200)
+        self.assertIn('Samsung Smart TV',page.text)
+        self.assertIn('فك الأجهزة',page.text)
+        self.assertNotIn('hidden-unique-hash',page.text)
 
     def test_studio_and_api_are_isolated(self):
         for path in ('/studio/','/studio/sources','/static/app.js','/api/init'):
