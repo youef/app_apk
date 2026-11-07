@@ -31,7 +31,7 @@
   function make(tag, cls='', content){const el=document.createElement(tag);if(cls)el.className=cls;if(content!=null)text(el,content);return el;}
   function rowField(id, value){const el=$(id);if(el && document.activeElement!==el)el.value=value??'';}
   function fmtKind(kind){return kind==='series'?'مسلسل':'فيلم';}
-  function mediaBadge(ep){if(ep.verified)return ['✓ صالح','ok'];if(ep.error)return ['✕ غير متحقق','fail'];return [ep.media_url?'◷ يحتاج فحصًا':'— بلا رابط','wait'];}
+  function mediaBadge(ep){if(ep.verified)return ['✓ فيديو مباشر مُتحقق','ok'];if((ep.sources||[]).some(s=>s.kind==='embed'&&s.reachable&&s.url===ep.media_url))return ['◷ صفحة Embed متاحة (التشغيل غير مثبت)','wait'];if(ep.error)return ['✕ غير متحقق','fail'];return [ep.media_url?'◷ يحتاج فحصًا':'— بلا رابط','wait'];}
   function updateStatus(payload){
     app.catalogue=payload.catalogue || null;app.authenticated=!!payload.authenticated;
     app.demo=!!payload.demo;
@@ -127,7 +127,7 @@
       const identity=make('div','episode-identity');const title=make('input');title.type='text';title.value=ep.title;title.maxLength=250;title.setAttribute('aria-label','اسم الحلقة '+ep.number);
       title.oninput=()=>{app.catalogue.episodes[ep.i].title=title.value;};
       identity.append(title,make('small','',`الموسم ${ep.season} · الحلقة ${ep.number}`));
-      const url=make('input','episode-url');url.type='url';url.value=ep.media_url||'';url.placeholder='رابط MP4 / HLS (اختياري)';url.dir='ltr';url.setAttribute('aria-label','رابط تشغيل الحلقة '+ep.number);
+      const url=make('input','episode-url');url.type='url';url.value=ep.media_url||'';url.placeholder='MP4 / HLS / Embed 1vid (اختياري)';url.dir='ltr';url.setAttribute('aria-label','رابط تشغيل الحلقة '+ep.number);
       url.onchange=()=>{const current=app.catalogue.episodes[ep.i];if(current.media_url!==url.value.trim()){
         current.media_url=url.value.trim();current.verified=false;current.error='';
         redrawStats();
