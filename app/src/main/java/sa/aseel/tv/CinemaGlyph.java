@@ -75,6 +75,44 @@ public final class CinemaGlyph extends Drawable {
             poly(canvas,3,11,12,3.5f,21,11,21,20,15,20,15,14,9,14,9,20,3,20,3,11);
         }else if("play".equals(name)){
             poly(canvas,8,5,19,12,8,19,8,5);
+        }else if("playpause".equals(name)){
+            poly(canvas,5,5,12,12,5,19,5,5);
+            line(canvas,16,6,16,18);line(canvas,20,6,20,18);
+        }else if("retry".equals(name)){
+            Path arc=new Path();arc.addArc(new RectF(5,5,19,19),-55,293);
+            canvas.drawPath(arc,brush);poly(canvas,18,3,21,9,15,9);
+        }else if("guide".equals(name)){
+            for(int y=6;y<=18;y+=6){
+                canvas.drawCircle(5,y,1,brush);line(canvas,9,y,21,y);
+            }
+        }else if("star".equals(name)||"star-filled".equals(name)){
+            Path star=new Path();
+            for(int i=0;i<10;i++){
+                double angle=-Math.PI/2+i*Math.PI/5;
+                float rad=i%2==0?9f:4.4f;
+                float x=12+(float)Math.cos(angle)*rad,y=12+(float)Math.sin(angle)*rad;
+                if(i==0)star.moveTo(x,y);else star.lineTo(x,y);
+            }
+            star.close();brush.setStyle("star-filled".equals(name)?Paint.Style.FILL:Paint.Style.STROKE);
+            canvas.drawPath(star,brush);
+        }else if("mute".equals(name)||"volume".equals(name)||"audio".equals(name)){
+            poly(canvas,3,9,7,9,12,5,12,19,7,15,3,15,3,9);
+            if("mute".equals(name)){
+                line(canvas,16,9,21,15);line(canvas,21,9,16,15);
+            }else{
+                Path wave=new Path();wave.moveTo(15,8);
+                wave.quadTo(19,12,15,16);canvas.drawPath(wave,brush);
+                if("audio".equals(name))line(canvas,20,7,20,17);
+            }
+        }else if("screen".equals(name)){
+            poly(canvas,4,9,4,4,9,4);poly(canvas,15,4,20,4,20,9);
+            poly(canvas,4,15,4,20,9,20);poly(canvas,15,20,20,20,20,15);
+        }else if("more".equals(name)){
+            brush.setStyle(Paint.Style.FILL);
+            canvas.drawCircle(5,12,1.65f,brush);canvas.drawCircle(12,12,1.65f,brush);
+            canvas.drawCircle(19,12,1.65f,brush);
+        }else if("close".equals(name)){
+            line(canvas,5,5,19,19);line(canvas,19,5,5,19);
         }else if("back".equals(name)){
             poly(canvas,15,5,8,12,15,19);line(canvas,8,12,21,12);
         }else{
