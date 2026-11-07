@@ -229,6 +229,17 @@ $("editorForm").addEventListener("submit",async ev=>{
    try { const u=new URL(String(value||"")); return u.protocol==="https:" && /\.(?:mp4|m3u8)$/i.test(u.pathname); }
    catch (_) {return false;}
  };
+ const isEmbed = value => {
+   try {
+     const u=new URL(String(value||""));
+     if(u.protocol!=="https:"||u.username||u.password||(u.port&&u.port!=="443"))return false;
+     return (u.hostname==="hanerix.com" && /^\/e\/[a-z0-9_-]+\/?$/i.test(u.pathname)) ||
+       (u.hostname==="player.vimeo.com" && /^\/video\/[0-9]+\/?$/.test(u.pathname)) ||
+       (u.hostname==="www.dailymotion.com" && /^\/embed\/video\/[a-z0-9_-]+\/?$/i.test(u.pathname)) ||
+       (u.hostname==="www.youtube-nocookie.com" && /^\/embed\/[a-z0-9_-]{11}\/?$/i.test(u.pathname));
+   }catch(_){return false;}
+ };
+ const isPlayableSource=v=>isDirect(v)||isEmbed(v);
  if(table==="aseel_youtube_videos"){
    if(!youtubeId(payload.youtube_url))return show("أدخل رابط فيديو يوتيوب رسمي صالحًا",true);
    payload.youtube_url="https://www.youtube.com/watch?v="+youtubeId(payload.youtube_url);
@@ -241,14 +252,14 @@ $("editorForm").addEventListener("submit",async ev=>{
  }
  if(payload.youtube_url && !youtubeId(payload.youtube_url))
    return show("أدخل رابط يوتيوب رسمي صالحًا: watch أو shorts أو live أو youtu.be",true);
- if(payload.stream_url && !isDirect(payload.stream_url))
-   return show("ضع روابط MP4 أو HLS في خانة البث، وروابط يوتيوب في الحقل المستقل",true);
+ if(payload.stream_url && !isPlayableSource(payload.stream_url))
+   return show("ضع MP4/HLS أو Embed معتمدًا في خانة التشغيل، ويوتيوب في حقله",true);
  if(["aseel_movies","aseel_episodes","aseel_channels"].includes(table) && payload.status==="published" &&
     payload.playback_mode!=="official_link" &&
-    !isDirect(payload.stream_url) && !youtubeId(payload.youtube_url))
-   return show("يلزم رابط MP4/HLS مباشر أو رابط يوتيوب رسمي",true);
- if(Array.isArray(payload.stream_variants) && payload.stream_variants.some(v=>!isDirect(v.url)))
-   return show("جميع الجودات يجب أن تكون روابط MP4 أو HLS مباشرة",true);
+    !isPlayableSource(payload.stream_url) && !youtubeId(payload.youtube_url))
+   return show("يلزم MP4/HLS أو Embed معتمد أو رابط يوتيوب رسمي",true);
+ if(Array.isArray(payload.stream_variants) && payload.stream_variants.some(v=>!isPlayableSource(v.url)))
+   return show("روابط المصادر الإضافية يجب أن تكون MP4/HLS أو Embed معتمدًا",true);
  try{
   const id=editing?.id??editing?.key;
   const query=id?(table==="aseel_settings"?"key":"id")+"=eq."+encodeURIComponent(id):"";
