@@ -1192,6 +1192,19 @@ public final class TVHomeActivity extends Activity {
         String youtube=value(item,"youtube_url");
         if(YouTubeLink.usable(youtube) && !kidsMode){openYouTube(item);return;}
         String url=value(item,"stream_url");
+        // Embed playback is a separate WebView route: never send HTML pages to ExoPlayer.
+        if (EmbedPlayerActivity.isAllowed(url)) {
+            if (kidsMode || !"approved".equals(value(item, "rights_status"))) {
+                heading("المصدر غير معتمد", "مشغلات Embed تتطلب اعتماد الحقوق ولا تعمل في وضع الأطفال.");
+                return;
+            }
+            Intent embed = new Intent(this, EmbedPlayerActivity.class);
+            embed.putExtra("stream_url", url);
+            embed.putExtra("title", label(item));
+            embed.putExtra("kids_mode", false);
+            startActivity(embed);
+            return;
+        }
         if(StreamQuality.parse(url,value(item,"quality"),
             item.optJSONArray("stream_variants")==null?"[]":item.optJSONArray("stream_variants").toString()).isEmpty()){
             heading("لا يوجد مصدر صالح للتشغيل","تأكد من وجود رابط HTTPS MP4/HLS لهذا العنوان في لوحة الإدارة.");
