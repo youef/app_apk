@@ -8,7 +8,7 @@
     <supports-screens android:smallScreens="true" android:normalScreens="true"
         android:largeScreens="true" android:xlargeScreens="true" />
     <application android:allowBackup="false" android:label="@string/app_name"
-        android:icon="@drawable/alizz_brand" android:banner="@drawable/tv_banner"
+        android:icon="@drawable/red_cinema_launcher" android:banner="@drawable/tv_banner"
         android:supportsRtl="true" android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Holo.NoActionBar.Fullscreen">
         <activity android:name="sa.aseel.tv.TVHomeActivity" android:exported="true"
