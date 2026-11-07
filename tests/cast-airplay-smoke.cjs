@@ -12,7 +12,7 @@ assert(html.includes('js/cast.js?v='),"Web Cast sender must load before player")
 assert(html.indexOf("js/cast.js")<html.indexOf("js/player.js"),"Cast controls must initialize before player");
 assert(player.includes('window.AlezzCast.bind("player"')&&player.includes('window.AlezzCast.detach("player"'));
 assert(live.includes('window.AlezzCast.bind("live"')&&live.includes('window.AlezzCast.detach("live"'));
-assert(player.includes('el.video.disableRemotePlayback=!!item.kids'),"Child viewing limit must not be bypassed by casting");
+assert(player.includes('el.video.disableRemotePlayback=!!current.kids'),"Child viewing limit must not be bypassed by casting");
 assert(cast.includes("DEFAULT_MEDIA_RECEIVER_APP_ID"),"Official default receiver required");
 assert(cast.includes("SESSION_STARTED")&&cast.includes("session.loadMedia(request)"),"Transfer video through receiver");
 assert(cast.includes("webkitShowPlaybackTargetPicker"),"Native Safari AirPlay selector required");
