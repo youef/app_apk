@@ -122,6 +122,7 @@ try {
 <div class="player" id="player" hidden>
   <div class="player__stage" id="playerStage">
     <video id="video" playsinline webkit-playsinline x-webkit-airplay="allow" preload="metadata" controlslist="nodownload" aria-label="مشغل العز TV"></video>
+    <button class="player__embed-external" id="playerEmbedExternal" type="button" hidden>فتح المصدر في صفحة مستقلة ↗</button>
     <div class="player__veil" id="playerVeil"></div>
     <div class="player__spinner" id="playerSpinner" hidden>
       <span></span><p>جارٍ التحضير…</p>
