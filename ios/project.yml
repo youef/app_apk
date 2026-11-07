@@ -1,0 +1,27 @@
+# Al Ezz TV iPhone V4 - generate Xcode project: cd ios && xcodegen generate
+name: AlEzzTV
+options:
+  bundleIdPrefix: sa.alezz
+  deploymentTarget:
+    iOS: "15.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    IPHONEOS_DEPLOYMENT_TARGET: "15.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+targets:
+  AlEzzTV:
+    type: application
+    platform: iOS
+    sources:
+      - path: AlEzzIOSApp.swift
+      - path: Assets.xcassets
+        optional: true
+    info:
+      path: Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: sa.aseel.tv.ios
+        SWIFT_VERSION: "5.9"
+        CODE_SIGN_STYLE: Automatic
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
