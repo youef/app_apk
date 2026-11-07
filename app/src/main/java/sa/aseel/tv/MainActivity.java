@@ -1224,7 +1224,7 @@ public final class MainActivity extends Activity {
         Intent i=new Intent(this,available.size()>1?CinemaPlayerActivity.class:PlayerActivity.class);
         i.putExtra("available_sources",encoded);
         i.putExtra("stream_url",url);
-        i.putExtra("quality",str(item,"quality"));
+        i.putExtra("quality",available.size()>1?"default":str(item,"quality"));
         i.putExtra("stream_variants",variants);
         i.putExtra("is_live","channel".equals(str(item,"_type")));
         i.putExtra("title",str(item,"title_ar"));
