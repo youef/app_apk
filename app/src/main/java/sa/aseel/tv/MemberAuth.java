@@ -102,10 +102,22 @@ public final class MemberAuth {
             throw new AuthenticationException("تاريخ صلاحية الحساب غير صحيح. راجع الإدارة.");
         return parsed.getTime();
     }
-    private static JSONObject authorizedUser(Context context,String access)throws Exception{
+    private static JSONObject authorizedUser(Context context,String access,long sessionStarted)throws Exception{
         JSONObject user=request(context,"user",null,access);
         if(!"active".equals(user.optJSONObject("app_metadata")==null?"":user.optJSONObject("app_metadata").optString("alezz_customer","")))
             throw new AuthenticationException("هذا الحساب غير نشط. تواصل مع الإدارة.");
+        JSONObject metadata=user.optJSONObject("app_metadata");
+        String reset=metadata==null?"":metadata.optString("alezz_devices_revoked_at","");
+        if(!reset.isEmpty()){
+            SimpleDateFormat resetFormat=new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",Locale.US);
+            resetFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
+            resetFormat.setLenient(false);
+            ParsePosition resetAt=new ParsePosition(0);
+            java.util.Date cutOff=resetFormat.parse(reset,resetAt);
+            if(cutOff==null||resetAt.getIndex()!=reset.length()||
+                sessionStarted<=0L||sessionStarted<=cutOff.getTime())
+                throw new AuthenticationException("تم إلغاء ارتباط الجهاز من الإدارة. سجّل الدخول مجددًا.");
+        }
         long deadline=subscriptionDeadline(user);
         if(deadline>0L && deadline<=System.currentTimeMillis())
             throw new AuthenticationException("انتهت صلاحية حسابك. تواصل مع الإدارة لتجديد الاشتراك.");
@@ -124,7 +136,8 @@ public final class MemberAuth {
         }
         ensureFresh(context);
         try{
-            JSONObject user=authorizedUser(context,accessToken(context));
+            JSONObject user=authorizedUser(context,accessToken(context),
+                preferences(context).getLong("session_started_ms",0L));
             preferences(context).edit()
                 .putLong("subscription_expires_ms",subscriptionDeadline(user)).commit();
         }catch(AuthenticationException denied){
@@ -132,14 +145,15 @@ public final class MemberAuth {
             throw denied;
         }
     }
-    private static void save(Context context,JSONObject reply,String username)throws Exception{
+    private static void save(Context context,JSONObject reply,String username,long sessionStarted)throws Exception{
         String access=reply.optString("access_token",""),refresh=reply.optString("refresh_token","");
         if(access.length()<30||refresh.length()<15)throw new AuthenticationException("فشل استلام جلسة صالحة.");
-        JSONObject user=authorizedUser(context,access);
+        JSONObject user=authorizedUser(context,access,sessionStarted);
         long lifetime=Math.max(60,Math.min(86400,reply.optLong("expires_in",3600)));
         boolean stored=preferences(context).edit()
             .putLong("subscription_expires_ms",subscriptionDeadline(user))
             .putLong("expires_at_ms",System.currentTimeMillis()+lifetime*1000L)
+            .putLong("session_started_ms",sessionStarted)
             .putString("user_id",user.optString("id"))
             .putString("username",username)
             .putString("access_token",access)
@@ -157,8 +171,9 @@ public final class MemberAuth {
             JSONObject body=new JSONObject();
             body.put("email",name+"@"+ALIAS_DOMAIN);
             body.put("password",new String(password));
+            long sessionStarted=System.currentTimeMillis();
             JSONObject reply=request(context,"token?grant_type=password",body,null);
-            save(context,reply,name);
+            save(context,reply,name,sessionStarted);
         }finally{
             if(password!=null)java.util.Arrays.fill(password,'\0');
         }
@@ -169,7 +184,8 @@ public final class MemberAuth {
         JSONObject body=new JSONObject();body.put("refresh_token",refresh);
         try{
             JSONObject reply=request(context,"token?grant_type=refresh_token",body,null);
-            save(context,reply,username(context));
+            save(context,reply,username(context),
+                preferences(context).getLong("session_started_ms",0L));
         }catch(AuthenticationException invalid){
             logoutLocal(context);
             throw invalid;
@@ -184,6 +200,12 @@ public final class MemberAuth {
         long expiry=preferences(context).getLong("expires_at_ms",0L);
         if(accessToken(context).isEmpty()||System.currentTimeMillis()>expiry-90000L)
             resume(context);
+    }
+    public static int daysRemaining(Context context){
+        long deadline=preferences(context).getLong("subscription_expires_ms",0L);
+        if(deadline<=0L)return -1;
+        long remaining=deadline-System.currentTimeMillis();
+        return remaining<=0L?0:(int)Math.min(3651L,(remaining+86400000L-1)/86400000L);
     }
     public static void logoutLocal(Context context){
         preferences(context).edit().clear().commit();
