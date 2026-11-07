@@ -12,6 +12,12 @@ const manifest=read("app/src/main/AndroidManifest.xml");
 function ok(label,condition){assert.ok(condition,label);console.log("PASS | "+label);}
 ok("Native customer login uses a server-verified password grant",
  auth.includes('token?grant_type=password')&&auth.includes('app_metadata')&&auth.includes('"alezz_customer"'));
+// Supabase Auth still accepts 12-character legacy refresh tokens. Regression
+// guard: rejecting tokens shorter than 15 incorrectly blocked valid logins.
+const tokenGuard=auth.match(/if\(access\.length\(\)<(\d+)\|\|refresh\.length\(\)<(\d+)\)/);
+ok("Supabase legacy 12-character refresh tokens are accepted",
+ tokenGuard && Number(tokenGuard[1])<=30 && Number(tokenGuard[2])===12 &&
+ !(12<Number(tokenGuard[2])) && (11<Number(tokenGuard[2])));
 ok("App resumes sessions without storing plaintext passwords",
  auth.includes("token?grant_type=refresh_token")&&auth.includes('putString("refresh_token",refresh)')&&
  !auth.includes('putString("password"')&&!auth.includes("SERVICE_ROLE"));
