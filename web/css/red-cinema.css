@@ -294,6 +294,8 @@ body{
   box-shadow:0 0 0 2px rgba(255,248,249,.84),0 0 0 5px rgba(240,45,70,.55),
     0 0 22px 5px rgba(249,44,72,.38),inset 0 1px 0 rgba(255,255,255,.47)!important;
   transform:translateY(-1px) scale(1.018);
+  background-image:url("../assets/al-ezz-glass-button.svg")!important;
+  background-size:100% 100%!important;
 }
 :is(.btn--gold,.btn-gold,.btn--primary,.btn.primary,button[data-primary="true"],
     .hero__actions [data-play],.detail__actions [data-play]):active{
