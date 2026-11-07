@@ -1200,6 +1200,16 @@ public final class MainActivity extends Activity {
             openYouTube(youtube,str(item,"title_ar"));return;
         }
         String url=str(item,"stream_url");
+        if(EmbedPlayerActivity.isAllowed(url)){
+            if(!"approved".equals(str(item,"rights_status"))){
+                showStatus("مشغل Embed غير معتمد الحقوق");return;
+            }
+            Intent embed=new Intent(this,EmbedPlayerActivity.class);
+            embed.putExtra("stream_url",url);
+            embed.putExtra("title",str(item,"title_ar"));
+            startActivity(embed);
+            return;
+        }
         if(!StreamQuality.isDirectUrl(url)){showStatus("هذا العنصر لا يحتوي على رابط MP4/HLS مباشر صالح");return;}
         Intent i=new Intent(this,PlayerActivity.class);
         i.putExtra("stream_url",url);
