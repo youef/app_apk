@@ -22,7 +22,7 @@ from uuid import UUID
 
 import requests
 from alezz_fetchv_importer import SourceClient, public_url, pull_html
-from media_resolver import MediaResolver, safe_error, signed_expiry
+from media_resolver import MediaResolver, safe_error, signed_expiry, supported_source_kind
 from title_cleaner import content_title
 
 TABLES = ('aseel_movies', 'aseel_episodes', 'aseel_series')
@@ -166,7 +166,7 @@ class QueueDB:
                 db.execute('insert into auto_jobs(table_name,target_id,title,page_url,stream_url,data) values(?,?,?,?,?,?)',
                            (table,identifier,row.get('title_ar') or '',page,row.get('stream_url') or '',json.dumps(row,ensure_ascii=False)))
         if page: self.remember(table,identifier,dict(url=page,kind='original'))
-        if row.get('stream_url'): self.remember(table,identifier,dict(url=row['stream_url'],kind='direct'))
+        if row.get('stream_url'): self.remember(table,identifier,dict(url=row['stream_url'],kind=supported_source_kind(row['stream_url']) or 'direct'))
         for item in row.get('stream_variants') or []:
             if isinstance(item,dict): self.remember(table,identifier,item)
 
@@ -495,6 +495,9 @@ class AutoSync:
             replace={s['url']:s for s in checked+checked_new}
             checked=list(replace.values())
             good=[s for s in checked if s.get('verified') and s.get('kind','direct')=='direct']
+        # A reachable iframe is a separate state from a verified MP4/HLS stream.
+        reachable_embed=[s for s in checked if s.get('kind')=='embed' and s.get('reachable')
+                         and s['url'] in active_urls]
         for source in checked:self.record_check(table,identifier,source,now)
         history=self.queue.sources(table,identifier)
         by_url={s['url']:s for s in history}
@@ -515,13 +518,14 @@ class AutoSync:
                         renewed.append(url)
             if renewed:
                 selected=max(renewed,key=expires_at)
-        failures=0 if good else job['failures']+1
-        status='healthy' if good else 'broken' if failures>=3 else 'suspect'
-        error='' if good else ('المصدر الأصلي مفقود؛ أضف صفحة الفيلم أو الحلقة' if not pages else
+        failures=0 if good or reachable_embed else job['failures']+1
+        status='healthy' if good else 'suspect' if reachable_embed else 'broken' if failures>=3 else 'suspect'
+        error='' if good else ('صفحة Embed متاحة؛ لم يتم التحقق من تشغيل الفيديو' if reachable_embed else
+                              'المصدر الأصلي مفقود؛ أضف صفحة الفيلم أو الحلقة' if not pages else
                               'لا يوجد رابط مباشر اجتاز الفحص؛ '+('; '.join(errors) if errors else 'تعذرت الروابط المحفوظة'))
-        next_check=now+self.check_interval if good else now+min(3600,60*2**min(failures-1,6))
+        next_check=now+self.check_interval if good or reachable_embed else now+min(3600,60*2**min(failures-1,6))
         next_refresh=now+self.interval if extracted or not pages else job['next_refresh']
-        if not good and pages:next_refresh=min(next_refresh,next_check)
+        if not good and not reachable_embed and pages:next_refresh=min(next_refresh,next_check)
         allowed={s['url'] for s in checked if s.get('verified') or s.get('kind')=='embed' and s.get('reachable')}
         variants=[]
         for source in sorted(history,key=lambda s:(s['kind']=='direct',s['confidence']),reverse=True):
@@ -552,7 +556,7 @@ class AutoSync:
             self.queue.event('replacement','تم تبديل الرابط الأساسي ببديل اجتاز الفحص',table,identifier)
         if retired & active_urls:
             self.queue.event('retired_links','أُزيلت روابط مؤكدة التعطّل من قائمة التشغيل',table,identifier)
-        if not good and (job['status']=='healthy' or job['last_check']==0 and candidates):
+        if not good and not reachable_embed and (job['status']=='healthy' or job['last_check']==0 and candidates):
             self.queue.event('all_links_failed','تنبيه: لم ينجح أي رابط لهذا العنصر',table,identifier)
         if not pages and job['last_check']==0:self.queue.event('missing_source','المصدر الأصلي مفقود؛ يمكن فحص الروابط الحالية فقط',table,identifier)
         with self.queue.db() as conn:
