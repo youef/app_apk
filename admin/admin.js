@@ -2104,9 +2104,9 @@
     values.forEach(function (item) {
       list.append(variantRow(item && item.label ? item.label : '', item && item.url ? item.url : ''));
     });
-    var add = el('button', { class: 'btn btn-ghost btn-sm', type: 'button' }, '+ إضافة جودة');
+    var add = el('button', { class: 'btn btn-ghost btn-sm', type: 'button' }, '+ إضافة مصدر');
     add.addEventListener('click', function () {
-      if ($$('.variant-row', list).length >= 8) { toast('الحد الأقصى 8 جودات.', 'error'); return; }
+      if ($$('.variant-row', list).length >= 8) { toast('الحد الأقصى 8 مصادر إضافية.', 'error'); return; }
       list.append(variantRow('', ''));
     });
     box.append(list, add);
@@ -2115,9 +2115,9 @@
 
   function variantRow(label, url) {
     var row = el('div', { class: 'variant-row' });
-    var labelInput = el('input', { class: 'variant-label', type: 'text', placeholder: 'الاسم (HD)', maxlength: 24, 'aria-label': 'اسم الجودة' });
+    var labelInput = el('input', { class: 'variant-label', type: 'text', placeholder: 'مثلاً: HLS 1080p / Embed احتياطي', maxlength: 24, 'aria-label': 'اسم الجودة' });
     labelInput.value = label || '';
-    var urlInput = el('input', { class: 'variant-url', type: 'url', placeholder: 'https://…/movie.mp4', 'aria-label': 'رابط الجودة' });
+    var urlInput = el('input', { class: 'variant-url', type: 'url', placeholder: 'https://…/master.m3u8 أو /e/…', 'aria-label': 'رابط المصدر' });
     urlInput.value = url || '';
     var remove = el('button', {
       class: 'row-btn row-btn--danger', type: 'button', 'aria-label': 'حذف الجودة', title: 'حذف الجودة', html: icon('trash', 14)
