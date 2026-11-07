@@ -1,7 +1,7 @@
 /* Al Ezz TV — authenticated PWA shell.
    Do not cache HTML, authenticated navigation, API data or snapshot.json.
    Offline playback/navigation is intentionally unavailable without a live session. */
-var CACHE = "alezz-shell-member-privacy-20261107-v23-red-glass-buttons";
+var CACHE = "alezz-shell-member-privacy-20261107-v24-dynamic-cinema";
 var BASE = self.registration.scope;
 var FILES = [
   "assets/logo.svg", "assets/al-ezz-app-icon.svg", "assets/al-ezz-red-glass-background.svg", "assets/al-ezz-glass-button.svg",
