@@ -81,7 +81,7 @@ public final class TVHomeActivity extends Activity {
     private CatalogApi catalog;
     private ScrollView scroller;
     private LinearLayout content,navBar;
-    private TextView status,featuredTitle,featuredMeta;
+    private TextView status,featuredTitle,featuredMeta,topProfileLabel;
     private ImageView featuredArtwork;
     private JSONObject featuredItem;
     private Runnable pendingFeature;
@@ -257,7 +257,7 @@ public final class TVHomeActivity extends Activity {
         splash.addView(note);
         ui.postDelayed(new Runnable(){public void run(){
             if(!isFinishing()&&showingWelcome&&!unlocked)showWelcome();
-        }},1100L);
+        }},750L);
     }
     /** Login once; on later launches refresh the persisted session transparently. */
     private void showWelcome(){
@@ -432,10 +432,19 @@ public final class TVHomeActivity extends Activity {
             remaining>=0&&remaining<=7?GOLD:MUTED,false);
         status.setSingleLine(true);status.setEllipsize(TextUtils.TruncateAt.END);
         top.addView(status,space(dp(170),-2,3));
-        Button account=button("حسابي");
-        account.setContentDescription("الحساب والبروفايلات والاشتراك");
+        final LinearLayout account=row();account.setFocusable(true);account.setClickable(true);
         account.setTag("nav:account");
-        top.addView(account,space(dp(94),dp(49),2));
+        account.setContentDescription("حسابي وبروفايلاتي واشتراكي");
+        account.setPadding(dp(8),0,dp(8),0);
+        account.setBackgroundDrawable(new CinemaGlassButtonDrawable(false,true,0xFF38202F));
+        ImageView accountIcon=new ImageView(this);
+        accountIcon.setImageDrawable(new CinemaGlyph("account",0xFFFF8DA6));
+        account.addView(accountIcon,new LinearLayout.LayoutParams(dp(26),dp(26)));
+        topProfileLabel=text(PlaybackMemory.displayProfile(this,PlaybackMemory.activeProfile(this)),14,WHITE,true);
+        topProfileLabel.setSingleLine(true);
+        topProfileLabel.setEllipsize(TextUtils.TruncateAt.END);
+        account.addView(topProfileLabel,space(dp(102),-2,2));
+        top.addView(account,space(dp(167),dp(49),2));
         account.setOnClickListener(new View.OnClickListener(){
             public void onClick(View view){goTo("account");}
         });
@@ -520,8 +529,8 @@ public final class TVHomeActivity extends Activity {
                     focused?0xFFFF758A:0x74B88B9C,19));
                 capsule.setBackgroundDrawable(bg(focused?0xFFAE2B4A:0xFF4D2233,
                     focused?0xFFFFA0B0:0x8AD85B73,15));
-                tile.setScaleX(focused?1.035f:1f);
-                tile.setScaleY(focused?1.035f:1f);
+                tile.setScaleX(focused?1.015f:1f);
+                tile.setScaleY(focused?1.015f:1f);
                 if(android.os.Build.VERSION.SDK_INT>=21)tile.setElevation(focused?dp(8):0f);
             }
         });
@@ -622,7 +631,7 @@ public final class TVHomeActivity extends Activity {
         TextView secondaryTitle=text("المزيد",16,MUTED,true);
         content.addView(secondaryTitle,space(-1,dp(29),7));
         final String[][] small={
-            {"الأطفال","kids"},{"قائمتي","favorites"},{"الإعدادات","settings"}
+            {"الأطفال","kids"},{"قائمتي","favorites"},{"الإعدادات","settings"},{"بروفايلي","profiles"}
         };
         LinearLayout secondary=row();
         secondary.setFocusable(false);
@@ -646,8 +655,8 @@ public final class TVHomeActivity extends Activity {
                 public void onFocusChange(View v,boolean focused){
                     focusTile.setBackgroundDrawable(bg(focused?0xFF60233A:0xFF201B28,
                         focused?0xFFFF8094:0x628D6376,16));
-                    focusTile.setScaleX(focused?1.03f:1f);
-                    focusTile.setScaleY(focused?1.03f:1f);
+                    focusTile.setScaleX(focused?1.015f:1f);
+                    focusTile.setScaleY(focused?1.015f:1f);
                 }
             });
             tile.setOnClickListener(new View.OnClickListener(){public void onClick(View v){goTo(target);}});
@@ -771,7 +780,9 @@ public final class TVHomeActivity extends Activity {
         loading=pendingRequests>0;
         status.setText(loading?"◌ تحميل المكتبة...":lastLoadError.length()>0
             ?"⚠ بعض الأقسام غير متاحة":"● المكتبة متصلة");
-        if(!detailVisible && !loading)render();
+        // Keep customer forms stable when asynchronous library updates arrive.
+        if(!detailVisible && !loading && !"account".equals(section) &&
+            !"profiles".equals(section) && !"settings".equals(section))render();
     }
     private void heading(String title,String note){
         TextView h=text(title,23,WHITE,true);content.addView(h,space(-1,-2,5));
@@ -818,6 +829,8 @@ public final class TVHomeActivity extends Activity {
     }
     private void render(){
         if(content==null)return;
+        if(topProfileLabel!=null)topProfileLabel.setText(PlaybackMemory.displayProfile(this,
+            PlaybackMemory.activeProfile(this)));
         if(detailVisible)episodeGeneration++;
         final boolean sameSection=section.equals(lastRenderedSection);
         final String focusTag=sameSection?focusedItemTag():"";
@@ -920,6 +933,32 @@ public final class TVHomeActivity extends Activity {
             }});
         }
     }
+    /** Confirmation prevents accidental sign-out from a TV remote. */
+    private void confirmLogout(){
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("تسجيل الخروج")
+            .setMessage("هل تريد تسجيل الخروج من هذا الجهاز؟ تبقى محفوظات الحساب وبروفايلاته على الجهاز.")
+            .setNegativeButton("إلغاء",null)
+            .setPositiveButton("تسجيل الخروج",new android.content.DialogInterface.OnClickListener(){
+                public void onClick(android.content.DialogInterface d,int which){
+                    unlocked=false;showingWelcome=true;
+                    generation++;episodeGeneration++;localPlaylistGeneration++;
+                    ui.removeCallbacks(entitlementGuard);
+                    if(pendingFeature!=null)ui.removeCallbacks(pendingFeature);
+                    LinearLayout wait=column();wait.setGravity(Gravity.CENTER);
+                    wait.setBackgroundDrawable(new CinemaBackdropDrawable());
+                    TextView note=text("جارٍ تسجيل الخروج...",21,WHITE,true);
+                    note.setGravity(Gravity.CENTER);wait.addView(note);
+                    setContentView(wait);
+                    background.execute(new Runnable(){public void run(){
+                        MemberAuth.logout(TVHomeActivity.this);
+                        ui.post(new Runnable(){public void run(){
+                            if(!isFinishing())showMemberLogin("تم تسجيل الخروج بنجاح.");
+                        }});
+                    }});
+                }
+            }).show();
+    }
     private void accountScreen(){
         heading("حسابي","بيانات العميل والاشتراك وملفات المشاهدة على هذا الجهاز");
         LinearLayout panel=column();
@@ -927,8 +966,19 @@ public final class TVHomeActivity extends Activity {
         panel.setBackgroundDrawable(bg(0xFF231827,0xABDA4862,18));
         content.addView(panel,space(-1,-2,5));
         String login=MemberAuth.username(this);
-        panel.addView(text("◉  "+(login.isEmpty()?"مشاهد العز TV":login),26,WHITE,true),
-            space(-1,dp(56),1));
+        LinearLayout identity=row();
+        FrameLayout avatar=new FrameLayout(this);
+        avatar.setBackgroundDrawable(bg(0xFF732840,0xFFFF8EAA,17));
+        ImageView avatarIcon=new ImageView(this);
+        avatarIcon.setImageDrawable(new CinemaGlyph("account",0xFFFFCED8));
+        avatar.addView(avatarIcon,new FrameLayout.LayoutParams(dp(37),dp(37),Gravity.CENTER));
+        identity.addView(avatar,new LinearLayout.LayoutParams(dp(65),dp(65)));
+        LinearLayout names=column();names.setPadding(dp(16),0,dp(16),0);
+        names.addView(text(login.isEmpty()?"مشاهد العز TV":login,26,WHITE,true),space(-1,dp(42),1));
+        names.addView(text("بروفايلك: "+PlaybackMemory.displayProfile(this,
+            PlaybackMemory.activeProfile(this)),14,0xFFFFB6C5,false),space(-1,dp(30),1));
+        identity.addView(names,new LinearLayout.LayoutParams(0,-2,1));
+        panel.addView(identity,space(-1,dp(79),1));
         panel.addView(text("حساب مشاهدة مفعل  •  التحقق من الصلاحية تلقائيًا",
             14,0xFFD7BFC8,false),space(-1,-2,2));
         heading("الباقة الحالية",MemberAuth.planName(this));
@@ -937,7 +987,7 @@ public final class TVHomeActivity extends Activity {
             "انتهت الصلاحية":"متبقي "+days+" يومًا";
         TextView deadline=text(expiry,23,days>=0&&days<=7?0xFFFFB35C:0xFFFF8496,true);
         content.addView(deadline,space(-1,dp(49),6));
-        heading("الأجهزة المرتبطة","يراجع المسؤول عدد الأجهزة وحالاتها من لوحة الإدارة؛ هذا الجهاز مسجل بعد الدخول إن نجحت المزامنة.");
+        heading("الأجهزة المرتبطة","يراجع المسؤول الأجهزة المسجلة من لوحة الإدارة؛ لا نعرض عددًا غير مؤكد.");
         Button profiles=primaryButton("بروفايلات المشاهدة  •  "+PlaybackMemory.displayProfile(this,
             PlaybackMemory.activeProfile(this)));
         profiles.setTag("nav:profiles");
@@ -950,14 +1000,23 @@ public final class TVHomeActivity extends Activity {
         settings.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
             goTo("settings");
         }});
+        Button logout=button("تسجيل الخروج من الحساب");
+        logout.setTag("account:logout");
+        content.addView(logout,space(dp(300),dp(59),4));
+        logout.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            confirmLogout();
+        }});
     }
     private void profilesScreen(){
-        heading("من يشاهد الآن؟","ثلاثة بروفايلات مستقلة داخل حسابك • الأسماء تحفظ محليًا فقط");
+        heading("من يشاهد الآن؟","بروفايلات شخصية مستقلة • أسماؤها محفوظة على الجهاز");
         final String active=PlaybackMemory.activeProfile(this);
-        final String[] values={"family","kids","guest"};
-        final String[] descriptions={"سجل ومفضلة العائلة","قائمة ووقت الأطفال","سجل ضيف مستقل"};
+        final String[] values={"personal","family","kids","guest"};
+        final String[] descriptions={"مشاهدة شخصية","العائلة والمزامنة","عالم الأطفال","سجل الضيف"};
+        HorizontalScrollView profileScroll=new HorizontalScrollView(this);
+        profileScroll.setHorizontalScrollBarEnabled(false);
         LinearLayout strip=row();strip.setGravity(Gravity.TOP);
-        content.addView(strip,space(-1,dp(190),4));
+        profileScroll.addView(strip,new HorizontalScrollView.LayoutParams(-2,-1));
+        content.addView(profileScroll,space(-1,dp(214),4));
         for(int i=0;i<values.length;i++){
             final String profile=values[i];
             LinearLayout card=column();
@@ -966,7 +1025,8 @@ public final class TVHomeActivity extends Activity {
                 active.equals(profile)?0xFFFF7389:0x886D4C5D,18));
             ImageView icon=new ImageView(this);
             icon.setImageDrawable(new CinemaGlyph("kids".equals(profile)?"kids":
-                "guest".equals(profile)?"search":"favorites",0xFFFF8094));
+                "guest".equals(profile)?"search":"personal".equals(profile)?"account":
+                "favorites",0xFFFF8094));
             LinearLayout.LayoutParams symbol=new LinearLayout.LayoutParams(dp(52),dp(52));
             symbol.gravity=Gravity.CENTER_HORIZONTAL;
             card.addView(icon,symbol);
@@ -982,9 +1042,7 @@ public final class TVHomeActivity extends Activity {
                 PlaybackMemory.setProfile(TVHomeActivity.this,profile);
                 goTo("home");
             }});
-            LinearLayout.LayoutParams place=new LinearLayout.LayoutParams(0,-1,1);
-            place.setMargins(dp(5),0,dp(5),0);
-            strip.addView(card,place);
+            strip.addView(card,space(dp(213),dp(197),4));
         }
         heading("تخصيص الأسماء","يمكن تعديل اسم كل بروفايل بدون تغيير صلاحيات الاشتراك.");
         for(final String profile:values){
@@ -1016,16 +1074,11 @@ public final class TVHomeActivity extends Activity {
         heading("اشتراكي",daysLeft<0?"الصلاحية الحالية يحددها المسؤول":daysLeft==0?
             "انتهت الصلاحية، جدّد اشتراكك":daysLeft<=7?
             "⚠ تنبيه: متبقي "+daysLeft+" يومًا فقط":"متبقي "+daysLeft+" يومًا على انتهاء الباقة");
-        Button logout=button("↪ تسجيل الخروج من الحساب");
+        Button logout=button("تسجيل الخروج من الحساب");
+        logout.setTag("settings:logout");
         content.addView(logout,space(-1,dp(58),6));
         logout.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-            unlocked=false;showingWelcome=true;
-            background.execute(new Runnable(){public void run(){
-                MemberAuth.logout(TVHomeActivity.this);
-                ui.post(new Runnable(){public void run(){
-                    if(!isFinishing())showMemberLogin("تم تسجيل الخروج من الحساب.");
-                }});
-            }});
+            confirmLogout();
         }});
         final SharedPreferences prefs=getSharedPreferences(SETTINGS,MODE_PRIVATE);
         final String active=PlaybackMemory.activeProfile(this);
@@ -1037,7 +1090,7 @@ public final class TVHomeActivity extends Activity {
             goTo("profiles");
         }});
         LinearLayout profiles=row();content.addView(profiles,space(-1,-2,4));
-        for(final String profile:new String[]{"family","kids","guest"}){
+        for(final String profile:new String[]{"personal","family","kids","guest"}){
             Button choice=button((active.equals(profile)?"✓ ":"")+PlaybackMemory.displayProfile(this,profile));
             profiles.addView(choice,new LinearLayout.LayoutParams(0,dp(55),1));
             choice.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
@@ -1413,7 +1466,7 @@ public final class TVHomeActivity extends Activity {
         outer.addView(text(desc,12,0xFFFF8DA6,false));
         outer.setOnFocusChangeListener(new View.OnFocusChangeListener(){public void onFocusChange(View v,boolean focused){
             outer.setBackgroundDrawable(bg(focused?0xFF79203A:0xFF201C25,focused?0xFFFFB0C6:0xFF342B38,13));
-            outer.setScaleX(focused?1.035f:1);outer.setScaleY(focused?1.035f:1);
+            outer.setScaleX(focused?1.015f:1);outer.setScaleY(focused?1.015f:1);
             if(focused&&"home".equals(section))scheduleFeatured(item);
         }});
         outer.setOnClickListener(new View.OnClickListener(){public void onClick(View v){detail(item);}});

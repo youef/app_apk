@@ -124,6 +124,7 @@ jobs:
           node tests/native-red-tv-focus-v21-smoke.cjs
           node tests/cinema-wallpaper-v22-smoke.cjs
           node tests/cinema-v24-profiles-and-shelves-smoke.cjs
+          node tests/tv-red-glass-v25-profile-smoothness-smoke.cjs
           node tests/glossy-red-glass-buttons-v23-smoke.cjs
           node tests/member-account-login-smoke.cjs
           node tests/member-cloud-sync-smoke.cjs
@@ -219,6 +220,7 @@ jobs:
       - name: Upload to Appetize
         id: appetize_upload
         if: env.APPETIZE_API_TOKEN != ''
+        continue-on-error: true
         uses: appetizeio/github-action-appetize@v1.1.0
         with:
           apiToken: ${{ secrets.APPETIZE_API_TOKEN }}
@@ -255,3 +257,24 @@ jobs:
         run: |
           echo "::notice::Appetize upload skipped: set APPETIZE_API_TOKEN in repository Actions secrets."
           echo "Appetize: awaiting GitHub Actions secret APPETIZE_API_TOKEN" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish APK for direct download after verified build
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s dist/al-ezz-tv-v15-smart-cinema-api19.apk
+          git fetch origin main
+          git checkout -B direct-apk-publish origin/main
+          mkdir -p downloads
+          cp dist/al-ezz-tv-v15-smart-cinema-api19.apk downloads/al-ezz-tv-latest.apk
+          sha256sum downloads/al-ezz-tv-latest.apk > downloads/al-ezz-tv-latest.sha256
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f downloads/al-ezz-tv-latest.apk downloads/al-ezz-tv-latest.sha256
+          if git diff --cached --quiet; then
+            echo "Current APK already published."
+            exit 0
+          fi
+          git commit -m "release(android): publish Red Glass V25 APK [skip ci]"
+          git push origin HEAD:main

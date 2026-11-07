@@ -17,7 +17,8 @@ public final class PlaybackMemory {
         return context.getApplicationContext().getSharedPreferences(PREF+"."+(user.matches("[a-fA-F0-9-]{36}")?user:"anonymous"),Context.MODE_PRIVATE);
     }
     private static String safeProfile(String profile){
-        return "kids".equals(profile)?"kids":"guest".equals(profile)?"guest":"family";
+        return "personal".equals(profile)?"personal":"kids".equals(profile)?"kids":
+            "guest".equals(profile)?"guest":"family";
     }
     private static String safeId(String s){
         return s!=null&&s.matches("[A-Za-z0-9_-]{1,80}")?s:"";
@@ -29,10 +30,11 @@ public final class PlaybackMemory {
         return safeProfile(prefs(context).getString("profile","family"));
     }
     public static String profileName(String profile){
-        return "kids".equals(profile)?"الأطفال":"guest".equals(profile)?"الضيف":"العائلة";
+        return "personal".equals(profile)?"شخصي":"kids".equals(profile)?"الأطفال":
+            "guest".equals(profile)?"الضيف":"العائلة";
     }
     public static void setProfile(Context context,String profile){
-        if("family".equals(profile)||"kids".equals(profile)||"guest".equals(profile))
+        if("personal".equals(profile)||"family".equals(profile)||"kids".equals(profile)||"guest".equals(profile))
             prefs(context).edit().putString("profile",profile).apply();
     }
 

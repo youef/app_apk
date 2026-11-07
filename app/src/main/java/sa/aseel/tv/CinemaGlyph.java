@@ -65,6 +65,18 @@ public final class CinemaGlyph extends Drawable {
             heart.cubicTo(3.4f,4.2f,9,2.6f,12,7.3f);
             heart.cubicTo(15,2.6f,20.6f,4.2f,20.6f,8.6f);
             heart.cubicTo(20.6f,13,16,17,12,20);canvas.drawPath(heart,brush);
+        }else if("account".equals(name)||"profile".equals(name)){
+            canvas.drawCircle(12,8,4f,brush);
+            Path shoulder=new Path();shoulder.moveTo(4,20);
+            shoulder.cubicTo(4,15,8,14,12,14);
+            shoulder.cubicTo(16,14,20,15,20,20);
+            canvas.drawPath(shoulder,brush);
+        }else if("logout".equals(name)){
+            poly(canvas,11,4,4,4,4,20,11,20);
+            line(canvas,10,12,22,12);poly(canvas,17,7,22,12,17,17);
+        }else if("subscription".equals(name)){
+            rectangle(canvas,3,5,21,19);
+            line(canvas,3,10,21,10);line(canvas,7,15,13,15);
         }else if("settings".equals(name)){
             canvas.drawCircle(12,12,8.5f,brush);canvas.drawCircle(12,12,3,brush);
             line(canvas,12,1.5f,12,4);line(canvas,12,20,12,22.5f);
