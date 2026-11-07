@@ -411,7 +411,9 @@ def scan_catalogue(state: UserState, cat: Catalogue, progress: dict):
                                        if url and (cat.kind == 'movie' or url.rstrip('/') != cat.url.rstrip('/'))))
             checked, errors = resolver.resolve(pages, existing=candidates)
             playable = next((item for item in checked if item.get('verified') and item.get('kind')=='direct'), None)
-            error = '' if playable else ('; '.join(errors[:2]) or 'لم يُعثر على رابط تشغيل اجتاز الفحص.')
+            embed_page = next((item for item in checked if item.get('kind') == 'embed'
+                               and item.get('reachable') and item.get('url') == entry.media_url), None)
+            error = '' if (playable or embed_page) else ('; '.join(errors[:2]) or 'لم يُعثر على رابط تشغيل اجتاز الفحص.')
         except Exception as exc:
             checked, playable, error = candidates, None, safe_error(exc)
         with state.lock:
@@ -632,7 +634,7 @@ async def links(request: Request, data: LinkForm):
                 if cat.kind == 'movie' and '|' not in line:
                     url = public_url(line)
                     if not supported_source_kind(url):
-                        raise ValueError('رابط الفيديو ليس MP4/HLS/WebM')
+                        raise ValueError('الرابط يجب أن يكون MP4/HLS/WebM أو Embed 1vid')
                     cat.media_url, cat.verified = url, False
                     count += 1
                     continue
@@ -714,7 +716,7 @@ async def update(request: Request, data: UpdateForm):
         if data.media_url is not None and cat.kind == 'movie':
             value = optional_url(data.media_url)
             if value and not supported_source_kind(value):
-                raise HTTPException(400, 'رابط الفيلم يجب أن يكون MP4 أو HLS أو WebM')
+                raise HTTPException(400, 'رابط الفيلم يجب أن يكون MP4/HLS/WebM أو Embed 1vid')
             if value != cat.media_url:
                 cat.media_url, cat.verified = value, False
         if data.episodes is not None and cat.kind == 'series':
