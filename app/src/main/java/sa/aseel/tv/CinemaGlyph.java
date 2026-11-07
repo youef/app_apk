@@ -7,6 +7,7 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
+import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 
 /**
@@ -24,7 +25,7 @@ public final class CinemaGlyph extends Drawable {
         canvas.drawLine(x1,y1,x2,y2,brush);
     }
     private void rectangle(Canvas canvas,float x1,float y1,float x2,float y2){
-        canvas.drawRoundRect(x1,y1,x2,y2,2f,2f,brush);
+        canvas.drawRoundRect(new RectF(x1,y1,x2,y2),2f,2f,brush);
     }
     private void poly(Canvas canvas,float... pts){
         if(pts.length<4)return;
