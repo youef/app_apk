@@ -10,6 +10,9 @@ from zoneinfo import ZoneInfo
 
 SAUDI_ZONE = ZoneInfo("Asia/Riyadh")
 EXPIRES_KEY = "alezz_expires_at"
+PLAN_DAYS = 90
+PLAN_KEY = "alezz_plan_days"
+DEVICE_REVOKED_KEY = "alezz_devices_revoked_at"
 
 
 def expiration_from_date(text, *, today=None):
@@ -58,3 +61,41 @@ def expiry_date(metadata):
     if expiry == 1:
         return "invalid"
     return datetime.fromtimestamp(expiry - 1, SAUDI_ZONE).date().isoformat()
+
+
+def plan_90_dates(metadata=None, *, today=None):
+    """(UTC expiry timestamp, local inclusive expiry date) for a 90-day plan.
+
+    A new/expired subscription includes today as day one. A live subscription
+    extends 90 calendar days from its previous inclusive expiry date.
+    """
+    current = today or datetime.now(SAUDI_ZONE).date()
+    old = expiry_date(metadata or {})
+    if old and old != "invalid":
+        try:
+            old_day = date.fromisoformat(old)
+        except ValueError:
+            old_day = current - timedelta(days=1)
+    else:
+        old_day = current - timedelta(days=1)
+    target = (old_day + timedelta(days=PLAN_DAYS)
+              if old_day >= current
+              else current + timedelta(days=PLAN_DAYS - 1))
+    return expiration_from_date(target.isoformat(), today=current), target.isoformat()
+
+
+def subscription_summary(metadata, *, today=None):
+    """Small, safe, customer-visible summary; never includes credentials."""
+    current = today or datetime.now(SAUDI_ZONE).date()
+    state = account_state(metadata, now=datetime.combine(current, time.min, SAUDI_ZONE).timestamp()) if today else account_state(metadata)
+    date_text = expiry_date(metadata)
+    days_left = None
+    if date_text and date_text != "invalid":
+        days_left = max(0, (date.fromisoformat(date_text) - current).days + 1)
+    return {
+        "status": state,
+        "expires_on": date_text if date_text != "invalid" else None,
+        "remaining_days": days_left,
+        "plan_days": metadata.get(PLAN_KEY) if isinstance(metadata, dict) and metadata.get(PLAN_KEY) == PLAN_DAYS else None,
+        "warning": bool(state == "active" and days_left is not None and days_left <= 7),
+    }
