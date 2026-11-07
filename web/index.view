@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0A0E17">
+<meta name="theme-color" content="#100B13">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="العز TV">
@@ -32,6 +32,7 @@
 </script>
 <link rel="stylesheet" href="css/member-ui.css?v=2">
 <link rel="stylesheet" href="css/glass.css?v=glass-v19-20261107">
+<link rel="stylesheet" href="css/red-cinema.css?v=red-glass-cinema-v20-20261107">
 </head>
 <body data-boot="loading">
 <script>
@@ -48,13 +49,13 @@ try {
   </a>
 
   <nav class="nav" id="mainNav" aria-label="التنقل الرئيسي">
-    <a href="#/home"   class="nav__link" data-nav="home">الرئيسية</a>
-    <a href="#/movies" class="nav__link" data-nav="movies">أفلام</a>
-    <a href="#/series" class="nav__link" data-nav="series">مسلسلات</a>
-    <a href="#/live"   class="nav__link" data-nav="live">بث مباشر</a>
-    <a href="#/kids"   class="nav__link" data-nav="kids">أطفال</a>
-    <a href="#/youtube" class="nav__link" data-nav="youtube">يوتيوب</a>
-    <a href="#/mylist" class="nav__link" data-nav="mylist">قائمتي</a>
+    <a href="#/home"   class="nav__link" data-nav="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.4 12 4l9 7.4V20h-6v-5H9v5H3z"/></svg><span>الرئيسية</span></a>
+    <a href="#/movies" class="nav__link" data-nav="movies"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 9h18M8 5l3 4m3-4 3 4"/></svg><span>أفلام</span></a>
+    <a href="#/series" class="nav__link" data-nav="series"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4v16m5-11 4 3-4 3z"/></svg><span>مسلسلات</span></a>
+    <a href="#/live"   class="nav__link" data-nav="live"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M8 3l4 3 4-3M8 22h8"/></svg><span>بث مباشر</span></a>
+    <a href="#/kids"   class="nav__link" data-nav="kids"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 10h.01M16 10h.01M8 15q4 4 8 0"/></svg><span>أطفال</span></a>
+    <a href="#/youtube" class="nav__link" data-nav="youtube"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="4"/><path d="m10 9 5 3-5 3z"/></svg><span>يوتيوب</span></a>
+    <a href="#/mylist" class="nav__link" data-nav="mylist"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 8.2c0 4.1-8.8 10.1-8.8 10.1S3.2 12.3 3.2 8.2a4.4 4.4 0 018.8-.3 4.4 4.4 0 018.8.3z"/></svg><span>قائمتي</span></a>
   </nav>
 
   <div class="topbar__actions">
@@ -86,7 +87,7 @@ try {
   <a href="#/series" data-dock="series"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4v16m5-11 4 3-4 3z"/></svg><small>مسلسلات</small></a>
   <a href="#/live" data-dock="live"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M8 3l4 3 4-3M8 22h8"/></svg><small>مباشر</small></a>
   <a href="#/kids" data-dock="kids"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 10h.01M16 10h.01M8 15q4 4 8 0"/></svg><small>أطفال</small></a>
-  <a href="#/youtube" data-dock="youtube"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="4"/><path d="m10 9 5 3-5 3z"/></svg><small>فيديو</small></a>
+  <a href="#/mylist" data-dock="mylist"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 8.2c0 4.1-8.8 10.1-8.8 10.1S3.2 12.3 3.2 8.2a4.4 4.4 0 018.8-.3 4.4 4.4 0 018.8.3z"/></svg><small>قائمتي</small></a>
 </nav>
 <div class="install-guide" id="installGuide" role="dialog" aria-modal="true" aria-labelledby="installGuideTitle" hidden>
  <div class="install-guide__shade" data-dismiss-install></div>
