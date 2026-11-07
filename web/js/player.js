@@ -215,10 +215,16 @@
   }
   function playSelectedSource(url, forceJs) {
     if (!current || el.root.hidden) return;
-    if (isEmbedUrl(url)) { playEmbed(url); return; }
+    if (sourceKind(url)==="youtube") { playYoutube(youtubeSourceId(url), current.title); return; }
+    if (sourceKind(url)==="embed") { playEmbed(url); return; }
     activeStreamUrl = url;
     clearStage();
     el.video.controls = iosSafari;
+    el.video.disableRemotePlayback=!!current.kids;
+    el.video.setAttribute("x-webkit-airplay",current.kids?"deny":"allow");
+    if (window.AlezzCast) window.AlezzCast.bind("player",el.video,Object.assign({},current,{stream:url}),{
+      cast:"playerCast",airplay:"playerAirPlay",status:"playerCastStatus"
+    });
     bindSubtitleTrack(current);
     show("playerSpinner", true);
     var ticket = playbackToken;
@@ -355,7 +361,11 @@
     clearStage();
     el.video.hidden = true;
     youtubeFrame = document.createElement("iframe");
-    youtubeFrame.className = "yt-frame";
+    activeStreamUrl="https://www.youtube-nocookie.com/embed/"+id;
+    el.root.classList.add("is-embed");
+    show("playerEmbedExternal", true);
+    youtubeFrame.className="yt-frame alezz-embed-frame";
+    youtubeFrame.setAttribute("sandbox","allow-scripts allow-same-origin allow-forms allow-presentation");
     youtubeFrame.setAttribute("allow", "autoplay; encrypted-media; picture-in-picture");
     youtubeFrame.setAttribute("allowfullscreen", "");
     youtubeFrame.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
@@ -366,7 +376,7 @@
     $("playerTitle").textContent = title || "فيديو";
     $("playerSubtitle").textContent = "YouTube — مشغل رسمي";
     $("playerBadges").innerHTML = '<span class="chip chip--gold">تضمين رسمي</span>';
-    el.root.classList.add("is-idle");
+    el.root.classList.remove("is-idle");
   }
 
   // Keep embeds restricted to explicitly allowed HTTPS player endpoints.
@@ -381,6 +391,37 @@
         (host === "www.dailymotion.com" && /^\/embed\/video\/[a-z0-9_-]+\/?$/i.test(path)) ||
         (host === "www.youtube-nocookie.com" && /^\/embed\/[a-z0-9_-]{11}\/?$/i.test(path));
     } catch (_e) { return false; }
+  }
+  function youtubeSourceId(value) {
+    try {
+      var u=new URL(String(value||"").trim()), host=u.hostname.toLowerCase();
+      if(u.protocol!=="https:"||u.username||u.password||(u.port&&u.port!=="443"))return "";
+      var p=u.pathname.split("/").filter(Boolean),id="";
+      if(host==="youtu.be"&&p.length===1)id=p[0];
+      else if(["youtube.com","www.youtube.com","m.youtube.com","www.youtube-nocookie.com"].indexOf(host)>=0) {
+        if(u.pathname==="/watch")id=u.searchParams.get("v")||"";
+        else if(p.length===2 && /^(shorts|embed|live)$/.test(p[0]))id=p[1];
+      }
+      return /^[A-Za-z0-9_-]{11}$/.test(id)?id:"";
+    } catch(e){return "";}
+  }
+  function sourceKind(value) {
+    if(youtubeSourceId(value))return "youtube";
+    if(isEmbedUrl(value))return "embed";
+    try {
+      var u=new URL(String(value||"").trim());
+      if(u.protocol!=="https:"||u.username||u.password||(u.port&&u.port!=="443"))return "";
+      if(/\.m3u8$/i.test(u.pathname))return "hls";
+      if(/\.mp4$/i.test(u.pathname))return "mp4";
+    }catch(e){}
+    return "";
+  }
+  function canonicalSource(url){
+    var id=youtubeSourceId(url);
+    return id?"https://www.youtube-nocookie.com/embed/"+id:String(url||"").trim();
+  }
+  function sourceTypeLabel(type){
+    return {hls:"HLS",mp4:"MP4",embed:"Embed",youtube:"YouTube"}[type]||"فيديو";
   }
   function playEmbed(url) {
     clearStage();
@@ -414,12 +455,8 @@
     el.root.classList.remove("is-idle");
     configureQualities(item);
 
-    if (item.youtubeId) {
-      if (window.AlezzCast) window.AlezzCast.detach("player");
-      playYoutube(item.youtubeId, item.title); return;
-    }
-
-    var url = activeStreamUrl || item.stream || "";
+    var url = activeStreamUrl || item.stream || (item.youtubeId ?
+      "https://www.youtube-nocookie.com/embed/"+item.youtubeId : "");
     if (!url) {
       clearStage();
       if (window.AlezzCast) window.AlezzCast.detach("player");
@@ -429,18 +466,9 @@
       clearStage(); fail("نوع الرابط غير مدعوم. استخدم رابط فيديو مباشرًا أو Embed من مصدر معتمد.");
       return;
     }
-    if (isEmbedUrl(url)) {
-      if (item.kids) { clearStage(); fail("المشغلات المضمّنة غير متاحة في وضع الأطفال."); return; }
-      playEmbed(url); return;
+    if(item.kids && sourceKind(url)!=="mp4" && sourceKind(url)!=="hls"){
+      clearStage();fail("هذا المصدر غير متاح في وضع الأطفال.");return;
     }
-    // Child-profile casting is disabled: the remote device cannot enforce the local viewing limit.
-    el.video.disableRemotePlayback=!!item.kids;
-    el.video.setAttribute("x-webkit-airplay",item.kids?"deny":"allow");
-    if (window.AlezzCast) window.AlezzCast.bind("player",el.video,Object.assign({},item,{stream:url}),{
-      cast:"playerCast",airplay:"playerAirPlay",status:"playerCastStatus"
-    });
-
-    el.video.hidden = false;
     playSelectedSource(url, false);
   }
 
@@ -610,10 +638,7 @@
 
   /* Sources are explicit episode variants; HLS levels come from the live manifest.
      Never invent a quality that the selected stream does not actually advertise. */
-  function isPlayableUrl(url) {
-    return isEmbedUrl(url) || (/^https:\/\/[^\s]+/i.test(url || "") &&
-      /\.(m3u8|mp4)([?#]|$)/i.test(url || ""));
-  }
+  function isPlayableUrl(url) { return !!sourceKind(url); }
   function qualityMenuOpen() {
     var menu = $("playerQualityMenu");
     return !!(menu && !menu.hidden);
@@ -632,21 +657,20 @@
     hlsLevels = [];
     activeQuality = "auto";
     activeSourceIndex = 0;
-    activeStreamUrl = item.stream || "";
-    preferredQuality = String(Store.pref("preferredPlaybackQuality", "auto") || "auto");
-    if (isPlayableUrl(item.stream)) {
-      qualitySources.push({ url: item.stream, label: "الأصل" });
+    activeStreamUrl = "";
+    preferredQuality = String(Store.pref("source:"+(item.key||"video"), "auto")||"auto");
+    function appendSource(raw,label){
+      var type=sourceKind(raw),url=canonicalSource(raw);
+      if(!type||(item.kids && type!=="mp4"&&type!=="hls")||qualitySources.length>=9)return;
+      if(qualitySources.some(function(s){return s.url===url;}))return;
+      qualitySources.push({url:url,label:String(label||sourceTypeLabel(type)).trim().slice(0,36),type:type});
     }
-    (Array.isArray(item.variants) ? item.variants : []).forEach(function (entry) {
-      var url = entry && String(entry.url || "").trim();
-      var label = entry && String(entry.label || "").trim().slice(0, 36);
-      if (!isPlayableUrl(url)) return;
-      var match = qualitySources.filter(function (source) { return source.url === url; })[0];
-      if (match) { if (label) match.label = label; }
-      else if (qualitySources.length < 9) {
-        qualitySources.push({ url: url, label: label || "مصدر " + (qualitySources.length + 1) });
-      }
+    appendSource(item.stream,item.quality||"الأساسي");
+    (Array.isArray(item.variants)?item.variants:[]).forEach(function(entry){
+      if(entry)appendSource(entry.url||entry.stream_url,entry.label||entry.quality);
     });
+    if(item.youtubeId)appendSource("https://www.youtube-nocookie.com/embed/"+item.youtubeId,"YouTube");
+    if(qualitySources.length)activeStreamUrl=qualitySources[0].url;
     if (qualitySources.length && preferredQuality !== "auto") {
       for (var i = 0; i < qualitySources.length; i++) {
         if (qualitySources[i].label.toLowerCase() === preferredQuality.toLowerCase()) {
@@ -664,7 +688,7 @@
     var out = [{ id: "auto", label: "تلقائي", hint: "أفضل جودة حسب الاتصال" }];
     qualitySources.forEach(function (src, i) {
       // A source whose URL has already appeared is de-duplicated in configureQualities.
-      out.push({ id: "source:" + i, label: src.label, hint: "رابط متاح" });
+      out.push({ id: "source:" + i, label: src.label, hint: sourceTypeLabel(src.type) });
     });
     hlsLevels.forEach(function (level) {
       out.push({ id: "level:" + level.index, label: level.label, hint: "جودة HLS" });
@@ -707,12 +731,15 @@
       menu.appendChild(row);
     });
     button.textContent = "الجودة: " + activeQualityLabel();
-    button.disabled = !current || !!current.youtubeId || options.length < 2;
+    button.disabled = !current || options.length < 2;
+    renderSourcesMenu();
     button.setAttribute("aria-label", "تحديد جودة الفيديو. " + activeQualityLabel());
   }
   function switchQualitySource(url) {
     if (!isPlayableUrl(url)) { toast("رابط الجودة غير صالح", "err"); return; }
-    if (embedFrame || isEmbedUrl(url)) { playSelectedSource(url, false); return; }
+    if (embedFrame || youtubeFrame || (sourceKind(url)!=="mp4" && sourceKind(url)!=="hls")) {
+      playSelectedSource(url, false); return;
+    }
     var position = el.video.currentTime || 0;
     var playing = !el.video.paused;
     activeStreamUrl = url;
@@ -731,12 +758,12 @@
     playSelectedSource(url, false);
   }
   function selectQuality(id) {
-    if (!current || current.youtubeId) return;
+    if (!current) return;
     closeQualityMenu();
     if (id === "auto") {
       activeQuality = "auto";
       preferredQuality = "auto";
-      Store.setPref("preferredPlaybackQuality", "auto");
+      Store.setPref("source:"+current.key, "auto");
       if (activeSourceIndex !== 0 && qualitySources[0]) {
         activeSourceIndex = 0;
         switchQualitySource(qualitySources[0].url);
@@ -748,7 +775,7 @@
       if (!qualitySources[index]) return;
       activeQuality = id;
       preferredQuality = qualitySources[index].label;
-      Store.setPref("preferredPlaybackQuality", preferredQuality);
+      Store.setPref("source:"+current.key, preferredQuality);
       if (activeSourceIndex !== index) {
         activeSourceIndex = index;
         switchQualitySource(qualitySources[index].url);
@@ -863,7 +890,7 @@
       startPlayback(current);
     });
     $("playerEmbedExternal").addEventListener("click", function () {
-      if (embedFrame && activeStreamUrl && isEmbedUrl(activeStreamUrl))
+      if ((embedFrame || youtubeFrame) && activeStreamUrl && isPlayableUrl(activeStreamUrl))
         window.open(activeStreamUrl, "_blank", "noopener,noreferrer");
     });
     $("playerExternal").addEventListener("click", function () {
