@@ -38,4 +38,20 @@ ok("Private account cookies persist and can be revoked",
 ok("Browser and native sessions do not put admin secrets in client bundles",
  auth.includes("AppConfig.PUBLISHABLE_KEY")&&
  manifest.includes('android:allowBackup="false"'));
+const expiry=read("python-cloud-studio/member_expiry.py");
+const admin=read("python-cloud-studio/customer_directory.py");
+const guard=read("web/js/customer-session-guard.js");
+ok("90-day subscription is server managed, includes existing expiry carryover",
+ expiry.includes("PLAN_DAYS = 90")&&expiry.includes("def plan_90_dates(")&&
+ portal.includes("action=='renew-90'")&&admin.includes('value="renew-90"'));
+ok("Expiry enforces browser and native sessions including active playback",
+ sessions.includes("account_expires_at")&&portal.includes("account_deadline")&&
+ auth.includes('"alezz_expires_at"')&&home.includes("showExpiredScreen")&&
+ player.includes("subscriptionGuard"));
+ok("Live subscription warnings appear in customer interface",
+ admin.includes("تنبيهات الاشتراكات")&&guard.includes("subscriptionNotice")&&
+ guard.includes("remaining_days"));
+ok("Native device registry uses Supabase authenticated RLS and admin can revoke",
+ auth.includes("aseel_device_sessions")&&auth.includes('"Authorization","Bearer "+token')&&
+ auth.includes('"alezz_devices_revoked_at"')&&portal.includes("DEVICE_REVOKED_KEY"));
 console.log("PASS | Native/portal customer auth acceptance; physical-device and end-to-end login tests require a provisioned test customer.");
