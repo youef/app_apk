@@ -786,6 +786,12 @@ public final class TVHomeActivity extends Activity {
             refresh.requestFocus();
         }
         lastRenderedSection=section;
+        if(!sameSection && "home".equals(section) && scroller!=null){
+            scroller.post(new Runnable(){public void run(){
+                View entry=findTagged(content,"nav:series");
+                if(entry!=null && "home".equals(section))entry.requestFocus();
+            }});
+        }
         if(sameSection && scroller!=null){
             scroller.post(new Runnable(){public void run(){
                 if(!unlocked||!section.equals(lastRenderedSection))return;
@@ -1033,6 +1039,7 @@ public final class TVHomeActivity extends Activity {
                 "المفضلة".equals(type)?favoriteCount:counts.get(type);
             Button b=button((type.equals(activeChannelCategory)?"✓ ":"")+type+"  "+count);
             b.setContentDescription("تصنيف "+type+"، "+count+" قناة");
+            b.setTag("filter:"+type);
             filters.addView(b,space(dp(156),dp(52),3));
             b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
                 activeChannelCategory=type;liveGuideLimit=48;
@@ -1111,9 +1118,10 @@ public final class TVHomeActivity extends Activity {
     private void grid(String title,ArrayList<JSONObject> list){
         heading(title,list.size()+" عنوان متاح");
         if(list.isEmpty()){heading("لا يوجد محتوى منشور في هذا القسم","يمكن تحديث المكتبة أو إضافة أعمال من لوحة الإدارة.");return;}
-        for(int base=0;base<list.size();base+=5){
+        final int columns=screenWidthDp()>=1060?5:screenWidthDp()>=760?4:3;
+        for(int base=0;base<list.size();base+=columns){
             LinearLayout row=row();row.setGravity(Gravity.TOP);
-            for(int i=base;i<Math.min(base+5,list.size());i++)
+            for(int i=base;i<Math.min(base+columns,list.size());i++)
                 row.addView(card(list.get(i),false),new LinearLayout.LayoutParams(0,dp(248),1));
             content.addView(row,space(-1,-2,3));
         }
@@ -1334,6 +1342,8 @@ public final class TVHomeActivity extends Activity {
                 try{
                     record.put("id",value(candidate,"id"));
                     record.put("title",label(candidate));
+                    record.put("poster",value(candidate,"poster_url"));
+                    record.put("youtube_url",value(candidate,"youtube_url"));
                     record.put("series_id",value(candidate,"_series_id"));
                     record.put("url",candidateUrl);
                     record.put("quality",value(candidate,"quality"));
