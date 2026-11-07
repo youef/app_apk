@@ -85,3 +85,89 @@ tr:hover td{background:rgba(231,198,137,.045)}
     background:rgba(13,22,35,.97) !important;
   }
 }
+
+
+/* AL EZZ TV V20 — Red Glass Cinema. This skin also covers the import studios
+   which embed their own markup and currently load this shared sheet last. */
+:root{
+  --ink:#090a10;--ink-2:#10121a;--ink-3:#151823;
+  --surface:#181a25;--surface-2:#20222e;
+  --gold:#E33246;--gold-2:#A91933;--gold-soft:rgba(226,49,70,.18);
+  --crimson:#E33246;--crimson-soft:rgba(226,49,70,.15);
+  --line:rgba(255,255,255,.10);--line-strong:rgba(255,255,255,.18);
+  --text:#F9F8FB;--text-2:#D3D5DE;--muted:#A7A9B8;
+  --bg:#0A0B12;--card:#1B1D2A;
+  --admin-glass:rgba(35,29,42,.86);
+  --admin-glass-dark:rgba(14,15,24,.95);
+  --admin-glass-line:rgba(239,237,245,.16);
+  --admin-glass-gold:rgba(249,94,111,.42);
+  --red:#E33246;
+}
+body{
+  background:
+    radial-gradient(ellipse 72vw 55vw at 90% -15%,rgba(162,22,50,.22),transparent 75%),
+    radial-gradient(ellipse 61vw 54vw at -8% 90%,rgba(90,20,44,.12),transparent 76%),
+    linear-gradient(150deg,#08090f,#11131d 55%,#08090f)!important;
+  background-attachment:fixed;color:#F8F8FA;
+}
+.ambient-glow--gold{background:rgba(135,25,49,.13)!important}
+.ambient-glow--crimson{background:rgba(195,37,66,.14)!important}
+.login-card,.sidebar,.topbar,.card,.table-card,.banner,.toolbar,.segmented,
+.table-scroll,.tablewrap,.dashboard-kpis>*,.batch-panel,.batch-message,.batch-overview,
+.batch-stats,.batch-table,.panelCard,.auth-card,.masthead,.studio-sidebar,
+.studio-main>.card,.imp-section,.imp-sidepanel,.imp-aside,.imp-saved-row,.imp-studio,
+.panel,.season,.result,.saved-episode,.saved-preview,.pill,.tag,.chip,.modal-content,
+.dialog,.sheet__panel,.imp-launch,.login,.table-actions{
+  background:linear-gradient(143deg,rgba(39,34,46,.9),rgba(14,16,25,.94))!important;
+  border-color:rgba(255,255,255,.16)!important;
+  box-shadow:0 14px 34px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.06)!important;
+}
+.sidebar,.studio-sidebar,.masthead,.topbar{
+  background:linear-gradient(140deg,rgba(32,25,36,.97),rgba(12,14,23,.97))!important;
+}
+.login-card,.card,.table-card,.batch-panel,.panelCard,.auth-card,.imp-section,.season,
+.imp-studio,.saved-episode{border-radius:18px}
+.login-brand strong span,.brand-copy strong span,.brand strong span{color:#FF6A7C!important}
+.nav-item.is-active,.sidebar-link.active,.tab.active,.chip-btn.is-active,.seg-btn.is-active,
+.nav-link.active,.segmented .active,.filter.active{
+  background:linear-gradient(133deg,rgba(198,34,57,.38),rgba(65,30,46,.63))!important;
+  color:#fff!important;border-color:rgba(250,98,114,.45)!important;
+}
+.nav-item:hover,.sidebar-link:hover,.tab:hover,.btn-ghost:hover{
+  background:rgba(202,51,74,.17)!important;color:#fff;
+}
+.btn-gold,.primary,button.primary,.btn-primary,.row-btn--on,
+#loginSubmit,.login-card button[type="submit"]{
+  background:linear-gradient(128deg,#F04A5E,#B51A34)!important;
+  color:#fff!important;border:1px solid rgba(255,132,149,.44)!important;
+  box-shadow:0 7px 20px rgba(179,23,50,.21)!important;
+}
+.btn-gold:hover,.primary:hover{
+  background:linear-gradient(125deg,#FA6071,#C52343)!important;
+}
+input:not([type=checkbox]),select,textarea{
+  background:rgba(13,15,25,.87)!important;
+  color:#fff!important;border-color:rgba(255,255,255,.21)!important;
+  border-radius:11px;
+}
+input:focus-visible,select:focus-visible,textarea:focus-visible,
+button:focus-visible,a:focus-visible,[tabindex]:focus-visible{
+  outline:2px solid #F55A6C!important;outline-offset:3px;
+}
+input:focus,select:focus,textarea:focus{border-color:#E84F64!important}
+a:not(.btn):not(.nav-item):not(.sidebar-link){text-decoration-color:#E44A5C}
+.badge--active,.status--active,.live-dot{background:#E73650!important}
+:where(.danger,.btn-danger,.row-btn--danger){background:rgba(172,26,51,.21)!important}
+@supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .topbar,.login-card,.modal-content,.dialog{
+    -webkit-backdrop-filter:blur(9px) saturate(125%);
+    backdrop-filter:blur(9px) saturate(125%);
+  }
+}
+@media(max-width:850px){
+  body{background-attachment:scroll}
+  .topbar,.sidebar,.studio-sidebar{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+}
+@media(prefers-reduced-motion:reduce),(prefers-reduced-transparency:reduce){
+  .topbar,.login-card,.modal-content,.dialog{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+}
