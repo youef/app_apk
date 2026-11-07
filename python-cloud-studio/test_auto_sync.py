@@ -134,6 +134,64 @@ class AutoSyncTests(unittest.TestCase):
             value = conn.execute('select * from auto_jobs where table_name=? and target_id=?', (table,row['id'])).fetchone()
             return dict(value)
 
+    def test_missing_original_auto_drafts_even_when_direct_media_is_healthy(self):
+        row = self.row(name='no-source-movie', source='', stream=OLD)
+        self.resolver.healthy.add(OLD)
+        self.worker.check_target(self.job(row))
+        remote = self.db.rows['aseel_movies'][row['id']]
+        self.assertEqual(remote['status'], 'draft')
+        self.assertEqual(remote['rights_status'], 'approved')
+        self.assertEqual(remote['stream_url'], OLD)
+        self.assertEqual(remote['link_health_status'], 'healthy')
+        self.assertIn('الأصلي', remote['link_health_reason'])
+
+    def test_three_consecutive_media_failures_draft_once_and_never_auto_publish(self):
+        row = self.row(name='three-failures')
+        for count in (1, 2, 3):
+            self.worker.check_target(self.job(row))
+            remote = self.db.rows['aseel_movies'][row['id']]
+            self.assertEqual(remote['status'], 'draft' if count == 3 else 'published')
+            self.now += 125
+        self.resolver.healthy.add(OLD)
+        self.worker.check_target(self.job(row))
+        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['status'], 'draft')
+        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['rights_status'], 'approved')
+
+    def test_working_backup_prevents_draft_and_replaces_failed_primary(self):
+        row = self.row(name='backup-working', stream_variants=[dict(url=NEW,label='backup')])
+        self.resolver.healthy.add(NEW)
+        self.worker.check_target(self.job(row))
+        remote = self.db.rows['aseel_movies'][row['id']]
+        self.assertEqual(remote['status'], 'published')
+        self.assertEqual(remote['stream_url'], NEW)
+
+    def test_reachable_embedded_backup_is_not_proof_primary_is_working(self):
+        embed = 'https://player.example.org/embed/7'
+        row = self.row(name='only-embed-backup',stream_variants=[dict(url=embed,kind='embed')])
+        self.resolver.reachable.add(embed)
+        for _ in range(3):
+            self.worker.check_target(self.job(row))
+            self.now += 125
+        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['status'],'draft')
+
+    def test_missing_original_series_is_drafted(self):
+        row = self.row(table='aseel_series', name='no-source-series',source='',stream='')
+        self.worker.discover_series(self.job(row,'aseel_series'))
+        remote = self.db.rows['aseel_series'][row['id']]
+        self.assertEqual(remote['status'], 'draft')
+        self.assertEqual(remote['rights_status'], 'approved')
+
+    def test_series_without_discovered_episodes_drafts_after_three_scans(self):
+        row = self.row(table='aseel_series',name='empty-series',source=ROOT,stream='')
+        from alezz_fetchv_importer import Catalogue
+        cat = Catalogue(kind='series',title='No episodes',url=ROOT)
+        with patch('auto_sync.pull_html',return_value=cat):
+            for n in (1,2,3):
+                self.worker.discover_series(self.job(row,'aseel_series'))
+                remote = self.db.rows['aseel_series'][row['id']]
+                self.assertEqual(remote['status'],'draft' if n==3 else 'published')
+                self.now = self.job(row,'aseel_series')['next_check'] + 1
+
     def test_failed_library_import_does_not_block_queued_media_checks(self):
         row = self.row()
         self.resolver.healthy.add(OLD)
