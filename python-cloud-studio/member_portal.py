@@ -391,7 +391,7 @@ class Portal:
                 end_local=datetime.fromtimestamp(deadline-1,ZoneInfo('Asia/Riyadh')).date()
                 days=max(0,(end_local-datetime.now(ZoneInfo('Asia/Riyadh')).date()).days+1)
                 summary={'active':True,'expires_on':end_local.isoformat(),
-                         'remaining_days':days,'warning':days<=7,'plan_days':PLAN_DAYS}
+                         'remaining_days':days,'warning':days<=7}
             else:
                 summary={'active':True,'expires_on':None,'remaining_days':None,'warning':False}
             return JSONResponse(summary,headers=HEADERS)
