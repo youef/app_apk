@@ -1,10 +1,10 @@
 /* Al Ezz TV — authenticated PWA shell.
    Do not cache HTML, authenticated navigation, API data or snapshot.json.
    Offline playback/navigation is intentionally unavailable without a live session. */
-var CACHE = "alezz-shell-member-privacy-20261107-v21-red-glass-cinema";
+var CACHE = "alezz-wallpaper-v1-shell-member-privacy-20261107-v21-red-glass-cinema";
 var BASE = self.registration.scope;
 var FILES = [
-  "assets/logo.svg", "assets/al-ezz-app-icon.svg",
+  "assets/logo.svg", "assets/al-ezz-app-icon.svg", "assets/al-ezz-red-glass-background.svg",
   "css/app.css", "css/unified.css", "css/glass.css", "css/red-cinema.css", "css/live.css", "css/kids.css", "css/cast.css",
   "css/member-ui.css",
   "js/legacy-polyfills.js", "js/config.js", "js/api.js", "js/explore.js",
@@ -21,7 +21,7 @@ self.addEventListener("install", function (event) {
 self.addEventListener("activate", function (event) {
   event.waitUntil(caches.keys().then(function (names) {
     return Promise.all(names.filter(function (name) {
-      return name.indexOf("alezz-shell-") === 0 || name === "alezz-offline-media-v1";
+      return name.indexOf("alezz-shell-") === 0 || name.indexOf("alezz-wallpaper-") === 0 || name === "alezz-offline-media-v1";
     }).map(function (name) { return caches.delete(name); }));
   }).then(function () { return self.clients.claim(); }));
 });
