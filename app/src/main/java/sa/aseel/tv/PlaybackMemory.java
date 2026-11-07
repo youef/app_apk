@@ -35,6 +35,21 @@ public final class PlaybackMemory {
         if("family".equals(profile)||"kids".equals(profile)||"guest".equals(profile))
             prefs(context).edit().putString("profile",profile).apply();
     }
+
+    /** Names are local to the authenticated customer's device and never change the security scope. */
+    public static String displayProfile(Context context,String profile){
+        String safe=safeProfile(profile);
+        String name=prefs(context).getString("profile.name."+safe,"").trim();
+        return name.length()==0?profileName(safe):name;
+    }
+    public static void renameProfile(Context context,String profile,String name){
+        String safe=safeProfile(profile);
+        if(name==null)return;
+        String label=name.trim().replaceAll("[\\p{Cntrl}\\r\\n]"," ");
+        if(label.length()>24)label=label.substring(0,24);
+        prefs(context).edit().putString("profile.name."+safe,label).apply();
+    }
+
     public static void save(Context context,String profile,String id,String kind,String seriesId,
                             String title,long position,long duration,String quality){
         if(safeId(id).isEmpty()||"channel".equals(kind)||"live".equals(kind))return;
