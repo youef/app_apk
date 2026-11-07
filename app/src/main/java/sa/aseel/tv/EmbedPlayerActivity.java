@@ -190,6 +190,14 @@ public final class EmbedPlayerActivity extends Activity {
             @Override public void onClick(View view) { message("إعادة تحميل المشغل…"); web.reload(); }
         });
 
+        if(PlaybackSources.hasAlternatives(this)){
+            Button sources=button("☷ المصادر");
+            toolbar.addView(sources,new LinearLayout.LayoutParams(dp(120),-1));
+            sources.setContentDescription("اختيار مشغل أو جودة أخرى");
+            sources.setOnClickListener(new View.OnClickListener(){
+                @Override public void onClick(View view){PlaybackSources.show(EmbedPlayerActivity.this);}
+            });
+        }
         Button external = button("↗ المصدر");
         toolbar.addView(external, new LinearLayout.LayoutParams(dp(115), -1));
         external.setOnClickListener(new View.OnClickListener() {
