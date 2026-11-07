@@ -72,6 +72,7 @@ public final class TVHomeActivity extends Activity {
     private final ArrayList<JSONObject> movies=new ArrayList<JSONObject>();
     private final ArrayList<JSONObject> series=new ArrayList<JSONObject>();
     private final ArrayList<JSONObject> episodeQueue=new ArrayList<JSONObject>();
+    private final java.util.HashMap<String,JSONObject> watchedMedia=new java.util.HashMap<String,JSONObject>();
     private final ArrayList<JSONObject> channels=new ArrayList<JSONObject>();
     private final ArrayList<JSONObject> localChannels=new ArrayList<JSONObject>();
     private int localPlaylistGeneration=0;
@@ -804,6 +805,17 @@ public final class TVHomeActivity extends Activity {
         }
         return null;
     }
+    private void rebuildWatchedMedia(){
+        watchedMedia.clear();
+        for(JSONObject watch:PlaybackMemory.recent(this,PlaybackMemory.activeProfile(this))){
+            String id=watch.optString("id","");
+            if(id.length()>0&&!watchedMedia.containsKey("movie:"+id))
+                watchedMedia.put("movie:"+id,watch);
+            String showId=watch.optString("series_id","");
+            if(showId.length()>0&&!watchedMedia.containsKey("series:"+showId))
+                watchedMedia.put("series:"+showId,watch);
+        }
+    }
     private void render(){
         if(content==null)return;
         if(detailVisible)episodeGeneration++;
@@ -811,6 +823,7 @@ public final class TVHomeActivity extends Activity {
         final String focusTag=sameSection?focusedItemTag():"";
         final int previousScroll=(sameSection&&scroller!=null)?scroller.getScrollY():0;
         detailVisible=false;
+        rebuildWatchedMedia();
         updateNav();
         content.removeAllViews();
         if("home".equals(section)){
@@ -1323,14 +1336,61 @@ public final class TVHomeActivity extends Activity {
         outer.setPadding(dp(7),dp(7),dp(7),dp(7));
         LinearLayout.LayoutParams p=space(wide?dp(205):-1,dp(241),6);
         if(wide)outer.setLayoutParams(p);
+        FrameLayout imageSurface=new FrameLayout(this);
+        imageSurface.setBackgroundDrawable(bg(0xFF412335,0,11));
+        imageSurface.setClipChildren(true);
+        outer.addView(imageSurface,new LinearLayout.LayoutParams(-1,dp(159)));
         ImageView image=new ImageView(this);image.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        image.setBackgroundDrawable(bg(0xFF412335,0,9));
-        outer.addView(image,new LinearLayout.LayoutParams(-1,dp(159)));
+        image.setBackgroundDrawable(bg(0xFF412335,0,10));
+        imageSurface.addView(image,new FrameLayout.LayoutParams(-1,-1));
         String poster=value(item,"poster_url");
         if(poster.length()==0)poster=value(item,"backdrop_url");
         if("youtube".equals(kind(item))){String clip=YouTubeLink.videoId(value(item,"youtube_url"));
             if(clip!=null)poster="https://i.ytimg.com/vi/"+clip+"/hqdefault.jpg";}
         if(poster.startsWith("https://"))PosterLoader.load(image,poster);
+        String quality=value(item,"quality").toUpperCase(Locale.US);
+        if(quality.contains("2160")||quality.contains("4K"))quality="4K";
+        else if(quality.contains("1080"))quality="FHD";
+        else if(quality.contains("720")||quality.contains("HD"))quality="HD";
+        else quality="";
+        if(!quality.isEmpty()){
+            TextView badge=text(quality,11,WHITE,true);
+            badge.setGravity(Gravity.CENTER);
+            badge.setPadding(dp(7),0,dp(7),0);
+            badge.setBackgroundDrawable(bg(0xCD7B182F,0x9CFF879C,8));
+            FrameLayout.LayoutParams chip=new FrameLayout.LayoutParams(dp(53),dp(27),Gravity.TOP|Gravity.RIGHT);
+            chip.setMargins(dp(7),dp(7),dp(7),0);
+            imageSurface.addView(badge,chip);
+        }
+        String progressKey=("series".equals(kind(item))?"series:":"movie:")+value(item,"id");
+        JSONObject watch=watchedMedia.get(progressKey);
+        if(watch!=null){
+            final long duration=watch.optLong("duration",0L);
+            final long position=watch.optLong("position",0L);
+            if(duration>0&&position>0&&position<duration){
+                final float fraction=Math.min(1f,position/(float)duration);
+                View progressView=new View(this){
+                    private final android.graphics.Paint paint=new android.graphics.Paint(
+                        android.graphics.Paint.ANTI_ALIAS_FLAG);
+                    @Override protected void onDraw(android.graphics.Canvas c){
+                        float width=getWidth(),height=getHeight();
+                        paint.setColor(0xBB11131B);c.drawRect(0,0,width,height,paint);
+                        paint.setColor(0xFFFB546D);c.drawRect(0,0,width*fraction,height,paint);
+                    }
+                };
+                imageSurface.addView(progressView,new FrameLayout.LayoutParams(-1,dp(6),Gravity.BOTTOM));
+                long minutes=(duration-position)/60000L;
+                TextView marker=text("▶ متبقي "+minutes+" د",11,WHITE,true);
+                marker.setGravity(Gravity.CENTER);
+                marker.setPadding(dp(6),0,dp(6),0);
+                marker.setBackgroundDrawable(bg(0xB71C1120,0x556E4F5F,8));
+                FrameLayout.LayoutParams labelPosition=new FrameLayout.LayoutParams(
+                    dp(114),dp(24),Gravity.BOTTOM|Gravity.RIGHT);
+                labelPosition.bottomMargin=dp(9);
+                labelPosition.rightMargin=dp(4);
+                imageSurface.addView(marker,labelPosition);
+            }
+        }
         TextView title=text(label(item),15,WHITE,true);title.setMaxLines(2);
         title.setEllipsize(TextUtils.TruncateAt.END);outer.addView(title,space(-1,dp(47),3));
         if("series".equals(kind(item))&&isFavorite(item)){
