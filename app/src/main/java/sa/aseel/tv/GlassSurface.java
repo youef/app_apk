@@ -19,27 +19,27 @@ public final class GlassSurface {
 
     public static GradientDrawable panel(int tint,int border,float cornerPixels){
         int r=Color.red(tint),g=Color.green(tint),b=Color.blue(tint);
-        int top=Color.argb(219,constrain(r+18,110),constrain(g+19,115),
-            constrain(b+30,135));
-        int bottom=Color.argb(232,constrain(r+3,60),constrain(g+5,70),
-            constrain(b+10,92));
+        int top=Color.argb(231,constrain(r+22,115),constrain(g+10,92),
+            constrain(b+21,115));
+        int bottom=Color.argb(240,constrain(r+5,72),constrain(g+3,65),
+            constrain(b+11,85));
         GradientDrawable drawable=new GradientDrawable(GradientDrawable.Orientation.TL_BR,
             new int[]{top,bottom});
         drawable.setCornerRadius(Math.max(0,cornerPixels));
-        drawable.setStroke(1,border==0?0x52E7D8BE:border);
+        drawable.setStroke(1,border==0?0x5CF87D92:border);
         return drawable;
     }
 
     public static GradientDrawable overlay(int border,float cornerPixels){
         GradientDrawable drawable=new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            new int[]{0xED303C51,0xE8152133,0xE90C1526});
+            new int[]{0xEE342333,0xEA201C2A,0xED0C1019});
         drawable.setCornerRadius(Math.max(0,cornerPixels));
-        drawable.setStroke(1,border==0?0x72F1D39B:border);
+        drawable.setStroke(1,border==0?0x72F66A7C:border);
         return drawable;
     }
 
     public static GradientDrawable canvas(){
         return new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            new int[]{0xFF060A13,0xFF141E30,0xFF080C15});
+            new int[]{0xFF090B12,0xFF21141F,0xFF090C14});
     }
 }
