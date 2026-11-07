@@ -1200,13 +1200,13 @@ public final class TVHomeActivity extends Activity {
             heading("لا يوجد مصدر صالح للتشغيل",
                 "أضف مصدر MP4/HLS أو Embed/YouTube معتمدًا من لوحة الإدارة.");return;
         }
-        PlaybackSources.Source selected=available.get(PlaybackSources.preferred(available));
-        String url=selected.url;
+        PlaybackSources.Source chosenSource=available.get(PlaybackSources.preferred(available));
+        String url=chosenSource.url;
         String sourceList=PlaybackSources.encode(available);
-        if("youtube".equals(selected.kind) && available.size()==1 && !kidsMode){
+        if("youtube".equals(chosenSource.kind) && available.size()==1 && !kidsMode){
             openYouTube(item);return;
         }
-        if("embed".equals(selected.kind)||"youtube".equals(selected.kind)){
+        if("embed".equals(chosenSource.kind)||"youtube".equals(chosenSource.kind)){
             if(kidsMode || !"approved".equals(value(item,"rights_status"))){
                 heading("المصدر غير معتمد",
                     "مشغلات Embed وYouTube تتطلب اعتماد الحقوق ولا تعمل في وضع الأطفال.");return;
