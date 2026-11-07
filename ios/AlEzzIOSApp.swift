@@ -243,7 +243,7 @@ final class CinemaContainerController: UIViewController, WKNavigationDelegate, W
             decisionHandler(.cancel)
             return
         }
-        if !navigationAction.targetFrame!.isMainFrame {
+        if let frame = navigationAction.targetFrame, !frame.isMainFrame {
             decisionHandler(.allow) // Embedded licensed media is handled by WebKit.
             return
         }
