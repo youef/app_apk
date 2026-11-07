@@ -1,23 +1,44 @@
-name: Al Ezz TV - iOS Simulator
+name: Al Ezz TV - iPhone V4 Complete ZIP and Simulator
 on:
   push:
     branches: [main]
     paths:
       - 'ios/**'
+      - 'tests/ios-v4-iphone-smoke.cjs'
       - '.github/workflows/ios-simulator.yml'
   workflow_dispatch:
+
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: al-ezz-ios-v4-complete
+  cancel-in-progress: false
+
 jobs:
   ios-simulator:
-    env:
-      APPETIZE_API_TOKEN: ${{ secrets.APPETIZE_API_TOKEN }}
-      APPETIZE_IOS_PUBLIC_KEY: ${{ secrets.APPETIZE_IOS_PUBLIC_KEY }}
+    name: Compile iOS 15+ app and package complete iPhone source
     runs-on: macos-15
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - name: Build native arm64 iOS Simulator app
+      - name: Checkout the full project
+        uses: actions/checkout@v4
+      - name: Validate secure iPhone shell, design and web integration
+        run: |
+          set -euo pipefail
+          node tests/ios-v4-iphone-smoke.cjs
+          plutil -lint ios/Info.plist
+          test -s web/index.html
+          test -s web/manifest.webmanifest
+          test -s ios/project.yml
+      - name: Generate iPhone and iPad application icons
+        run: |
+          set -euo pipefail
+          bash ios/generate-app-icons.sh
+          for size in 120 180 152 167 1024; do
+            test -s "ios/Assets.xcassets/AppIcon.appiconset/AppIcon-$size.png"
+          done
+      - name: Compile native iOS app for arm64 iPhone Simulator
         run: |
           set -euo pipefail
           xcodebuild -version
@@ -25,41 +46,46 @@ jobs:
           xcrun swiftc --version
           mkdir -p dist/AseelTV.app
           cp ios/Info.plist dist/AseelTV.app/Info.plist
+          cp ios/Assets.xcassets/AppIcon.appiconset/AppIcon-180.png dist/AseelTV.app/EzzIcon.png
           xcrun swiftc -sdk "$SDK" -target arm64-apple-ios15.0-simulator \
-            -parse-as-library -O ios/AseelApp.swift \
+            -parse-as-library -O ios/AlEzzIOSApp.swift \
             -o dist/AseelTV.app/AseelTV
           /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" dist/AseelTV.app/Info.plist
           lipo -archs dist/AseelTV.app/AseelTV | grep -q arm64
           codesign --force --sign - dist/AseelTV.app
-          cd dist
-          zip -qr al-ezz-tv-ios-simulator.app.zip AseelTV.app
-          unzip -t al-ezz-tv-ios-simulator.app.zip
-          shasum -a 256 al-ezz-tv-ios-simulator.app.zip
-      - name: Upload simulator ZIP artifact
+          codesign --verify dist/AseelTV.app
+      - name: Package single ZIP containing all iOS and web resources
+        run: |
+          set -euo pipefail
+          echo "Al Ezz TV - iPhone & iPad Red Glass Cinema V4" > dist/README-IPHONE.txt
+          echo "Use immediately: https://app-apk-oquy.onrender.com/web/ (Safari > Share > Add to Home Screen)" >> dist/README-IPHONE.txt
+          echo "ZIP includes full iOS source, XcodeGen project definition, artwork, current PWA viewer, and iPhone Simulator app." >> dist/README-IPHONE.txt
+          echo "Simulator .app cannot be installed on a real iPhone. Physical iPhone IPA requires Apple signing." >> dist/README-IPHONE.txt
+          echo "See ios/README-AR.md for signing, build and installation instructions." >> dist/README-IPHONE.txt
+          mkdir -p dist/iphone-full
+          cp -R ios web dist/iphone-full/
+          cp -R dist/AseelTV.app dist/iphone-full/
+          cp dist/README-IPHONE.txt dist/iphone-full/
+          (cd dist/iphone-full && zip -qr ../al-ezz-tv-iphone-complete-v4.zip .)
+          (cd dist && zip -qr al-ezz-tv-ios-simulator.app.zip AseelTV.app)
+          unzip -t dist/al-ezz-tv-iphone-complete-v4.zip | tail -1
+          unzip -t dist/al-ezz-tv-ios-simulator.app.zip | tail -1
+          unzip -Z1 dist/al-ezz-tv-iphone-complete-v4.zip | grep -q '^ios/AlEzzIOSApp.swift'
+          unzip -Z1 dist/al-ezz-tv-iphone-complete-v4.zip | grep -q '^web/index.html'
+          unzip -Z1 dist/al-ezz-tv-iphone-complete-v4.zip | grep -q '^AseelTV.app/AseelTV'
+          shasum -a 256 dist/al-ezz-tv-iphone-complete-v4.zip
+          du -h dist/*.zip
+      - name: Upload complete iPhone ZIP (source, PWA, simulator app)
         uses: actions/upload-artifact@v4
         with:
-          name: al-ezz-tv-ios-appetize
+          name: al-ezz-tv-iphone-complete-v4
+          path: dist/al-ezz-tv-iphone-complete-v4.zip
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload separate simulator ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: al-ezz-tv-ios-simulator-v4
           path: dist/al-ezz-tv-ios-simulator.app.zip
           if-no-files-found: error
           retention-days: 30
-      - name: Release iPhone Simulator ZIP
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: al-ezz-ios-simulator-v3
-          name: Al Ezz TV - iPhone Simulator Preview
-          prerelease: true
-          make_latest: false
-          body: |
-            Native Swift UIKit app. Upload the included .app.zip to Appetize.
-            Simulator only: physical iPhone builds require Apple signing.
-          files: dist/al-ezz-tv-ios-simulator.app.zip
-          fail_on_unmatched_files: true
-
-      - name: Upload iOS simulator ZIP to Appetize if connected
-        if: env.APPETIZE_API_TOKEN != '' && env.APPETIZE_IOS_PUBLIC_KEY != ''
-        uses: appetizeio/github-action-appetize@v1.1.0
-        with:
-          apiToken: ${{ secrets.APPETIZE_API_TOKEN }}
-          publicKey: ${{ secrets.APPETIZE_IOS_PUBLIC_KEY }}
-          appFile: dist/al-ezz-tv-ios-simulator.app.zip
-          platform: ios
