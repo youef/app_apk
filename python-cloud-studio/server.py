@@ -775,11 +775,27 @@ class VerifyForm(BaseModel):
 
 
 def verify_entries(cat: Catalogue, indices: list[int]) -> int:
+    def check_embed(item) -> bool:
+        if supported_source_kind(item.media_url) != 'embed':
+            return False
+        # Probe the iframe document only. Its reachability is not video playback.
+        checked = MediaResolver(mode='http').check([
+            {'url': item.media_url, 'kind': 'embed', 'label': '1vid'}])
+        item.sources = [s for s in item.sources if s.get('url') != item.media_url] + checked
+        item.verified = False
+        item.error = '' if checked and checked[0].get('reachable') else (
+            checked[0].get('error', 'تعذّر الوصول إلى صفحة المشغّل') if checked
+            else 'تعذّر الوصول إلى صفحة المشغّل')
+        return True
+
     if cat.kind == 'movie':
-        inspect_episodes(cat, SourceClient(timeout=12), delay=0)
+        if not check_embed(cat):
+            inspect_episodes(cat, SourceClient(timeout=12), delay=0)
         return int(cat.verified)
     targets = [(i, cat.episodes[i]) for i in dict.fromkeys(indices) if 0 <= i < len(cat.episodes)]
     def inspect(item: Episode):
+        if check_embed(item):
+            return False
         temp = Catalogue(kind='series', title=cat.title, url=cat.url, episodes=[item])
         inspect_episodes(temp, SourceClient(timeout=12), delay=0)
         return item.verified
