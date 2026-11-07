@@ -92,6 +92,13 @@ class Portal:
 
     def login_page(self, message='', mode='customer'):
         admin=mode=='admin'
+        if not admin and message and 'انتهت صلاحية' in message:
+            return self.page('انتهت صلاحية اشتراكك',
+                '<div class="expired-mark" aria-hidden="true">⌛</div>'
+                '<p class="member-alert" role="alert">'+html.escape(message)+'</p>'
+                '<p>تم إيقاف المشاهدة لحماية حسابك. باقة العز TV قابلة للتجديد لمدة 90 يومًا من الإدارة.</p>'
+                '<p>تظل المفضلة وتقدم المشاهدة محفوظين في حسابك. تواصل مع المسؤول لتجديد الاشتراك.</p>'
+                '<a class="member-cta" href="/account/login">تسجيل الدخول بعد التجديد</a>')
         alert='<p role="alert" class="member-alert">'+html.escape(message)+'</p>' if message else ''
         label='البريد الإلكتروني للمسؤول' if admin else 'اسم المستخدم'
         input_attrs='type="email" maxlength="254"' if admin else 'maxlength="40" pattern="[a-zA-Z0-9][a-zA-Z0-9_.-]{2,39}"'
