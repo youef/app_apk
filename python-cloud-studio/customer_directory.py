@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 from uuid import UUID
 from html import escape
 from fastapi.responses import HTMLResponse
-from member_expiry import account_state, expiry_date
+from member_expiry import account_state, expiry_date, subscription_summary, PLAN_DAYS
 
 ALIAS_DOMAIN='members.alezz.invalid'
 HEADERS={'Cache-Control':'private, no-store','X-Frame-Options':'DENY','X-Content-Type-Options':'nosniff'}
@@ -38,10 +38,13 @@ def page(portal,session,message='',number=1):
         try:uid=str(UUID(user['id']))
         except (ValueError,TypeError,KeyError):continue
         metadata=user.get('app_metadata') or {}
+        summary=subscription_summary(metadata)
         customers.append({'uid':uid,'name':email.split('@')[0],
-                          'status':account_state(metadata),
+                          'status':summary['status'],
                           'enabled':metadata.get('alezz_customer')=='active',
-                          'expiry':expiry_date(metadata),
+                          'expiry':summary['expires_on'],
+                          'days_left':summary['remaining_days'],
+                          'soon':summary['warning'],
                           'last':user.get('last_sign_in_at'),'created':user.get('created_at')})
     devices=portal.devices.details([u['uid'] for u in customers])
     cards=[]
@@ -65,10 +68,15 @@ def page(portal,session,message='',number=1):
         subtitle=('تنتهي الصلاحية: '+user['expiry'] if valid_date
                   else 'انتهاء الصلاحية غير محدد — حساب قديم' if user['expiry'] is None
                   else 'تاريخ الصلاحية غير صالح — يُمنع الدخول')
-        cards.append('<article class="customer"><header><strong dir="ltr">'+name+'</strong><span class="'+('expired' if expired else 'on' if active else 'off')+'">'+label+'</span></header>'+
+        if active and user['days_left'] is not None:
+            subtitle+=' • '+str(user['days_left'])+' يوم متبقٍ'
+        renew=('<form method="post" class="renew-inline"><input type="hidden" name="csrf" value="'+csrf+
+               '"><input type="hidden" name="username" value="'+name+
+               '"><button class="renew" name="action" value="renew-90">↻ تجديد 90 يومًا</button></form>')
+        cards.append('<article class="customer"><header><strong dir="ltr">'+name+'</strong><span class="'+('expired' if expired else 'soon' if user['soon'] else 'on' if active else 'off')+'">'+('قارب على الانتهاء' if user['soon'] else label)+'</span></header>'+
                      '<div class="detail"><div><small>آخر دخول</small><b>'+date(user['last'])+'</b><small>الإنشاء: '+date(user['created'])+'</small>'+
                      '<small>'+escape(subtitle)+'</small></div>'+
-                     '<div><small>الجهاز المعتمد</small>'+info+'</div></div>'+renewal+actions+'</article>')
+                     '<div><small>جهاز بوابة الويب</small>'+info+'</div></div>'+renew+renewal+actions+'</article>')
     if not cards:cards.append('<p class="empty">لا توجد حسابات عملاء في هذه الصفحة.</p>')
     prev=('<a href="/account/customers?page='+str(number-1)+'">السابق</a>') if number>1 else ''
     nxt=('<a href="/account/customers?page='+str(number+1)+'">التالي</a>') if len(users)>=100 and number<100 else ''
@@ -87,11 +95,15 @@ main{max-width:1130px;padding:24px 16px 75px;margin:auto}.bar{display:flex;align
 .section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0}
 .section-head h2{font-size:1.35rem}.paging{display:flex;gap:12px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
 .customer,.new{background:#152231;border:1px solid #344a60;border-radius:18px;padding:20px}
-.customer header{display:flex;align-items:center;justify-content:space-between;gap:8px}.customer header strong{font-size:1.18rem}.on,.off,.expired{border-radius:20px;padding:6px 11px;font-size:.76rem}.on{background:#1e443a;color:#b1e9c7}.off{background:#533330;color:#ffd4c1}.expired{background:#554221;color:#ffe5a4}
+.customer header{display:flex;align-items:center;justify-content:space-between;gap:8px}.customer header strong{font-size:1.18rem}.on,.off,.expired,.soon{border-radius:20px;padding:6px 11px;font-size:.76rem}.on{background:#1e443a;color:#b1e9c7}.off{background:#533330;color:#ffd4c1}.expired{background:#554221;color:#ffe5a4}.soon{background:#574222;color:#ffe4b2}
 .detail{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:15px 0;padding-top:14px;border-top:1px solid #ffffff17}.detail small{display:block;font-size:.76rem;color:#a7bac9;line-height:1.9}.detail b,.detail strong{display:block;font-size:.85rem}.detail em{color:#e8c7a3;font-size:.85rem}
 button,input{font:inherit}button{cursor:pointer}.row-actions{display:flex;gap:9px;flex-wrap:wrap}
 .minor,.primary{padding:10px 15px;border-radius:11px;border:1px solid #527087;background:#263c50;color:#f3f7f9;font-weight:700;min-height:42px}
-.minor:hover{background:#36566e}.primary{background:#d9ebb4;color:#182315;border:0}.new{margin-top:27px}.new h2{margin:0}
+.minor:hover{background:#36566e}.primary,.renew{background:#d9ebb4;color:#182315;border:0}.new{margin-top:27px}.new h2{margin:0}
+.renew-inline{margin:12px 0}.renew{border-radius:11px;padding:10px 14px;font-weight:800;min-height:44px}
+.notice-board{border-radius:18px;background:#192b37;border:1px solid #455b68;margin:12px 0 27px;padding:15px 20px}
+.notice-board h2{margin:5px 0;font-size:1.14rem}.notice-board p{color:#bdcdd6;font-size:.9rem;margin:6px 0}
+.expiry-alerts{display:flex;gap:8px;flex-wrap:wrap}.expiry-alerts span{background:#263d4a;border-radius:10px;padding:8px 12px;font-size:.85rem}
 .expiry-actions{display:flex;align-items:end;gap:10px;flex-wrap:wrap;margin-bottom:12px;border-top:1px solid #ffffff20;padding-top:12px}.expiry-actions label{display:grid;gap:7px;flex:1;min-width:195px;color:#cfdee5;font-size:.82rem}
 .expiry-actions input{width:100%;min-height:42px;border:1px solid #517080;border-radius:10px;padding:8px;color:#f6fafa;background:#0b1723;color-scheme:dark}
 .new form{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end;margin-top:18px}.new label{display:grid;gap:7px;font-size:.87rem}
@@ -103,20 +115,27 @@ footer{font-size:.79rem;color:#afbfcb;margin-top:30px;line-height:1.9}
 </style></head><body><main><header class="bar"><div class="logo">العز <b>TV</b> · الإدارة</div>
 <nav><a href="/studio/">الاستوديو</a><a href="/studio/sources">مصادر المسلسلات</a><a href="/admin/">إدارة المحتوى</a></nav></header>
 <section class="intro"><small>CUSTOMER CONTROL</small><h1>إدارة العملاء وأجهزتهم</h1>
-<p>حدّد تاريخ انتهاء صلاحية كل عميل. يتوقف الحساب تلقائيًا بعد نهاية اليوم المحدد بتوقيت السعودية، ولا يدخل مجددًا إلا بعد تجديد التاريخ من الإدارة.</p></section>'''+note+'''
+<p>باقة 90 يومًا افتراضيًا لكل عميل. التجديد يضيف 90 يومًا إلى آخر يوم نشط، أو يبدأ من اليوم إذا انتهى الاشتراك. جميع التواريخ بتوقيت السعودية.</p></section>'''+note+'''
 <section class="stats"><div class="stat"><b>'''+str(len(customers))+'''</b><span>عملاء الصفحة</span></div>
 <div class="stat"><b>'''+str(sum(u['status']=='active' for u in customers))+'''</b><span>حسابات نشطة</span></div>
 <div class="stat"><b>'''+str(sum(u['status']=='expired' for u in customers))+'''</b><span>منتهية الصلاحية</span></div>
+<div class="stat"><b>'''+str(sum(u['soon'] for u in customers))+'''</b><span>تنتهي خلال 7 أيام</span></div>
 <div class="stat"><b>'''+str(len(devices))+'''</b><span>أجهزة مرتبطة</span></div></section>
+<section class="notice-board"><h2>تنبيهات الاشتراكات</h2>
+<p>تنبيهات داخل لوحة الإدارة، ولا تُرسل رسائل SMS أو بريد تلقائيًا دون ربط خدمة إرسال.</p>
+<div class="expiry-alerts">'''+''.join(
+'<span>'+escape(u['name'])+' • '+('منتهي الصلاحية' if u['status']=='expired' else str(u['days_left'])+' أيام متبقية')+'</span>'
+for u in customers if u['status']=='expired' or u['soon'])+'''
+</div></section>
 <div class="section-head"><h2>دليل حسابات العملاء</h2><div class="paging"><span>صفحة '''+str(number)+'''</span>'''+prev+nxt+'''</div></div>
 <div class="grid">'''+''.join(cards)+'''</div>
-<section class="new"><h2>إنشاء حساب جديد</h2><p class="hint">اختر اسم المستخدم وكلمة مرور قوية وتاريخ انتهاء الصلاحية. يبقى الحساب نشطًا حتى نهاية اليوم المحدد بتوقيت السعودية.</p>
+<section class="new"><h2>إنشاء حساب جديد · باقة 90 يومًا</h2><p class="hint">يُحسب تلقائيًا 90 يومًا من تاريخ الإنشاء، أو حدّد تاريخًا مخصصًا عند الحاجة.</p>
 <form method="post" action="/account/customers?page='''+str(number)+'''">
 <input type="hidden" name="csrf" value="'''+csrf+'''">
 <label>اسم المستخدم<input name="username" dir="ltr" required pattern="[a-zA-Z0-9][a-zA-Z0-9_.-]{2,39}" maxlength="40" autocomplete="off"></label>
 <label>كلمة المرور<input type="password" name="password" dir="ltr" required minlength="12" maxlength="72" autocomplete="new-password"></label>
-<label>تنتهي الصلاحية في<input type="date" name="expires_on" required></label>
-<button class="primary" name="action" value="create">إنشاء العميل</button></form></section>
+<label>تاريخ مخصص (اختياري)<input type="date" name="expires_on"></label>
+<button class="primary" name="action" value="create">إنشاء العميل · 90 يومًا</button></form></section>
 <footer>معلومات الحساب من Supabase؛ ومعرّف الجهاز عشوائي وليس عنوان MAC. الأوقات بتوقيت السعودية، وتُحفظ ارتباطات الأجهزة على قرص الخادم الخاص.</footer>
 </main></body></html>'''
     return HTMLResponse(markup,headers=HEADERS)
