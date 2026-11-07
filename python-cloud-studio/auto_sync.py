@@ -186,7 +186,7 @@ class QueueDB:
                              (table,identifier,key)).fetchone()
             if old:
                 db.execute('update auto_sources set last_seen_at=?,page_url=case when ?!=\'\' then ? else page_url end,'
-                           'kind=case when kind=\'original\' then kind when ? in (\'direct\',\'embed\') then ? else kind end,'
+                           'kind=case when ?=\'original\' then \'original\' when kind=\'original\' then kind else ? end,'
                            'label=case when ?!=\'\' then ? else label end,synced=0 '
                            'where table_name=? and target_id=? and source_key=?',
                            (max(now,old['last_seen_at']),page,page,kind,kind,str(source.get('label') or '')[:80],
