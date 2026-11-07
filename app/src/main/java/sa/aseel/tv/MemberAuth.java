@@ -198,7 +198,10 @@ public final class MemberAuth {
 
     private static void save(Context context,JSONObject reply,String username,long sessionStarted)throws Exception{
         String access=reply.optString("access_token",""),refresh=reply.optString("refresh_token","");
-        if(access.length()<30||refresh.length()<15)throw new AuthenticationException("فشل استلام جلسة صالحة.");
+        // Supabase may issue legacy 12-character refresh tokens as well as longer tokens.
+        // Treat 12-character tokens as valid and rely on /auth/v1/user to verify the JWT.
+        if(access.length()<30||refresh.length()<12)
+            throw new AuthenticationException("الخادم لم يُرجع رموز دخول مكتملة. أعد المحاولة.");
         JSONObject user=authorizedUser(context,access,sessionStarted);
         long lifetime=Math.max(60,Math.min(86400,reply.optLong("expires_in",3600)));
         boolean stored=preferences(context).edit()
