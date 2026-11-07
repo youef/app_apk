@@ -539,7 +539,7 @@ class AutoSync:
         error='' if good else ('صفحة Embed متاحة؛ لم يتم التحقق من تشغيل الفيديو' if primary_embed_reachable else
                               'المصدر الأصلي مفقود؛ أضف صفحة الفيلم أو الحلقة' if not pages else
                               'لا يوجد رابط مباشر اجتاز الفحص؛ '+('; '.join(errors) if errors else 'تعذرت الروابط المحفوظة'))
-        next_check=now+self.check_interval if good or primary_embed_reachable else now+min(3600,60*2**min(failures-1,6))
+        next_check=now+self.check_interval if good or primary_embed_reachable else now+min(self.check_interval,60*2**min(failures-1,6))
         next_refresh=now+self.interval if extracted or not pages else job['next_refresh']
         if not good and not primary_embed_reachable and pages:next_refresh=min(next_refresh,next_check)
         allowed={s['url'] for s in checked if s.get('verified') or s.get('kind')=='embed' and s.get('reachable')}
@@ -707,7 +707,7 @@ class AutoSync:
                 self.queue.event('episode_gap',warning,table,identifier)
         now=self.clock()
         failures=0 if found_episodes else job['failures']+1
-        retry=now+(self.interval if found_episodes else min(3600,60*2**min(failures-1,6)))
+        retry=now+(self.interval if found_episodes else min(self.check_interval,60*2**min(failures-1,6)))
         auto_draft=(not found_episodes and failures>=3 and
                     json.loads(job['data']).get('status')=='published')
         self.queue.update(table,identifier,next_check=retry,next_refresh=retry,
