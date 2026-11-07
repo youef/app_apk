@@ -498,6 +498,7 @@ class AutoSync:
         # A reachable iframe is a separate state from a verified MP4/HLS stream.
         reachable_embed=[s for s in checked if s.get('kind')=='embed' and s.get('reachable')
                          and s['url'] in active_urls]
+        primary_embed_reachable=any(s['url']==job['stream_url'] for s in reachable_embed)
         for source in checked:self.record_check(table,identifier,source,now)
         history=self.queue.sources(table,identifier)
         by_url={s['url']:s for s in history}
@@ -518,14 +519,14 @@ class AutoSync:
                         renewed.append(url)
             if renewed:
                 selected=max(renewed,key=expires_at)
-        failures=0 if good or reachable_embed else job['failures']+1
-        status='healthy' if good else 'suspect' if reachable_embed else 'broken' if failures>=3 else 'suspect'
-        error='' if good else ('صفحة Embed متاحة؛ لم يتم التحقق من تشغيل الفيديو' if reachable_embed else
+        failures=0 if good or primary_embed_reachable else job['failures']+1
+        status='healthy' if good else 'suspect' if primary_embed_reachable else 'broken' if failures>=3 else 'suspect'
+        error='' if good else ('صفحة Embed متاحة؛ لم يتم التحقق من تشغيل الفيديو' if primary_embed_reachable else
                               'المصدر الأصلي مفقود؛ أضف صفحة الفيلم أو الحلقة' if not pages else
                               'لا يوجد رابط مباشر اجتاز الفحص؛ '+('; '.join(errors) if errors else 'تعذرت الروابط المحفوظة'))
-        next_check=now+self.check_interval if good or reachable_embed else now+min(3600,60*2**min(failures-1,6))
+        next_check=now+self.check_interval if good or primary_embed_reachable else now+min(3600,60*2**min(failures-1,6))
         next_refresh=now+self.interval if extracted or not pages else job['next_refresh']
-        if not good and not reachable_embed and pages:next_refresh=min(next_refresh,next_check)
+        if not good and not primary_embed_reachable and pages:next_refresh=min(next_refresh,next_check)
         allowed={s['url'] for s in checked if s.get('verified') or s.get('kind')=='embed' and s.get('reachable')}
         variants=[]
         for source in sorted(history,key=lambda s:(s['kind']=='direct',s['confidence']),reverse=True):
@@ -536,7 +537,7 @@ class AutoSync:
         # consecutive independent failures of every playable source. Retain the
         # source history so an editor can review and restore it later.
         missing_original=not pages
-        should_draft=missing_original or (failures>=3 and not good and not reachable_embed)
+        should_draft=missing_original or (failures>=3 and not good and not primary_embed_reachable)
         if missing_original:
             error='المصدر الأصلي مفقود؛ حُفظ العمل مسودة حتى مراجعة مصادره'
         payload=dict(link_health_status=status,link_health_reason=error or None,
@@ -569,7 +570,7 @@ class AutoSync:
             self.queue.event('replacement','تم تبديل الرابط الأساسي ببديل اجتاز الفحص',table,identifier)
         if retired & active_urls:
             self.queue.event('retired_links','أُزيلت روابط مؤكدة التعطّل من قائمة التشغيل',table,identifier)
-        if not good and not reachable_embed and (job['status']=='healthy' or job['last_check']==0 and candidates):
+        if not good and not primary_embed_reachable and (job['status']=='healthy' or job['last_check']==0 and candidates):
             self.queue.event('all_links_failed','تنبيه: لم ينجح أي رابط لهذا العنصر',table,identifier)
         if not pages and job['last_check']==0:self.queue.event('missing_source','المصدر الأصلي مفقود؛ يمكن فحص الروابط الحالية فقط',table,identifier)
         with self.queue.db() as conn:
