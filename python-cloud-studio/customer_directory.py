@@ -47,6 +47,23 @@ def page(portal,session,message='',number=1):
                           'soon':summary['warning'],
                           'last':user.get('last_sign_in_at'),'created':user.get('created_at')})
     devices=portal.devices.details([u['uid'] for u in customers])
+    native={}
+    if customers:
+        ids=[u['uid'] for u in customers]
+        try:
+            rows=portal.upstream('GET','/rest/v1/aseel_device_sessions',secret=True,
+                params={'user_id':'in.('+','.join(ids)+')',
+                        'select':'user_id,platform,device_model,last_seen_at,device_hash',
+                        'order':'last_seen_at.desc','limit':400})
+            if isinstance(rows,list):
+                for device in rows:
+                    if not isinstance(device,dict) or device.get('user_id') not in ids:
+                        continue
+                    uid=device['user_id']
+                    if len(native.get(uid,[]))<5:
+                        native.setdefault(uid,[]).append(device)
+        except Exception:
+            pass  # Subscription administration must work even if inventory is unavailable.
     cards=[]
     for user in customers:
         name=escape(user['name'],quote=True)
@@ -57,9 +74,16 @@ def page(portal,session,message='',number=1):
         linked=devices.get(user['uid'])
         info=('<strong>'+escape(linked['device_name'])+'</strong><small>رقم الجهاز: <b dir="ltr">'+escape(linked['device_id'])+
               '</b></small><small>آخر نشاط: '+date(linked['last_seen_at'])+'</small>') if linked else '<em>لم يسجل جهازًا بعد</em>'
+        native_list=native.get(user['uid'],[])
+        native_info=''.join(
+            '<small class="device-item">📺 '+escape(str(d.get('device_model') or 'Android TV')[:70])+
+            ' • آخر اتصال: '+date(d.get('last_seen_at'))+'</small>'
+            for d in native_list if d.get('platform')=='android_tv')
+        if not native_info:
+            native_info='<em>لم يُسجل جهاز تلفزيون بهذا الحساب بعد</em>'
         actions='<form method="post" class="row-actions"><input type="hidden" name="csrf" value="'+csrf+'"><input type="hidden" name="username" value="'+name+'">'
-        if linked:
-            actions+='<button class="minor" name="action" value="reset-device" onclick="return confirm(\'فك ارتباط الجهاز الحالي وإنهاء جلسة العميل؟\')">فك الجهاز</button>'
+        if linked or native_info:
+            actions+='<button class="minor" name="action" value="reset-device" onclick="return confirm(\'إلغاء ارتباط أجهزة العميل وإبطال جلسات المشاهدة السابقة؟\')">فك الأجهزة / إنهاء الجلسات</button>'
         actions+='<button class="minor" name="action" value="'+('disable' if user['enabled'] else 'enable')+'">'+('إيقاف الحساب' if user['enabled'] else 'تفعيل الحساب')+'</button></form>'
         valid_date=user['expiry'] if user['expiry'] not in (None,'invalid') else ''
         renewal=('<form method="post" class="expiry-actions"><input type="hidden" name="csrf" value="'+csrf+'"><input type="hidden" name="username" value="'+name+'">'+
@@ -76,7 +100,8 @@ def page(portal,session,message='',number=1):
         cards.append('<article class="customer"><header><strong dir="ltr">'+name+'</strong><span class="'+('expired' if expired else 'soon' if user['soon'] else 'on' if active else 'off')+'">'+('قارب على الانتهاء' if user['soon'] else label)+'</span></header>'+
                      '<div class="detail"><div><small>آخر دخول</small><b>'+date(user['last'])+'</b><small>الإنشاء: '+date(user['created'])+'</small>'+
                      '<small>'+escape(subtitle)+'</small></div>'+
-                     '<div><small>جهاز بوابة الويب</small>'+info+'</div></div>'+renew+renewal+actions+'</article>')
+                     '<div><small>جهاز بوابة الويب</small>'+info+
+                     '<small>أجهزة Android TV المسجلة</small>'+native_info+'</div></div>'+renew+renewal+actions+'</article>')
     if not cards:cards.append('<p class="empty">لا توجد حسابات عملاء في هذه الصفحة.</p>')
     prev=('<a href="/account/customers?page='+str(number-1)+'">السابق</a>') if number>1 else ''
     nxt=('<a href="/account/customers?page='+str(number+1)+'">التالي</a>') if len(users)>=100 and number<100 else ''
@@ -120,7 +145,7 @@ footer{font-size:.79rem;color:#afbfcb;margin-top:30px;line-height:1.9}
 <div class="stat"><b>'''+str(sum(u['status']=='active' for u in customers))+'''</b><span>حسابات نشطة</span></div>
 <div class="stat"><b>'''+str(sum(u['status']=='expired' for u in customers))+'''</b><span>منتهية الصلاحية</span></div>
 <div class="stat"><b>'''+str(sum(u['soon'] for u in customers))+'''</b><span>تنتهي خلال 7 أيام</span></div>
-<div class="stat"><b>'''+str(len(devices))+'''</b><span>أجهزة مرتبطة</span></div></section>
+<div class="stat"><b>'''+str(len(devices)+sum(len(u) for u in native.values()))+'''</b><span>أجهزة مسجلة</span></div></section>
 <section class="notice-board"><h2>تنبيهات الاشتراكات</h2>
 <p>تنبيهات داخل لوحة الإدارة، ولا تُرسل رسائل SMS أو بريد تلقائيًا دون ربط خدمة إرسال.</p>
 <div class="expiry-alerts">'''+''.join(
