@@ -7,10 +7,10 @@ const home=read("app/src/main/java/sa/aseel/tv/TVHomeActivity.java");
 const css=read("web/css/live.css");
 const js=read("web/js/live.js");
 function check(label,condition){assert.ok(condition,label);console.log("PASS | "+label);}
-check("Native fullscreen broadcast does not force open both channel rails",player.includes("setRailsVisible(!live)")&&player.includes("showChannelGuide()"));
+check("Native fullscreen and movie playback do not force open side rails",player.includes("setRailsVisible(false)")&&player.includes("showChannelGuide()")&&player.includes("updateMediaRail()"));
 check("Native channel information HUD auto hides",player.includes("showLiveHud(")&&player.includes("hideLiveHud")&&player.includes("3800L"));
 check("Remote guide and channel keys have dedicated handlers",player.includes("KEYCODE_GUIDE")&&player.includes("KEYCODE_CHANNEL_UP")&&player.includes("KEYCODE_CHANNEL_DOWN")&&player.includes("KEYCODE_DPAD_UP"));
-check("Native guide can be dismissed without leaving playback",player.includes("code==KeyEvent.KEYCODE_BACK && live")&&player.includes("hideControls();return true;"));
+check("Native guide can be dismissed in live and movies without leaving playback",player.includes("code==KeyEvent.KEYCODE_BACK &&")&&player.includes("hideControls();return true;"));
 check("Native broadcast quality saved per-channel",player.includes('getString("quality_"+itemId,"auto")'));
 check("Native channel catalog uses limited rendering",home.includes("liveGuideLimit=48")&&home.includes("matching>displayed")&&home.includes("liveGuideLimit+48"));
 check("Native channel catalog supports favorites",home.includes('types.add("المفضلة")')&&home.includes('isFavorite(x)'));
