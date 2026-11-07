@@ -1,0 +1,53 @@
+name: Publish Al Ezz TV V2 APK as direct download
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/direct-apk-download.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: al-ezz-one-time-direct-apk
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Download successfully built V2 APK
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download 42395151898 --repo "$GITHUB_REPOSITORY" \
+            --name "al-ezz-tv-redclassic-fresh-api19-224" --dir /tmp/al-ezz-build
+          test -s /tmp/al-ezz-build/al-ezz-tv-v15-smart-cinema-api19.apk
+          file /tmp/al-ezz-build/al-ezz-tv-v15-smart-cinema-api19.apk | grep -Eq 'Zip archive|Android'
+          mkdir -p downloads
+          cp /tmp/al-ezz-build/al-ezz-tv-v15-smart-cinema-api19.apk downloads/al-ezz-tv-latest.apk
+          sha256sum downloads/al-ezz-tv-latest.apk | tee downloads/al-ezz-tv-latest.sha256
+          printf '%s\n' \
+            'Red Glass Cinema V2 (API19+ universal)' \
+            'Source successful Android build: https://github.com/youef/app_apk/actions/runs/42395151898' \
+            'Source commit: f7fef018980ef168d42ab69a190ef50eab583629' \
+            'Signing: temporary debug; not an upgrade to a differently signed app.' \
+            > downloads/README.txt
+      - name: Publish APK directly as a public repository file
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add downloads/al-ezz-tv-latest.apk downloads/al-ezz-tv-latest.sha256 downloads/README.txt
+          git commit -m "release(apk): make verified V2 build a direct no-ZIP download"
+          git push origin HEAD:main
