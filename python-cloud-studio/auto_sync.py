@@ -690,11 +690,23 @@ class AutoSync:
             for warning in cat.discovery_warnings:
                 self.queue.event('episode_gap',warning,table,identifier)
         now=self.clock()
-        self.queue.update(table,identifier,next_check=now+self.interval,next_refresh=now+self.interval,
-                          last_check=now,last_refresh=now,failures=0,checkpoint='{}',
-                          status='discovered' if found_episodes else 'suspect',
-                          error='' if found_episodes else 'لم تظهر صفحات حلقات في المصدر.')
-        self.flush(job)
+        failures=0 if found_episodes else job['failures']+1
+        retry=now+(self.interval if found_episodes else min(3600,60*2**min(failures-1,6)))
+        auto_draft=(not found_episodes and failures>=3 and
+                    json.loads(job['data']).get('status')=='published')
+        self.queue.update(table,identifier,next_check=retry,next_refresh=retry,
+                          last_check=now,last_refresh=now,failures=failures,checkpoint='{}',
+                          status='discovered' if found_episodes else 'broken' if failures>=3 else 'suspect',
+                          error='' if found_episodes else 'لم تظهر صفحات حلقات في المصدر.',
+                          **(dict(dirty=json.dumps({'status':'draft'},ensure_ascii=False),
+                                  upload_at=now) if auto_draft else {}))
+        if auto_draft:
+            self.queue.event('auto_draft','نُقل المسلسل إلى مسودة بعد 3 محاولات لم تُرجع حلقات',
+                             table,identifier)
+        with self.queue.db() as conn:
+            updated=dict(conn.execute('select * from auto_jobs where table_name=? and target_id=?',
+                                      (table,identifier)).fetchone())
+        self.flush(updated)
 
     def control(self,action):
         if action in ('pause','resume'):self.queue.setting('enabled',action=='resume')
