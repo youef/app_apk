@@ -124,6 +124,7 @@ jobs:
           node tests/member-account-login-smoke.cjs
           node tests/member-cloud-sync-smoke.cjs
           node tests/glass-v19-smoke.cjs
+          node tests/red-glass-cinema-smoke.cjs
           node tests/tv-iptv-nimbus-smoke.cjs
           node tests/quality-picker-smoke.cjs
           node tests/embed-playback-smoke.cjs
