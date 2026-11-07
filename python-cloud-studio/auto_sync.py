@@ -296,8 +296,8 @@ class AutoSync:
     def __init__(self, data_dir, db_factory=None, resolver_factory=None, clock=time.time):
         self.queue=QueueDB(Path(data_dir)/'autosync.sqlite3')
         self.clock=clock
-        self.interval=max(1,float(os.getenv('ALEZZ_AUTOSYNC_INTERVAL_HOURS','24')))*3600
-        self.check_interval=min(self.interval,max(5,float(os.getenv('ALEZZ_AUTOSYNC_CHECK_MINUTES','30')))*60)
+        self.interval=max(0.25,float(os.getenv('ALEZZ_AUTOSYNC_INTERVAL_HOURS','0.5')))*3600
+        self.check_interval=min(self.interval,max(1,float(os.getenv('ALEZZ_AUTOSYNC_CHECK_MINUTES','5')))*60)
         self.mode=os.getenv('ALEZZ_AUTOSYNC_MODE','auto')
         self.concurrency=max(1,min(4,int(os.getenv('ALEZZ_AUTOSYNC_CONCURRENCY','2'))))
         self.db_factory=db_factory or self._environment_db
@@ -418,7 +418,7 @@ class AutoSync:
         self.queue.setting('last_import',self.last_import)
 
     def tick(self):
-        if self.clock()>=self.import_retry_at and (self.force_import or self.clock()-self.last_import>=900):
+        if self.clock()>=self.import_retry_at and (self.force_import or self.clock()-self.last_import>=300):
             try:
                 self.import_remote()
                 self.import_error=''
@@ -532,8 +532,21 @@ class AutoSync:
             if source['url'] in allowed and source['url']!=selected:
                 variants.append(dict(url=source['url'],label=source['label'] or urlsplit(source['url']).hostname,
                                      kind=source['kind'],page_url=source['page_url']))
+        # Never leave a published item without an original page, or after three
+        # consecutive independent failures of every playable source. Retain the
+        # source history so an editor can review and restore it later.
+        missing_original=not pages
+        should_draft=missing_original or (failures>=3 and not good and not reachable_embed)
+        if missing_original:
+            error='المصدر الأصلي مفقود؛ حُفظ العمل مسودة حتى مراجعة مصادره'
         payload=dict(link_health_status=status,link_health_reason=error or None,
                      link_health_checked_at=iso(now),link_health_failures=failures,link_health_url=selected or None)
+        if should_draft and saved.get('status')=='published':
+            payload['status']='draft'
+            self.queue.event('auto_draft',
+                             'نُقل إلى مسودة: المصدر الأصلي مفقود' if missing_original else
+                             'نُقل إلى مسودة بعد 3 فحوص متتالية دون مصدر صالح',
+                             table,identifier)
         if remove_primary or good:
             payload['stream_url']=selected or None
         if good:
@@ -607,7 +620,8 @@ class AutoSync:
         if job['dirty']:
             payload=json.loads(job['dirty'])
             db.patch(table,identifier,payload)
-            if table=='aseel_episodes' and payload.get('stream_url') and payload.get('link_health_status')=='healthy':
+            if (table=='aseel_episodes' and payload.get('stream_url') and
+                    payload.get('link_health_status')=='healthy' and payload.get('status')!='draft'):
                 self.publish_discovered_episode(db, identifier)
             with self.queue.db() as conn:
                 conn.execute('update auto_jobs set dirty=\'\',upload_at=0,data=json_patch(data,?) '
@@ -633,9 +647,20 @@ class AutoSync:
         table,identifier=job['table_name'],job['target_id']
         pages=[s['url'] for s in self.queue.sources(table,identifier) if s['kind']=='original']
         if not pages:
-            self.queue.update(table,identifier,next_check=self.clock()+self.interval,next_refresh=self.clock()+self.interval,
-                              last_check=self.clock(),status='missing_source',
-                              error='مصدر المسلسل الأصلي مفقود؛ فحص الحلقات المحفوظة مستمر')
+            now=self.clock()
+            saved=json.loads(job['data'])
+            reason='مصدر المسلسل الأصلي مفقود؛ نُقل إلى المسودات'
+            to_draft=saved.get('status')=='published'
+            self.queue.update(table,identifier,next_check=now+self.interval,next_refresh=now+self.interval,
+                              last_check=now,status='missing_source',error=reason,
+                              **(dict(dirty=json.dumps({'status':'draft'},ensure_ascii=False),
+                                      upload_at=now) if to_draft else {}))
+            if to_draft:
+                self.queue.event('auto_draft',reason,table,identifier)
+                with self.queue.db() as conn:
+                    pending=dict(conn.execute('select * from auto_jobs where table_name=? and target_id=?',
+                                              (table,identifier)).fetchone())
+                self.flush(pending)
             return
         found_episodes=False
         for page in pages:
