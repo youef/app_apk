@@ -940,3 +940,13 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{
 .subscription-notice{position:relative;z-index:12;display:block;margin:8px auto 0;max-width:min(1050px,calc(100% - 24px));padding:11px 16px;text-align:center;direction:rtl;border:1px solid rgba(226,183,100,.4);border-radius:14px;background:#34271e;color:#f7e6cb;font-size:clamp(12px,2.5vw,15px);line-height:1.65}
 .subscription-notice--urgent{background:#432127;border-color:rgba(239,91,102,.5);color:#ffe9e9}
 .subscription-notice[hidden]{display:none!important}
+
+/* Trusted third-party iframe mode: let the provider own its playback controls. */
+.player.is-embed .alezz-embed-frame{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000;z-index:1}
+.player.is-embed .player__chrome{z-index:2;opacity:1!important;pointer-events:none}
+.player.is-embed .player__top{pointer-events:auto;position:relative;z-index:3}
+.player.is-embed .player__center,.player.is-embed .player__bottom{display:none!important}
+.player.is-embed .player__veil{display:none}
+.player.is-embed{cursor:auto}
+.player__embed-open{white-space:nowrap;min-height:40px}
+@media(max-width:600px){.player.is-embed .player__top{padding:12px 10px;gap:8px}.player__embed-open{font-size:11px}}
