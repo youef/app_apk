@@ -81,7 +81,7 @@ public final class TVHomeActivity extends Activity {
     private ScrollView scroller;
     private LinearLayout content,navBar;
     private TextView status;
-    private String section="home";
+    private String section="home",lastRenderedSection="";
     private boolean detailVisible=false, showingWelcome=false;
     private String detailOrigin="home";
     private String pendingResumeEpisodeId="",activeChannelCategory="الكل";
@@ -472,6 +472,7 @@ public final class TVHomeActivity extends Activity {
             final String glyph,final String target,final int baseColor){
         final LinearLayout tile=column();tile.setPadding(dp(19),dp(13),dp(19),dp(12));
         tile.setFocusable(true);tile.setClickable(true);
+        tile.setTag("nav:"+target);
         tile.setBackgroundDrawable(bg(baseColor,0x74B88B9C,19));
         FrameLayout symbolSpace=new FrameLayout(this);
         tile.addView(symbolSpace,new LinearLayout.LayoutParams(-1,0,1));
@@ -503,41 +504,66 @@ public final class TVHomeActivity extends Activity {
         return tile;
     }
     private void portal(){
-        LinearLayout banner=column();
-        banner.setPadding(dp(22),dp(13),dp(22),dp(9));
-        content.addView(banner,space(-1,dp(91),3));
-        banner.addView(text("AL EZZ  •  RED CINEMA",12,GOLD,true));
-        banner.addView(text("اختر عالمك",34,WHITE,true));
-        banner.addView(text("كل الترفيه في مكان واحد  •  تحكم كامل بالريموت",16,MUTED,false));
-        final String[][] data={
-            {"المسلسلات","المواسم والحلقات","▣","series"},
-            {"الأفلام","اكتشف مكتبة السينما","▤","movies"},
-            {"البث المباشر","شاهد قنواتك المفضلة","◉","live"},
-            {"الأطفال","محتوى مناسب للصغار","☻","kids"},
-            {"قائمتي","المفضلة وتابع المشاهدة","♥","favorites"},
-            {"الإعدادات","خصص تجربتك","⚙","settings"}
+        LinearLayout heading=column();heading.setPadding(dp(12),dp(7),dp(12),dp(7));
+        content.addView(heading,space(-1,-2,3));
+        heading.addView(text("AL EZZ  •  RED CINEMA",12,GOLD,true));
+        heading.addView(text("اختر عالمك",33,WHITE,true));
+        heading.addView(text("اختر ما تريد مشاهدته — أقسام واضحة بالريموت",15,MUTED,false));
+        final String[][] main={
+            {"المسلسلات","المواسم والحلقات","series"},
+            {"الأفلام","مكتبة السينما","movies"},
+            {"البث المباشر","القنوات والبرامج","live"}
         };
-        int[] colors={0xFF332331,0xFF35212F,0xFF272631,0xFF292631,0xFF33232D,0xFF27242F};
-        int columns=screenWidthDp()>=620?3:2;
-        int cellHeight=Math.max(130,Math.min(190,(screenHeightDp()-205)/2));
-        for(int j=0;j<6;j+=columns){
-            LinearLayout line=row();line.setGravity(Gravity.CENTER);
-            for(int k=j;k<Math.min(6,j+columns);k++){
-                LinearLayout tile=dashboardTile(data[k][0],data[k][1],data[k][2],data[k][3],colors[k]);
-                LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(cellHeight),1);
-                lp.setMargins(dp(7),dp(7),dp(7),dp(7));
-                line.addView(tile,lp);
-                if(j==0&&k==0){
-                    final View primaryTile=tile;
-                    ui.post(new Runnable(){public void run(){
-                        if(unlocked&&"home".equals(section))primaryTile.requestFocus();
-                    }});
-                }
-            }
-            content.addView(line,space(-1,-2,1));
+        LinearLayout primary=row();primary.setGravity(Gravity.TOP);
+        primary.setFocusable(false);
+        content.addView(primary,space(-1,-2,4));
+        final int cardHeight=Math.max(165,Math.min(250,screenHeightDp()/3));
+        for(int i=0;i<main.length;i++){
+            LinearLayout tile=dashboardTile(main[i][0],main[i][1],"",main[i][2],
+                i==0?0xFF34212E:i==1?0xFF30222A:0xFF272631);
+            LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,dp(cardHeight),1);
+            params.setMargins(dp(6),dp(5),dp(6),dp(7));
+            primary.addView(tile,params);
         }
-        TextView guide=text("الأسهم للتنقل     •     OK اختيار     •     رجوع للخروج",13,MUTED,false);
-        guide.setGravity(Gravity.CENTER);content.addView(guide,space(-1,dp(39),5));
+        TextView secondaryTitle=text("المزيد",16,MUTED,true);
+        content.addView(secondaryTitle,space(-1,dp(29),7));
+        final String[][] small={
+            {"الأطفال","kids"},{"قائمتي","favorites"},{"الإعدادات","settings"}
+        };
+        LinearLayout secondary=row();
+        secondary.setFocusable(false);
+        content.addView(secondary,space(-1,dp(106),4));
+        for(int i=0;i<small.length;i++){
+            final String target=small[i][1];
+            LinearLayout tile=column();
+            tile.setGravity(Gravity.CENTER);
+            tile.setFocusable(true);tile.setClickable(true);
+            tile.setTag("nav:"+target);
+            tile.setBackgroundDrawable(bg(0xFF201B28,0x628D6376,16));
+            ImageView icon=new ImageView(this);
+            icon.setImageDrawable(new CinemaGlyph(target,0xFFFF778A));
+            icon.setContentDescription(small[i][0]);
+            tile.addView(icon,new LinearLayout.LayoutParams(dp(30),dp(30)));
+            TextView label=text(small[i][0],14,WHITE,true);
+            label.setGravity(Gravity.CENTER);
+            tile.addView(label,space(-1,dp(29),1));
+            final LinearLayout focusTile=tile;
+            tile.setOnFocusChangeListener(new View.OnFocusChangeListener(){
+                public void onFocusChange(View v,boolean focused){
+                    focusTile.setBackgroundDrawable(bg(focused?0xFF60233A:0xFF201B28,
+                        focused?0xFFFF8094:0x628D6376,16));
+                    focusTile.setScaleX(focused?1.03f:1f);
+                    focusTile.setScaleY(focused?1.03f:1f);
+                }
+            });
+            tile.setOnClickListener(new View.OnClickListener(){public void onClick(View v){goTo(target);}});
+            LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,dp(91),1);
+            params.setMargins(dp(6),0,dp(6),0);
+            secondary.addView(tile,params);
+        }
+        TextView guide=text("← → اختيار القسم   •   OK فتح   •   رجوع للصفحة السابقة",12,MUTED,false);
+        guide.setGravity(Gravity.CENTER);
+        content.addView(guide,space(-1,dp(35),4));
     }
 
     /**
@@ -657,9 +683,40 @@ public final class TVHomeActivity extends Activity {
         TextView h=text(title,23,WHITE,true);content.addView(h,space(-1,-2,5));
         if(note!=null && note.length()>0)content.addView(text(note,13,MUTED,false),space(-1,-2,2));
     }
+    /**
+     * Focus stays attached to a semantic item instead of a recycled View instance.
+     * Refreshing a shelf must never throw the remote user to another category.
+     */
+    private String focusedItemTag(){
+        View focused=getCurrentFocus();
+        if(focused==null||content==null)return "";
+        View view=focused;
+        while(view!=null && view!=content){
+            if(view.getTag() instanceof String)return (String)view.getTag();
+            if(!(view.getParent() instanceof View))break;
+            view=(View)view.getParent();
+        }
+        return "";
+    }
+    private View findTagged(View parent,String tag){
+        if(parent==null||tag==null||tag.length()==0)return null;
+        if(tag.equals(parent.getTag()) && parent.isFocusable() && parent.getVisibility()==View.VISIBLE)
+            return parent;
+        if(parent instanceof ViewGroup){
+            ViewGroup group=(ViewGroup)parent;
+            for(int i=0;i<group.getChildCount();i++){
+                View found=findTagged(group.getChildAt(i),tag);
+                if(found!=null)return found;
+            }
+        }
+        return null;
+    }
     private void render(){
         if(content==null)return;
         if(detailVisible)episodeGeneration++;
+        final boolean sameSection=section.equals(lastRenderedSection);
+        final String focusTag=sameSection?focusedItemTag():"";
+        final int previousScroll=(sameSection&&scroller!=null)?scroller.getScrollY():0;
         detailVisible=false;
         updateNav();
         content.removeAllViews();
@@ -727,6 +784,15 @@ public final class TVHomeActivity extends Activity {
             Button refresh=button("إعادة المحاولة");content.addView(refresh,space(dp(240),dp(60),4));
             refresh.setOnClickListener(new View.OnClickListener(){public void onClick(View v){loadCatalog();}});
             refresh.requestFocus();
+        }
+        lastRenderedSection=section;
+        if(sameSection && scroller!=null){
+            scroller.post(new Runnable(){public void run(){
+                if(!unlocked||!section.equals(lastRenderedSection))return;
+                scroller.scrollTo(0,previousScroll);
+                View target=findTagged(content,focusTag);
+                if(target!=null)target.requestFocus();
+            }});
         }
     }
     private void settingsScreen(){
@@ -1012,6 +1078,7 @@ public final class TVHomeActivity extends Activity {
         final LinearLayout line=row();
         line.setPadding(dp(16),dp(8),dp(16),dp(8));
         line.setFocusable(true);line.setClickable(true);
+        line.setTag("channel:"+value(channel,"id"));
         line.setBackgroundDrawable(bg(0xFF172236,0x7B9DB2CD,12));
         LinearLayout.LayoutParams outer=space(-1,dp(83),4);
         line.setLayoutParams(outer);
@@ -1053,6 +1120,7 @@ public final class TVHomeActivity extends Activity {
     }
     private LinearLayout card(final JSONObject item,boolean wide){
         final LinearLayout outer=column();outer.setFocusable(true);outer.setClickable(true);
+        outer.setTag("item:"+kind(item)+":"+value(item,"id"));
         outer.setBackgroundDrawable(bg(0xFF201C25,0xFF342B38,13));
         outer.setPadding(dp(7),dp(7),dp(7),dp(7));
         LinearLayout.LayoutParams p=space(wide?dp(205):-1,dp(241),6);
@@ -1410,10 +1478,12 @@ public final class TVHomeActivity extends Activity {
         if(code==KeyEvent.KEYCODE_BACK && !"home".equals(section)){
             goTo("home");return true;
         }
+        // MENU is contextual, not a shortcut that teleports the viewer to live TV.
         if(code==KeyEvent.KEYCODE_MENU||code==KeyEvent.KEYCODE_GUIDE){
-            section="live";render();scroller.scrollTo(0,0);return true;
+            if("live".equals(section))return super.onKeyDown(code,event);
+            return true;
         }
-        if(!(getCurrentFocus() instanceof EditText) && !channels.isEmpty()){
+        if("live".equals(section) && !(getCurrentFocus() instanceof EditText) && !channels.isEmpty()){
             int digit=code-KeyEvent.KEYCODE_0;
             if(digit>=0 && digit<=9){
                 remoteChannelDigits+=digit;
