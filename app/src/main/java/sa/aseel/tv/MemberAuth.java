@@ -36,6 +36,10 @@ public final class MemberAuth {
     public static String username(Context context){
         return preferences(context).getString("username","");
     }
+    public static String planName(Context context){
+        String name=preferences(context).getString("subscription_plan_name","");
+        return name.isEmpty()?"حسب الباقة المحددة من الإدارة":name;
+    }
     public static String accessToken(Context context){
         return preferences(context).getString("access_token","");
     }
@@ -138,8 +142,13 @@ public final class MemberAuth {
         try{
             JSONObject user=authorizedUser(context,accessToken(context),
                 preferences(context).getLong("session_started_ms",0L));
+            JSONObject metadata=user.optJSONObject("app_metadata");
+            String plan=metadata==null?"":metadata.optString("alezz_plan_name","");
+            if(plan.isEmpty()&&metadata!=null)plan=metadata.optString("alezz_plan","");
+            if(plan.length()>48)plan=plan.substring(0,48);
             preferences(context).edit()
-                .putLong("subscription_expires_ms",subscriptionDeadline(user)).commit();
+                .putLong("subscription_expires_ms",subscriptionDeadline(user))
+                .putString("subscription_plan_name",plan).commit();
             registerDevice(context);
         }catch(AuthenticationException denied){
             logoutLocal(context);
@@ -204,7 +213,12 @@ public final class MemberAuth {
             throw new AuthenticationException("الخادم لم يُرجع رموز دخول مكتملة. أعد المحاولة.");
         JSONObject user=authorizedUser(context,access,sessionStarted);
         long lifetime=Math.max(60,Math.min(86400,reply.optLong("expires_in",3600)));
+        JSONObject metadata=user.optJSONObject("app_metadata");
+        String plan=metadata==null?"":metadata.optString("alezz_plan_name","");
+        if(plan.isEmpty()&&metadata!=null)plan=metadata.optString("alezz_plan","");
+        if(plan.length()>48)plan=plan.substring(0,48);
         boolean stored=preferences(context).edit()
+            .putString("subscription_plan_name",plan)
             .putLong("subscription_expires_ms",subscriptionDeadline(user))
             .putLong("expires_at_ms",System.currentTimeMillis()+lifetime*1000L)
             .putLong("session_started_ms",sessionStarted)
