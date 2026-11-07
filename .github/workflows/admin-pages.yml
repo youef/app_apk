@@ -82,6 +82,7 @@ jobs:
           node tests/member-cloud-sync-smoke.cjs
           node tests/glass-v19-smoke.cjs
           node tests/red-glass-cinema-smoke.cjs
+          node tests/cinema-wallpaper-v22-smoke.cjs
           node tests/brand-fallback-smoke.cjs
           node tests/genre-classification-smoke.cjs
           node tests/discovery-smoke.cjs
