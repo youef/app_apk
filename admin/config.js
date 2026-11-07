@@ -63,7 +63,7 @@
     /* playback */
     stream_url: { key: 'stream_url', label: 'رابط التشغيل (MP4 / HLS / Embed)', type: 'url', group: 'playback', hint: 'مصدر HTTPS مباشر أو مشغل Embed مسموح (مثل hanerix.com/e/…).' },
     youtube_url: { key: 'youtube_url', label: 'رابط يوتيوب الرسمي', type: 'url', group: 'playback' },
-    stream_variants: { key: 'stream_variants', label: 'جودات إضافية', type: 'variants', group: 'playback', span: 2, hint: 'حتى 8 جودات، وكل جودة تحتاج اسمًا ورابط HTTPS.' },
+    stream_variants: { key: 'stream_variants', label: 'مصادر إضافية وجودات', type: 'variants', group: 'playback', span: 2, hint: 'يمكن إضافة حتى 8 روابط MP4 أو HLS أو Embed معتمدة أو يوتيوب، ولكل مصدر اسم واضح. النشر يتطلب اعتماد الحقوق.' },
     source_id: { key: 'source_id', label: 'مصدر الحقوق', type: 'select', group: 'playback', source: 'sources', emptyLabel: 'غير محدد' },
     source_page_url: { key: 'source_page_url', label: 'صفحة المصدر الأصلية', type: 'url', group: 'playback' },
     official_url: { key: 'official_url', label: 'رابط المشاهدة الرسمي', type: 'url', group: 'playback' },
