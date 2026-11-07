@@ -51,7 +51,7 @@ import com.google.android.exoplayer2.ui.PlayerView;
 
 /** Leanback-style native player. HLS/MP4 use legacy ExoPlayer, never WebView. */
 public final class CinemaPlayerActivity extends Activity {
-    private static final int BG=0xFF090B11, RED=0xFFEF3658, WHITE=0xFFF7F4F8, MUTED=0xFFA7A6B4;
+    private static final int BG=0xFF090B11, RED=0xFFE33246, WHITE=0xFFF8F8FB, MUTED=0xFFADAAB9;
     private final Handler handler=new Handler();
     private volatile boolean entitlementCheckRunning=false;
     private long lastEntitlementProbe=0L;
@@ -267,11 +267,11 @@ public final class CinemaPlayerActivity extends Activity {
         control.setPadding(0,0,0,0);
         control.setContentDescription(label);
         if(Build.VERSION.SDK_INT>=26)control.setTooltipText(label);
-        control.setBackgroundDrawable(shape(0xFF19263B,0x877A90B2));
+        control.setBackgroundDrawable(shape(0xFF2B2331,0x888E6178));
         control.setOnFocusChangeListener(new View.OnFocusChangeListener(){
             public void onFocusChange(View view,boolean focused){
-                control.setBackgroundDrawable(shape(focused?0xFF66512A:0xFF19263B,
-                    focused?0xFFEBC47D:0x877A90B2));
+                control.setBackgroundDrawable(shape(focused?0xFF74233F:0xFF2B2331,
+                    focused?0xFFFF7085:0x888E6178));
                 control.setScaleX(focused?1.08f:1f);
                 control.setScaleY(focused?1.08f:1f);
                 if(focused)showLiveHud(label);
@@ -327,11 +327,11 @@ public final class CinemaPlayerActivity extends Activity {
     }
     private Button button(String name){
         final Button v=new Button(this);v.setText(name);v.setAllCaps(false);v.setTextSize(14);
-        v.setTextColor(WHITE);v.setFocusable(true);v.setBackgroundDrawable(shape(0xFF24334C,0x886B7F9E));
+        v.setTextColor(WHITE);v.setFocusable(true);v.setBackgroundDrawable(shape(0xFF292330,0x887E6275));
         v.setOnFocusChangeListener(new View.OnFocusChangeListener(){
             public void onFocusChange(View w,boolean focused){
-                v.setBackgroundDrawable(shape(focused?0xFF745335:0xFF24334C,
-                    focused?0xFFF2D39B:0x886B7F9E));
+                v.setBackgroundDrawable(shape(focused?0xFF77233E:0xFF292330,
+                    focused?0xFFFF788C:0x887E6275));
                 v.setScaleX(focused?1.03f:1f);v.setScaleY(focused?1.03f:1f);
                 if(focused&&controlPanel!=null&&controlPanel.getVisibility()==View.VISIBLE){
                     handler.removeCallbacks(autoHide);
@@ -414,7 +414,7 @@ public final class CinemaPlayerActivity extends Activity {
         if(live){
             liveHud=txt("● LIVE  •  العز TV",18,WHITE,true);
             liveHud.setPadding(dp(19),dp(11),dp(19),dp(11));
-            liveHud.setBackgroundDrawable(GlassSurface.overlay(0xC7E5C78D,dp(12)));
+            liveHud.setBackgroundDrawable(GlassSurface.overlay(0xD4F06B7E,dp(14)));
             liveHud.setMaxWidth(Math.max(dp(260),getResources().getDisplayMetrics().widthPixels*62/100));
             liveHud.setVisibility(View.GONE);
             FrameLayout.LayoutParams hudParams=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.RIGHT);
@@ -425,7 +425,7 @@ public final class CinemaPlayerActivity extends Activity {
         controlPanel=panel;
         panel.setPadding(dp(22),dp(13),dp(22),dp(13));
         panel.setBackgroundDrawable(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{0xD6334055,0xE9111929}));
+            new int[]{0xE33A2435,0xED10141E}));
         FrameLayout.LayoutParams pp=new FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM);
         root.addView(panel,pp);
         title=txt("▶ "+itemTitle,21,WHITE,true);panel.addView(title);
@@ -858,7 +858,7 @@ public final class CinemaPlayerActivity extends Activity {
             channel.setTextSize(13);
             channel.setGravity(Gravity.CENTER_VERTICAL|Gravity.RIGHT);
             channel.setPadding(dp(12),0,dp(12),0);
-            if(i==tvChannelIndex)channel.setBackgroundDrawable(shape(0xFF4A3B26,0xFFE6BE77));
+            if(i==tvChannelIndex)channel.setBackgroundDrawable(shape(0xFF632239,0xFFFC7489));
             card.addView(channel,new LinearLayout.LayoutParams(0,dp(height-7),1));
             list.addView(card,new LinearLayout.LayoutParams(-1,dp(height)));
             if(guideFirstButton==null)guideFirstButton=channel;
