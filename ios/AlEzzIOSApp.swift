@@ -61,6 +61,7 @@ final class CinemaContainerController: UIViewController, WKNavigationDelegate, W
         configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
         configuration.allowsAirPlayForMediaPlayback = true
+        configuration.applicationNameForUserAgent = "AlEzzTV-iOS/4"
 
         browser = WKWebView(frame: .zero, configuration: configuration)
         browser.navigationDelegate = self
@@ -71,7 +72,6 @@ final class CinemaContainerController: UIViewController, WKNavigationDelegate, W
         browser.scrollView.contentInsetAdjustmentBehavior = .never
         browser.scrollView.bounces = true
         browser.allowsBackForwardNavigationGestures = true
-        browser.applicationNameForUserAgent = "AlEzzTV-iOS/4"
         browser.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(browser)
         NSLayoutConstraint.activate([
@@ -155,7 +155,7 @@ final class CinemaContainerController: UIViewController, WKNavigationDelegate, W
         let emblem = UILabel()
         emblem.text = "العز TV"
         emblem.textColor = .white
-        emblem.font = .systemFont(ofSize: 46, weight: .heavy, design: .rounded)
+        emblem.font = .systemFont(ofSize: 46, weight: .heavy)
         emblem.textAlignment = .center
         emblem.layer.shadowColor = EzzIOS.crimson.cgColor
         emblem.layer.shadowOpacity = 0.45
