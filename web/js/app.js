@@ -114,7 +114,14 @@
   function cardHTML(item, opts) {
     opts = opts || {};
     var wide = opts.wide || item.live || item.kind === "youtube";
-    var pct = progressOf(item);
+    var progressTarget = item.kind === "series" ? (seriesResume(item) || item) : item;
+    var pct = progressOf(progressTarget);
+    var savedProgress = Store.progress(progressTarget.key);
+    var remaining = savedProgress && savedProgress.d && savedProgress.t
+      ? Math.max(0, Math.ceil((savedProgress.d - savedProgress.t) / 60)) : 0;
+    var quality = /(?:2160|4K)/i.test(item.quality || "") ? "4K" :
+      /(?:1080|FHD)/i.test(item.quality || "") ? "FHD" :
+      /(?:720|HD)/i.test(item.quality || "") ? "HD" : "";
     var tag = "";
     if (item.kind === "channel" && item.playback === "official_link") tag = '<span class="card__tag">↗ موقع رسمي</span>';
     else if (item.live) tag = '<span class="card__tag card__tag--live"><i></i>مباشر</span>';
@@ -139,6 +146,9 @@
       esc(item.key) + '" aria-label="' + esc(item.title + " — " + kindLabel(item.kind)) + '">' +
       '<div class="card__media">' + media + "</div>" +
       '<div class="card__veil"></div>' + tag +
+      (quality ? '<span class="card__quality">' + quality + '</span>' : '') +
+      (pct > 1 && pct < 97 && remaining ? '<span class="card__remaining">متبقي ' +
+          remaining + ' د</span>' : '') +
       '<div class="card__play"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6L20 12z"/></svg></span></div>' +
       '<div class="card__body"><h3 class="card__title">' + esc(item.title) + "</h3>" +
       '<div class="card__meta">' + metaBits.join("<span>·</span>") + "</div></div>" +
@@ -216,17 +226,49 @@
       "</section>";
   }
 
+  /* No video previews or automatic redirection. Updating only the hero's content
+     preserves the D-pad's focused card and every horizontal shelf position. */
+  function previewHeroOnFocus(item) {
+    var hero = $("hero");
+    if (!hero || !item || parseHash().name !== "home") return;
+    if (hero.getAttribute("data-preview-key") === item.key) return;
+    hero.setAttribute("data-preview-key",item.key);
+    var title = hero.querySelector(".hero__title");
+    var desc = hero.querySelector(".hero__desc");
+    if (title) title.textContent = item.title || "العز TV";
+    if (desc) desc.textContent = item.description || "";
+    var play = hero.querySelector("[data-play]");
+    var detail = hero.querySelector("[data-detail]");
+    var fav = hero.querySelector("[data-fav]");
+    if (play) play.setAttribute("data-play",item.key);
+    if (detail) detail.setAttribute("data-detail",item.key);
+    if (fav) fav.setAttribute("data-fav",item.key);
+    var media = hero.querySelector(".hero__media img");
+    var nextUrl = item.backdrop || item.poster;
+    if (media && nextUrl && media.getAttribute("src") !== nextUrl) {
+      media.style.transition = "opacity .3s ease";
+      media.style.opacity = ".3";
+      media.setAttribute("src",nextUrl);
+      media.onload = function () { media.style.opacity = "1"; };
+    }
+  }
+
   function showSlide(index) {
     if (!heroItems.length) return;
     heroIndex = (index + heroItems.length) % heroItems.length;
     var host = $("hero");
     if (!host) return;
+    var shouldRestoreFocus = document.activeElement && !!document.activeElement.closest("[data-slide]");
     var item = heroItems[heroIndex];
     var tmp = document.createElement("div");
     tmp.innerHTML = heroHTML(item);
     var next = tmp.firstElementChild;
     next.style.opacity = "0";
     host.parentNode.replaceChild(next, host);
+    if (shouldRestoreFocus) {
+      var dot = next.querySelector('[data-slide="' + heroIndex + '"]');
+      if (dot) dot.focus();
+    }
     requestAnimationFrame(function () {
       next.style.transition = "opacity .5s ease";
       next.style.opacity = "1";
@@ -711,7 +753,7 @@
         '<span class="ep__number">الحلقة ' + esc(e.number || "—") + '</span></span>' +
         '<span class="ep__txt"><strong>' + esc(e.title) + '</strong>' +
         '<span>' + esc(e.description || 'اضغط لمشاهدة هذه الحلقة') + '</span>' +
-        (started ? '<span class="ep__watching">● متابعة · ' + Math.round(pct) + '%</span>' : '') +
+        (started ? '<span class="ep__watching">● آخر مشاهدة · ' + Math.round(pct) + '%</span>' : '') +
         (started ? '<span class="ep__progress"><i style="width:' + pct.toFixed(1) + '%"></i></span>' : '') +
         '</span><span class="ep__trailing">' +
         (e.duration ? '<span class="ep__dur">' + esc(fmtDuration(e.duration)) + '</span>' : '') +
@@ -1120,6 +1162,17 @@
       if (slide) { showSlide(parseInt(slide.getAttribute("data-slide"), 10)); startHeroRotation(); return; }
     });
 
+    /* Focus/hover are previews only; navigation remains on explicit OK/click. */
+    document.addEventListener("focusin",function(e){
+      var target=e.target && e.target.closest && e.target.closest(".card[data-key]");
+      if (target && parseHash().name === "home")
+        previewHeroOnFocus(findItem(target.getAttribute("data-key")));
+    });
+    document.addEventListener("mouseover",function(e){
+      var target=e.target && e.target.closest && e.target.closest(".card[data-key]");
+      if (target && parseHash().name === "home")
+        previewHeroOnFocus(findItem(target.getAttribute("data-key")));
+    });
     $("searchBtn").addEventListener("click", openSearch);
     $("searchClose").addEventListener("click", closeSearch);
     $("searchInput").addEventListener("input", function (e) { runSearch(e.target.value); });
