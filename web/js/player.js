@@ -27,6 +27,7 @@
   var activeStreamUrl = "";
   var preferredQuality = "auto";
   var youtubeFrame = null;
+  var embedFrame = null;
   var playbackToken = 0;
   var iosSafari = /iPhone|iPad|iPod/i.test(navigator.userAgent || "") ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -73,7 +74,7 @@
   function wake() {
     setChromeIdle(false);
     clearTimeout(hideTimer);
-    if (!el.video.paused && !qualityMenuOpen()) {
+    if (!embedFrame && !el.video.paused && !qualityMenuOpen()) {
       hideTimer = setTimeout(function () { if (!qualityMenuOpen()) setChromeIdle(true); }, 3200);
     }
   }
@@ -100,7 +101,7 @@
   }
 
   function persist(force) {
-    if (!current || !current.key) return;
+    if (!current || !current.key || embedFrame) return;
     var v = el.video;
     if (!v.duration || current.live) return;
     if (!force && Date.now() - (persist._last || 0) < 5000) return;
@@ -151,6 +152,9 @@
     playbackToken++;
     if (hls) { try { hls.destroy(); } catch (e) {} hls = null; }
     if (youtubeFrame) { youtubeFrame.remove(); youtubeFrame = null; }
+    if (embedFrame) { embedFrame.remove(); embedFrame = null; }
+    el.root.classList.remove("is-embed");
+    show("playerEmbedExternal", false);
     var v = el.video;
     v.pause();
     v.removeAttribute("src");
@@ -211,6 +215,7 @@
   }
   function playSelectedSource(url, forceJs) {
     if (!current || el.root.hidden) return;
+    if (isEmbedUrl(url)) { playEmbed(url); return; }
     activeStreamUrl = url;
     clearStage();
     el.video.controls = iosSafari;
@@ -364,6 +369,44 @@
     el.root.classList.add("is-idle");
   }
 
+  // Keep embeds restricted to explicitly allowed HTTPS player endpoints.
+  // Never scrape or bypass a provider's frame or media restrictions.
+  function isEmbedUrl(value) {
+    try {
+      var u = new URL(String(value || "").trim());
+      if (u.protocol !== "https:" || u.username || u.password || (u.port && u.port !== "443")) return false;
+      var host = u.hostname.toLowerCase(), path = u.pathname;
+      return (host === "hanerix.com" && /^\/e\/[a-z0-9_-]+\/?$/i.test(path)) ||
+        (host === "player.vimeo.com" && /^\/video\/[0-9]+\/?$/.test(path)) ||
+        (host === "www.dailymotion.com" && /^\/embed\/video\/[a-z0-9_-]+\/?$/i.test(path)) ||
+        (host === "www.youtube-nocookie.com" && /^\/embed\/[a-z0-9_-]{11}\/?$/i.test(path));
+    } catch (_e) { return false; }
+  }
+  function playEmbed(url) {
+    clearStage();
+    activeStreamUrl = url;
+    if (window.AlezzCast) window.AlezzCast.detach("player");
+    el.video.hidden = true;
+    el.root.classList.add("is-embed");
+    show("playerEmbedExternal", true);
+    var frame = document.createElement("iframe");
+    embedFrame = frame;
+    frame.className = "alezz-embed-frame";
+    frame.title = (current && current.title ? current.title : "الفيديو") + " — مشغل مضمّن";
+    frame.setAttribute("allow", "autoplay; encrypted-media; fullscreen; picture-in-picture");
+    frame.setAttribute("allowfullscreen", "");
+    frame.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+    frame.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms allow-presentation");
+    frame.src = url;
+    frame.addEventListener("load", function () { if (embedFrame === frame) show("playerSpinner", false); });
+    el.stage.appendChild(frame);
+    show("playerSpinner", true);
+    $("playerBadges").innerHTML = '<span class="chip chip--gold">Embed</span>';
+    $("playerSubtitle").textContent = "مشغل مضمّن — استخدم أدوات الفيديو داخله";
+    $("playerClose").focus();
+    setChromeIdle(false);
+  }
+
   function startPlayback(item) {
     $("playerTitle").textContent = item.title || "—";
     $("playerSubtitle").textContent = item.subtitle || "";
@@ -381,6 +424,14 @@
       clearStage();
       if (window.AlezzCast) window.AlezzCast.detach("player");
       fail("لا يوجد رابط تشغيل مسجّل لهذا العنصر."); return;
+    }
+    if (!isPlayableUrl(url)) {
+      clearStage(); fail("نوع الرابط غير مدعوم. استخدم رابط فيديو مباشرًا أو Embed من مصدر معتمد.");
+      return;
+    }
+    if (isEmbedUrl(url)) {
+      if (item.kids) { clearStage(); fail("المشغلات المضمّنة غير متاحة في وضع الأطفال."); return; }
+      playEmbed(url); return;
     }
     // Child-profile casting is disabled: the remote device cannot enforce the local viewing limit.
     el.video.disableRemotePlayback=!!item.kids;
@@ -490,6 +541,7 @@
   }
 
   function togglePlay() {
+    if (embedFrame) { embedFrame.focus(); return; }
     if (window.AlezzCast && window.AlezzCast.playPause()) return;
     var v = el.video;
     if (v.paused) requestPlayback(playbackToken);
@@ -559,8 +611,8 @@
   /* Sources are explicit episode variants; HLS levels come from the live manifest.
      Never invent a quality that the selected stream does not actually advertise. */
   function isPlayableUrl(url) {
-    return /^https:\/\/[^\s]+/i.test(url || "") &&
-      /\.(m3u8|mp4)([?#]|$)/i.test(url || "");
+    return isEmbedUrl(url) || (/^https:\/\/[^\s]+/i.test(url || "") &&
+      /\.(m3u8|mp4)([?#]|$)/i.test(url || ""));
   }
   function qualityMenuOpen() {
     var menu = $("playerQualityMenu");
@@ -660,6 +712,7 @@
   }
   function switchQualitySource(url) {
     if (!isPlayableUrl(url)) { toast("رابط الجودة غير صالح", "err"); return; }
+    if (embedFrame || isEmbedUrl(url)) { playSelectedSource(url, false); return; }
     var position = el.video.currentTime || 0;
     var playing = !el.video.paused;
     activeStreamUrl = url;
@@ -809,6 +862,10 @@
       errorHandledToken = -1;
       startPlayback(current);
     });
+    $("playerEmbedExternal").addEventListener("click", function () {
+      if (embedFrame && activeStreamUrl && isEmbedUrl(activeStreamUrl))
+        window.open(activeStreamUrl, "_blank", "noopener,noreferrer");
+    });
     $("playerExternal").addEventListener("click", function () {
       var url = current && (activeStreamUrl || current.stream || (current.youtubeId ? "https://www.youtube.com/watch?v=" + current.youtubeId : ""));
       if (!url) return;
@@ -882,6 +939,7 @@
       if (el.root.hidden) return;
       var tag = (e.target.tagName || "").toLowerCase();
       if (tag === "input" || tag === "textarea") return;
+      if (embedFrame && e.key !== "Escape" && e.key !== "Backspace" && e.key !== "f") return;
       if (qualityMenuOpen()) {
         if (e.key === "Escape" || e.key === "Backspace") {
           e.preventDefault(); closeQualityMenu(); $("btnQuality").focus(); return;
@@ -907,6 +965,7 @@
         case "c": toggleCaptions(); break;
         case "f": toggleFullscreen(); break;
         case "z": toggleFit(); break;
+        case "Backspace":
         case "Escape":
           if (document.body.classList.contains("watch-route") && window.Alezz && window.Alezz.leaveWatch) window.Alezz.leaveWatch();
           else Player.close();
