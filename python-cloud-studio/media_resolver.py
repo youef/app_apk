@@ -20,7 +20,7 @@ from alezz_fetchv_importer import MEDIA_EXT, SourceClient, check_dns, clean, fin
 MAX_CANDIDATES = 128
 
 # Reachability of an embed page is not evidence of playable media.
-ONEVID_EMBED_PATH = re.compile(r'^/embed-[A-Za-z0-9_-]+\\.html$', re.I)
+ONEVID_EMBED_PATH = re.compile(r'^/embed-[A-Za-z0-9_-]+\.html$', re.I)
 
 
 def supported_source_kind(value: str) -> str:
