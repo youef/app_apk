@@ -192,6 +192,23 @@ class AutoSyncTests(unittest.TestCase):
                 self.assertEqual(remote['status'],'draft' if n==3 else 'published')
                 self.now = self.job(row,'aseel_series')['next_check'] + 1
 
+    def test_reimport_preserves_synced_source_history_without_reupload_churn(self):
+        row = self.row(name='import-idempotence')
+        self.resolver.healthy.add(OLD)
+        self.worker.check_target(self.job(row))
+        before = self.worker.queue.sources('aseel_movies', row['id'])
+        self.assertTrue(before)
+        self.assertTrue(all(src['synced'] for src in before))
+        self.worker.import_remote()
+        self.worker.import_remote()
+        after = self.worker.queue.sources('aseel_movies', row['id'])
+        self.assertEqual(len(after), len(before))
+        self.assertTrue(all(src['synced'] for src in after))
+        for original, current in zip(sorted(before,key=lambda x:x['url']),
+                                     sorted(after,key=lambda x:x['url'])):
+            self.assertEqual(current['last_seen_at'],original['last_seen_at'])
+            self.assertEqual(current['status'],original['status'])
+
     def test_failed_library_import_does_not_block_queued_media_checks(self):
         row = self.row()
         self.resolver.healthy.add(OLD)
