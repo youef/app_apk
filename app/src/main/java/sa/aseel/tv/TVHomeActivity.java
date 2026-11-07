@@ -264,7 +264,8 @@ public final class TVHomeActivity extends Activity {
             }catch(final Exception error){
                 ui.post(new Runnable(){public void run(){
                     if(isFinishing())return;
-                    showMemberLogin(MemberAuth.hasSession(TVHomeActivity.this)?
+                    showMemberLogin(error instanceof MemberAuth.AuthenticationException?
+                        error.getMessage():MemberAuth.hasSession(TVHomeActivity.this)?
                         "تعذر التحقق من الجلسة. تأكد من الاتصال ثم اضغط إعادة المحاولة.":
                         "انتهت الجلسة أو توقف الحساب. يرجى تسجيل الدخول.");
                 }});
@@ -272,6 +273,8 @@ public final class TVHomeActivity extends Activity {
         }});
     }
     private void showMemberLogin(String notice){
+        if(notice!=null && (notice.contains("انتهت صلاحية") || notice.contains("صلاحية حسابك")))
+        {showExpiredScreen();return;}
         showingWelcome=true;unlocked=false;
         final LinearLayout panel=column();
         panel.setGravity(Gravity.CENTER);
@@ -328,6 +331,11 @@ public final class TVHomeActivity extends Activity {
                 }catch(final Exception error){
                     ui.post(new Runnable(){public void run(){
                         if(isFinishing())return;
+                        if(error instanceof MemberAuth.AuthenticationException &&
+                           error.getMessage()!=null && error.getMessage().contains("انتهت صلاحية")){
+                            showExpiredScreen();
+                            return;
+                        }
                         feedback.setText(error instanceof MemberAuth.AuthenticationException?
                             error.getMessage():"تعذر الاتصال. تحقق من الإنترنت ثم حاول مجددًا.");
                         signIn.setEnabled(true);
@@ -341,6 +349,35 @@ public final class TVHomeActivity extends Activity {
             retry.setOnClickListener(new View.OnClickListener(){public void onClick(View v){restoreMember();}});
         }
         username.requestFocus();
+    }
+    /** Explicit, remote-friendly subscription expiration screen (Android API 19+). */
+    private void showExpiredScreen(){
+        unlocked=false;showingWelcome=true;
+        final LinearLayout panel=column();
+        panel.setGravity(Gravity.CENTER);
+        panel.setPadding(dp(38),dp(16),dp(38),dp(16));
+        panel.setBackgroundDrawable(new GradientDrawable(
+            GradientDrawable.Orientation.TL_BR,new int[]{0xFF100F18,0xFF38232A,0xFF0D111B}));
+        setContentView(panel);
+        TextView icon=text("⌛",58,GOLD,true);
+        icon.setGravity(Gravity.CENTER);
+        panel.addView(icon,space(dp(135),dp(91),4));
+        TextView title=text("انتهت صلاحية اشتراكك",34,WHITE,true);
+        title.setGravity(Gravity.CENTER);
+        panel.addView(title,space(-1,dp(63),6));
+        TextView note=text("توقف حساب المشاهدة تلقائيًا عند موعد الانتهاء.\\n"+
+            "المفضلة وسجل المشاهدة محفوظان حتى تجدد الاشتراك من الإدارة.",18,MUTED,false);
+        note.setGravity(Gravity.CENTER);
+        panel.addView(note,space(-1,dp(104),9));
+        Button renew=button("↻  تسجيل الدخول بعد تجديد الاشتراك");
+        panel.addView(renew,space(dp(420),dp(68),8));
+        renew.setOnClickListener(new View.OnClickListener(){public void onClick(View view){
+            showMemberLogin("");
+        }});
+        TextView foot=text("باقة 90 يومًا • تواصل مع مسؤول الاشتراكات لتجديد حسابك",14,GOLD,false);
+        foot.setGravity(Gravity.CENTER);
+        panel.addView(foot,space(-1,dp(50),5));
+        renew.requestFocus();
     }
     private void startViewer(){
         if(!MemberAuth.hasSession(this)){
@@ -373,7 +410,9 @@ public final class TVHomeActivity extends Activity {
         branding.addView(text("عالمك السينمائي",12,GOLD,false));
         top.addView(branding,space(dp(175),-2,2));
         top.addView(new View(this),new LinearLayout.LayoutParams(0,1,1));
-        status=text("● متصل",12,MUTED,false);
+        int remaining=MemberAuth.daysRemaining(this);
+        status=text(remaining>=0 && remaining<=7?"⚠ تبقى "+remaining+" يومًا على انتهاء اشتراكك":"● متصل",12,
+            remaining>=0&&remaining<=7?GOLD:MUTED,false);
         status.setSingleLine(true);status.setEllipsize(TextUtils.TruncateAt.END);
         top.addView(status,space(dp(170),-2,3));
         Button search=button("⌕  بحث");
@@ -679,6 +718,10 @@ public final class TVHomeActivity extends Activity {
     private void settingsScreen(){
         heading("الإعدادات","تخصيص تجربة العز TV • التفضيلات محفوظة على هذا الجهاز فقط");
         heading("حساب المشاهدة","مسجل الدخول: "+MemberAuth.username(this));
+        final int daysLeft=MemberAuth.daysRemaining(this);
+        heading("اشتراكي • 90 يومًا",daysLeft<0?"الصلاحية الحالية يحددها المسؤول":daysLeft==0?
+            "انتهت الصلاحية، جدّد اشتراكك":daysLeft<=7?
+            "⚠ تنبيه: متبقي "+daysLeft+" يومًا فقط":"متبقي "+daysLeft+" يومًا على انتهاء الباقة");
         Button logout=button("↪ تسجيل الخروج من الحساب");
         content.addView(logout,space(-1,dp(58),6));
         logout.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
