@@ -915,7 +915,17 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
     if source_id:
         work_rights["source_id"]=source_id
         episode_rights["source_id"]=source_id
-    result={"kind":cat.kind,"title":cat.title,"works_new":0,"works_updated":0,"seasons_new":0,"episodes_new":0,"episodes_updated":0,"media_verified":0,"metadata_only":0,"bindings":[]}
+    result={"kind":cat.kind,"title":cat.title,"works_new":0,"works_updated":0,"seasons_new":0,"episodes_new":0,"episodes_updated":0,"media_verified":0,"metadata_only":0,"embed_reachable":0,"bindings":[]}
+
+    def approved_embed_page(entry) -> bool:
+        # Store only an explicitly allowed and reachable iframe page as a
+        # separately unverified source. Publication still requires rights.
+        if not entry.media_url:
+            return False
+        from media_resolver import supported_source_kind
+        return (supported_source_kind(entry.media_url) == 'embed' and
+                any(src.get('kind') == 'embed' and src.get('reachable')
+                    and src.get('url') == entry.media_url for src in entry.sources))
     fields=imported_fields(cat,category_id)
     def merge_capture(payload, old, entry):
         if not capture_merge or not old:
@@ -937,10 +947,10 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
                                            "release_year":"eq."+str(cat.year)})
         payload={**fields,"source_page_url":cat.url}
         if cat.sources: payload['stream_variants'] = playback_variants(cat, (movie or {}).get('stream_variants'))
-        if cat.verified and cat.media_url:
+        if cat.verified and cat.media_url or approved_embed_page(cat):
             payload["stream_url"]=cat.media_url
-            payload["link_health_status"]="healthy"
-            result["media_verified"]+=1
+            payload["link_health_status"]="healthy" if cat.verified else "suspect"
+            result["media_verified" if cat.verified else "embed_reachable"]+=1
         else:result["metadata_only"]+=1
         if movie:
             db.patch("aseel_movies",movie["id"],{**merge_capture(payload,movie,cat),**({"status":"published","rights_status":"approved"} if publish and rights else {})})
@@ -980,10 +990,10 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
                  "poster_url":ep.poster_url or cat.poster_url or None,'source_page_url':ep.page_url}
         if ep.sources: payload['stream_variants'] = playback_variants(ep, (old or {}).get('stream_variants'))
         payload={k:v for k,v in payload.items() if v is not None}
-        if ep.verified and ep.media_url:
+        if ep.verified and ep.media_url or approved_embed_page(ep):
             payload["stream_url"]=ep.media_url
-            payload["link_health_status"]="healthy"
-            result["media_verified"]+=1
+            payload["link_health_status"]="healthy" if ep.verified else "suspect"
+            result["media_verified" if ep.verified else "embed_reachable"]+=1
         else:result["metadata_only"]+=1
         if old:
             db.patch("aseel_episodes",old["id"],{**merge_capture(payload,old,ep),**({"status":"published","rights_status":"approved"} if publish and rights else {})})
