@@ -152,6 +152,10 @@ body{
   background:rgba(13,14,23,.86);border-color:rgba(255,255,255,.18);color:#fff;
 }
 .searchpanel input:focus-visible,input:focus-visible,select:focus-visible{border-color:#FA566A!important}
+/* Native-brand fallback artwork harmonizes with the crimson UI. */
+.card__art .art__logo,.hero__fallback-logo{
+  filter:sepia(.65) saturate(2.1) hue-rotate(308deg) brightness(1.07);
+}
 /* Mobile dock: one coherent red glass capsule, text kept legible at 320px. */
 .app-dock{
   border:1px solid rgba(255,255,255,.14)!important;
@@ -193,6 +197,11 @@ body{
     backdrop-filter:blur(10px) saturate(124%);
   }
 }
+@media(min-width:901px) and (max-width:1160px){
+  .nav__link{width:43px;min-width:43px;padding:9px!important;justify-content:center}
+  .nav__link span{display:none}
+  .nav__link svg{width:21px;height:21px}
+}
 @media(min-width:900px){
   .topbar{gap:clamp(10px,1.8vw,28px)}
   .nav__link{font-size:13px}
@@ -203,6 +212,8 @@ body{
   .app-dock{display:grid!important;grid-template-columns:repeat(6,minmax(0,1fr));
     position:fixed;left:12px;right:12px;bottom:max(8px,env(safe-area-inset-bottom));
     z-index:57;padding:7px;gap:2px}
+  .app-dock a{display:flex;flex-direction:column;align-items:center;justify-content:center;
+    height:50px;gap:2px;min-width:0;text-decoration:none}
   .view{padding-bottom:calc(85px + env(safe-area-inset-bottom))}
 }
 @media(max-width:850px){
