@@ -128,7 +128,7 @@ class PortalTests(unittest.TestCase):
         import time
         self.assertEqual(self.client.get('/account/status').status_code,401)
         self.login('customer')
-        self.assertEqual(self.client.get('/account/status').json(),{'active':True})
+        self.assertTrue(self.client.get('/account/status').json()['active'])
         # A session may still be within its 180-day cookie lifetime.
         self.portal.member_sessions.set_user_expiry('example-id',int(time.time())-1)
         expired=self.client.get('/account/status')
@@ -214,6 +214,69 @@ class PortalTests(unittest.TestCase):
         self.assertTrue(created[0].kwargs['secret'])
         self.assertEqual(created[0].kwargs['json']['app_metadata']['alezz_customer'],'active')
         self.assertTrue(created[0].kwargs['json']['app_metadata']['alezz_expires_at'].endswith('Z'))
+
+    def test_default_create_is_90_days_with_no_manual_expiry(self):
+        from member_expiry import expiry_date
+        self.login('admin')
+        csrf=next(iter(self.portal.sessions.values()))[3]
+        with patch.object(self.portal,'upstream',return_value={}) as upstream:
+            result=self.client.post('/account/customers',data={
+                'username':'plan90','password':'a-strong-customer-password',
+                'action':'create','csrf':csrf},headers=self.headers)
+        self.assertEqual(result.status_code,200)
+        created=[x for x in upstream.call_args_list if x.args[:2]==('POST','/auth/v1/admin/users')]
+        self.assertEqual(len(created),1)
+        metadata=created[0].kwargs['json']['app_metadata']
+        self.assertEqual(metadata['alezz_plan_days'],90)
+        expected=(datetime.now(ZoneInfo('Asia/Riyadh')).date()+timedelta(days=89)).isoformat()
+        self.assertEqual(expiry_date(metadata),expected)
+
+    def test_renew_90_extends_existing_expiry_and_preserves_disabled_status(self):
+        from member_expiry import expiration_from_date, expiry_date
+        today=datetime.now(ZoneInfo('Asia/Riyadh')).date()
+        current=(today+timedelta(days=14)).isoformat()
+        metadata={'alezz_customer':'disabled',
+                  'alezz_expires_at':expiration_from_date(current),
+                  'example_config':'keep'}
+        user={'id':'12345678-1234-1234-1234-123456789abc',
+              'email':'sub90@members.alezz.invalid','app_metadata':metadata}
+        with patch.object(self.portal,'upstream',return_value={'users':[user]}) as upstream:
+            result=self.portal.manage({'action':'renew-90','username':'sub90'})
+        self.assertEqual(result,user['id'])
+        changed=[x.kwargs['json']['app_metadata'] for x in upstream.call_args_list if x.args[0]=='PUT']
+        self.assertEqual(len(changed),1)
+        self.assertEqual(changed[0]['alezz_plan_days'],90)
+        self.assertEqual(changed[0]['alezz_customer'],'disabled')
+        self.assertEqual(changed[0]['example_config'],'keep')
+        self.assertEqual(expiry_date(changed[0]),(today+timedelta(days=104)).isoformat())
+
+    def test_warning_at_seven_days_and_expired_screen(self):
+        from member_expiry import expiration_from_date, expiry_epoch
+        self.login('customer')
+        today=datetime.now(ZoneInfo('Asia/Riyadh')).date()
+        expiry=expiration_from_date((today+timedelta(days=6)).isoformat())
+        self.portal.member_sessions.set_user_expiry('example-id',expiry_epoch({'alezz_expires_at':expiry}))
+        summary=self.client.get('/account/status')
+        self.assertEqual(summary.status_code,200)
+        self.assertEqual(summary.json()['remaining_days'],7)
+        self.assertTrue(summary.json()['warning'])
+        screen=self.client.get('/account/login?expired=1')
+        self.assertIn('انتهت صلاحية اشتراكك',screen.text)
+        self.assertIn('تسجيل الدخول بعد التجديد',screen.text)
+
+    def test_device_reset_updates_authoritative_cutoff(self):
+        self.login('customer')
+        username='customer1'
+        record={'id':'12345678-1234-1234-1234-123456789abc',
+                'email':username+'@members.alezz.invalid',
+                'app_metadata':{'alezz_customer':'active',
+                                'other_setting':'keep'}}
+        with patch.object(self.portal,'upstream',return_value={'users':[record]}) as upstream:
+            self.portal.manage({'action':'reset-device','username':username})
+        changes=[x.kwargs['json']['app_metadata'] for x in upstream.call_args_list if x.args[0]=='PUT']
+        self.assertEqual(changes[0]['other_setting'],'keep')
+        self.assertIn('alezz_devices_revoked_at',changes[0])
+        self.assertTrue(changes[0]['alezz_devices_revoked_at'].endswith('Z'))
 
     def test_expired_customer_cannot_log_in_even_with_valid_password(self):
         from member_expiry import expiration_from_date
