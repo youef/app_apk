@@ -497,6 +497,17 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke
    ========================================================================== */
 .player{position:fixed;inset:0;z-index:100;background:#000;display:flex}
 .player__stage{position:relative;flex:1;overflow:hidden;background:#000}
+/* Provider-controlled player frames: the frame receives clicks and focus directly. */
+.alezz-embed-frame{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
+.player__embed-external{position:absolute;z-index:7;bottom:max(14px,env(safe-area-inset-bottom));right:14px;border:1px solid rgba(255,255,255,.4);background:rgba(15,18,24,.88);color:#fff;border-radius:12px;padding:10px 16px;cursor:pointer;font:inherit}
+.player.is-embed .player__chrome{pointer-events:none}
+.player.is-embed .player__top{pointer-events:none}
+.player.is-embed #playerClose{pointer-events:auto;position:relative;z-index:8;background:rgba(12,14,20,.8)}
+.player.is-embed .player__bottom,.player.is-embed .player__center,.player.is-embed .player__veil{display:none!important}
+.player.is-embed.is-idle .player__chrome{opacity:1}
+.player.is-embed #playerChrome .player__top{background:linear-gradient(180deg,rgba(0,0,0,.67),transparent)}
+.player__embed-external[hidden]{display:none!important}
+
 #video{width:100%;height:100%;object-fit:contain;background:#000;display:block}
 .player__veil{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,.45) 100%)}
 
