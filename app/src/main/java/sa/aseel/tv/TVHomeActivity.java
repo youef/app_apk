@@ -458,9 +458,7 @@ public final class TVHomeActivity extends Activity {
         navBar.addView(back,space(dp(210),dp(48),2));
         TextView breadcrumb=text("العز TV   /   "+sectionName(section),19,GOLD,true);
         navBar.addView(breadcrumb,new LinearLayout.LayoutParams(0,-1,1));
-        Button next=button("التنقل بين الأقسام");
-        next.setOnClickListener(new View.OnClickListener(){public void onClick(View v){goTo("home");}});
-        navBar.addView(next,space(dp(218),dp(48),2));
+        // One clear Back/Home action is sufficient; avoid duplicate remote targets.
     }
     private int screenWidthDp(){
         return Math.round(getResources().getDisplayMetrics().widthPixels/
@@ -667,6 +665,9 @@ public final class TVHomeActivity extends Activity {
         content.removeAllViews();
         if("home".equals(section)){
             portal();
+            showContinueWatching(false);
+            shelf("أفلام مختارة","استكشف مكتبة السينما",movies,16);
+            shelf("المسلسلات","المواسم والحلقات",series,16);
         }else if("movies".equals(section)){
             heading("الأفلام بحسب التصنيف","تظهر قوائم الأعمال المتوفرة تلقائيًا، مع إمكانية التنقل بالريموت.");
             shelf("أفلام تركية","بلد الإنتاج: تركيا",originItems(movies,"TR"),30);
