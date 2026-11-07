@@ -57,11 +57,12 @@
   }
 
   function artStyle(item, hero) {
-    var h = hueFor(item);
+    // Always-on neutral crimson fallback: actual editorial poster artwork is untouched.
     return [
-      "radial-gradient(" + (hero ? "110% 80% at 82% 4%" : "120% 95% at 76% 8%") + ", hsla(" + h + ",68%,56%," + (hero ? ".46" : ".34") + "), transparent 60%)",
-      "radial-gradient(85% 70% at 8% 96%, hsla(" + ((h + 46) % 360) + ",70%,48%,.24), transparent 64%)",
-      "linear-gradient(155deg,#161B27 0%,#0A0C12 54%,#06070A 100%)"
+      "radial-gradient(" + (hero ? "110% 80% at 82% 4%" : "120% 95% at 76% 8%") +
+        ", rgba(195,33,64," + (hero ? ".42" : ".31") + "), transparent 65%)",
+      "radial-gradient(85% 70% at 8% 96%,rgba(57,54,91,.29),transparent 64%)",
+      "linear-gradient(155deg,#251520 0%,#13131D 54%,#090A10 100%)"
     ].join(",");
   }
 
