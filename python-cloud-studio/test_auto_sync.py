@@ -333,7 +333,7 @@ class AutoSyncTests(unittest.TestCase):
         self.worker.check_target(self.job(row))
         job = self.job(row)
         self.assertEqual(job['next_check'], NOW+min(3300,self.worker.check_interval))
-        self.assertEqual(job['next_refresh'], NOW+3300)
+        self.assertEqual(job['next_refresh'], NOW+min(3300,self.worker.interval))
         self.assertEqual(expires_at(OLD), 0)
         self.assertEqual(expires_at(signed), NOW+3600)
 
