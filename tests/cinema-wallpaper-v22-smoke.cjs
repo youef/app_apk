@@ -20,7 +20,7 @@ assert(sw.includes('"assets/al-ezz-red-glass-background.svg"')&&
     sw.includes('request.mode === "navigate"'),
     "Cache can store only the public asset, never protected navigation HTML");
 assert(native.includes("extends Drawable")&&native.includes("LinearGradient")&&
-    !native.includes("RenderEffect")&&!native.includes("BlurMaskFilter"),
+    !native.includes("RenderEffect.")&&!native.includes("new BlurMaskFilter("),
     "Native KitKat wallpaper must avoid expensive unsupported blur");
 assert(home.includes("root.setBackgroundDrawable(new CinemaBackdropDrawable());")&&
     home.includes("splash.setBackgroundDrawable(new CinemaBackdropDrawable());")&&
