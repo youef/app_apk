@@ -126,6 +126,7 @@ jobs:
           node tests/glass-v19-smoke.cjs
           node tests/tv-iptv-nimbus-smoke.cjs
           node tests/quality-picker-smoke.cjs
+          node tests/embed-playback-smoke.cjs
           node tests/kids-world-smoke.cjs
           node tests/cast-airplay-smoke.cjs
       - name: Build legacy-compatible APK
