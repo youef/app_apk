@@ -26,6 +26,9 @@
         <activity android:name="sa.aseel.tv.YouTubeActivity" android:exported="false"
             android:screenOrientation="landscape" android:hardwareAccelerated="true"
             android:configChanges="orientation|screenSize|keyboardHidden" />
+        <activity android:name="sa.aseel.tv.EmbedPlayerActivity" android:exported="false"
+            android:screenOrientation="landscape" android:hardwareAccelerated="true"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
         <activity android:name="sa.aseel.tv.CinemaPlayerActivity" android:exported="false"
             android:screenOrientation="landscape" android:hardwareAccelerated="true" />
         <activity android:name="sa.aseel.tv.PlayerActivity" android:exported="false"
