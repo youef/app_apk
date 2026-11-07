@@ -886,7 +886,7 @@ public final class TVHomeActivity extends Activity {
         else if("settings".equals(section))settingsScreen();
         else if("account".equals(section))accountScreen();
         else if("profiles".equals(section))profilesScreen();
-        if(!"home".equals(section)&&!"settings".equals(section)&&movies.size()+series.size()+channels.size()+youtubeVideos.size()==0){
+        if(!"home".equals(section)&&!"settings".equals(section)&&!"account".equals(section)&&!"profiles".equals(section)&&movies.size()+series.size()+channels.size()+youtubeVideos.size()==0){
             heading(loading?"جاري تحميل المكتبة...":"المكتبة لم تُحمّل",
                 loading?"اتصل بالإنترنت، ستظهر البطاقات تلقائيًا.":"اضغط تحديث. "+lastLoadError);
             Button refresh=button("إعادة المحاولة");content.addView(refresh,space(dp(240),dp(60),4));
@@ -898,6 +898,17 @@ public final class TVHomeActivity extends Activity {
             scroller.post(new Runnable(){public void run(){
                 View entry=findTagged(content,"nav:series");
                 if(entry!=null && "home".equals(section))entry.requestFocus();
+            }});
+        }
+        if(!sameSection && ("account".equals(section)||"profiles".equals(section))
+            && scroller!=null){
+            final String targetSection=section;
+            final String desired="profiles".equals(targetSection)?
+                "profile:"+PlaybackMemory.activeProfile(this):"nav:profiles";
+            scroller.post(new Runnable(){public void run(){
+                if(!targetSection.equals(section))return;
+                View choice=findTagged(content,desired);
+                if(choice!=null)choice.requestFocus();
             }});
         }
         if(sameSection && scroller!=null){
