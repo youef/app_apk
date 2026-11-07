@@ -13,7 +13,7 @@ button{background:#262b35;color:#fff;border:1px solid #444d5e;font-size:16px;min
 button:focus,button:hover{background:#dc2b48;outline:3px solid #ff8192}
 #status{font-size:12px;color:#c7cedc;text-align:center;padding:6px 10px;background:#14151c}
 @media(max-width:560px){button{min-width:70px;font-size:13px}.controls{gap:5px;padding:5px}}
-</style><link rel="stylesheet" href="css/glass.css?v=glass-v19-20261107">
+</style><link rel="stylesheet" href="css/glass.css?v=glass-v19-20261107"><link rel="stylesheet" href="css/red-cinema.css?v=red-glass-cinema-v20-20261107">
 </head><body>
 <main class="layout">
 <div class="stage" id="player"></div>
