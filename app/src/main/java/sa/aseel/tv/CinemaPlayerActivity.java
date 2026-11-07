@@ -455,6 +455,14 @@ public final class CinemaPlayerActivity extends Activity {
         qualityButton=live?tvTool("⚙","جودة البث"):button("الجودة");
         footer.addView(qualityButton,new LinearLayout.LayoutParams(dp(live?69:138),-1));
         qualityButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showQualityMenu();}});
+        if(!live && PlaybackSources.hasAlternatives(this)){
+            Button sourcePicker=button("☷ المصادر");
+            footer.addView(sourcePicker,new LinearLayout.LayoutParams(dp(140),-1));
+            sourcePicker.setContentDescription("تغيير مصدر تشغيل الفيلم أو الحلقة");
+            sourcePicker.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                PlaybackSources.show(CinemaPlayerActivity.this);
+            }});
+        }
         externalButton=button("مشغل بديل");
         if(!live)footer.addView(externalButton,new LinearLayout.LayoutParams(dp(138),-1));
         externalButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){external();}});
