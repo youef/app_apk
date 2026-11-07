@@ -12,6 +12,8 @@ import time
 from pathlib import Path
 from urllib.parse import parse_qs
 from uuid import UUID
+from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 
 import requests
 from fastapi import Request
@@ -19,7 +21,8 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Resp
 from starlette.concurrency import run_in_threadpool
 from member_devices import DeviceRegistry, DEVICE_COOKIE, DEVICE_MAX_AGE, friendly_device
 from member_sessions import MemberSessions, CUSTOMER_SESSION_SECONDS
-from member_expiry import account_state, expiration_from_date, expiry_epoch, EXPIRES_KEY
+from member_expiry import (account_state, expiration_from_date, expiry_epoch, expiry_date,
+    plan_90_dates, subscription_summary, EXPIRES_KEY, PLAN_KEY, PLAN_DAYS, DEVICE_REVOKED_KEY)
 
 COOKIE = 'alezz_member'
 SESSION_SECONDS = 8 * 3600
@@ -128,12 +131,21 @@ class Portal:
             password=form.get('password','')
             if not 12<=len(password)<=72 or len(password.encode('utf-8'))>72:
                 raise ValueError('اختر كلمة مرور من 12 إلى 72 بايت.')
-            expires=expiration_from_date(form.get('expires_on',''))
+            if form.get('expires_on','').strip():
+                expires=expiration_from_date(form['expires_on'])
+                ending=form['expires_on']
+                package=None
+            else:
+                expires,ending=plan_90_dates()
+                package=PLAN_DAYS
+            app_meta={'alezz_customer':'active',EXPIRES_KEY:expires}
+            if package:
+                app_meta[PLAN_KEY]=package
             self.upstream('POST','/auth/v1/admin/users',secret=True,json={
                 'email':username+'@'+ALIAS_DOMAIN,'password':password,'email_confirm':True,
-                'app_metadata':{'alezz_customer':'active',EXPIRES_KEY:expires}})
-            return 'تم إنشاء العميل '+username+'، وتنتهي صلاحيته في '+form['expires_on']+'.'
-        if action not in ('disable','enable','reset-device','set-expiry'):
+                'app_metadata':app_meta})
+            return 'تم إنشاء العميل '+username+'، وتنتهي صلاحيته في '+ending+'.'
+        if action not in ('disable','enable','reset-device','set-expiry','renew-90'):
             raise ValueError('أمر غير معروف.')
         expires=expiration_from_date(form.get('expires_on','')) if action=='set-expiry' else None
         # Resolve the exact alias. Pagination prevents modifying an unrelated user.
@@ -146,8 +158,16 @@ class Portal:
                 current_meta=user.get('app_metadata') or {}
                 metadata=dict(current_meta)
                 if action=='reset-device':
+                    metadata[DEVICE_REVOKED_KEY]=datetime.now(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00','Z')
+                    self.upstream('PUT','/auth/v1/admin/users/'+uid,secret=True,json={
+                        'app_metadata':metadata})
                     self.devices.reset(uid)
-                elif action=='set-expiry':
+                elif action in ('set-expiry','renew-90'):
+                    if action=='renew-90':
+                        expires,ending=plan_90_dates(metadata)
+                        metadata[PLAN_KEY]=PLAN_DAYS
+                    else:
+                        metadata.pop(PLAN_KEY,None)
                     metadata[EXPIRES_KEY]=expires
                     self.upstream('PUT','/auth/v1/admin/users/'+uid,secret=True,json={
                         'app_metadata':metadata})
@@ -337,10 +357,11 @@ class Portal:
                     action=form.get('action','')
                     result=await run_in_threadpool(self.manage,form)
                     if action!='create':
-                        if action!='set-expiry':
+                        if action not in ('set-expiry','renew-90'):
                             self.revoke(result)
-                        result=('تم تحديث تاريخ صلاحية الحساب.' if action=='set-expiry'
-                                else 'تم فك ارتباط الجهاز. يمكن للعميل تسجيل الدخول من جهاز جديد.' if action=='reset-device'
+                        result=('تم تجديد الباقة 90 يومًا بنجاح.' if action=='renew-90'
+                                else 'تم تحديث تاريخ صلاحية الحساب.' if action=='set-expiry'
+                                else 'تم فك ارتباط الجهاز وإبطال الجلسات السابقة.' if action=='reset-device'
                                 else 'تم تحديث حالة الحساب.')
                     return await run_in_threadpool(self.customers_page,session,result,page_number)
                 except ValueError as exc:
@@ -351,7 +372,15 @@ class Portal:
             from fastapi.responses import JSONResponse
             if request.method!='GET' or session[1]!='customer':
                 return JSONResponse({'active':False},status_code=403,headers=HEADERS)
-            return JSONResponse({'active':True},headers=HEADERS)
+            deadline=session[4] if len(session)>4 else 0
+            if deadline:
+                end_local=datetime.fromtimestamp(deadline-1,ZoneInfo('Asia/Riyadh')).date()
+                days=max(0,(end_local-datetime.now(ZoneInfo('Asia/Riyadh')).date()).days+1)
+                summary={'active':True,'expires_on':end_local.isoformat(),
+                         'remaining_days':days,'warning':days<=7,'plan_days':PLAN_DAYS}
+            else:
+                summary={'active':True,'expires_on':None,'remaining_days':None,'warning':False}
+            return JSONResponse(summary,headers=HEADERS)
         if path=='/account/sync':
             from fastapi.responses import JSONResponse
             if session[1]!='customer':
