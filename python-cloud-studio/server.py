@@ -39,7 +39,7 @@ from alezz_fetchv_importer import (
 from metadata_enrichment import enrich
 from library_sync import JobDB,collect_pages,collect_works
 from auto_sync import AutoSync, target_key
-from media_resolver import MediaResolver, read_public_html, safe_error
+from media_resolver import MediaResolver, read_public_html, safe_error, supported_source_kind
 from title_cleaner import content_title
 from launch import studio_revision
 from member_portal import Portal
@@ -402,7 +402,7 @@ def scan_catalogue(state: UserState, cat: Catalogue, progress: dict):
             page = cat.url if cat.kind == 'movie' else entry.page_url
             candidates = list(entry.sources)
             if entry.media_url and not any(item.get('url') == entry.media_url for item in candidates):
-                candidates.append({'url':entry.media_url,'kind':'direct','page_url':page})
+                candidates.append({'url':entry.media_url,'kind':supported_source_kind(entry.media_url) or 'direct','page_url':page})
         pages = []
         try:
             # Metadata-only episodes may point to the series page. Never assign that
@@ -631,7 +631,7 @@ async def links(request: Request, data: LinkForm):
             try:
                 if cat.kind == 'movie' and '|' not in line:
                     url = public_url(line)
-                    if not MEDIA_EXT.search(url):
+                    if not supported_source_kind(url):
                         raise ValueError('رابط الفيديو ليس MP4/HLS/WebM')
                     cat.media_url, cat.verified = url, False
                     count += 1
@@ -642,7 +642,7 @@ async def links(request: Request, data: LinkForm):
                 from alezz_fetchv_importer import episode_numbers
                 numbers = episode_numbers(label.strip())
                 url = public_url(url.strip())
-                if not numbers or not MEDIA_EXT.search(url):
+                if not numbers or not supported_source_kind(url):
                     raise ValueError('الموسم/الحلقة أو صيغة الرابط غير صحيحة')
                 ep = next((e for e in cat.episodes if (e.season, e.number) == numbers), None)
                 if ep is None:
@@ -713,7 +713,7 @@ async def update(request: Request, data: UpdateForm):
             cat.genres = list(dict.fromkeys(clean(x, 40).lower() for x in data.genres if x))[:12]
         if data.media_url is not None and cat.kind == 'movie':
             value = optional_url(data.media_url)
-            if value and not MEDIA_EXT.search(value):
+            if value and not supported_source_kind(value):
                 raise HTTPException(400, 'رابط الفيلم يجب أن يكون MP4 أو HLS أو WebM')
             if value != cat.media_url:
                 cat.media_url, cat.verified = value, False
@@ -735,7 +735,7 @@ async def update(request: Request, data: UpdateForm):
                     ep.poster_url = optional_url(str(row['poster_url']))
                 if 'media_url' in row:
                     value = optional_url(str(row['media_url']))
-                    if value and not MEDIA_EXT.search(value):
+                    if value and not supported_source_kind(value):
                         raise HTTPException(400, f'صيغة رابط الموسم {ep.season} الحلقة {ep.number} غير مدعومة')
                     if value != ep.media_url:
                         ep.media_url, ep.verified, ep.error = value, False, ''
