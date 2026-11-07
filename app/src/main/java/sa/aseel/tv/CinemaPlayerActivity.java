@@ -845,6 +845,7 @@ public final class CinemaPlayerActivity extends Activity {
             int groupSize="الكل".equals(group)?tvChannels.size():
                 "المفضلة".equals(group)?favorites:counts.get(group);
             Button filter=button((group.equals(activeGroup)?"● ":"")+group+"  "+groupSize);
+            filter.setTag("filter:"+group);
             filter.setTextSize(12);
             filter.setContentDescription("تصنيف "+group+"، "+groupSize+" قناة");
             horizontal.addView(filter,new LinearLayout.LayoutParams(dp(127),dp(46)));
@@ -852,7 +853,9 @@ public final class CinemaPlayerActivity extends Activity {
                 activeGroup=group;
                 updateChannelRail();
                 if(leftRail!=null)leftRail.setVisibility(View.VISIBLE);
-                focusGuideChannel();
+                View replacement=leftRail==null?null:leftRail.findViewWithTag("filter:"+group);
+                if(replacement!=null)replacement.requestFocus();
+                else focusGuideChannel();
             }});
         }
         int shown=0;
@@ -1041,6 +1044,13 @@ public final class CinemaPlayerActivity extends Activity {
         seriesId=selected.optString("series_id",seriesId);
         itemTitle=selected.optString("title","العز TV");
         sources=variants;
+        // Source picker must follow the currently selected film/episode, not the original one.
+        ArrayList<PlaybackSources.Source> alternatives=PlaybackSources.collect(
+            selected.optString("url"),selected.optString("quality"),
+            selected.optJSONArray("variants")==null?"[]":selected.optJSONArray("variants").toString(),
+            selected.optString("youtube_url",""),kidsPlayback);
+        getIntent().putExtra("available_sources",PlaybackSources.encode(alternatives));
+        getIntent().putExtra("stream_url",selected.optString("url"));
         JSONObject savedItem=PlaybackMemory.entry(this,profile,itemId);
         String quality=savedItem==null?"auto":savedItem.optString("quality","auto");
         index=StreamQuality.choose(sources,quality,Build.VERSION.SDK_INT);
