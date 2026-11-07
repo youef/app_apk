@@ -1196,25 +1196,36 @@ public final class MainActivity extends Activity {
             return;
         }
         String youtube=str(item,"youtube_url");
-        if(YouTubeLink.usable(youtube)){
-            openYouTube(youtube,str(item,"title_ar"));return;
-        }
-        String url=str(item,"stream_url");
-        if(EmbedPlayerActivity.isAllowed(url)){
-            if(!"approved".equals(str(item,"rights_status"))){
-                showStatus("مشغل Embed غير معتمد الحقوق");return;
+        String variants=item.optJSONArray("stream_variants")==null?
+            "[]":item.optJSONArray("stream_variants").toString();
+        boolean kids="kids".equals(mode);
+        ArrayList<PlaybackSources.Source> available=PlaybackSources.collect(
+            str(item,"stream_url"),str(item,"quality"),variants,youtube,kids);
+        if(available.isEmpty()){showStatus("لا يوجد مصدر MP4/HLS أو Embed/YouTube معتمد");return;}
+        PlaybackSources.Source selected=available.get(PlaybackSources.preferred(available));
+        String url=selected.url;
+        String encoded=PlaybackSources.encode(available);
+        if("embed".equals(selected.kind)||"youtube".equals(selected.kind)){
+            if(kids || !"approved".equals(str(item,"rights_status"))){
+                showStatus("مشغل Embed/YouTube غير معتمد الحقوق");return;
+            }
+            if(available.size()==1 && "youtube".equals(selected.kind)){
+                openYouTube(youtube,str(item,"title_ar"));return;
             }
             Intent embed=new Intent(this,EmbedPlayerActivity.class);
             embed.putExtra("stream_url",url);
             embed.putExtra("title",str(item,"title_ar"));
+            embed.putExtra("available_sources",encoded);
+            embed.putExtra("stream_variants",variants);
+            embed.putExtra("item_id",str(item,"id"));
             startActivity(embed);
             return;
         }
-        if(!StreamQuality.isDirectUrl(url)){showStatus("هذا العنصر لا يحتوي على رابط MP4/HLS مباشر صالح");return;}
-        Intent i=new Intent(this,PlayerActivity.class);
+        Intent i=new Intent(this,available.size()>1?CinemaPlayerActivity.class:PlayerActivity.class);
+        i.putExtra("available_sources",encoded);
         i.putExtra("stream_url",url);
         i.putExtra("quality",str(item,"quality"));
-        i.putExtra("stream_variants",item.optJSONArray("stream_variants")==null?"[]":item.optJSONArray("stream_variants").toString());
+        i.putExtra("stream_variants",variants);
         i.putExtra("is_live","channel".equals(str(item,"_type")));
         i.putExtra("title",str(item,"title_ar"));
         i.putExtra("item_id",str(item,"id"));if(nextUrl!=null)i.putExtra("next_url",nextUrl);
