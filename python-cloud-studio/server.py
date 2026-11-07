@@ -409,7 +409,11 @@ def scan_catalogue(state: UserState, cat: Catalogue, progress: dict):
             # page's video to an episode without an episode-specific source.
             pages = list(dict.fromkeys(url for url in [page, *entry.source_pages]
                                        if url and (cat.kind == 'movie' or url.rstrip('/') != cat.url.rstrip('/'))))
-            checked, errors = resolver.resolve(pages, existing=candidates)
+            if entry.media_url and supported_source_kind(entry.media_url) == 'embed':
+                # Validate only the authorized iframe page; do not scrape its media.
+                checked, errors = resolver.check(candidates), []
+            else:
+                checked, errors = resolver.resolve(pages, existing=candidates)
             playable = next((item for item in checked if item.get('verified') and item.get('kind')=='direct'), None)
             embed_page = next((item for item in checked if item.get('kind') == 'embed'
                                and item.get('reachable') and item.get('url') == entry.media_url), None)
