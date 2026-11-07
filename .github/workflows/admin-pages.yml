@@ -65,6 +65,7 @@ jobs:
           node tests/web-routes-smoke.cjs
           node tests/ios-safari-playback-smoke.cjs
           node tests/embed-playback-smoke.cjs
+          node tests/unified-sources-smoke.cjs
           node tests/kids-world-smoke.cjs
           node tests/cast-airplay-smoke.cjs
           node tests/importer-smoke.cjs
