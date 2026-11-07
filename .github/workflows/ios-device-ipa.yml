@@ -1,0 +1,100 @@
+name: Al Ezz TV - iPhone device IPA package
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ios-device-ipa.yml'
+      - 'ios/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: al-ezz-ios-device-ipa-package
+  cancel-in-progress: false
+
+jobs:
+  build-ipa:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate native source and assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/ios-v4-iphone-smoke.cjs
+          plutil -lint ios/Info.plist
+          bash ios/generate-app-icons.sh
+          test -s ios/Assets.xcassets/AppIcon.appiconset/AppIcon-180.png
+      - name: Compile actual iPhoneOS arm64 executable (not simulator)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk="$(xcrun --sdk iphoneos --show-sdk-path)"
+          mkdir -p dist/Payload/AseelTV.app
+          cp ios/Info.plist dist/Payload/AseelTV.app/Info.plist
+          cp ios/Assets.xcassets/AppIcon.appiconset/AppIcon-180.png dist/Payload/AseelTV.app/EzzIcon.png
+          xcrun swiftc -sdk "$sdk" -target arm64-apple-ios15.0 \
+            -parse-as-library -O ios/AlEzzIOSApp.swift -o dist/Payload/AseelTV.app/AseelTV
+          plutil -replace CFBundleSupportedPlatforms -json '["iPhoneOS"]' dist/Payload/AseelTV.app/Info.plist
+          lipo -archs dist/Payload/AseelTV.app/AseelTV | grep -qw arm64
+          xcrun vtool -show-build dist/Payload/AseelTV.app/AseelTV
+          # Ad hoc code signature only for integrity. Not Apple-issued distribution.
+          codesign --force --sign - dist/Payload/AseelTV.app
+          codesign --verify dist/Payload/AseelTV.app
+      - name: Package iPhone IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          (
+            cd dist
+            zip -qry al-ezz-tv-iphone-v4-unsigned.ipa Payload
+          )
+          unzip -t dist/al-ezz-tv-iphone-v4-unsigned.ipa | tail -1
+          unzip -Z1 dist/al-ezz-tv-iphone-v4-unsigned.ipa | grep -q '^Payload/AseelTV.app/AseelTV$'
+          shasum -a 256 dist/al-ezz-tv-iphone-v4-unsigned.ipa \
+            > dist/al-ezz-tv-iphone-v4-unsigned.sha256
+          cat > dist/README-IPA.txt <<'NOTE'
+          Al Ezz TV — Red Glass Cinema V4 iPhoneOS arm64 IPA (iOS 15+).
+          Built for physical iPhone architecture, NOT an iOS simulator build.
+          IMPORTANT: this IPA is ONLY ad-hoc code-signed, without an Apple
+          provisioning profile/certificate. It CANNOT be installed directly on
+          a regular iPhone. It must be re-signed with an authorized iOS
+          development/distribution certificate and matching provisioning profile.
+          iPhone users can use the PWA immediately:
+          https://app-apk-oquy.onrender.com/web/
+          Safari > Share > Add to Home Screen.
+          Source: https://github.com/youef/app_apk/tree/main/ios
+          NOTE
+      - name: Upload unsigned IPA with instructions
+        uses: actions/upload-artifact@v4
+        with:
+          name: al-ezz-tv-ios-device-unsigned-ipa
+          path: |
+            dist/al-ezz-tv-iphone-v4-unsigned.ipa
+            dist/al-ezz-tv-iphone-v4-unsigned.sha256
+            dist/README-IPA.txt
+          retention-days: 30
+          if-no-files-found: error
+      - name: Publish direct IPA download on GitHub
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p downloads
+          cp dist/al-ezz-tv-iphone-v4-unsigned.ipa downloads/al-ezz-tv-iphone-v4-unsigned.ipa
+          cp dist/al-ezz-tv-iphone-v4-unsigned.sha256 downloads/al-ezz-tv-iphone-v4-unsigned.sha256
+          cp dist/README-IPA.txt downloads/README-IPHONE-IPA.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f downloads/al-ezz-tv-iphone-v4-unsigned.ipa
+          git add -f downloads/al-ezz-tv-iphone-v4-unsigned.sha256
+          git add -f downloads/README-IPHONE-IPA.txt
+          if git diff --cached --quiet; then
+            echo "Already published"
+          else
+            git commit -m "release(ios): publish unsigned physical iPhone IPA for Apple re-signing"
+            git push origin HEAD:main
+          fi
