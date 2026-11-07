@@ -169,6 +169,13 @@ class Portal:
                     self.upstream('PUT','/auth/v1/admin/users/'+uid,secret=True,json={
                         'app_metadata':metadata})
                     self.devices.reset(uid)
+                    try:
+                        self.upstream('DELETE','/rest/v1/aseel_device_sessions',
+                                      secret=True,params={'user_id':'eq.'+uid})
+                    except requests.RequestException:
+                        # Native sessions are still revoked via server-owned metadata,
+                        # even if cleaning the informational inventory fails.
+                        pass
                 elif action in ('set-expiry','renew-90'):
                     if action=='renew-90':
                         expires,ending=plan_90_dates(metadata)
