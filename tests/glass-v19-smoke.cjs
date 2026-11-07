@@ -13,7 +13,7 @@ for(const p of ["web/index.html","web/index.view","web/youtube-player.html","web
 for(const p of ["admin/index.html","admin/index.view","admin/bulk-import.html",
     "admin/bulk-import.view","admin/import-studio.html","admin/import-studio.view",
     "admin/series-quick.html","admin/series-quick.view"]){
-  const html=read(p),n=(html.match(/href="glass\.css\?v=glass-v19-20261107"/g)||[]).length;
+  const html=read(p),n=(html.match(/href="glass\.css\?v=glass-v19-20261107(?:-red-v20)?"/g)||[]).length;
   test(p+" loads the administration glass layer exactly once",n===1);
 }
 test("Viewer has translucent material tokens and crisp readable text",
