@@ -1,9 +1,24 @@
-Al Ezz TV — iPhone Simulator Preview
+Al Ezz TV — iPhone / iPad — Red Glass Cinema V4
 
-Native UIKit iOS 15+ application. New Al Ezz TV branding, dark interface, children filter, movies, series, authorized direct channels and favorites.
+To use the strongest iPhone interface immediately, open
+https://app-apk-oquy.onrender.com/web/ in Safari, select Share
+and choose "Add to Home Screen". This opens the actual, authenticated
+current viewer with movies, series, seasons, live television, profiles,
+subscription status and mobile red-glass styling.
+
+The native iOS project is ios/AlEzzIOSApp.swift (iOS 15+, HTTPS WKWebView).
+Generate the Xcode project on macOS:
+  bash ios/generate-app-icons.sh
+  cd ios
+  xcodegen generate
+  open AlEzzTV.xcodeproj
+
+A physical iPhone IPA requires signing and provisioning with Apple Developer.
+The GitHub Actions artifact AlEzzTV.app is for iPhone Simulator ONLY.
+A ZIP file is not an installable iPhone app. Source and simulator artifacts
+are bundled together as al-ezz-tv-iphone-complete-v4.zip.
 
 Workflow: .github/workflows/ios-simulator.yml
-Artifact: al-ezz-tv-ios-simulator.app.zip
+Arabic instructions: ios/README-AR.md
 
-This is only a simulator .app ZIP, NOT an IPA for a physical iPhone; Apple Developer code signing is necessary for iPhone distribution.
-The application uses the same Supabase RLS-approved public catalog. External website fallback is disabled for playback.
+Legacy ios/AseelApp.swift remains an old, unbuilt catalog prototype.
