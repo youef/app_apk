@@ -954,20 +954,78 @@ public final class CinemaPlayerActivity extends Activity {
                 }
             }).setNegativeButton("إلغاء",null).show();
     }
+    /** Movies and series use the same cinematic slide-out catalogue as Live TV. */
     private void showContentGuide(){
         if(live){showChannelGuide();return;}
-        if(mediaPlaylist.isEmpty()){status.setText("قائمة التشغيل غير متاحة.");return;}
-        String[] names=new String[mediaPlaylist.size()];
-        for(int i=0;i<names.length;i++)
-            names[i]=String.format(Locale.US,"%02d  •  %s",i+1,
-                mediaPlaylist.get(i).optString("title","عنوان"));
-        new android.app.AlertDialog.Builder(this).setTitle(
-            "episode".equals(mediaKind)?"الحلقات":"الأفلام")
-            .setSingleChoiceItems(names,mediaIndex,new android.content.DialogInterface.OnClickListener(){
-                public void onClick(android.content.DialogInterface dialog,int which){
-                    dialog.dismiss();switchMedia(which);
+        if(mediaPlaylist.isEmpty()){
+            status.setText("قائمة التشغيل غير متاحة لهذا العنوان.");showControls(true);return;
+        }
+        updateMediaRail();
+        handler.removeCallbacks(autoHide);
+        if(controlPanel!=null)controlPanel.setVisibility(View.GONE);
+        if(rightRail!=null)rightRail.setVisibility(View.GONE);
+        if(leftRail!=null)leftRail.setVisibility(View.VISIBLE);
+        railVisible=true;
+        focusGuideChannel();
+    }
+    private void updateMediaRail(){
+        if(live||leftRail==null)return;
+        leftRail.removeAllViews();
+        guideSelectedButton=null;
+        guideFirstButton=null;
+        final boolean episodes="episode".equals(mediaKind);
+        TextView titleView=txt(episodes?"☷  جميع حلقات المسلسل":"☷  مكتبة الأفلام",19,WHITE,true);
+        titleView.setGravity(Gravity.CENTER);
+        leftRail.addView(titleView,new LinearLayout.LayoutParams(-1,dp(51)));
+        TextView description=txt(mediaPlaylist.size()+
+            (episodes?" حلقة":" فيلم")+"   •   ↑↓ للتنقل   OK للمشاهدة",12,MUTED,false);
+        description.setGravity(Gravity.CENTER);
+        leftRail.addView(description,new LinearLayout.LayoutParams(-1,dp(37)));
+        ScrollView scroll=new ScrollView(this);
+        scroll.setVerticalScrollBarEnabled(false);
+        scroll.setFillViewport(false);
+        leftRail.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        LinearLayout list=new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        scroll.addView(list,new ScrollView.LayoutParams(-1,-2));
+        for(int i=0;i<mediaPlaylist.size();i++){
+            final int position=i;
+            JSONObject media=mediaPlaylist.get(i);
+            LinearLayout entry=new LinearLayout(this);
+            entry.setOrientation(LinearLayout.HORIZONTAL);
+            entry.setGravity(Gravity.CENTER_VERTICAL);
+            entry.setPadding(dp(5),dp(5),dp(5),dp(5));
+            ImageView image=new ImageView(this);
+            image.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            image.setBackgroundDrawable(shape(0xFF2D2231,0x556F576C));
+            String poster=media.optString("poster","");
+            if(poster.startsWith("https://"))PosterLoader.load(image,poster);
+            entry.addView(image,new LinearLayout.LayoutParams(dp(63),dp(66)));
+            String label=String.format(Locale.US,"%02d  •  %s",i+1,
+                media.optString("title",episodes?"الحلقة "+(i+1):"فيلم"));
+            if(episodes)label+="\n"+(i==mediaIndex?"● تشاهد الآن":"الحلقة "+(i+1));
+            final Button button=button((i==mediaIndex?"▶ ":"")+label);
+            button.setAllCaps(false);
+            button.setTextSize(13);
+            button.setGravity(Gravity.CENTER_VERTICAL|Gravity.RIGHT);
+            button.setPadding(dp(10),0,dp(10),0);
+            if(i==mediaIndex)button.setBackgroundDrawable(shape(0xFF68223B,0xFFFF7185));
+            entry.addView(button,new LinearLayout.LayoutParams(0,dp(71),1));
+            list.addView(entry,new LinearLayout.LayoutParams(-1,dp(82)));
+            if(guideFirstButton==null)guideFirstButton=button;
+            if(i==mediaIndex)guideSelectedButton=button;
+            button.setOnClickListener(new View.OnClickListener(){
+                public void onClick(View view){
+                    switchMedia(position);
+                    hideControls();
                 }
-            }).setNegativeButton("إغلاق",null).show();
+            });
+        }
+        Button close=button("✕ إغلاق قائمة "+(episodes?"الحلقات":"الأفلام"));
+        leftRail.addView(close,new LinearLayout.LayoutParams(-1,dp(49)));
+        close.setOnClickListener(new View.OnClickListener(){
+            public void onClick(View view){hideControls();}
+        });
     }
     private void switchMedia(int next){
         if(next<0||next>=mediaPlaylist.size())return;
@@ -1193,8 +1251,15 @@ public final class CinemaPlayerActivity extends Activity {
         if(code==KeyEvent.KEYCODE_DPAD_CENTER||code==KeyEvent.KEYCODE_ENTER||
            code==KeyEvent.KEYCODE_DPAD_UP||code==KeyEvent.KEYCODE_DPAD_DOWN||
            code==KeyEvent.KEYCODE_DPAD_LEFT||code==KeyEvent.KEYCODE_DPAD_RIGHT){
-            if(controlPanel!=null&&controlPanel.getVisibility()!=View.VISIBLE){
-                showControls(true);return true;
+            final boolean guideShown=leftRail!=null&&leftRail.getVisibility()==View.VISIBLE;
+            final boolean optionsShown=rightRail!=null&&rightRail.getVisibility()==View.VISIBLE;
+            // Never steal D-pad focus from the open guide or the options drawer.
+            if(!guideShown&&!optionsShown&&controlPanel!=null&&
+                controlPanel.getVisibility()!=View.VISIBLE){
+                if(!live && code==KeyEvent.KEYCODE_DPAD_LEFT)showContentGuide();
+                else if(!live && code==KeyEvent.KEYCODE_DPAD_RIGHT)showLiveOptions();
+                else showControls(true);
+                return true;
             }
         }
         if(code==KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE||
