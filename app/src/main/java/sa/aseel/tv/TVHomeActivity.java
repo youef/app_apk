@@ -1203,6 +1203,9 @@ public final class TVHomeActivity extends Activity {
         PlaybackSources.Source selected=available.get(PlaybackSources.preferred(available));
         String url=selected.url;
         String sourceList=PlaybackSources.encode(available);
+        if("youtube".equals(selected.kind) && available.size()==1 && !kidsMode){
+            openYouTube(item);return;
+        }
         if("embed".equals(selected.kind)||"youtube".equals(selected.kind)){
             if(kidsMode || !"approved".equals(value(item,"rights_status"))){
                 heading("المصدر غير معتمد",
