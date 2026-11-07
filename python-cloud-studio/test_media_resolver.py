@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 import requests
 import alezz_fetchv_importer as importer
 from media_resolver import (MediaResolver, confidence, extract_candidates,
-                            merge_sources, safe_error, signed_expiry)
+                            merge_sources, safe_error, signed_expiry, supported_source_kind)
 
 ROOT = 'https://source.example.org/episode/1'
 OLD = 'https://cdn.example.org/old.m3u8?expires=1700000000&token=secret'
@@ -34,6 +34,26 @@ class FakeSite:
 
 
 class ResolverTests(unittest.TestCase):
+    def test_1vid_embed_format_and_nonvideo_probe(self):
+        url = 'https://1vid.xyz/embed-cnpn8jvjzx9p.html'
+        self.assertEqual(supported_source_kind(url), 'embed')
+        self.assertEqual(supported_source_kind('https://www.1vid.xyz/embed-Xy_123.html'), 'embed')
+        self.assertEqual(supported_source_kind('https://cdn.example.org/film.m3u8'), 'direct')
+        for invalid in (
+            'http://1vid.xyz/embed-cnpn8jvjzx9p.html',
+            'https://1vid.xyz.evil.test/embed-cnpn8jvjzx9p.html',
+            'https://1vid.xyz/watch/cnpn8jvjzx9p',
+            'https://1vid.xyz:8443/embed-cnpn8jvjzx9p.html',
+            'https://127.0.0.1/embed-cnpn8jvjzx9p.html',
+        ):
+            self.assertEqual(supported_source_kind(invalid), '', invalid)
+        page = FakeSite({url: '<html><body>Player</body></html>'})
+        result = self.resolver(page, mode='http').check(
+            [{'url': url, 'kind': 'embed', 'label': '1vid'}])[0]
+        self.assertTrue(result['reachable'])
+        self.assertFalse(result['verified'])
+        self.assertEqual(page.checked, [])
+
     def resolver(self, site, browser=None, mode='auto', **kwargs):
         return MediaResolver(mode=mode, client_factory=lambda timeout: site,
                              browser_capture=browser or Mock(return_value=[]), **kwargs)
