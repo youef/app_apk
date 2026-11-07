@@ -61,7 +61,7 @@
     backdrop_url: { key: 'backdrop_url', label: 'رابط الخلفية (HTTPS)', type: 'url', group: 'media' },
 
     /* playback */
-    stream_url: { key: 'stream_url', label: 'رابط التشغيل المباشر', type: 'url', group: 'playback', hint: 'ملف MP4 أو قائمة HLS عبر HTTPS.' },
+    stream_url: { key: 'stream_url', label: 'رابط التشغيل (MP4 / HLS / Embed)', type: 'url', group: 'playback', hint: 'مصدر HTTPS مباشر أو مشغل Embed مسموح (مثل hanerix.com/e/…).' },
     youtube_url: { key: 'youtube_url', label: 'رابط يوتيوب الرسمي', type: 'url', group: 'playback' },
     stream_variants: { key: 'stream_variants', label: 'جودات إضافية', type: 'variants', group: 'playback', span: 2, hint: 'حتى 8 جودات، وكل جودة تحتاج اسمًا ورابط HTTPS.' },
     source_id: { key: 'source_id', label: 'مصدر الحقوق', type: 'select', group: 'playback', source: 'sources', emptyLabel: 'غير محدد' },
