@@ -24,8 +24,10 @@ services:
       - key: ALEZZ_AUTOSYNC_MODE
         value: auto
       - key: ALEZZ_AUTOSYNC_INTERVAL_HOURS
-        value: "24"
+        value: "0.5"
+      - key: ALEZZ_AUTOSYNC_CHECK_MINUTES
+        value: "5"
       - key: ALEZZ_AUTOSYNC_CONCURRENCY
-        value: "2"
+        value: "3"
       - key: ALEZZ_SUPABASE_SERVICE_ROLE_KEY
         sync: false
