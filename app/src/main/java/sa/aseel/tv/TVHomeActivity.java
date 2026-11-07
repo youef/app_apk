@@ -223,9 +223,7 @@ public final class TVHomeActivity extends Activity {
         showingWelcome=true;
         LinearLayout splash=column();
         splash.setGravity(Gravity.CENTER);
-        splash.setBackgroundDrawable(new GradientDrawable(
-            GradientDrawable.Orientation.TL_BR,
-            new int[]{0xFF0B0B13,0xFF471A31,0xFF090B11}));
+        splash.setBackgroundDrawable(new CinemaBackdropDrawable());
         setContentView(splash);
         ImageView icon=new ImageView(this);
         int mark=getResources().getIdentifier("alizz_brand","drawable",getPackageName());
@@ -249,8 +247,7 @@ public final class TVHomeActivity extends Activity {
         showingWelcome=true;
         final LinearLayout panel=column();
         panel.setGravity(Gravity.CENTER);
-        panel.setBackgroundDrawable(new GradientDrawable(
-            GradientDrawable.Orientation.TL_BR,new int[]{0xFF0B0D15,0xFF411D30,0xFF090B11}));
+        panel.setBackgroundDrawable(new CinemaBackdropDrawable());
         setContentView(panel);
         TextView message=text("◌  التحقق من الجلسة المحفوظة...",22,WHITE,true);
         message.setGravity(Gravity.CENTER);
@@ -280,8 +277,7 @@ public final class TVHomeActivity extends Activity {
         final LinearLayout panel=column();
         panel.setGravity(Gravity.CENTER);
         panel.setPadding(dp(32),dp(15),dp(32),dp(15));
-        panel.setBackgroundDrawable(new GradientDrawable(
-            GradientDrawable.Orientation.TL_BR,new int[]{0xFF0B0E18,0xFF302331,0xFF090B11}));
+        panel.setBackgroundDrawable(new CinemaBackdropDrawable());
         setContentView(panel);
         ImageView logo=new ImageView(this);
         int resource=getResources().getIdentifier("alizz_brand","drawable",getPackageName());
@@ -357,8 +353,7 @@ public final class TVHomeActivity extends Activity {
         final LinearLayout panel=column();
         panel.setGravity(Gravity.CENTER);
         panel.setPadding(dp(38),dp(16),dp(38),dp(16));
-        panel.setBackgroundDrawable(new GradientDrawable(
-            GradientDrawable.Orientation.TL_BR,new int[]{0xFF100E16,0xFF4B1B31,0xFF0D101A}));
+        panel.setBackgroundDrawable(new CinemaBackdropDrawable());
         setContentView(panel);
         TextView icon=text("⌛",58,GOLD,true);
         icon.setGravity(Gravity.CENTER);
@@ -395,7 +390,7 @@ public final class TVHomeActivity extends Activity {
     }
     private void buildShell(){
         LinearLayout root=column();
-        root.setBackgroundDrawable(GlassSurface.canvas());
+        root.setBackgroundDrawable(new CinemaBackdropDrawable());
         root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
         setContentView(root);
         LinearLayout top=row();top.setPadding(dp(16),dp(6),dp(16),dp(6));
