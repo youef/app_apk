@@ -389,6 +389,7 @@
       if (u.protocol !== "https:" || u.username || u.password || (u.port && u.port !== "443")) return false;
       var host = u.hostname.toLowerCase(), path = u.pathname;
       return (host === "hanerix.com" && /^\/e\/[a-z0-9_-]+\/?$/i.test(path)) ||
+        ((host === "1vid.xyz" || host === "www.1vid.xyz") && /^\/embed-[a-z0-9_-]+\.html$/i.test(path)) ||
         (host === "player.vimeo.com" && /^\/video\/[0-9]+\/?$/.test(path)) ||
         (host === "www.dailymotion.com" && /^\/embed\/video\/[a-z0-9_-]+\/?$/i.test(path)) ||
         (host === "www.youtube-nocookie.com" && /^\/embed\/[a-z0-9_-]{11}\/?$/i.test(path));
