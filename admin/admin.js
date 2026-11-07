@@ -1935,6 +1935,10 @@
           ((parts[0] === 'embed' || parts[0] === 'live' || parts[0] === 'shorts') && parts.length === 2 ? parts[1] : '');
         return /^[A-Za-z0-9_-]{11}$/.test(id || '') ? 'youtube' : '';
       }
+      if ((host === 'hanerix.com' && /^\/e\/[a-z0-9_-]+\/?$/i.test(u.pathname)) ||
+          (host === 'player.vimeo.com' && /^\/video\/[0-9]+\/?$/.test(u.pathname)) ||
+          (host === 'www.dailymotion.com' && /^\/embed\/video\/[a-z0-9_-]+\/?$/i.test(u.pathname)))
+        return 'embed';
       return /\.(?:mp4|m3u8)$/i.test(u.pathname) ? 'stream' : '';
     } catch (err) { return ''; }
   }
@@ -1957,7 +1961,7 @@
       placeholder: 'https://example.com/movie.mp4', 'aria-label': 'رابط تشغيل الفيلم' });
     quickUrl.setAttribute('inputmode', 'url');
     linkWrap.append(quickUrl,
-      el('p', { class: 'field-hint' }, 'MP4 أو M3U8 مباشر، أو رابط يوتيوب رسمي.'),
+      el('p', { class: 'field-hint' }, 'MP4 أو M3U8 مباشر، أو Embed مدعوم، أو يوتيوب رسمي.'),
       el('p', { class: 'field-msg', id: 'e_movie_quick_url' }));
     grid.append(linkWrap);
 
@@ -1996,11 +2000,11 @@
     quickUrl.addEventListener('input', function () {
       var link = quickUrl.value.trim(), type = movieQuickLinkType(link);
       var direct = form.elements.namedItem('stream_url'), youtube = form.elements.namedItem('youtube_url');
-      if (direct) direct.value = type === 'stream' ? link : '';
+      if (direct) direct.value = (type === 'stream' || type === 'embed') ? link : '';
       if (youtube) youtube.value = type === 'youtube' ? link : '';
       linkWrap.classList.toggle('is-invalid', !!link && !type);
       var msg = $('#e_movie_quick_url');
-      if (msg) msg.textContent = link && !type ? 'الرابط يجب أن يكون MP4 أو M3U8 مباشرًا أو يوتيوب صالحًا.' : '';
+      if (msg) msg.textContent = link && !type ? 'الرابط يجب أن يكون MP4 أو M3U8 أو Embed من مصدر معتمد أو يوتيوب.' : '';
     });
   }
 
@@ -2233,8 +2237,8 @@
         if (!link && !payload.stream_url && !payload.youtube_url) {
           errors.movie_quick_url = 'أدخل رابط تشغيل الفيلم أولًا.';
         } else if (link && !type) {
-          errors.movie_quick_url = 'استخدم رابط MP4 / M3U8 مباشرًا أو فيديو يوتيوب صالحًا.';
-        } else if (type === 'stream') {
+          errors.movie_quick_url = 'استخدم رابط MP4 أو M3U8 أو Embed مدعومًا أو فيديو يوتيوب.';
+        } else if (type === 'stream' || type === 'embed') {
           payload.stream_url = link;
           payload.youtube_url = null;
         } else if (type === 'youtube') {
