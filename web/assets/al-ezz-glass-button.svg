@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 180" preserveAspectRatio="none" role="img" aria-label="Crimson glass button texture without text">
+<defs>
+  <linearGradient id="base" x1="0" y1="0" x2=".88" y2="1">
+    <stop stop-color="#731325"/><stop offset=".23" stop-color="#3a020a"/><stop offset=".69" stop-color="#590713"/><stop offset="1" stop-color="#910b26"/>
+  </linearGradient>
+  <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
+    <stop stop-color="#ff94a0" stop-opacity=".65"/><stop offset=".16" stop-color="#ff5069" stop-opacity=".29"/><stop offset=".57" stop-color="#ffffff" stop-opacity=".01"/><stop offset="1" stop-color="#dd102b" stop-opacity=".29"/>
+  </linearGradient>
+  <linearGradient id="wave" x1=".12" y1="0" x2=".88" y2="1">
+    <stop stop-color="#8a061c" stop-opacity=".01"/><stop offset=".4" stop-color="#df1631" stop-opacity=".27"/><stop offset="1" stop-color="#f52744" stop-opacity=".19"/>
+  </linearGradient>
+  <linearGradient id="stroke" x1="0" y1="0" x2="0" y2="1">
+    <stop stop-color="#ffadb6"/><stop offset=".32" stop-color="#ef3152"/><stop offset=".65" stop-color="#9b112d"/><stop offset="1" stop-color="#ff677a"/>
+  </linearGradient>
+  <linearGradient id="rim" x1=".08" y1=".15" x2=".82" y2="1">
+    <stop stop-color="#ffffff" stop-opacity=".72"/><stop offset=".27" stop-color="#ff5773" stop-opacity=".27"/><stop offset=".73" stop-color="#f61b40" stop-opacity=".16"/><stop offset="1" stop-color="#ff8493" stop-opacity=".75"/>
+  </linearGradient>
+  <clipPath id="clip"><rect x="7" y="9" width="646" height="162" rx="72"/></clipPath>
+</defs>
+<rect x="2" y="3" width="656" height="174" rx="76" fill="#730619" opacity=".48"/>
+<rect x="7" y="9" width="646" height="162" rx="72" fill="url(#base)" stroke="url(#stroke)" stroke-width="3"/>
+<g clip-path="url(#clip)">
+ <path d="M15 42Q95 -10 195 5H650V38Q430 30 310 50Q153 87 9 111Z" fill="url(#shine)" opacity=".66"/>
+ <path d="M-5 103Q180 150 340 140Q495 111 668 106V186H-5Z" fill="url(#wave)"/>
+ <path d="M-20 110Q168 170 318 148Q488 123 672 118" stroke="#fd2142" stroke-opacity=".73" stroke-width="3" fill="none"/>
+ <path d="M18 24Q86 8 146 16" stroke="#ffe3e7" stroke-opacity=".45" stroke-width="3" stroke-linecap="round" fill="none"/>
+ <path d="M-10 128Q102 161 164 159" stroke="#ff6a7d" stroke-opacity=".49" stroke-width="6" fill="none"/>
+</g>
+<rect x="12" y="15" width="636" height="150" rx="67" fill="none" stroke="url(#rim)" stroke-width="2.3"/>
+<rect x="19" y="22" width="622" height="136" rx="59" fill="none" stroke="#110009" stroke-opacity=".35" stroke-width="1.5"/>
+</svg>
