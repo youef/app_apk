@@ -4,7 +4,7 @@ const fs=require("node:fs"),assert=require("node:assert/strict");
 const read=p=>fs.readFileSync(p,"utf8");
 const asset=read("web/assets/al-ezz-glass-button.svg");
 const css=read("web/css/red-cinema.css");
-const home=read("app/src/main/java/sa/alezz/tv/TVHomeActivity.java".replace("/sa/alezz/","/sa/aseel/"));
+const home=read("app/src/main/java/sa/aseel/tv/TVHomeActivity.java");
 const player=read("app/src/main/java/sa/aseel/tv/CinemaPlayerActivity.java");
 const drawable=read("app/src/main/java/sa/aseel/tv/CinemaGlassButtonDrawable.java");
 const sw=read("web/sw.js");
