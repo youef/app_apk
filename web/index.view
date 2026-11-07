@@ -14,7 +14,7 @@
 <link rel="icon" href="assets/al-ezz-app-icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="alizz-tv-transparent.png">
 <link rel="manifest" href="manifest.webmanifest?v=direct-streams-only-20261102">
-<link rel="stylesheet" href="css/app.css?v=subscriptions-90-20261107">
+<link rel="stylesheet" href="css/app.css?v=embed-20261107-v1">
 <link rel="stylesheet" href="css/live.css?v=tv-studio-v18-balanced-20261107">
 <link rel="stylesheet" href="css/kids.css?v=kids-direct-20261102-1">
 <link rel="stylesheet" href="css/cast.css?v=cast-airplay-20261102-1">
@@ -144,6 +144,7 @@ try {
           <strong id="playerTitle">—</strong>
           <span id="playerSubtitle"></span>
         </div>
+        <button class="chipbtn player__embed-open" id="playerEmbedExternal" type="button" hidden>↗ فتح المصدر</button>
         <div class="player__badges" id="playerBadges"></div>
       </div>
 
@@ -238,7 +239,7 @@ try {
 <script src="js/member-sync.js?v=account-sync-20261107"></script>
 <script src="js/customer-session-guard.js?v=subscriptions-90-20261107"></script>
 <script src="js/cast.js?v=cast-airplay-20261102-1"></script>
-<script src="js/player.js?v=ios-safari-source-fix-20261103-v3"></script>
+<script src="js/player.js?v=embed-20261107-v1"></script>
 <script src="js/live.js?v=tv-v18-balanced-20261107"></script>
 <script src="js/kids.js?v=kids-direct-20261102-1"></script>
 <script src="js/app.js?v=member-watch-history-20261105-v1"></script>
