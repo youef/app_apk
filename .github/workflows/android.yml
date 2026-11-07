@@ -196,11 +196,62 @@ jobs:
             --latest=false; then
             echo "::warning::GitHub Releases unavailable for this token; signed APK is preserved in the workflow artifact."
           fi
-      - name: Upload to Appetize when linked
-        if: env.APPETIZE_API_TOKEN != '' && env.APPETIZE_ANDROID_PUBLIC_KEY != ''
+      # The API token must be a GitHub Actions secret. Never put it in git or logs.
+      # The initial upload creates an app when no public key exists.
+      - name: Determine Appetize app identifier
+        id: appetize_app_key
+        if: env.APPETIZE_API_TOKEN != ''
+        shell: bash
+        env:
+          INITIAL_PUBLIC_KEY: ${{ secrets.APPETIZE_ANDROID_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          key="$INITIAL_PUBLIC_KEY"
+          if [[ -z "$key" && -s ".appetize/android-public-key.txt" ]]; then
+            key="$(cat ".appetize/android-public-key.txt")"
+          fi
+          if [[ ! "$key" =~ ^[A-Za-z0-9_-]{0,128}$ ]]; then
+            echo "::error::Invalid Appetize public identifier."
+            exit 1
+          fi
+          echo "public_key=$key" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to Appetize
+        id: appetize_upload
+        if: env.APPETIZE_API_TOKEN != ''
         uses: appetizeio/github-action-appetize@v1.1.0
         with:
           apiToken: ${{ secrets.APPETIZE_API_TOKEN }}
-          publicKey: ${{ secrets.APPETIZE_ANDROID_PUBLIC_KEY }}
+          publicKey: ${{ steps.appetize_app_key.outputs.public_key }}
           appFile: dist/al-ezz-tv-v15-smart-cinema-api19.apk
           platform: android
+
+      - name: Remember public Appetize app identifier for subsequent builds
+        if: env.APPETIZE_API_TOKEN != '' && steps.appetize_upload.outputs.publicKey != ''
+        shell: bash
+        env:
+          APPETIZE_PUBLIC_KEY: ${{ steps.appetize_upload.outputs.publicKey }}
+        run: |
+          set -euo pipefail
+          # The public identifier is NOT an API credential. Validate before saving.
+          if [[ ! "$APPETIZE_PUBLIC_KEY" =~ ^[A-Za-z0-9_-]{6,128}$ ]]; then
+            echo "::error::Invalid public identifier returned by Appetize."
+            exit 1
+          fi
+          mkdir -p .appetize
+          printf '%s\n' "$APPETIZE_PUBLIC_KEY" > .appetize/android-public-key.txt
+          git add .appetize/android-public-key.txt
+          if git diff --cached --quiet; then
+            echo "Appetize public identifier already saved."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "ci(appetize): remember public app identifier for next build"
+          git push origin HEAD:main
+
+      - name: Appetize connection status
+        if: env.APPETIZE_API_TOKEN == ''
+        run: |
+          echo "::notice::Appetize upload skipped: set APPETIZE_API_TOKEN in repository Actions secrets."
+          echo "Appetize: awaiting GitHub Actions secret APPETIZE_API_TOKEN" >> "$GITHUB_STEP_SUMMARY"
