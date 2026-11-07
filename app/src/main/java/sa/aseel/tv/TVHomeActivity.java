@@ -80,7 +80,11 @@ public final class TVHomeActivity extends Activity {
     private CatalogApi catalog;
     private ScrollView scroller;
     private LinearLayout content,navBar;
-    private TextView status;
+    private TextView status,featuredTitle,featuredMeta;
+    private ImageView featuredArtwork;
+    private JSONObject featuredItem;
+    private Runnable pendingFeature;
+    private int featureSelectionGeneration=0;
     private String section="home",lastRenderedSection="";
     private boolean detailVisible=false, showingWelcome=false;
     private String detailOrigin="home";
@@ -243,8 +247,10 @@ public final class TVHomeActivity extends Activity {
         int mark=getResources().getIdentifier("alizz_brand","drawable",getPackageName());
         if(mark!=0)icon.setImageResource(mark);
         icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        icon.setAlpha(0f);icon.animate().alpha(1f).setDuration(420).start();
         splash.addView(icon,new LinearLayout.LayoutParams(dp(145),dp(145)));
         TextView brand=text("العز TV",42,WHITE,true);brand.setGravity(Gravity.CENTER);
+        brand.setAlpha(0f);brand.animate().alpha(1f).setStartDelay(180).setDuration(480).start();
         splash.addView(brand,space(dp(380),dp(84),7));
         TextView note=text("عالمك السينمائي يبدأ هنا",18,MUTED,false);note.setGravity(Gravity.CENTER);
         splash.addView(note);
@@ -425,6 +431,13 @@ public final class TVHomeActivity extends Activity {
             remaining>=0&&remaining<=7?GOLD:MUTED,false);
         status.setSingleLine(true);status.setEllipsize(TextUtils.TruncateAt.END);
         top.addView(status,space(dp(170),-2,3));
+        Button account=button("حسابي");
+        account.setContentDescription("الحساب والبروفايلات والاشتراك");
+        account.setTag("nav:account");
+        top.addView(account,space(dp(94),dp(49),2));
+        account.setOnClickListener(new View.OnClickListener(){
+            public void onClick(View view){goTo("account");}
+        });
         Button search=button("⌕  بحث");
         top.addView(search,space(dp(102),dp(49),2));
         search.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
@@ -449,6 +462,8 @@ public final class TVHomeActivity extends Activity {
         if("kids".equals(s))return "عالم الأطفال";
         if("favorites".equals(s))return "قائمتي";
         if("settings".equals(s))return "الإعدادات";
+        if("account".equals(s))return "حسابي واشتراكي";
+        if("profiles".equals(s))return "بروفايلات المشاهدة";
         if("search".equals(s))return "البحث";
         if("youtube".equals(s))return "يوتيوب الأطفال";
         return "اختر عالمك";
@@ -512,12 +527,81 @@ public final class TVHomeActivity extends Activity {
         tile.setOnClickListener(new View.OnClickListener(){public void onClick(View v){goTo(target);}});
         return tile;
     }
+    private void scheduleFeatured(final JSONObject item){
+        if(item==null||!"home".equals(section)||featuredTitle==null)return;
+        if(featuredItem!=null && value(featuredItem,"id").equals(value(item,"id")))return;
+        if(pendingFeature!=null)ui.removeCallbacks(pendingFeature);
+        final int gen=++featureSelectionGeneration;
+        pendingFeature=new Runnable(){public void run(){
+            if(gen!=featureSelectionGeneration || !"home".equals(section))return;
+            applyFeatured(item);
+        }};
+        ui.postDelayed(pendingFeature,160L);
+    }
+    private void applyFeatured(final JSONObject item){
+        if(item==null||featuredTitle==null||featuredArtwork==null)return;
+        featuredItem=item;
+        featuredTitle.setText(label(item));
+        String kind="series".equals(kind(item))?"مسلسل":"فيلم";
+        String year=value(item,"release_year");
+        if(year.isEmpty())year=value(item,"year");
+        String quality=value(item,"quality");
+        featuredMeta.setText(kind+(year.isEmpty()?"":"  •  "+year)+
+            (quality.isEmpty()?"":"  •  "+quality)+"  •  اختيار العز");
+        String backdrop=value(item,"backdrop_url");
+        if(backdrop.isEmpty())backdrop=value(item,"poster_url");
+        if(backdrop.startsWith("https://")){
+            featuredArtwork.setAlpha(.35f);
+            PosterLoader.load(featuredArtwork,backdrop);
+            featuredArtwork.animate().alpha(.65f).setDuration(260L).start();
+        }else{
+            featuredArtwork.setImageDrawable(null);
+            featuredArtwork.setAlpha(.1f);
+        }
+    }
+    private void featuredBanner(){
+        final JSONObject first=!movies.isEmpty()?movies.get(0):!series.isEmpty()?series.get(0):null;
+        if(first==null)return;
+        FrameLayout banner=new FrameLayout(this);
+        banner.setFocusable(false);
+        banner.setBackgroundDrawable(bg(0xFF190D18,0xAA91384D,20));
+        banner.setClipChildren(true);
+        featuredArtwork=new ImageView(this);
+        featuredArtwork.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        banner.addView(featuredArtwork,new FrameLayout.LayoutParams(-1,-1));
+        View shade=new View(this);
+        shade.setBackgroundDrawable(new GradientDrawable(
+            GradientDrawable.Orientation.LEFT_RIGHT,
+            new int[]{0xC0080710,0xD5110712,0xEC130B16}));
+        banner.addView(shade,new FrameLayout.LayoutParams(-1,-1));
+        LinearLayout overlay=column();
+        overlay.setPadding(dp(24),dp(15),dp(24),dp(10));
+        overlay.addView(text("●  العمل المميز",13,0xFFFF8295,true));
+        featuredTitle=text("",27,WHITE,true);
+        featuredTitle.setSingleLine(true);
+        featuredTitle.setEllipsize(TextUtils.TruncateAt.END);
+        overlay.addView(featuredTitle,space(-1,dp(51),1));
+        featuredMeta=text("",13,0xFFF6CED5,false);
+        overlay.addView(featuredMeta,space(-1,dp(27),0));
+        Button watch=primaryButton("▶ شاهد الآن");
+        watch.setTag("featured:watch");
+        overlay.addView(watch,space(dp(210),dp(52),1));
+        watch.setOnClickListener(new View.OnClickListener(){
+            public void onClick(View v){if(featuredItem!=null)detail(featuredItem);}
+        });
+        FrameLayout.LayoutParams pos=new FrameLayout.LayoutParams(-1,-2,
+            Gravity.RIGHT|Gravity.BOTTOM);
+        banner.addView(overlay,pos);
+        content.addView(banner,space(-1,dp(Math.max(187,Math.min(235,screenHeightDp()/3))),6));
+        applyFeatured(first);
+    }
     private void portal(){
         LinearLayout heading=column();heading.setPadding(dp(12),dp(7),dp(12),dp(7));
         content.addView(heading,space(-1,-2,3));
         heading.addView(text("AL EZZ  •  RED CINEMA",12,GOLD,true));
         heading.addView(text("اختر عالمك",33,WHITE,true));
         heading.addView(text("اختر ما تريد مشاهدته — أقسام واضحة بالريموت",15,MUTED,false));
+        featuredBanner();
         final String[][] main={
             {"المسلسلات","المواسم والحلقات","series"},
             {"الأفلام","مكتبة السينما","movies"},
@@ -787,6 +871,8 @@ public final class TVHomeActivity extends Activity {
             grid("قائمتي",list);
         }else if("search".equals(section))searchScreen();
         else if("settings".equals(section))settingsScreen();
+        else if("account".equals(section))accountScreen();
+        else if("profiles".equals(section))profilesScreen();
         if(!"home".equals(section)&&!"settings".equals(section)&&movies.size()+series.size()+channels.size()+youtubeVideos.size()==0){
             heading(loading?"جاري تحميل المكتبة...":"المكتبة لم تُحمّل",
                 loading?"اتصل بالإنترنت، ستظهر البطاقات تلقائيًا.":"اضغط تحديث. "+lastLoadError);
@@ -807,6 +893,95 @@ public final class TVHomeActivity extends Activity {
                 scroller.scrollTo(0,previousScroll);
                 View target=findTagged(content,focusTag);
                 if(target!=null)target.requestFocus();
+            }});
+        }
+    }
+    private void accountScreen(){
+        heading("حسابي","بيانات العميل والاشتراك وملفات المشاهدة على هذا الجهاز");
+        LinearLayout panel=column();
+        panel.setPadding(dp(23),dp(14),dp(23),dp(15));
+        panel.setBackgroundDrawable(bg(0xFF231827,0xABDA4862,18));
+        content.addView(panel,space(-1,-2,5));
+        String login=MemberAuth.username(this);
+        panel.addView(text("◉  "+(login.isEmpty()?"مشاهد العز TV":login),26,WHITE,true),
+            space(-1,dp(56),1));
+        panel.addView(text("حساب مشاهدة مفعل  •  التحقق من الصلاحية تلقائيًا",
+            14,0xFFD7BFC8,false),space(-1,-2,2));
+        heading("الباقة الحالية",MemberAuth.planName(this));
+        int days=MemberAuth.daysRemaining(this);
+        String expiry=days<0?"لم يُحدد تاريخ انتهاء من الإدارة":days==0?
+            "انتهت الصلاحية":"متبقي "+days+" يومًا";
+        TextView deadline=text(expiry,23,days>=0&&days<=7?0xFFFFB35C:0xFFFF8496,true);
+        content.addView(deadline,space(-1,dp(49),6));
+        heading("الأجهزة المرتبطة","يراجع المسؤول عدد الأجهزة وحالاتها من لوحة الإدارة؛ هذا الجهاز مسجل بعد الدخول إن نجحت المزامنة.");
+        Button profiles=primaryButton("بروفايلات المشاهدة  •  "+PlaybackMemory.displayProfile(this,
+            PlaybackMemory.activeProfile(this)));
+        profiles.setTag("nav:profiles");
+        content.addView(profiles,space(dp(380),dp(63),5));
+        profiles.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            goTo("profiles");
+        }});
+        Button settings=button("تفضيلات التطبيق");
+        content.addView(settings,space(dp(280),dp(57),4));
+        settings.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            goTo("settings");
+        }});
+    }
+    private void profilesScreen(){
+        heading("من يشاهد الآن؟","ثلاثة بروفايلات مستقلة داخل حسابك • الأسماء تحفظ محليًا فقط");
+        final String active=PlaybackMemory.activeProfile(this);
+        final String[] values={"family","kids","guest"};
+        final String[] descriptions={"سجل ومفضلة العائلة","قائمة ووقت الأطفال","سجل ضيف مستقل"};
+        LinearLayout strip=row();strip.setGravity(Gravity.TOP);
+        content.addView(strip,space(-1,dp(190),4));
+        for(int i=0;i<values.length;i++){
+            final String profile=values[i];
+            LinearLayout card=column();
+            card.setPadding(dp(14),dp(12),dp(14),dp(10));
+            card.setBackgroundDrawable(bg(active.equals(profile)?0xFF682239:0xFF241C29,
+                active.equals(profile)?0xFFFF7389:0x886D4C5D,18));
+            ImageView icon=new ImageView(this);
+            icon.setImageDrawable(new CinemaGlyph("kids".equals(profile)?"kids":
+                "guest".equals(profile)?"search":"favorites",0xFFFF8094));
+            LinearLayout.LayoutParams symbol=new LinearLayout.LayoutParams(dp(52),dp(52));
+            symbol.gravity=Gravity.CENTER_HORIZONTAL;
+            card.addView(icon,symbol);
+            TextView name=text(PlaybackMemory.displayProfile(this,profile),20,WHITE,true);
+            name.setGravity(Gravity.CENTER);
+            card.addView(name,space(-1,dp(39),1));
+            TextView detail=text(descriptions[i],12,MUTED,false);detail.setGravity(Gravity.CENTER);
+            card.addView(detail,space(-1,dp(32),1));
+            Button choose=primaryButton(active.equals(profile)?"✓ البروفايل النشط":"اختيار");
+            choose.setTag("profile:"+profile);
+            card.addView(choose,space(-1,dp(47),1));
+            choose.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                PlaybackMemory.setProfile(TVHomeActivity.this,profile);
+                goTo("home");
+            }});
+            LinearLayout.LayoutParams place=new LinearLayout.LayoutParams(0,-1,1);
+            place.setMargins(dp(5),0,dp(5),0);
+            strip.addView(card,place);
+        }
+        heading("تخصيص الأسماء","يمكن تعديل اسم كل بروفايل بدون تغيير صلاحيات الاشتراك.");
+        for(final String profile:values){
+            Button change=button("✎  تعديل اسم "+PlaybackMemory.displayProfile(this,profile));
+            change.setTag("profile:rename:"+profile);
+            content.addView(change,space(-1,dp(52),3));
+            change.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                final EditText input=new EditText(TVHomeActivity.this);
+                input.setSingleLine(true);
+                input.setText(PlaybackMemory.displayProfile(TVHomeActivity.this,profile));
+                input.setSelectAllOnFocus(true);
+                new android.app.AlertDialog.Builder(TVHomeActivity.this)
+                    .setTitle("اسم بروفايل "+PlaybackMemory.profileName(profile))
+                    .setView(input)
+                    .setPositiveButton("حفظ",new android.content.DialogInterface.OnClickListener(){
+                        public void onClick(android.content.DialogInterface d,int selected){
+                            PlaybackMemory.renameProfile(TVHomeActivity.this,profile,
+                                input.getText().toString());
+                            render();
+                        }
+                    }).setNegativeButton("إلغاء",null).show();
             }});
         }
     }
@@ -831,9 +1006,15 @@ public final class TVHomeActivity extends Activity {
         final SharedPreferences prefs=getSharedPreferences(SETTINGS,MODE_PRIVATE);
         final String active=PlaybackMemory.activeProfile(this);
         heading("ملفات المشاهدة","ملفات مستقلة للعائلة والأطفال والضيف داخل حسابك");
+        Button manageProfiles=primaryButton("◉ إدارة البروفايلات");
+        manageProfiles.setTag("nav:profiles");
+        content.addView(manageProfiles,space(dp(285),dp(55),4));
+        manageProfiles.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            goTo("profiles");
+        }});
         LinearLayout profiles=row();content.addView(profiles,space(-1,-2,4));
         for(final String profile:new String[]{"family","kids","guest"}){
-            Button choice=button((active.equals(profile)?"✓ ":"")+PlaybackMemory.profileName(profile));
+            Button choice=button((active.equals(profile)?"✓ ":"")+PlaybackMemory.displayProfile(this,profile));
             profiles.addView(choice,new LinearLayout.LayoutParams(0,dp(55),1));
             choice.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
                 PlaybackMemory.setProfile(TVHomeActivity.this,profile);render();
@@ -1161,7 +1342,8 @@ public final class TVHomeActivity extends Activity {
         outer.addView(text(desc,12,0xFFFF8DA6,false));
         outer.setOnFocusChangeListener(new View.OnFocusChangeListener(){public void onFocusChange(View v,boolean focused){
             outer.setBackgroundDrawable(bg(focused?0xFF79203A:0xFF201C25,focused?0xFFFFB0C6:0xFF342B38,13));
-            outer.setScaleX(focused?1.055f:1);outer.setScaleY(focused?1.055f:1);
+            outer.setScaleX(focused?1.035f:1);outer.setScaleY(focused?1.035f:1);
+            if(focused&&"home".equals(section))scheduleFeatured(item);
         }});
         outer.setOnClickListener(new View.OnClickListener(){public void onClick(View v){detail(item);}});
         return outer;
