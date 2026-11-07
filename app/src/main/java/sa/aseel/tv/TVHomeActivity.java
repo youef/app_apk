@@ -118,13 +118,27 @@ public final class TVHomeActivity extends Activity {
         if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return t;
     }
     private Button button(String name){
-        final Button b=new Button(this);b.setText(name);b.setAllCaps(false);b.setTextColor(WHITE);
-        b.setTextSize(15);b.setFocusable(true);b.setBackgroundDrawable(bg(0xFF29232F,0x6A8E7088,14));
+        final Button b=new Button(this);b.setText(name);b.setAllCaps(false);
+        b.setTextColor(CinemaGlassButtonDrawable.labelColors());
+        b.setTextSize(15);b.setFocusable(true);
+        b.setBackgroundDrawable(new CinemaGlassButtonDrawable(false,false,0xFF29232F));
         b.setOnFocusChangeListener(new View.OnFocusChangeListener(){public void onFocusChange(View v,boolean focused){
-            b.setBackgroundDrawable(bg(focused?0xFF78223C:0xFF29232F,
-                focused?0xFFFF6B83:0x6A8E7088,14));
-            b.setScaleX(focused?1.035f:1f);b.setScaleY(focused?1.035f:1f);
+            b.setBackgroundDrawable(new CinemaGlassButtonDrawable(false,false,
+                focused?0xFF78223C:0xFF29232F));
+            b.setScaleX(focused?1.024f:1f);b.setScaleY(focused?1.024f:1f);
         }});return b;
+    }
+    private Button primaryButton(String label){
+        final Button action=button(label);
+        action.setBackgroundDrawable(new CinemaGlassButtonDrawable(true,false,0xFF6F0C26));
+        action.setOnFocusChangeListener(new View.OnFocusChangeListener(){
+            public void onFocusChange(View v,boolean focused){
+                action.setBackgroundDrawable(new CinemaGlassButtonDrawable(true,false,
+                    focused?0xFF9A1532:0xFF6F0C26));
+                action.setScaleX(focused?1.02f:1f);action.setScaleY(focused?1.02f:1f);
+            }
+        });
+        return action;
     }
     private String value(JSONObject item,String key){return item==null?"":item.optString(key,"");}
 
@@ -903,9 +917,9 @@ public final class TVHomeActivity extends Activity {
         copy.addView(text("اختر فيلمك أو مسلسلك أو قناتك مباشرة، وتحكم بالكامل بالريموت.",15,0xFFE1C9D1,false),space(-1,-2,3));
         TextView counts=text(movies.size()+" فيلم  •  "+series.size()+" مسلسل  •  "+channels.size()+" قناة  •  "+youtubeVideos.size()+" مقطع",13,0xFFFFBDCD,true);
         copy.addView(counts,space(-1,-2,4));
-        Button explore=button("▶ استكشف الأفلام");copy.addView(explore,space(dp(245),dp(52),6));
+        Button explore=primaryButton("▶ استكشف الأفلام");copy.addView(explore,space(dp(245),dp(52),6));
         explore.setOnClickListener(new View.OnClickListener(){public void onClick(View v){section="movies";render();}});
-        Button liveButton=button("● شاهد التلفزيون المباشر");
+        Button liveButton=primaryButton("● شاهد التلفزيون المباشر");
         copy.addView(liveButton,space(dp(275),dp(48),2));
         liveButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
             section="live";render();scroller.scrollTo(0,0);
@@ -1185,7 +1199,7 @@ public final class TVHomeActivity extends Activity {
         String image=value(item,"poster_url");if(image.startsWith("https://"))PosterLoader.load(poster,image);
         LinearLayout info=column();hero.addView(info,new LinearLayout.LayoutParams(0,-1,1));
         info.addView(text(value(item,"description"),16,MUTED,false),space(-1,-2,9));
-        Button play=button("official_link".equals(value(item,"playback_mode"))?"↗ فتح الموقع الرسمي":"▶ ابدأ المشاهدة");
+        Button play=primaryButton("official_link".equals(value(item,"playback_mode"))?"↗ فتح الموقع الرسمي":"▶ ابدأ المشاهدة");
         info.addView(play,space(dp(260),dp(56),7));
         play.setOnClickListener(new View.OnClickListener(){public void onClick(View v){play(item);}});
         Button favorite=button(isFavorite(item)?"♥ إزالة من قائمتي":"♡ أضف إلى قائمتي");
