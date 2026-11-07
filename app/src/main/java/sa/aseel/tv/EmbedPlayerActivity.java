@@ -67,6 +67,7 @@ public final class EmbedPlayerActivity extends Activity {
             if (host == null || path == null) return false;
             host = host.toLowerCase(java.util.Locale.US);
             return (host.equals("hanerix.com") && path.matches("(?i)^/e/[a-z0-9_-]+/?$")) ||
+                ((host.equals("1vid.xyz") || host.equals("www.1vid.xyz")) && path.matches("(?i)^/embed-[a-z0-9_-]+\\.html$")) ||
                 (host.equals("player.vimeo.com") && path.matches("^/video/[0-9]+/?$")) ||
                 (host.equals("www.dailymotion.com") && path.matches("(?i)^/embed/video/[a-z0-9_-]+/?$")) ||
                 (host.equals("www.youtube-nocookie.com") && path.matches("(?i)^/embed/[a-z0-9_-]{11}/?$"));
@@ -81,6 +82,7 @@ public final class EmbedPlayerActivity extends Activity {
                 return false;
             String host = uri.getHost();
             return host != null && (host.equalsIgnoreCase("hanerix.com") ||
+                host.equalsIgnoreCase("1vid.xyz") || host.equalsIgnoreCase("www.1vid.xyz") ||
                 host.equalsIgnoreCase("player.vimeo.com") ||
                 host.equalsIgnoreCase("www.dailymotion.com") ||
                 host.equalsIgnoreCase("www.youtube-nocookie.com"));
