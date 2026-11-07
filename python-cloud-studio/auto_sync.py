@@ -296,8 +296,9 @@ class AutoSync:
     def __init__(self, data_dir, db_factory=None, resolver_factory=None, clock=time.time):
         self.queue=QueueDB(Path(data_dir)/'autosync.sqlite3')
         self.clock=clock
-        self.interval=max(0.25,float(os.getenv('ALEZZ_AUTOSYNC_INTERVAL_HOURS','0.5')))*3600
-        self.check_interval=min(self.interval,max(1,float(os.getenv('ALEZZ_AUTOSYNC_CHECK_MINUTES','5')))*60)
+        # Keep the near-live policy even when Render retains older 24h/30m env vars.
+        self.interval=max(0.25,min(0.5,float(os.getenv('ALEZZ_AUTOSYNC_INTERVAL_HOURS','0.5'))))*3600
+        self.check_interval=min(self.interval,max(1,min(5,float(os.getenv('ALEZZ_AUTOSYNC_CHECK_MINUTES','5'))))*60)
         self.mode=os.getenv('ALEZZ_AUTOSYNC_MODE','auto')
         self.concurrency=max(1,min(4,int(os.getenv('ALEZZ_AUTOSYNC_CONCURRENCY','2'))))
         self.db_factory=db_factory or self._environment_db
@@ -310,6 +311,20 @@ class AutoSync:
         self.local_db=None
         self.using_local_session=False
         self.process_lock=ProcessLock(Path(data_dir)/'autosync.lock')
+        self._reconcile_policy_schedule()
+
+    def _reconcile_policy_schedule(self):
+        """Apply faster checks to existing persistent jobs without a burst."""
+        revision='rapid-check-5m-refresh-30m-draft-v1'
+        if self.queue.get_setting('maintenance_policy')==revision:
+            return
+        now=self.clock()
+        with self.queue.db() as conn:
+            conn.execute('update auto_jobs set '
+                         'next_check=min(next_check, ? + (rowid % ?)), '
+                         'next_refresh=min(next_refresh, ? + (rowid % ?))',
+                         (now,int(self.check_interval),now,int(self.interval)))
+        self.queue.setting('maintenance_policy',revision)
 
     def remember_saved(self,cat,result,*,capture=False):
         """Preserve all local discoveries, including sources beyond eight variants."""
