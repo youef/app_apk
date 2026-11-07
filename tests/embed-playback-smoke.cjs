@@ -50,7 +50,9 @@ assert(android.includes("class EmbedPlayerActivity") && android.includes("setJav
   "Android embed must use sandboxed WebView with fullscreen");
 assert(android.includes("MemberAuth.hasSession") && android.includes("MemberAuth.isExpiredLocally"),
   "expired members must not open Android embeds");
-assert(tv.includes("EmbedPlayerActivity.isAllowed(url)") && legacy.includes("EmbedPlayerActivity.isAllowed(url)"),
+assert(tv.includes("PlaybackSources.collect(") && legacy.includes("PlaybackSources.collect(") &&
+  tv.includes("new Intent(this,EmbedPlayerActivity.class)") &&
+  legacy.includes("new Intent(this,EmbedPlayerActivity.class)"),
   "Android native catalogues must route embeds separately");
 assert(manifest.includes('android:name="sa.aseel.tv.EmbedPlayerActivity"'),
   "Android Embed player activity missing from manifest");
