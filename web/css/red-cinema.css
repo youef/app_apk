@@ -1,0 +1,233 @@
+/* AL EZZ TV • RED GLASS CINEMA • unified visual system
+   Loaded after legacy, mobile, live, kids and existing glass layers.
+   Paint-only fallbacks remain for old TV browsers; blur is limited to floating UI. */
+:root{
+  --red:#E33246;
+  --red-strong:#FC475B;
+  --red-deep:#8D1427;
+  --red-halo:rgba(227,50,70,.25);
+  --red-line:rgba(248,92,110,.34);
+  --ink:#08090E;
+  --ink-2:#0E1018;
+  --ink-3:#141720;
+  --surface:#171922;
+  --surface-2:#1E212C;
+  --gold:#E33246;
+  --gold-2:#AE1730;
+  --gold-soft:rgba(227,50,70,.16);
+  --crimson:#E33246;
+  --crimson-soft:rgba(227,50,70,.16);
+  --text:#F8F8FB;
+  --text-2:#D3D5DE;
+  --muted:#9DA1AF;
+  --glass-panel:rgba(22,24,34,.84);
+  --glass-panel-strong:rgba(12,14,22,.94);
+  --glass-panel-lite:rgba(69,39,51,.34);
+  --glass-stroke:rgba(237,236,244,.13);
+  --glass-stroke-bright:rgba(248,92,110,.42);
+  --glass-gold:#FA566A;
+  --shadow-card:0 18px 46px rgba(0,0,0,.28);
+  --pad-x:clamp(14px,3.1vw,50px);
+  color-scheme:dark;
+}
+html{background:#08090e}
+body{
+  color:#f8f8fb;
+  background:
+    radial-gradient(ellipse 58vw 42vw at 95% -6%,rgba(165,22,49,.19),transparent 77%),
+    radial-gradient(ellipse 46vw 55vw at -12% 78%,rgba(88,18,41,.13),transparent 74%),
+    linear-gradient(155deg,#090a10 0%,#10121a 47%,#090a10 100%) !important;
+}
+::selection{background:var(--red);color:white}
+:is(a,button,input,select,textarea,[tabindex]):focus-visible{
+  outline:2px solid #FB5266!important;outline-offset:3px;
+}
+*{scrollbar-color:rgba(234,56,80,.38) transparent}
+*::-webkit-scrollbar-thumb{background:rgba(234,56,80,.36)}
+/* Modern etched/glass top bar, with crisp navigation and no unnecessary chrome. */
+.topbar,.topbar.is-stuck{
+  background:linear-gradient(112deg,rgba(21,19,28,.95),rgba(11,13,21,.91))!important;
+  border-bottom:1px solid rgba(255,255,255,.095)!important;
+  box-shadow:0 10px 30px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.055)!important;
+}
+.brand__name b,.brand__text strong span,.brand-copy strong span{color:#FF6476!important}
+.brand__mark{box-shadow:0 0 0 1px rgba(255,255,255,.1),0 4px 19px rgba(199,28,53,.18)!important}
+.nav__link{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  min-height:41px;padding-inline:12px;border-radius:13px!important;
+  color:#C1C3D0;transition:background .18s,color .18s,border-color .18s;
+}
+.nav__link svg{width:18px;height:18px;flex-shrink:0;stroke-width:1.8}
+.nav__link.is-active,.nav__link[aria-current="page"],.nav__link:hover{
+  color:#fff!important;background:linear-gradient(135deg,rgba(176,24,51,.48),rgba(73,25,40,.40))!important;
+  border:1px solid rgba(250,82,104,.32)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.065),0 5px 18px rgba(191,23,53,.10)!important;
+}
+.topbar .iconbtn{border-radius:13px!important;min-width:42px;min-height:42px}
+.topbar .iconbtn:hover{background:rgba(231,48,74,.17)!important;color:#fff!important}
+/* Preserve native focus navigation and keep content in front of ambient shading. */
+.hero{
+  border:1px solid rgba(255,255,255,.19)!important;border-radius:24px!important;
+  background:linear-gradient(140deg,rgba(50,26,37,.76),#10121b)!important;
+  box-shadow:0 22px 55px rgba(0,0,0,.29),inset 0 1px 0 rgba(255,255,255,.07)!important;
+  isolation:isolate;overflow:hidden;
+}
+.hero__media::after{
+  background:
+    linear-gradient(90deg,rgba(9,10,16,.18) 0%,rgba(9,10,16,.22) 35%,rgba(9,10,16,.90) 100%),
+    linear-gradient(0deg,#0C0E17 1%,rgba(12,14,23,.38) 47%,rgba(12,14,23,.06) 100%)!important;
+}
+.hero__art::after{background:linear-gradient(0deg,#0C0E17 0%,rgba(12,14,23,.4) 70%,rgba(12,14,23,.1))!important}
+.hero__title{text-shadow:0 8px 32px #09090d;letter-spacing:-.025em}
+.hero__eyebrow{color:#FF7888!important}
+.hero__dot.is-on{background:linear-gradient(100deg,#FF6F80,#BB1230)!important}
+.hero__poster{border:1px solid rgba(255,255,255,.23)!important;box-shadow:0 24px 50px #0009}
+.hero__actions .btn{min-height:46px}
+/* Primary actions are red, secondary actions transparent glass. */
+.btn--gold,.btn-gold,.btn--primary,.btn.primary,[data-primary="true"]{
+  background:linear-gradient(125deg,#EE4257,#BD1937)!important;
+  color:#fff!important;border:1px solid rgba(255,154,165,.35)!important;
+  box-shadow:0 9px 22px rgba(184,22,50,.22),inset 0 1px 0 rgba(255,255,255,.21)!important;
+}
+.btn--gold:hover,.btn-gold:hover,.btn--primary:hover{
+  background:linear-gradient(125deg,#F85C6E,#D22140)!important;
+  box-shadow:0 12px 25px rgba(216,28,57,.29)!important;
+}
+.btn--ghost,.btn-ghost,.chipbtn,.browse-pill,.filter,.pill,.section__more,
+.player__sources-toggle,.player__quality-menu,.player__sources-menu{
+  border:1px solid rgba(255,255,255,.17)!important;
+  background:linear-gradient(145deg,rgba(50,42,55,.73),rgba(18,21,32,.87))!important;
+  color:#F7F7FA;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.07);
+}
+.browse-pill.is-on,.filter.is-on,.filter[aria-pressed="true"],.pill.is-on{
+  color:#fff!important;background:rgba(205,31,57,.24)!important;
+  border-color:rgba(249,90,109,.52)!important;
+}
+.section{margin-block:clamp(23px,3.2vw,40px)}
+.section__title{letter-spacing:-.02em}
+.section__title::before{content:"";display:inline-block;width:4px;height:18px;
+ background:linear-gradient(#FC6C7D,#AD1129);border-radius:6px;margin-inline-end:10px;vertical-align:-3px}
+.section__more,.watch-page__details,.watch-section-head a{color:#FF7F8F!important}
+.rail__track{gap:clamp(10px,1.6vw,18px)}
+/* Posters stay visually rich but light to render. */
+.card,.episode-card,.ep,.watch-episode,.kid-card,.live-guide__item{
+  border-radius:17px!important;
+  border:1px solid rgba(255,255,255,.125)!important;
+  background:linear-gradient(148deg,rgba(39,40,53,.78),rgba(18,21,30,.91))!important;
+  box-shadow:0 9px 24px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.055)!important;
+}
+.card{overflow:hidden;transition:transform .19s ease,border-color .19s ease,box-shadow .19s ease!important}
+.card:hover,.card:focus-visible,.card.is-focused{
+  transform:translateY(-4px) scale(1.015)!important;
+  border-color:rgba(252,99,120,.69)!important;
+  box-shadow:0 14px 32px rgba(0,0,0,.36),0 0 0 1px rgba(228,49,74,.24)!important;
+  z-index:2;
+}
+.card__play{background:linear-gradient(130deg,#EF485E,#B61935)!important;color:#fff!important}
+.card__tag,.chip--live,.live-stage__badge{background:rgba(177,18,47,.83)!important;color:#fff!important}
+.card__veil{background:linear-gradient(to top,rgba(5,6,10,.94),rgba(5,6,10,.13) 60%,transparent)!important}
+.searchpanel,.sheet__panel,.detail__info,.detail__body,.live-viewer,.live-guide,
+.player__controls,.player__info,.player__sidebar,.gate__card,.install-guide__panel{
+  background:linear-gradient(146deg,rgba(34,33,44,.94),rgba(13,15,23,.96))!important;
+  border-color:rgba(255,255,255,.16)!important;
+  box-shadow:0 16px 42px rgba(0,0,0,.27),inset 0 1px 0 rgba(255,255,255,.06)!important;
+}
+.pagehead__count{background:rgba(191,34,56,.16)!important;border:1px solid rgba(242,83,105,.25)!important}
+.title-page .detail__hero{border-radius:23px!important}
+.title-page .detail__body{gap:clamp(15px,2.1vw,28px)}
+.title-page .detail__poster{border-radius:17px}
+.watch-player-slot{border:1px solid rgba(255,255,255,.13);box-shadow:0 20px 50px #0005}
+.watch-episode.is-current{border-color:rgba(248,89,110,.69)!important;background:rgba(147,24,45,.32)!important}
+.live-guide__item.is-selected,.live-type-tab.is-on,.kid-profile.is-selected{
+  background:linear-gradient(132deg,rgba(175,23,49,.46),rgba(38,25,39,.72))!important;
+  border-color:rgba(249,88,109,.51)!important;color:#fff!important;
+}
+.live-viewer,.live-guide{border-radius:21px!important}
+.live-stage__badge,.live-channel-hud{background:rgba(103,16,35,.90)!important}
+.live-toolbar .live-icon-action:focus-visible,.live-stage__guide-btn:focus-visible{
+  outline:3px solid #F85B72!important;outline-offset:3px;
+}
+.searchpanel input,.browse-select select,input:not([type=checkbox]),textarea{
+  background:rgba(13,14,23,.86);border-color:rgba(255,255,255,.18);color:#fff;
+}
+.searchpanel input:focus-visible,input:focus-visible,select:focus-visible{border-color:#FA566A!important}
+/* Mobile dock: one coherent red glass capsule, text kept legible at 320px. */
+.app-dock{
+  border:1px solid rgba(255,255,255,.14)!important;
+  border-radius:24px!important;
+  background:linear-gradient(145deg,rgba(33,28,40,.95),rgba(13,14,23,.97))!important;
+  box-shadow:0 13px 36px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.095)!important;
+  overflow:hidden;
+}
+.app-dock :is(a,button){border-radius:15px;color:#AAB0BD;min-height:51px}
+.app-dock :is(a,button).is-active,.app-dock :is(a,button)[aria-current="page"]{
+  background:linear-gradient(145deg,rgba(212,38,63,.25),rgba(122,21,46,.08))!important;
+  color:#FF6478!important;
+}
+.app-dock :is(a,button):focus-visible{outline:2px solid #FB5266!important;outline-offset:-2px}
+.app-dock button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+ border:0;background:transparent;font:inherit;cursor:pointer}
+.app-dock :is(a,button) svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.75}
+.app-dock :is(a,button) small{font-size:10.5px}
+/* Cinematic player: the provider is allowed to own its video controls. */
+.player{background:#010203}
+.player__top{
+  background:linear-gradient(180deg,rgba(9,10,16,.85),rgba(9,10,16,.19),transparent)!important
+}
+.player__sources-toggle,.player__embed-external,.player__quality-option,.player__sources-option{
+  border-radius:12px!important
+}
+.player__sources-option.is-selected,.player__quality-option.is-selected{
+  background:rgba(215,36,61,.30)!important;color:#fff!important
+}
+.player.is-embed .player__top{padding-block:12px;pointer-events:none}
+.player.is-embed #playerClose,.player.is-embed .player__sources-wrap{pointer-events:auto}
+.player.is-embed .player__embed-external{border-color:rgba(255,255,255,.2);background:rgba(19,21,29,.90)}
+.player__bigplay{background:linear-gradient(140deg,rgba(231,51,73,.94),rgba(144,18,41,.9))!important;color:#fff!important}
+/* Blur only small stationary overlays on capable devices, never lists or videos. */
+@supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .topbar,.topbar.is-stuck,.app-dock,.searchpanel__head,.player__sources-menu,
+  .player__quality-menu,.live-channel-hud{
+    -webkit-backdrop-filter:blur(10px) saturate(124%);
+    backdrop-filter:blur(10px) saturate(124%);
+  }
+}
+@media(min-width:900px){
+  .topbar{gap:clamp(10px,1.8vw,28px)}
+  .nav__link{font-size:13px}
+}
+@media(max-width:850px){
+  .topbar,.topbar.is-stuck{background:rgba(15,16,25,.96)!important}
+  .topbar .nav{display:none!important}
+  .hero{border-radius:18px!important}
+  .hero__title{font-size:clamp(25px,6vw,39px)}
+  .card{border-radius:14px!important}
+}
+@media(max-width:600px){
+  .topbar{padding-inline:max(13px,env(safe-area-inset-left)) max(13px,env(safe-area-inset-right));}
+  .hero{margin-inline:10px!important;padding-inline:18px!important;min-height:325px}
+  .hero__body{max-width:100%}
+  .section__head{padding-inline:16px}
+  .section{margin-block:22px}
+  .grid{gap:11px;grid-template-columns:repeat(2,minmax(0,1fr));padding-inline:14px}
+  .app-dock{bottom:max(8px,env(safe-area-inset-bottom));left:10px;right:10px;width:auto}
+  .view{padding-bottom:calc(88px + env(safe-area-inset-bottom))!important}
+  body.watch-route .view{padding-bottom:0!important}
+  body.watch-route .app-dock{display:none!important}
+  .watch-player-slot{margin-inline:7px;width:calc(100% - 14px)}
+}
+@media(orientation:landscape) and (max-height:600px){
+  .app-dock{display:none!important}
+  .view{padding-bottom:12px!important}
+}
+@media(prefers-reduced-motion:reduce),(prefers-reduced-transparency:reduce){
+  .card,.hero__media img{animation:none!important;transition:none!important;transform:none!important}
+  .topbar,.app-dock,.searchpanel__head,.player__sources-menu,.player__quality-menu{
+    backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+    background:#181923!important
+  }
+}
+@media(forced-colors:active){
+  .card,.topbar,.app-dock,.btn--gold{border:1px solid CanvasText!important;box-shadow:none!important}
+}
