@@ -365,7 +365,7 @@ public final class TVHomeActivity extends Activity {
         TextView title=text("انتهت صلاحية اشتراكك",34,WHITE,true);
         title.setGravity(Gravity.CENTER);
         panel.addView(title,space(-1,dp(63),6));
-        TextView note=text("توقف حساب المشاهدة تلقائيًا عند موعد الانتهاء.\\n"+
+        TextView note=text("توقف حساب المشاهدة تلقائيًا عند موعد الانتهاء.\n"+
             "المفضلة وسجل المشاهدة محفوظان حتى تجدد الاشتراك من الإدارة.",18,MUTED,false);
         note.setGravity(Gravity.CENTER);
         panel.addView(note,space(-1,dp(104),9));
@@ -719,7 +719,7 @@ public final class TVHomeActivity extends Activity {
         heading("الإعدادات","تخصيص تجربة العز TV • التفضيلات محفوظة على هذا الجهاز فقط");
         heading("حساب المشاهدة","مسجل الدخول: "+MemberAuth.username(this));
         final int daysLeft=MemberAuth.daysRemaining(this);
-        heading("اشتراكي • 90 يومًا",daysLeft<0?"الصلاحية الحالية يحددها المسؤول":daysLeft==0?
+        heading("اشتراكي",daysLeft<0?"الصلاحية الحالية يحددها المسؤول":daysLeft==0?
             "انتهت الصلاحية، جدّد اشتراكك":daysLeft<=7?
             "⚠ تنبيه: متبقي "+daysLeft+" يومًا فقط":"متبقي "+daysLeft+" يومًا على انتهاء الباقة");
         Button logout=button("↪ تسجيل الخروج من الحساب");
