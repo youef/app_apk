@@ -205,8 +205,9 @@ class QueueDB:
                                    "where table_name=? and target_id=? and source_key=?",
                                    (page,table,identifier,key))
                     first=min(old['first_seen_at'],stamp(source.get('first_seen_at')) or old['first_seen_at'])
-                    db.execute('update auto_sources set first_seen_at=? where table_name=? and target_id=? and source_key=?',
-                               (first,table,identifier,key))
+                    if first < old['first_seen_at']:
+                        db.execute('update auto_sources set first_seen_at=? where table_name=? and target_id=? and source_key=?',
+                                   (first,table,identifier,key))
                     checked=stamp(source.get('last_checked_at'))
                     if checked>old['last_checked_at']:
                         db.execute('update auto_sources set last_checked_at=?,status=?,successes=?,failures=?,consecutive_failures=?,'
