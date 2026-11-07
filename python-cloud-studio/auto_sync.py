@@ -186,7 +186,7 @@ class QueueDB:
                              (table,identifier,key)).fetchone()
             if old:
                 db.execute('update auto_sources set last_seen_at=?,page_url=case when ?!=\'\' then ? else page_url end,'
-                           'kind=case when ?=\'original\' then ? else kind end,'
+                           'kind=case when kind=\'original\' then kind when ? in (\'direct\',\'embed\') then ? else kind end,'
                            'label=case when ?!=\'\' then ? else label end,synced=0 '
                            'where table_name=? and target_id=? and source_key=?',
                            (max(now,old['last_seen_at']),page,page,kind,kind,str(source.get('label') or '')[:80],
@@ -474,7 +474,7 @@ class AutoSync:
         errors=[]
         extracted=False
         browser_requested=False
-        if job['next_refresh']<=now and pages:
+        if job['next_refresh']<=now and pages and supported_source_kind(job['stream_url'])!='embed':
             fresh,errors=resolver.extract(pages)
             extracted=True
             browser_requested=self.mode=='headless' or self.mode=='auto' and not any(s.get('kind')=='direct' for s in fresh)
@@ -485,7 +485,7 @@ class AutoSync:
         good=[s for s in checked if s.get('verified') and s.get('kind','direct')=='direct']
         failed_active=any(not item.get('verified') and not item.get('reachable') and item['url'] in active_urls
                           for item in checked)
-        if (not good or failed_active) and pages and not browser_requested:
+        if (not good or failed_active) and pages and not browser_requested and supported_source_kind(job['stream_url'])!='embed':
             # Includes retry of expired HTTP discoveries with conditional headless fallback.
             fresh,extra=resolver.extract(pages,force_browser=self.mode!='http')
             extracted=True
