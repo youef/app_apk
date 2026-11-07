@@ -935,3 +935,8 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{
 .outline-episode strong{font-size:14px;font-weight:800}
 .outline-episode p{margin:0;color:var(--text-2);font-size:12px;line-height:1.75}
 .outline-episode small{font-size:11px;color:var(--gold)}
+
+/* Member subscription warnings are small, readable and do not cover the player. */
+.subscription-notice{position:relative;z-index:12;display:block;margin:8px auto 0;max-width:min(1050px,calc(100% - 24px));padding:11px 16px;text-align:center;direction:rtl;border:1px solid rgba(226,183,100,.4);border-radius:14px;background:#34271e;color:#f7e6cb;font-size:clamp(12px,2.5vw,15px);line-height:1.65}
+.subscription-notice--urgent{background:#432127;border-color:rgba(239,91,102,.5);color:#ffe9e9}
+.subscription-notice[hidden]{display:none!important}
