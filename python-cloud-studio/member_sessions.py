@@ -83,7 +83,7 @@ class MemberSessions:
                              "WHERE token_hash=?", (now + CUSTOMER_SESSION_SECONDS, now, digest))
             # Session tuple keeps the original middleware's (uid, role, deadline, csrf) shape.
             return (row[0], row[1], time.monotonic() +
-                    (CUSTOMER_SESSION_SECONDS if renewed else row[3] - now), row[2]), renewed
+                    (CUSTOMER_SESSION_SECONDS if renewed else row[3] - now), row[2], row[5]), renewed
 
     def delete(self, token):
         digest = self._digest(token)
