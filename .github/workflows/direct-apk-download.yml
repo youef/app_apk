@@ -48,6 +48,8 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add downloads/al-ezz-tv-latest.apk downloads/al-ezz-tv-latest.sha256 downloads/README.txt
+          # APK files are ignored globally; explicitly opt in this single release artifact.
+          git add -f downloads/al-ezz-tv-latest.apk
+          git add downloads/al-ezz-tv-latest.sha256 downloads/README.txt
           git commit -m "release(apk): make verified V2 build a direct no-ZIP download"
           git push origin HEAD:main
