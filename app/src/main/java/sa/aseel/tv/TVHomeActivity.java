@@ -19,6 +19,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -32,8 +33,8 @@ import java.util.concurrent.Executors;
 
 /** Al Ezz TV 11: entirely native, remote-first leanback UI (Android KitKat+). */
 public final class TVHomeActivity extends Activity {
-    private static final int BG=0xFF090B11, PANEL=0xFF191B28, RED=0xFFEF3658;
-    private static final int WHITE=0xFFF7F4F8, MUTED=0xFFA7A6B4, GOLD=0xFFE9BF7A;
+    private static final int BG=0xFF090B11, PANEL=0xFF191823, RED=0xFFE33246;
+    private static final int WHITE=0xFFF8F8FB, MUTED=0xFFAFADBB, GOLD=0xFFFA6578;
     private static final String SETTINGS="alezz_tv_settings_v14";
     private final ExecutorService background=Executors.newFixedThreadPool(4);
     private final Handler ui=new Handler();
@@ -118,11 +119,11 @@ public final class TVHomeActivity extends Activity {
     }
     private Button button(String name){
         final Button b=new Button(this);b.setText(name);b.setAllCaps(false);b.setTextColor(WHITE);
-        b.setTextSize(15);b.setFocusable(true);b.setBackgroundDrawable(bg(0xFF252D3C,0x8B65748D,12));
+        b.setTextSize(15);b.setFocusable(true);b.setBackgroundDrawable(bg(0xFF29232F,0x6A8E7088,14));
         b.setOnFocusChangeListener(new View.OnFocusChangeListener(){public void onFocusChange(View v,boolean focused){
-            b.setBackgroundDrawable(bg(focused?0xFF6A5132:0xFF252D3C,
-                focused?0xFFE8C385:0x8B65748D,12));
-            b.setScaleX(focused?1.04f:1f);b.setScaleY(focused?1.04f:1f);
+            b.setBackgroundDrawable(bg(focused?0xFF78223C:0xFF29232F,
+                focused?0xFFFF6B83:0x6A8E7088,14));
+            b.setScaleX(focused?1.035f:1f);b.setScaleY(focused?1.035f:1f);
         }});return b;
     }
     private String value(JSONObject item,String key){return item==null?"":item.optString(key,"");}
@@ -224,7 +225,7 @@ public final class TVHomeActivity extends Activity {
         splash.setGravity(Gravity.CENTER);
         splash.setBackgroundDrawable(new GradientDrawable(
             GradientDrawable.Orientation.TL_BR,
-            new int[]{0xFF0A0D15,0xFF271422,0xFF090B11}));
+            new int[]{0xFF0B0B13,0xFF471A31,0xFF090B11}));
         setContentView(splash);
         ImageView icon=new ImageView(this);
         int mark=getResources().getIdentifier("alizz_brand","drawable",getPackageName());
@@ -249,7 +250,7 @@ public final class TVHomeActivity extends Activity {
         final LinearLayout panel=column();
         panel.setGravity(Gravity.CENTER);
         panel.setBackgroundDrawable(new GradientDrawable(
-            GradientDrawable.Orientation.TL_BR,new int[]{0xFF0B0E18,0xFF302331,0xFF090B11}));
+            GradientDrawable.Orientation.TL_BR,new int[]{0xFF0B0D15,0xFF411D30,0xFF090B11}));
         setContentView(panel);
         TextView message=text("◌  التحقق من الجلسة المحفوظة...",22,WHITE,true);
         message.setGravity(Gravity.CENTER);
@@ -297,7 +298,7 @@ public final class TVHomeActivity extends Activity {
         for(EditText input:new EditText[]{username,password}){
             input.setSingleLine(true);input.setTextColor(WHITE);input.setHintTextColor(MUTED);
             input.setTextSize(18);input.setPadding(dp(17),dp(3),dp(17),dp(3));
-            input.setBackgroundDrawable(bg(PANEL,0xFF7B6041,10));
+            input.setBackgroundDrawable(bg(PANEL,0xFFB45165,13));
             panel.addView(input,space(dp(430),dp(57),5));
         }
         username.setHint("اسم المستخدم");username.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
@@ -357,7 +358,7 @@ public final class TVHomeActivity extends Activity {
         panel.setGravity(Gravity.CENTER);
         panel.setPadding(dp(38),dp(16),dp(38),dp(16));
         panel.setBackgroundDrawable(new GradientDrawable(
-            GradientDrawable.Orientation.TL_BR,new int[]{0xFF100F18,0xFF38232A,0xFF0D111B}));
+            GradientDrawable.Orientation.TL_BR,new int[]{0xFF100E16,0xFF4B1B31,0xFF0D101A}));
         setContentView(panel);
         TextView icon=text("⌛",58,GOLD,true);
         icon.setGravity(Gravity.CENTER);
@@ -398,7 +399,7 @@ public final class TVHomeActivity extends Activity {
         root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
         setContentView(root);
         LinearLayout top=row();top.setPadding(dp(16),dp(6),dp(16),dp(6));
-        top.setBackgroundDrawable(GlassSurface.overlay(0x82DCC8A9,dp(0)));
+        top.setBackgroundDrawable(GlassSurface.overlay(0x86EF6A80,dp(0)));
         root.addView(top,new LinearLayout.LayoutParams(-1,dp(79)));
         ImageView logo=new ImageView(this);
         int logoId=getResources().getIdentifier("alizz_brand","drawable",getPackageName());
@@ -424,7 +425,7 @@ public final class TVHomeActivity extends Activity {
         top.addView(refresh,space(dp(108),dp(49),2));
         refresh.setOnClickListener(new View.OnClickListener(){public void onClick(View v){loadCatalog();}});
         navBar=row();navBar.setPadding(dp(15),dp(3),dp(15),dp(3));
-        navBar.setBackgroundDrawable(GlassSurface.overlay(0x55C7D8F3,0));
+        navBar.setBackgroundDrawable(GlassSurface.overlay(0x66F06E86,0));
         root.addView(navBar,new LinearLayout.LayoutParams(-1,dp(57)));
         scroller=new ScrollView(this);scroller.setFillViewport(true);scroller.setVerticalScrollBarEnabled(false);
         root.addView(scroller,new LinearLayout.LayoutParams(-1,0,1));
@@ -473,17 +474,28 @@ public final class TVHomeActivity extends Activity {
             final String glyph,final String target,final int baseColor){
         final LinearLayout tile=column();tile.setPadding(dp(19),dp(13),dp(19),dp(12));
         tile.setFocusable(true);tile.setClickable(true);
-        tile.setBackgroundDrawable(bg(baseColor,0x7BCCD7E7,19));
-        TextView symbol=text(glyph,37,WHITE,true);symbol.setGravity(Gravity.RIGHT);
-        tile.addView(symbol,new LinearLayout.LayoutParams(-1,0,1));
-        TextView name=text(label,27,WHITE,true);name.setGravity(Gravity.RIGHT);
+        tile.setBackgroundDrawable(bg(baseColor,0x74B88B9C,19));
+        FrameLayout symbolSpace=new FrameLayout(this);
+        tile.addView(symbolSpace,new LinearLayout.LayoutParams(-1,0,1));
+        FrameLayout capsule=new FrameLayout(this);
+        capsule.setBackgroundDrawable(bg(0xFF4D2233,0x8AD85B73,15));
+        FrameLayout.LayoutParams iconPlace=new FrameLayout.LayoutParams(dp(60),dp(60),Gravity.RIGHT|Gravity.TOP);
+        symbolSpace.addView(capsule,iconPlace);
+        ImageView symbol=new ImageView(this);
+        symbol.setImageDrawable(new CinemaGlyph(target,0xFFFF7A8D));
+        symbol.setContentDescription(label);
+        FrameLayout.LayoutParams mark=new FrameLayout.LayoutParams(dp(38),dp(38),Gravity.CENTER);
+        capsule.addView(symbol,mark);
+        TextView name=text(label,24,WHITE,true);name.setGravity(Gravity.RIGHT);
         tile.addView(name,space(-1,-2,2));
-        TextView caption=text(subtitle,14,0xFFCFCCD7,false);caption.setGravity(Gravity.RIGHT);
+        TextView caption=text(subtitle,13,0xFFC3C0CD,false);caption.setGravity(Gravity.RIGHT);
         tile.addView(caption,space(-1,-2,0));
         tile.setOnFocusChangeListener(new View.OnFocusChangeListener(){
             public void onFocusChange(View v,boolean focused){
-                tile.setBackgroundDrawable(bg(focused?0xFF665035:baseColor,
-                    focused?0xFFE8C385:0x7BCCD7E7,19));
+                tile.setBackgroundDrawable(bg(focused?0xFF692039:baseColor,
+                    focused?0xFFFF758A:0x74B88B9C,19));
+                capsule.setBackgroundDrawable(bg(focused?0xFFAE2B4A:0xFF4D2233,
+                    focused?0xFFFFA0B0:0x8AD85B73,15));
                 tile.setScaleX(focused?1.035f:1f);
                 tile.setScaleY(focused?1.035f:1f);
                 if(android.os.Build.VERSION.SDK_INT>=21)tile.setElevation(focused?dp(8):0f);
@@ -496,6 +508,7 @@ public final class TVHomeActivity extends Activity {
         LinearLayout banner=column();
         banner.setPadding(dp(22),dp(13),dp(22),dp(9));
         content.addView(banner,space(-1,dp(91),3));
+        banner.addView(text("AL EZZ  •  RED CINEMA",12,GOLD,true));
         banner.addView(text("اختر عالمك",34,WHITE,true));
         banner.addView(text("كل الترفيه في مكان واحد  •  تحكم كامل بالريموت",16,MUTED,false));
         final String[][] data={
@@ -506,7 +519,7 @@ public final class TVHomeActivity extends Activity {
             {"قائمتي","المفضلة وتابع المشاهدة","♥","favorites"},
             {"الإعدادات","خصص تجربتك","⚙","settings"}
         };
-        int[] colors={0xFF482A3F,0xFF503724,0xFF223D4C,0xFF225044,0xFF352A48,0xFF2C3047};
+        int[] colors={0xFF332331,0xFF35212F,0xFF272631,0xFF292631,0xFF33232D,0xFF27242F};
         int columns=screenWidthDp()>=620?3:2;
         int cellHeight=Math.max(130,Math.min(190,(screenHeightDp()-205)/2));
         for(int j=0;j<6;j+=columns){
@@ -815,7 +828,7 @@ public final class TVHomeActivity extends Activity {
     private void hero(){
         LinearLayout hero=row();hero.setPadding(dp(26),dp(18),dp(26),dp(18));
         hero.setBackgroundDrawable(new GradientDrawable(GradientDrawable.Orientation.RIGHT_LEFT,
-            new int[]{0xFF591629,0xFF250F1D,0xFF101119}));
+            new int[]{0xFF642039,0xFF2A1623,0xFF11121B}));
         content.addView(hero,space(-1,dp(214),5));
         LinearLayout copy=column();
         copy.addView(text("أهلًا بك في العز TV",30,WHITE,true),space(-1,-2,3));
