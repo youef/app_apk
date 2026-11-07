@@ -301,11 +301,11 @@ public final class CinemaPlayerActivity extends Activity {
         control.setFocusable(true);
         control.setContentDescription(label);
         if(Build.VERSION.SDK_INT>=26)control.setTooltipText(label);
-        control.setBackgroundDrawable(shape(0xFF2B2331,0x888E6178));
+        control.setBackgroundDrawable(new CinemaGlassButtonDrawable(false,true,0xFF2B2331));
         control.setOnFocusChangeListener(new View.OnFocusChangeListener(){
             public void onFocusChange(View view,boolean focused){
-                control.setBackgroundDrawable(shape(focused?0xFF74233F:0xFF2B2331,
-                    focused?0xFFFF7085:0x888E6178));
+                control.setBackgroundDrawable(new CinemaGlassButtonDrawable(false,true,
+                    focused?0xFF74233F:0xFF2B2331));
                 control.setScaleX(focused?1.055f:1f);
                 control.setScaleY(focused?1.055f:1f);
                 control.invalidate();
@@ -361,11 +361,12 @@ public final class CinemaPlayerActivity extends Activity {
     }
     private Button button(String name){
         final Button v=new Button(this);v.setText(name);v.setAllCaps(false);v.setTextSize(14);
-        v.setTextColor(WHITE);v.setFocusable(true);v.setBackgroundDrawable(shape(0xFF292330,0x887E6275));
+        v.setTextColor(CinemaGlassButtonDrawable.labelColors());v.setFocusable(true);
+        v.setBackgroundDrawable(new CinemaGlassButtonDrawable(false,false,0xFF292330));
         v.setOnFocusChangeListener(new View.OnFocusChangeListener(){
             public void onFocusChange(View w,boolean focused){
-                v.setBackgroundDrawable(shape(focused?0xFF77233E:0xFF292330,
-                    focused?0xFFFF788C:0x887E6275));
+                v.setBackgroundDrawable(new CinemaGlassButtonDrawable(false,false,
+                    focused?0xFF77233E:0xFF292330));
                 v.setScaleX(focused?1.03f:1f);v.setScaleY(focused?1.03f:1f);
                 if(focused&&controlPanel!=null&&controlPanel.getVisibility()==View.VISIBLE){
                     handler.removeCallbacks(autoHide);
