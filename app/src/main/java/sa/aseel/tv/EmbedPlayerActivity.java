@@ -10,6 +10,8 @@ import android.net.Uri;
 import android.net.http.SslError;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.view.KeyEvent;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -37,6 +39,21 @@ public final class EmbedPlayerActivity extends Activity {
     private View fullscreenView;
     private WebChromeClient.CustomViewCallback fullscreenCallback;
     private String sourceUrl;
+    private final Handler chromeHandler=new Handler();
+    private final Runnable hideChrome=new Runnable(){
+        @Override public void run(){
+            if(fullscreenView==null){
+                if(toolbar!=null)toolbar.setVisibility(View.GONE);
+                if(notice!=null)notice.setVisibility(View.GONE);
+            }
+        }
+    };
+    private void revealChrome(){
+        chromeHandler.removeCallbacks(hideChrome);
+        if(toolbar!=null)toolbar.setVisibility(View.VISIBLE);
+        if(notice!=null)notice.setVisibility(View.VISIBLE);
+        chromeHandler.postDelayed(hideChrome,6500L);
+    }
 
     public static boolean isAllowed(String value) {
         if (value == null || value.length() > 2048) return false;
@@ -143,7 +160,8 @@ public final class EmbedPlayerActivity extends Activity {
             }
             @Override public void onPageFinished(WebView view, String url) {
                 if (sourceUrl.equals(url))
-                    message("اضغط تشغيل داخل المشغل. قد يمنع مزود الفيديو التضمين على هذا الجهاز.");
+                    message("اضغط تشغيل داخل الفيديو. MENU أو ↑ لإظهار أدوات العز TV.");
+                revealChrome();
             }
         });
         web.setWebChromeClient(new WebChromeClient() {
@@ -223,6 +241,7 @@ public final class EmbedPlayerActivity extends Activity {
         message("جاري فتح مشغل Embed الآمن...");
         web.loadUrl(sourceUrl);
         back.requestFocus();
+        revealChrome();
     }
 
     private void hideFullscreen() {
@@ -237,11 +256,25 @@ public final class EmbedPlayerActivity extends Activity {
         }
     }
 
+    @Override public boolean dispatchKeyEvent(KeyEvent event){
+        if(event.getAction()==KeyEvent.ACTION_DOWN){
+            int code=event.getKeyCode();
+            if(code==KeyEvent.KEYCODE_MENU || code==KeyEvent.KEYCODE_INFO ||
+                (code==KeyEvent.KEYCODE_DPAD_UP && toolbar!=null &&
+                 toolbar.getVisibility()!=View.VISIBLE)){
+                revealChrome();
+                if(toolbar!=null && toolbar.getChildCount()>0)toolbar.getChildAt(0).requestFocus();
+                return true;
+            }
+        }
+        return super.dispatchKeyEvent(event);
+    }
     @Override public void onBackPressed() {
         if (fullscreenView != null) { hideFullscreen(); return; }
         super.onBackPressed();
     }
     @Override protected void onPause() {
+        chromeHandler.removeCallbacks(hideChrome);
         if (web != null) web.onPause();
         super.onPause();
     }
@@ -250,6 +283,7 @@ public final class EmbedPlayerActivity extends Activity {
         if (web != null) web.onResume();
     }
     @Override protected void onDestroy() {
+        chromeHandler.removeCallbacks(hideChrome);
         hideFullscreen();
         if (web != null) {
             web.stopLoading();
