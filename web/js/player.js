@@ -28,6 +28,7 @@
   var preferredQuality = "auto";
   var youtubeFrame = null;
   var embedFrame = null;
+  var sourceMenuVisible = false;
   var playbackToken = 0;
   var iosSafari = /iPhone|iPad|iPod/i.test(navigator.userAgent || "") ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -155,6 +156,7 @@
     if (embedFrame) { embedFrame.remove(); embedFrame = null; }
     el.root.classList.remove("is-embed");
     show("playerEmbedExternal", false);
+    closeSourceMenu();
     var v = el.video;
     v.pause();
     v.removeAttribute("src");
@@ -542,6 +544,7 @@
       attemptedJsHls = {};
       el.video.controls = false;
       closeQualityMenu();
+      closeSourceMenu();
     },
 
     /* open an episode's series queue */
@@ -734,6 +737,43 @@
     button.disabled = !current || options.length < 2;
     renderSourcesMenu();
     button.setAttribute("aria-label", "تحديد جودة الفيديو. " + activeQualityLabel());
+    renderSourcesMenu();
+  }
+  function closeSourceMenu(){
+    sourceMenuVisible=false;
+    var menu=$("playerSourcesMenu"),button=$("playerSourcesToggle");
+    if(menu)menu.hidden=true;
+    if(button)button.setAttribute("aria-expanded","false");
+  }
+  function renderSourcesMenu(){
+    var menu=$("playerSourcesMenu"),button=$("playerSourcesToggle");
+    if(!menu||!button)return;
+    button.hidden=qualitySources.length<2;
+    menu.innerHTML="";
+    var active=qualitySources[activeSourceIndex];
+    button.textContent="المصادر ("+qualitySources.length+") · "+(active?active.label:"");
+    qualitySources.forEach(function(src,i){
+      var opt=document.createElement("button");
+      opt.type="button";
+      opt.className="player__sources-option"+(activeSourceIndex===i?" is-selected":"");
+      opt.setAttribute("role","menuitemradio");
+      opt.setAttribute("aria-checked",String(activeSourceIndex===i));
+      opt.textContent=src.label+" · "+sourceTypeLabel(src.type);
+      opt.addEventListener("click",function(){
+        selectQuality("source:"+i);closeSourceMenu();button.focus();
+      });
+      menu.appendChild(opt);
+    });
+  }
+  function toggleSourceMenu(){
+    if(qualitySources.length<2)return;
+    sourceMenuVisible=!sourceMenuVisible;
+    $("playerSourcesMenu").hidden=!sourceMenuVisible;
+    $("playerSourcesToggle").setAttribute("aria-expanded",String(sourceMenuVisible));
+    if(sourceMenuVisible){
+      var active=$("playerSourcesMenu").querySelector(".is-selected");
+      if(active)active.focus();
+    }
   }
   function switchQualitySource(url) {
     if (!isPlayableUrl(url)) { toast("رابط الجودة غير صالح", "err"); return; }
@@ -790,7 +830,7 @@
       hls.currentLevel = levelIndex;
     } else return;
     renderQualityMenu();
-    toast("الجودة: " + activeQualityLabel());
+    toast("المصدر: " + activeQualityLabel());
     wake();
   }
   function updateHlsLevels(instance) {
@@ -906,8 +946,10 @@
     $("btnFull").addEventListener("click", toggleFullscreen);
     $("btnFit").addEventListener("click", toggleFit);
     $("btnQuality").addEventListener("click", toggleQualityMenu);
+    if($("playerSourcesToggle"))$("playerSourcesToggle").addEventListener("click",toggleSourceMenu);
     document.addEventListener("click", function (event) {
       if (qualityMenuOpen() && !event.target.closest(".player__quality-wrap")) closeQualityMenu();
+      if(sourceMenuVisible && !event.target.closest(".player__sources-wrap"))closeSourceMenu();
     });
     $("btnCaptions").addEventListener("click", toggleCaptions);
     $("nextPlay").addEventListener("click", playNext);
@@ -966,7 +1008,20 @@
       if (el.root.hidden) return;
       var tag = (e.target.tagName || "").toLowerCase();
       if (tag === "input" || tag === "textarea") return;
-      if (embedFrame && e.key !== "Escape" && e.key !== "Backspace" && e.key !== "f") return;
+      if(sourceMenuVisible){
+        if(e.key==="Escape"||e.key==="Backspace"){
+          e.preventDefault();closeSourceMenu();$("playerSourcesToggle").focus();return;
+        }
+        if(e.key==="ArrowUp"||e.key==="ArrowDown"){
+          e.preventDefault();
+          var options=Array.prototype.slice.call($("playerSourcesMenu").querySelectorAll("button"));
+          var i=options.indexOf(document.activeElement),d=e.key==="ArrowDown"?1:-1;
+          if(options.length)options[(i+d+options.length)%options.length].focus();
+          return;
+        }
+        if(e.key==="Enter"||e.key===" ")return;
+      }
+      if((embedFrame||youtubeFrame) && e.key!=="Escape" && e.key!=="Backspace" && e.key!=="f")return;
       if (qualityMenuOpen()) {
         if (e.key === "Escape" || e.key === "Backspace") {
           e.preventDefault(); closeQualityMenu(); $("btnQuality").focus(); return;
