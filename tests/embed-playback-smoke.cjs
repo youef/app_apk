@@ -40,7 +40,7 @@ assert(player.includes('frame.setAttribute("sandbox", "allow-scripts allow-same-
   "iframe must restrict popups/top navigation");
 assert(player.includes("if (embedFrame) { embedFrame.remove(); embedFrame = null; }"),
   "closing player must tear down embedded iframe");
-assert(player.includes("if (isEmbedUrl(url))") && player.includes("playEmbed(url)"),
+assert(player.includes('sourceKind(url)==="embed"') && player.includes("playEmbed(url)"),
   "embed must use separate playback flow, not native HTML5 video");
 assert(index.includes('id="playerEmbedExternal"'), "embedded player needs external-open fallback");
 assert(css.includes(".player.is-embed .alezz-embed-frame"), "embedded player should fill viewing area");
