@@ -248,3 +248,19 @@ body{
 @media(forced-colors:active){
   .card,.topbar,.app-dock,.btn--gold{border:1px solid CanvasText!important;box-shadow:none!important}
 }
+
+
+/* Crimson Glass Cinema wallpaper — background image only, never video surface.
+   Thin dark tint retains poster/card and typography readability on TV. */
+html{background-color:#08080d}
+body{
+  background:
+    linear-gradient(180deg,rgba(5,6,10,.46),rgba(6,6,11,.57)),
+    url("../assets/al-ezz-red-glass-background.svg") center top / cover no-repeat fixed !important;
+}
+@media(max-width:850px),(prefers-reduced-motion:reduce){
+  body{background-attachment:scroll!important}
+}
+@media(orientation:landscape) and (max-height:600px){
+  body{background-size:cover}
+}
