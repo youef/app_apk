@@ -961,3 +961,24 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{
 .player.is-embed{cursor:auto}
 .player__embed-open{white-space:nowrap;min-height:40px}
 @media(max-width:600px){.player.is-embed .player__top{padding:12px 10px;gap:8px}.player__embed-open{font-size:11px}}
+
+/* Unified V2: unobtrusive source picker above direct video and provider-controlled embeds. */
+.player__sources-wrap{position:relative;flex-shrink:0;pointer-events:auto}
+.player__sources-toggle{min-height:40px;max-width:min(32vw,250px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff;border:1px solid rgba(229,192,117,.48);border-radius:12px;background:rgba(21,24,34,.9);padding:8px 12px;cursor:pointer;font:inherit;font-size:13px}
+.player__sources-toggle:focus-visible,.player__sources-option:focus-visible{outline:3px solid #f5c66a;outline-offset:3px}
+.player__sources-menu{position:absolute;top:calc(100% + 7px);right:0;min-width:min(320px,85vw);max-height:min(60vh,380px);overflow-y:auto;direction:rtl;background:rgba(15,17,23,.97);border:1px solid rgba(255,255,255,.17);border-radius:14px;padding:7px;z-index:30;box-shadow:0 14px 36px rgba(0,0,0,.6)}
+.player__sources-menu[hidden],.player__sources-toggle[hidden]{display:none!important}
+.player__sources-option{display:block;width:100%;min-height:44px;border:none;border-radius:10px;text-align:right;background:transparent;color:#f9f8f6;font:inherit;font-size:13px;padding:10px 12px;cursor:pointer}
+.player__sources-option:hover,.player__sources-option.is-selected{background:rgba(222,180,105,.23)}
+.player.is-embed .player__sources-wrap,.player.is-embed #playerSourcesToggle,.player.is-embed .player__sources-menu{pointer-events:auto}
+.player.is-embed .player__top{pointer-events:none}
+.player.is-embed #playerClose,.player.is-embed .player__sources-wrap{pointer-events:auto}
+.player.is-embed .player__chrome{opacity:1!important}
+.player.is-embed .player__bottom,.player.is-embed .player__center{display:none!important}
+.player.is-embed .player__embed-external{bottom:max(12px,env(safe-area-inset-bottom));right:12px;padding:7px 12px;font-size:12px;opacity:.85}
+@media(max-width:600px){
+ .player__sources-toggle{max-width:45vw;font-size:11px;min-height:36px}
+ .player.is-embed .player__title strong{font-size:12px}
+ .player.is-embed .player__title span,.player.is-embed .player__badges{display:none}
+ .player__sources-menu{right:auto;left:0}
+}
