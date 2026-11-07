@@ -32,8 +32,10 @@ test("Live TV toolbar scrolls without stacking",css.includes('.live-toolbar .liv
 test("Focused TV remote buttons announce their actions",player.includes('private Button tvTool(') &&
     player.includes('control.setContentDescription(label)') &&
     player.includes('if(focused)showLiveHud(label)'));
-test("Native live controls use compact symbols, VOD keeps old controls",player.includes('playButton=live?tvTool("⏯"') &&
-    player.includes('Button guideButton=live?tvTool("☷"') &&
+test("Native live and VOD share font-independent vector icon controls",
+    player.includes('playButton=tvTool(') &&
+    player.includes('Button guideButton=tvTool(') &&
+    player.includes('new CinemaGlyph(icon,') &&
     player.includes('if(!live)footer.addView(externalButton'));
 test("Native favorite uses existing profile-scoped keys",player.includes('getSharedPreferences("alizz_v11_favorites."+MemberAuth.userId(this)') &&
     player.includes('.putBoolean(profile+".channel:"+itemId,selected)') &&
