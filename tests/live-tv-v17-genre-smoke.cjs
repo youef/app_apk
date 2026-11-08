@@ -42,8 +42,11 @@ pass("TV genre guide counts and user preference",home.includes("ChannelGuideCate
 pass("Remote channel surfing scoped by selected genre",player.includes("private void stepChannel(int direction)")&&
      player.includes("matchesGroup(tvChannels.get(at))")&&
      player.includes("rapidZap(1,event)")&&player.includes("rapidZap(-1,event)"));
-pass("Live tuning never blocks video with control rails",player.includes("if(live)hideControls();else showControls(false)")&&
-     player.includes("if(live)hideControls();else showControls(true)"));
+pass("Live tuning shows a brief loading HUD then hides chrome after playback begins",
+     player.includes("showControls(false);")&&
+     player.includes("playbackBecameVisible()")&&
+     player.includes("HIDE_DELAY=3000L")&&
+     player.includes("if(controlPanel!=null)controlPanel.setVisibility(View.GONE);"));
 pass("Remote menu focus and last category persisted",player.includes("guideSelectedButton")&&
      home.includes('getString("live_selected_group",activeChannelCategory)'));
 pass("Switching cannot flood network probes",player.includes("new ThreadPoolExecutor(2,2")&&
