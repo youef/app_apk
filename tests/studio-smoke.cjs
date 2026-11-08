@@ -22,4 +22,10 @@ const snapshot=JSON.parse(read("web/data/snapshot.json"));assert.ok(snapshot&&ty
 for(const unsafe of ["web/__api.html","web/__api2.html","web/__read.html","web/__diag.html","web/__diag2.html","web/__activate.html","web/__ls.html"]){
  assert.ok(!fs.existsSync(path.join(root,unsafe)),"Debug page must not ship: "+unsafe);
 }
+const health=read("admin/admin.js"),edgeHealth=read("supabase/functions/aseel-link-health/index.ts");
+for(const feature of ["runSeriesHealthScan","seriesEpisodeIds","healthStopScan","healthIncludeDrafts","episode_ids:chunk","mode:'series'"]){
+ assert.ok(health.includes(feature),"Series link-health feature missing: "+feature);
+}
+assert.ok(edgeHealth.includes('!children.length?"unchecked"'),"Series without published episodes must not be marked broken");
+assert.ok(edgeHealth.includes("checkRow(tab.name,row,true)"),"All saved variant links must be probed");
 console.log("PASS: new admin, legacy importer, viewer assets, browser compatibility and download links");
