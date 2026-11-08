@@ -525,9 +525,12 @@ public final class CinemaPlayerActivity extends Activity {
         controlPanel=panel;
         panel.setPadding(dp(22),dp(13),dp(22),dp(13));
         GradientDrawable glassControls=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-             new int[]{0x963A2435,0xAF10141E});
+             new int[]{kidsPlayback?0xA33D2840:live?0x91301727:
+                 "episode".equals(mediaKind)?0xA03A2739:0x963A2435,
+                 kidsPlayback?0xAE181B30:live?0x9D0B1016:0xAF10141E});
          glassControls.setCornerRadii(new float[]{dp(23),dp(23),dp(23),dp(23),0,0,0,0});
-         glassControls.setStroke(dp(1),0x72E94463);
+         glassControls.setStroke(dp(1),kidsPlayback?0x89F17DA0:
+             live?0x86FC3D62:0x72E94463);
          panel.setBackgroundDrawable(glassControls);
         FrameLayout.LayoutParams pp=new FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM);
         root.addView(panel,pp);
