@@ -267,6 +267,34 @@ Deno.serve(async(req:Request)=>{
       return reply({error:"تعذر فحص الحلقات: "+String(e).slice(0,160)},500);
     }
   }
+  // On-demand complete-section scanning: browser pages through its own accessible
+  // catalogue; the Edge worker checks only exact administrator-selected IDs.
+  if(body.mode==="items"){
+    if(!admin)return reply({error:"تسجيل دخول مسؤول مطلوب للفحص الشامل"},403);
+    const selected=String(body.table||"");
+    const target=tables.find(t=>t.name===selected);
+    if(!target)return reply({error:"نوع المكتبة غير معروف"},400);
+    const raw=Array.isArray(body.item_ids)?body.item_ids:[];
+    const ids=[...new Set(raw.map((id:unknown)=>String(id)))];
+    if(!ids.length||ids.length>12||ids.some((id:string)=>!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)))
+      return reply({error:"اختر من 1 إلى 12 معرف محتوى صالحًا"},400);
+    try {
+      const query="id=in.("+ids.join(",")+")&limit="+ids.length;
+      const rows=await rest(target.name,"select="+target.fields+"&"+query);
+      const attempts=await Promise.allSettled(rows.map((row:Row)=>checkRow(target.name,row,true)));
+      const latest=await rest(target.name,"select=id,link_health_status,link_health_reason,link_health_checked_at,link_health_failures&"+query);
+      const errors:Record<string,string>={};
+      const sources:Record<string,unknown[]>={};
+      rows.forEach((row:Row,index:number)=>{
+        const value=attempts[index];
+        if(value.status==="rejected") errors[String(row.id)]=String(value.reason).slice(0,160);
+        else if(value.value.state==="skipped")errors[String(row.id)]="تغيرت الروابط أثناء الفحص؛ أعد المحاولة";
+        else sources[String(row.id)]=value.value.sources||[];
+      });
+      return reply({mode:"items",table:target.name,results:latest,sources,errors,
+        requested:ids.length,found:rows.length},Object.keys(errors).length?207:200);
+    }catch(e){return reply({error:"تعذّر الفحص الشامل: "+String(e).slice(0,160)},500);}
+  }
   // Draft sources imported by the November 5 playlist are probed without publication.
   // This changes health metadata only; publisher approval and accurate channel identity
   // remain separate explicit requirements.
