@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="admin.css?v=quick-movies-20261101">
+<link rel="stylesheet" href="admin.css?v=series-health-20261108">
 <link rel="stylesheet" href="member-ui.css?v=1">
 <link rel="stylesheet" href="glass.css?v=glass-v19-20261107-red-v20">
 </head>
@@ -189,6 +189,6 @@
 <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 
 <script src="config.js?v=embed-20261107-v1"></script>
-<script src="admin.js?v=embed-20261107-v1"></script>
+<script src="admin.js?v=series-health-20261108"></script>
 </body>
 </html>
