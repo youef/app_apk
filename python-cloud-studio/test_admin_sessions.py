@@ -37,9 +37,9 @@ class AdminSessionTests(unittest.TestCase):
                 result = store.get('B' * 43)
             self.assertTrue(result[1])
             # Even with repeated activity, re-authentication is required at 30 days.
-            for day in (12, 18, 24, 29):
+            for day in (13, 19, 25, 29):
                 with patch.object(sessions.time, 'time', return_value=base + day * 86400):
-                    store.get('B' * 43)
+                    self.assertIsNotNone(store.get('B' * 43), 'Session expired prematurely on day ' + str(day))
             with patch.object(sessions.time, 'time', return_value=base + 30 * 86400):
                 self.assertIsNone(store.get('B' * 43))
 
