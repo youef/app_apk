@@ -687,14 +687,19 @@ public final class CinemaPlayerActivity extends Activity {
                     status.setText("◌ جاري تحميل الفيديو... اضغط رجوع للخروج");started=false;
                     handler.removeCallbacks(watchdog);
                     handler.postDelayed(watchdog,22000L);
-                    if(live)hideControls();else showControls(false);
+                    showControls(false);
                 }else if(state==Player.STATE_READY){
                     handler.removeCallbacks(watchdog);started=true;tries=0;
                     if(live)PlaybackMemory.lastChannel(CinemaPlayerActivity.this,profile,itemId);
                     updateSkipButton();
                     status.setText(live?"● البث المباشر يعمل":"▶ الفيديو جاهز • OK أو اللمس لعرض القوائم");
+                    // Do not hide loading controls before a first frame or an audio-only fallback.
                     handler.removeCallbacks(autoHide);
-                    handler.postDelayed(autoHide,1200L);
+                    handler.postDelayed(new Runnable(){public void run(){
+                        if(engine!=null&&engine.isPlaying()&&
+                            engine.getPlaybackState()==Player.STATE_READY)
+                            playbackBecameVisible();
+                    }},1800L);
                     details.setText((live ? "● القناة "+(tvChannelIndex+1)+" / "+tvChannels.size()
                         : "سينما العز • جودة تلقائية")+"   |  "+sources.get(index).label);
                 }else if(state==Player.STATE_ENDED){
@@ -711,6 +716,25 @@ public final class CinemaPlayerActivity extends Activity {
                         status.setText("انتهى الفيديو. اختر رجوع أو جودة أخرى.");
                         showControls(true);
                     }
+                }
+            }
+            @Override public void onRenderedFirstFrame(){
+                firstFrameRendered=true;
+                playbackBecameVisible();
+            }
+            @Override public void onIsPlayingChanged(boolean playing){
+                if(playing){
+                    if(firstFrameRendered)playbackBecameVisible();
+                    else handler.postDelayed(new Runnable(){public void run(){
+                        if(engine!=null&&engine.isPlaying()&&
+                           engine.getPlaybackState()==Player.STATE_READY)
+                           playbackBecameVisible();
+                    }},1800L);
+                }else{
+                    handler.removeCallbacks(autoHide);
+                    if(controlPanel!=null&&engine!=null&&
+                       engine.getPlaybackState()==Player.STATE_READY)
+                        showControls(false);
                 }
             }
             @Override public void onPlayerError(PlaybackException error){
@@ -762,7 +786,9 @@ public final class CinemaPlayerActivity extends Activity {
         index=which;currentUrl=sources.get(which).url;
         frozenTicks=0;lastLivePlayhead=-1;
         attempted.add(which);
-        started=false;handler.removeCallbacks(watchdog);
+        started=false;firstFrameRendered=false;playbackVisible=false;
+        handler.removeCallbacks(autoHide);handler.removeCallbacks(watchdog);
+        lastChromeInteraction=android.os.SystemClock.uptimeMillis();
         final int token=++requestToken;
         final String stream=currentUrl;
         if(live){
@@ -770,7 +796,7 @@ public final class CinemaPlayerActivity extends Activity {
             qualityButton.setContentDescription("جودة البث: "+sources.get(which).label);
         }else qualityButton.setText("الجودة: "+sources.get(which).label);
         status.setText("◌ فحص رابط الفيديو قبل التشغيل...");
-        if(live)hideControls();else showControls(false);
+        showControls(false);
         // The live catalog already restricts sources to rights-approved direct HTTPS media.
         // Don't block every remote-arrow change on a separate HTTP preflight request.
         // ExoPlayer validates the response and preserves the existing error/fallback path.
@@ -1299,6 +1325,14 @@ public final class CinemaPlayerActivity extends Activity {
         }catch(Exception ex){
             status.setText("لا يوجد مشغل خارجي مثبت يدعم الرابط. جرّب جودة MP4 أو مصدرًا آخر.");
         }
+    }
+    @Override public boolean dispatchKeyEvent(KeyEvent event){
+        if(event.getAction()==KeyEvent.ACTION_DOWN)noteChromeInteraction();
+        return super.dispatchKeyEvent(event);
+    }
+    @Override public boolean dispatchTouchEvent(MotionEvent event){
+        if(event.getAction()==MotionEvent.ACTION_DOWN)noteChromeInteraction();
+        return super.dispatchTouchEvent(event);
     }
     @Override public boolean onKeyDown(int code,KeyEvent event){
         if(live && !tvChannels.isEmpty()){
