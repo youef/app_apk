@@ -102,6 +102,7 @@
           <div class="admin-tools-list">
             <a href="/account/customers">إدارة حسابات العملاء</a>
             <a href="bulk-import.html">الاستيراد الجماعي</a>
+            <a href="catalog-import.html">تحديث الأفلام والمسلسلات والحلقات</a>
             <a href="import-studio.html">الاستيراد المتقدم</a>
             <a href="/studio/#smart-sync">المزامنة الذكية</a>
             <a href="/studio/sources">مراجعة مصادر المسلسلات</a>
