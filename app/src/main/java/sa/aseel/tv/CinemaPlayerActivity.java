@@ -489,25 +489,39 @@ public final class CinemaPlayerActivity extends Activity {
             }
         });
         root.addView(surface,new FrameLayout.LayoutParams(-1,-1));
+        // Persistent overlay: attached to the video frame, NOT the auto-hidden chrome.
+        // Shared by movies, series episodes, live channels and native kids playback.
+        // Never intercepts touches or remote focus, and is not baked into the stream.
+        int watermarkId=getResources().getIdentifier("alizz_brand","drawable",getPackageName());
+        if(watermarkId!=0){
+            ImageView fixedWatermark=new ImageView(this);
+            fixedWatermark.setImageResource(watermarkId);
+            fixedWatermark.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            fixedWatermark.setAlpha(0.82f);
+            fixedWatermark.setFocusable(false);
+            fixedWatermark.setClickable(false);
+            fixedWatermark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            FrameLayout.LayoutParams watermarkPosition=new FrameLayout.LayoutParams(
+                dp(105),dp(56),Gravity.TOP|Gravity.LEFT);
+            watermarkPosition.leftMargin=dp(15);
+            watermarkPosition.topMargin=dp(12);
+            root.addView(fixedWatermark,watermarkPosition);
+        }
         playerHeader=new LinearLayout(this);
         playerHeader.setGravity(Gravity.CENTER_VERTICAL);
         playerHeader.setPadding(dp(14),dp(5),dp(14),dp(5));
         playerHeader.setBackgroundDrawable(GlassSurface.transparentHeader(dp(18)));
-        int logoId=getResources().getIdentifier("alizz_brand","drawable",getPackageName());
-        if(logoId!=0){
-            ImageView brand=new ImageView(this);
-            brand.setImageResource(logoId);
-            brand.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            playerHeader.addView(brand,new LinearLayout.LayoutParams(dp(45),dp(35)));
-        }
+        // The permanent watermark now owns the actual logo; avoid duplicating it in chrome.
         playerBadge=txt("",14,WHITE,true);
         playerBadge.setSingleLine(true);
         playerBadge.setEllipsize(android.text.TextUtils.TruncateAt.END);
         playerBadge.setPadding(dp(7),0,0,0);
         playerHeader.addView(playerBadge,new LinearLayout.LayoutParams(-2,dp(38)));
         FrameLayout.LayoutParams headerPos=new FrameLayout.LayoutParams(
-            -2,dp(52),Gravity.TOP|Gravity.LEFT);
-        headerPos.setMargins(dp(22),dp(18),dp(22),0);
+            -2,dp(52),Gravity.TOP|Gravity.RIGHT);
+        playerBadge.setMaxWidth(Math.max(dp(200),
+            getResources().getDisplayMetrics().widthPixels-dp(160)));
+        headerPos.setMargins(dp(138),dp(18),dp(22),0);
         root.addView(playerHeader,headerPos);
         refreshPlayerBadge();
         if(live){
