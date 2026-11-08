@@ -176,6 +176,6 @@ footer button{min-width:160px}
 </div>
 </main>
 <script src="config.js?v=quick-series-20261101"></script>
-<script src="series-quick.js?v=health-cors-20261105-v1"></script>
+<script src="series-quick.js?v=health-refresh-20261108-v2"></script>
 </body>
 </html>
