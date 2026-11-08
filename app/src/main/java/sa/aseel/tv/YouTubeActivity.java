@@ -57,6 +57,28 @@ public final class YouTubeActivity extends Activity {
     private WebChromeClient.CustomViewCallback fullScreenCallback;
     private int current=0;
     private boolean recommendationsOpen=false, playerReady=false,videoPlaying=false;
+    private LinearLayout chromeHeader,chromeControls;
+    private final Handler chromeHandler=new Handler();
+    private static final long CHROME_IDLE_MS=3000L;
+    private final Runnable hideChrome=new Runnable(){public void run(){
+        if(!videoPlaying||recommendationsOpen||isFinishing())return;
+        if(chromeHeader!=null)chromeHeader.setVisibility(View.GONE);
+        if(chromeControls!=null)chromeControls.setVisibility(View.GONE);
+        if(status!=null)status.setVisibility(View.GONE);
+    }};
+    private void showChrome(){
+        chromeHandler.removeCallbacks(hideChrome);
+        if(chromeHeader!=null)chromeHeader.setVisibility(View.VISIBLE);
+        if(chromeControls!=null)chromeControls.setVisibility(View.VISIBLE);
+        if(status!=null)status.setVisibility(View.VISIBLE);
+        if(videoPlaying&&!recommendationsOpen)
+            chromeHandler.postDelayed(hideChrome,CHROME_IDLE_MS);
+    }
+    private void scheduleChromeHide(){
+        chromeHandler.removeCallbacks(hideChrome);
+        if(videoPlaying&&!recommendationsOpen)
+            chromeHandler.postDelayed(hideChrome,CHROME_IDLE_MS);
+    }
     private float touchX=0,touchY=0;
 
     private int dp(int i){return Math.round(getResources().getDisplayMetrics().density*i);}
@@ -134,6 +156,7 @@ public final class YouTubeActivity extends Activity {
         header.setPadding(dp(13),0,dp(13),0);
         header.setBackgroundDrawable(GlassSurface.transparentHeader(0));
         body.addView(header,new LinearLayout.LayoutParams(-1,dp(54)));
+        chromeHeader=header;
         backButton=action("رجوع  ❯");
         header.addView(backButton,new LinearLayout.LayoutParams(dp(103),dp(44)));
         backButton.setOnClickListener(new View.OnClickListener(){
@@ -165,6 +188,7 @@ public final class YouTubeActivity extends Activity {
         web.setOnTouchListener(new View.OnTouchListener(){
             public boolean onTouch(View v,MotionEvent e){
                 if(e.getAction()==MotionEvent.ACTION_DOWN){
+                    showChrome();
                     touchX=e.getX();touchY=e.getY();
                 }else if(e.getAction()==MotionEvent.ACTION_UP){
                     float dy=e.getY()-touchY, dx=Math.abs(e.getX()-touchX);
@@ -188,6 +212,13 @@ public final class YouTubeActivity extends Activity {
                     readinessHandler.removeCallbacks(readinessTimeout);
                     if(compatibilityNotice!=null)compatibilityNotice.setVisibility(View.GONE);
                     status.setText("▶ الفيديو يعمل داخل العز TV");
+                    hideRecommendations();
+                    scheduleChromeHide();
+                    return true;
+                }
+                if(url.startsWith("alezzvideo://paused")){
+                    videoPlaying=false;showChrome();
+                    status.setText("إيقاف مؤقت • اضغط تشغيل للمتابعة");
                     return true;
                 }
                 if(url.startsWith("alezzvideo://ended")){
@@ -195,6 +226,7 @@ public final class YouTubeActivity extends Activity {
                     return true;
                 }
                 if(url.startsWith("alezzvideo://blocked")){
+                    showChrome();
                     status.setText("اضغط تشغيل داخل الفيديو. قد يمنع الجهاز التشغيل التلقائي.");
                     return true;
                 }
@@ -243,7 +275,8 @@ public final class YouTubeActivity extends Activity {
         LinearLayout controlBar=new LinearLayout(this);
         controlBar.setGravity(Gravity.CENTER_VERTICAL);
         controlBar.setPadding(dp(16),dp(4),dp(16),dp(4));
-        controlBar.setBackgroundDrawable(GlassSurface.overlay(0x6DE2D0B9,0));
+        controlBar.setBackgroundDrawable(GlassSurface.transparentHeader(0));
+        chromeControls=controlBar;
         body.addView(controlBar,new LinearLayout.LayoutParams(-1,dp(58)));
         recommendButton=action("↑  المقاطع المقترحة");
         controlBar.addView(recommendButton,new LinearLayout.LayoutParams(dp(198),dp(49)));
@@ -292,6 +325,7 @@ public final class YouTubeActivity extends Activity {
     }
     private void playAt(int index){
         if(queue.isEmpty())return;
+        videoPlaying=false;showChrome();
         current=(index+queue.size())%queue.size();
         updateCurrentUi();
         hideRecommendations();
@@ -304,7 +338,7 @@ public final class YouTubeActivity extends Activity {
     }
     private void showCompatibilityError(String message){
         readinessHandler.removeCallbacks(readinessTimeout);
-        videoPlaying=false;
+        videoPlaying=false;showChrome();
         if(status!=null)status.setText("فشل التشغيل داخل التطبيق. اختر «إعادة» أو مقطعًا آخر.");
         if(web!=null)web.setVisibility(View.INVISIBLE);
         if(compatibilityNotice!=null){
@@ -319,6 +353,7 @@ public final class YouTubeActivity extends Activity {
     }
     private void showRecommendations(){
         if(recommendationsOpen||queue.size()<2)return;
+        showChrome();
         recommendationsOpen=true;
         recommendations.setVisibility(View.VISIBLE);
         recommendButton.setText("↓  إخفاء المقترحات");
@@ -328,6 +363,7 @@ public final class YouTubeActivity extends Activity {
         if(!recommendationsOpen)return;
         recommendationsOpen=false;
         recommendations.setVisibility(View.GONE);
+        scheduleChromeHide();
         recommendButton.setText("↑  المقاطع المقترحة");
     }
     private void buildRecommendations(){
@@ -375,6 +411,7 @@ public final class YouTubeActivity extends Activity {
       * It does not proxy, extract, restream or hide official playback controls. */
     private void loadInternalPlayer(String id){
         playerReady=false;videoPlaying=false;
+        showChrome();
         if(compatibilityNotice!=null)compatibilityNotice.setVisibility(View.GONE);
         if(web!=null)web.setVisibility(View.VISIBLE);
         readinessHandler.removeCallbacks(readinessTimeout);
@@ -393,7 +430,7 @@ public final class YouTubeActivity extends Activity {
         h.append("videoId:'").append(id).append("',playerVars:{autoplay:1,controls:1,playsinline:1,");
         h.append("enablejsapi:1,origin:'https://youef.github.io'},events:{");
         h.append("onReady:function(e){location.href=\'alezzvideo://ready\';if(requestedId)e.target.loadVideoById(requestedId);else e.target.playVideo();},");
-        h.append("onStateChange:function(e){if(e.data===1)location.href='alezzvideo://playing';else if(e.data===0)location.href='alezzvideo://ended';},");
+        h.append("onStateChange:function(e){if(e.data===1)location.href='alezzvideo://playing';else if(e.data===0)location.href='alezzvideo://ended';else if(e.data===2)location.href='alezzvideo://paused';},");
         h.append("onError:function(e){location.href='alezzvideo://error/'+e.data;},");
         h.append("onAutoplayBlocked:function(){location.href='alezzvideo://blocked';}");
         h.append("}});}catch(e){location.href='alezzvideo://error/init';}};");
@@ -412,7 +449,16 @@ public final class YouTubeActivity extends Activity {
     }
     @Override public boolean dispatchKeyEvent(KeyEvent e){
         if(e.getAction()==KeyEvent.ACTION_DOWN){
-            if(e.getKeyCode()==KeyEvent.KEYCODE_DPAD_UP&&!recommendationsOpen){
+            int key=e.getKeyCode();
+            if(key==KeyEvent.KEYCODE_MENU||key==KeyEvent.KEYCODE_INFO){
+                showChrome();if(backButton!=null)backButton.requestFocus();return true;
+            }
+            if(videoPlaying && chromeHeader!=null&&chromeHeader.getVisibility()!=View.VISIBLE&&
+                (key==KeyEvent.KEYCODE_DPAD_CENTER||key==KeyEvent.KEYCODE_ENTER||
+                 key==KeyEvent.KEYCODE_DPAD_DOWN)){
+                showChrome();if(backButton!=null)backButton.requestFocus();return true;
+            }
+            if(key==KeyEvent.KEYCODE_DPAD_UP&&!recommendationsOpen){
                 showRecommendations();return true;
             }
             if(e.getKeyCode()==KeyEvent.KEYCODE_BACK&&recommendationsOpen){
@@ -435,11 +481,15 @@ public final class YouTubeActivity extends Activity {
         return super.dispatchKeyEvent(e);
     }
     @Override protected void onPause(){
+        chromeHandler.removeCallbacks(hideChrome);
         if(web!=null){web.loadUrl("javascript:window.alEzzPlayer&&window.alEzzPlayer.pauseVideo()");web.onPause();}
         super.onPause();
     }
-    @Override protected void onResume(){super.onResume();if(web!=null)web.onResume();}
+    @Override protected void onResume(){
+        super.onResume();if(web!=null)web.onResume();showChrome();
+    }
     @Override protected void onDestroy(){
+        chromeHandler.removeCallbacks(hideChrome);
         readinessHandler.removeCallbacks(readinessTimeout);
         hideFullScreen();
         if(web!=null){web.loadUrl("about:blank");web.stopLoading();videoArea.removeView(web);web.destroy();web=null;}
