@@ -446,3 +446,44 @@ border:1px solid #f34b67;box-shadow:0 0 26px #ff244a42}
 .developer-screen__signature{margin-top:30px;font-size:12px;color:#afb1bd}
 @media(max-width:600px){.developer-screen__actions{flex-direction:column}.developer-screen__actions .btn{width:100%}}
 @media(prefers-reduced-motion:reduce){.card,.ep,.watch-episode{transition:none!important}}
+
+/* Cinema Pro V27: small transparent chrome, a real glowing progress rail, distinct moods. */
+.player__brand-mark{
+  flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;
+  padding:8px 13px;border-radius:14px;white-space:nowrap;
+  font-weight:850;font-size:14px;color:#ffe2e7;letter-spacing:.02em;
+  border:1px solid rgba(255,97,120,.45);
+  background:linear-gradient(125deg,rgba(89,26,46,.34),rgba(9,11,17,.16));
+  box-shadow:0 0 18px rgba(252,50,83,.16);
+}
+.player__top,.player__bottom{
+  -webkit-backdrop-filter:blur(8px) saturate(112%);
+  backdrop-filter:blur(8px) saturate(112%);
+}
+.player__top{background:linear-gradient(180deg,rgba(11,9,16,.42),rgba(9,10,16,.06))!important;}
+.player__controls .iconbtn,.player__controls .chipbtn,.player__top .iconbtn,
+.player__sources-toggle,.player__quality-wrap .chipbtn{
+  border-radius:15px!important;
+  background:linear-gradient(150deg,rgba(79,32,51,.32),rgba(8,12,20,.26))!important;
+  border:1px solid rgba(251,101,129,.35)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.10),0 0 12px rgba(244,37,70,.12);
+}
+.player__controls :is(button,input):focus-visible,.player__top button:focus-visible{
+  outline:2px solid #ffa4b5!important;outline-offset:2px;
+  box-shadow:0 0 18px rgba(255,57,95,.5)!important;
+}
+.player .scrub{height:11px!important;border-radius:20px!important;overflow:visible!important;
+  background:rgba(255,255,255,.20)!important;border:1px solid rgba(255,112,137,.30)!important}
+.player .scrub__played{border-radius:20px!important;
+  background:linear-gradient(90deg,#cf1533,#ff4a69,#ff93a4)!important;
+  box-shadow:0 0 8px rgba(252,31,72,.62),0 0 21px rgba(255,36,73,.32)!important}
+.player .scrub__played i{background:#ffe7ec!important;border:2px solid #ff5073!important;
+  box-shadow:0 0 14px #ff3e64!important}
+.player.cinema--live .player__brand-mark{border-color:rgba(255,74,102,.65)}
+.player.cinema--series .player__brand-mark{border-color:rgba(252,131,155,.48)}
+.player.cinema--kids .player__brand-mark{border-color:rgba(255,156,176,.7);color:#ffeef2}
+.player.cinema--kids .player__top,.player.cinema--kids .player__bottom{
+  background:linear-gradient(180deg,rgba(42,23,54,.39),rgba(13,15,25,.12))!important}
+@media(max-width:650px){.player__brand-mark{font-size:11px;padding:6px 8px}
+.player__controls .chipbtn{border-radius:11px!important}}
+@media(prefers-reduced-motion:reduce){.player .scrub__played{transition:none!important}}
