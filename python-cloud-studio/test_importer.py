@@ -38,6 +38,17 @@ class FakeDB:
         raise ValueError("Unknown id")
 
 class Tests(unittest.TestCase):
+    def test_lazy_work_cover_uses_full_image_and_preserves_redirect_sources(self):
+        original='https://old.example.org/movies/test/'
+        final='https://new.example.org/movies/test/'
+        html='''<html><h1>فيلم اختبار</h1><div class="cover"><img class="lazy"
+          src="/placeholder.gif" data-src="/full-cover-1290x1000.jpg"></div>
+          <div class="related"><img src="/unrelated.jpg"></div></html>'''
+        client=type('Document',(),{'get':lambda self,url:(final,'text/html',html)})()
+        cat=mod.pull_html(original,client)
+        self.assertEqual(cat.poster_url,'https://new.example.org/full-cover-1290x1000.jpg')
+        self.assertEqual(cat.source_pages,[original,final])
+
     def test_parse_series_and_metadata(self):
         cat=mod.pull_html("https://public.example.com/series",FakeClient())
         self.assertEqual(cat.kind,"series")

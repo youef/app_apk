@@ -122,25 +122,35 @@ class SourceClient:
         self.session.trust_env = False
         self.session.headers.update({"User-Agent": "AlEzzTV-MetadataImporter/1.0", "Accept": "text/html,application/json,*/*"})
         self.timeout = timeout
+        self.deadline = None
+        self.retries = 3
+
+    def request_timeout(self):
+        if self.deadline is None:
+            return self.timeout
+        remaining = self.deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError('انتهت مهلة فحص المصدر؛ سيُعاد الفحص تلقائيًا')
+        return min(self.timeout, remaining)
 
     def get(self, url: str, max_size: int = 1_500_000):
-        for attempt in range(3):
+        for attempt in range(self.retries):
             try:
                 return self._get_page(url, max_size)
             except requests.exceptions.SSLError:
                 raise
             except (requests.exceptions.ConnectionError, requests.exceptions.Timeout,
                     requests.exceptions.ChunkedEncodingError, ConnectionResetError):
-                if attempt == 2:
+                if attempt == self.retries - 1:
                     raise SourceConnectionError(
-                        'انقطع الاتصال بالموقع المصدر بعد ثلاث محاولات. تحقق من فتح صفحة المصدر ثم أعد الفحص.'
+                        'انقطع الاتصال بالموقع المصدر خلال مهلة الفحص.'
                     ) from None
                 time.sleep(0.4 * 2**attempt)
 
     def _get_page(self, url: str, max_size: int):
         for _ in range(5):
             check_dns(url)
-            with self.session.get(url, timeout=self.timeout, allow_redirects=False, stream=True) as response:
+            with self.session.get(url, timeout=self.request_timeout(), allow_redirects=False, stream=True) as response:
                 if response.status_code in (301, 302, 303, 307, 308):
                     location = response.headers.get("Location")
                     if not location:
@@ -150,6 +160,7 @@ class SourceClient:
                 response.raise_for_status()
                 chunks, total = [], 0
                 for chunk in response.iter_content(64 * 1024):
+                    self.request_timeout()
                     total += len(chunk)
                     if total > max_size:
                         raise ValueError("Page exceeds safe size limit")
@@ -163,7 +174,7 @@ class SourceClient:
         for _ in range(5):
             check_dns(url)
             with self.session.get(url, headers={"Range": f"bytes=0-{size-1}", "Accept": "*/*"},
-                                  timeout=self.timeout, allow_redirects=False, stream=True) as response:
+                                  timeout=self.request_timeout(), allow_redirects=False, stream=True) as response:
                 if response.status_code in (301, 302, 303, 307, 308):
                     location = response.headers.get("Location")
                     if not location: raise ValueError("Redirect missing Location")
@@ -172,6 +183,7 @@ class SourceClient:
                 response.raise_for_status()
                 data = bytearray()
                 for chunk in response.iter_content(min(size, 8192)):
+                    self.request_timeout()
                     data.extend(chunk[:size-len(data)])
                     if len(data) >= size: break
                 return url, response.headers.get("Content-Type", "").lower(), bytes(data)
@@ -287,6 +299,9 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
                  soup.title.get_text() if soup.title else '')
                  if (title := content_title(value, final, site_name))), '')
     description = field_of(main, "description") or meta("og:description") or meta("description")
+    if not description:
+        story=soup.select_one('[itemprop="description"], .story, .synopsis, .plot')
+        if story:description=clean(story.get_text(' ',strip=True),2000)
     poster = absolutize(final, field_of(main, "image", "thumbnailUrl") or meta("og:image"))
     year_match = re.search(r"(?:19|20)\d{2}", field_of(main,"datePublished","startDate") or "")
     year = int(year_match.group()) if year_match else None
@@ -329,12 +344,15 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
         m=re.search(r'(?:سنة\s*(?:الإنتاج|الانتاج|العرض)|release\s*year|تاريخ\s*الإنتاج)\s*[:：-]?\s*((?:19|20)\d{2})',soup.get_text(' ',strip=True)[:4500],re.I)
         if m:year=int(m.group(1))
     if not poster:
-        image=soup.select_one('[itemprop="image"], img.poster, .poster img, img[itemprop="thumbnailUrl"]')
+        image=soup.select_one('[itemprop="image"], img.poster, .poster img, .cover img, img[itemprop="thumbnailUrl"]')
         if image:
-            poster=absolutize(final,image.get("src") or image.get("data-src") or image.get("data-original") or image.get("content") or "")
+            # Lazy images expose a GIF placeholder in src. Keep the full image,
+            # and stay inside the work's cover rather than related-work cards.
+            poster=absolutize(final,image.get("data-original") or image.get("data-src") or image.get("content") or image.get("src") or "")
     out = Catalogue(kind=detected, title=title or "بدون عنوان",url=final,description=description,
                     poster_url=poster,backdrop_url=poster,year=year,original_title=original)
     out.backdrop_url=absolutize(final,meta("og:image:secure_url") or meta("twitter:image")) or poster
+    out.source_pages=list(dict.fromkeys([url,final]))
     genre=main.get("genre", [])
     if isinstance(genre,str):genre=[genre]
     out.genres=[GENRE_MAP.get(str(x).lower(),str(x).lower().replace(" ","_")) for x in genre if isinstance(x,str)][:10]
