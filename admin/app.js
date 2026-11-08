@@ -77,7 +77,7 @@ async function selectTable(name){
  Array.from($("tabs").children).forEach((button,i)=>button.classList.toggle("active",Object.keys(tables)[i]===table));
  $("collectionName").textContent=tables[table].label;
  try{
-  rows=await request(table+"?select=*&order="+(table==="aseel_categories"?"sort_order.asc":table==="aseel_settings"?"key.asc":"created_at.desc")+"&limit=100")||[];
+  rows=await request(table+"?select=*&order="+(table==="aseel_categories"?"sort_order.asc":table==="aseel_settings"?"key.asc":"created_at.desc")+"&limit="+(table==="aseel_categories"?"400":"100"))||[];
   renderRows();
  }catch(e){rows=[];renderRows();show("تعذر جلب البيانات: "+e.message,true)}
 }
