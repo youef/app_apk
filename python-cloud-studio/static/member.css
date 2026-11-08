@@ -25,3 +25,15 @@ a{color:#d0ecad}
 .expired-mark{font-size:5rem;text-align:center;line-height:1.15;margin:10px 0 20px;color:#e9c282}
 .member-cta{display:block;text-align:center;margin:20px 0 8px;padding:14px 16px;background:#d0ecad;color:#172315;border-radius:12px;text-decoration:none;font-weight:800}
 .member-cta:focus-visible{outline:3px solid #fff;outline-offset:3px}
+
+/* Align administrator gateway with the current AL EZZ TV admin identity */
+:root{background:#0a0d14;color:#f3f1ef}
+body{background:radial-gradient(ellipse at 80% -15%,#452831,transparent 54%),#0a0d14}
+.member-shell{background:#171d2a;border-color:#394252;box-shadow:0 24px 65px #0007}
+.member-art{background:radial-gradient(ellipse at 60% 35%,#674538,#151d2c 72%);color:#ffddb1}
+.member-brand,a{color:#edc98e}
+input{background:#0d1420;color:#f5f2eb;border:1px solid #4e5768}
+button,.member-cta{background:#edc98e;color:#231b15}
+.secondary{background:#273344;color:#f5f2ed}
+.member-switch a:hover{color:#fff}
+:focus-visible{outline-color:#edc98e}

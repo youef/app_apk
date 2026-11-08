@@ -1,0 +1,30 @@
+/* Customer accounts – unified cinematic admin identity */
+:root{color-scheme:dark}
+body{background:radial-gradient(ellipse at 70% -10%,rgba(180,70,74,.18),transparent 55%),#090d14;color:#f6f3ef}
+main{max-width:1380px}
+.bar{border-bottom-color:rgba(234,213,179,.2);gap:17px}
+.logo,.logo b{color:#f0cc91}
+.bar nav{gap:8px}
+.bar nav a,.paging a{display:inline-flex;align-items:center;min-height:39px;padding:7px 14px;
+ background:#232c3a;border:1px solid #3c4659;border-radius:11px;color:#e4ebf3}
+.bar nav a:hover{background:#313c4e}
+.intro{padding-block:22px}
+.intro small{color:#eac68f}
+.intro h1{font-size:clamp(24px,4vw,42px);color:#f7f3ec}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px}
+.stat,.customer,.new,.notice-board{border:1px solid rgba(222,232,244,.15);border-radius:18px;
+ background:linear-gradient(145deg,#202838,#151b28);box-shadow:0 16px 35px rgba(0,0,0,.18)}
+.stat b{color:#f2d096}
+.customer header{gap:12px}
+.detail{border-top-color:#ffffff1c}
+.minor{border-color:#5b606e;background:#2c3545;color:#f2f3f7}
+.minor:hover{background:#394456}
+.primary,.renew{background:linear-gradient(120deg,#f4dcaa,#d7b37a);color:#231a18}
+.new input,.expiry-actions input{background:#111a27;border:1px solid #4b5466;border-radius:11px}
+.notice-board{padding:17px 22px}
+:focus-visible{outline-color:#f1cd94!important}
+@media(max-width:720px){main{padding-inline:12px}.grid{grid-template-columns:1fr}
+ .customer,.new{padding:16px}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .bar nav{width:100%;overflow-x:auto;flex-wrap:nowrap}.bar nav a{white-space:nowrap}
+ .new form{grid-template-columns:1fr}.detail{grid-template-columns:1fr}
+}

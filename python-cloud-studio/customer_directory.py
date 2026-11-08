@@ -137,7 +137,7 @@ button,input{font:inherit}button{cursor:pointer}.row-actions{display:flex;gap:9p
 footer{font-size:.79rem;color:#afbfcb;margin-top:30px;line-height:1.9}
 @media(max-width:740px){.grid{grid-template-columns:1fr}.new form{grid-template-columns:1fr}.detail{gap:10px}}
 @media(max-width:420px){.detail{grid-template-columns:1fr}}
-</style></head><body><main><header class="bar"><div class="logo">العز <b>TV</b> · الإدارة</div>
+</style><link rel="stylesheet" href="/static/customer-unified.css?v=20261108"></head><body><main><header class="bar"><div class="logo">العز <b>TV</b> · الإدارة</div>
 <nav><a href="/studio/">الاستوديو</a><a href="/studio/sources">مصادر المسلسلات</a><a href="/admin/">إدارة المحتوى</a></nav></header>
 <section class="intro"><small>CUSTOMER CONTROL</small><h1>إدارة العملاء وأجهزتهم</h1>
 <p>باقة 90 يومًا افتراضيًا لكل عميل. التجديد يضيف 90 يومًا إلى آخر يوم نشط، أو يبدأ من اليوم إذا انتهى الاشتراك. جميع التواريخ بتوقيت السعودية.</p></section>'''+note+'''
