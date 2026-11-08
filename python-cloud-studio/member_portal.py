@@ -83,18 +83,36 @@ class Portal:
             response.raise_for_status()
             return response.json() if response.content else {}
 
+    def current_customer_metadata(self, uid, expected_email, login_metadata):
+        """Check the current entitlement, not an older authentication snapshot.
+
+        User metadata returned by a password grant can lag an administrator's
+        extension. The server-owned Auth Admin record is authoritative when
+        its credential is configured. Never accept client-editable user_metadata.
+        """
+        service_key = (os.getenv('ALEZZ_SUPABASE_SECRET_KEY') or
+                       os.getenv('ALEZZ_SUPABASE_SERVICE_ROLE_KEY'))
+        if not service_key:
+            return login_metadata
+        user = self.upstream('GET', '/auth/v1/admin/users/' + uid, secret=True)
+        if (not isinstance(user, dict) or str(user.get('id')) != uid or
+                str(user.get('email', '')).lower() != expected_email.lower()):
+            raise ValueError('Unable to verify current customer account')
+        return user.get('app_metadata') or {}
+
     def authenticate(self, username, password):
         email = username if '@' in username else username+'@'+ALIAS_DOMAIN
         result = self.upstream('POST','/auth/v1/token?grant_type=password',json={'email':email,'password':password})
         user = result['user']
         uid = str(UUID(user['id']))
         if '@' not in username:
-            state=account_state(user.get('app_metadata',{}))
+            metadata = self.current_customer_metadata(uid,email,user.get('app_metadata') or {})
+            state=account_state(metadata)
             if state == 'expired':
                 raise ValueError('Customer subscription expired')
             if state != 'active':
                 raise ValueError('Inactive customer')
-            return uid,'customer',expiry_epoch(user.get('app_metadata',{}))
+            return uid,'customer',expiry_epoch(metadata)
         rows = self.upstream('GET','/rest/v1/aseel_admins',token=result['access_token'],
                              params={'user_id':'eq.'+uid,'active':'eq.true','select':'user_id','limit':1})
         if not rows:
@@ -354,9 +372,12 @@ class Portal:
             expected_role = 'admin' if path == '/account/admin' else 'customer'
             if session and session[2] > time.monotonic() and session[1] == expected_role:
                 return RedirectResponse('/studio/' if expected_role == 'admin' else '/web/',303,headers=HEADERS)
-            expired_notice=('انتهت صلاحية حسابك وأصبح غير نشط. تواصل مع الإدارة لتجديد الصلاحية.'
+            # expired=1 is an untrusted URL hint, not proof of entitlement status.
+            # Always show the sign-in form and validate the authoritative account
+            # metadata after a fresh, successful credential check.
+            neutral_notice=('انتهت جلستك السابقة. سجّل الدخول للتحقق من صلاحية اشتراكك الحالية.'
                             if path=='/account/login' and request.query_params.get('expired')=='1' else '')
-            return self.login_page(expired_notice,mode='admin' if path=='/account/admin' else 'customer')
+            return self.login_page(neutral_notice,mode='admin' if path=='/account/admin' else 'customer')
         section=path.split('/')[1]
         admin_area=section in ('admin','studio','static','api') or path=='/account/customers'
         if not session or session[2]<=time.monotonic():

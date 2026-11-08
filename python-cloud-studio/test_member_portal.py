@@ -35,6 +35,66 @@ class PortalTests(unittest.TestCase):
         self.assertIn('Secure',result.headers['Set-Cookie'])
         return result
 
+
+    def test_customer_login_reads_current_entitlement_after_admin_extension(self):
+        """An expired token snapshot must not overrule a currently active plan."""
+        import os
+        import time
+        uid='12345678-1234-1234-1234-123456789abc'
+        email='customer1@members.alezz.invalid'
+        old={'alezz_customer':'active','alezz_expires_at':'2025-01-01T00:00:00Z'}
+        renewed={'alezz_customer':'active','alezz_expires_at':'2030-01-01T00:00:00Z'}
+        def mock_upstream(method,endpoint,**kwargs):
+            if endpoint.startswith('/auth/v1/token'):
+                return {'user':{'id':uid,'email':email,'app_metadata':old},
+                        'access_token':'fresh-session'}
+            if endpoint=='/auth/v1/admin/users/'+uid:
+                self.assertTrue(kwargs.get('secret'))
+                return {'id':uid,'email':email,'app_metadata':renewed}
+            raise AssertionError('Unexpected upstream endpoint: '+endpoint)
+        with patch.dict(os.environ, {'ALEZZ_SUPABASE_SERVICE_ROLE_KEY':'server-only-test-key'}):
+            with patch.object(self.portal,'upstream',side_effect=mock_upstream):
+                actual=self.portal.authenticate('customer1','test-password')
+        self.assertEqual(actual[:2],(uid,'customer'))
+        self.assertGreater(actual[2],time.time())
+
+    def test_currently_expired_subscription_still_cannot_log_in(self):
+        import os
+        uid='12345678-1234-1234-1234-123456789abc'
+        email='customer1@members.alezz.invalid'
+        stale={'alezz_customer':'active','alezz_expires_at':'2030-01-01T00:00:00Z'}
+        latest={'alezz_customer':'active','alezz_expires_at':'2025-01-01T00:00:00Z'}
+        def mock_upstream(method,endpoint,**kwargs):
+            if endpoint.startswith('/auth/v1/token'):
+                return {'user':{'id':uid,'email':email,'app_metadata':stale}}
+            return {'id':uid,'email':email,'app_metadata':latest}
+        with patch.dict(os.environ, {'ALEZZ_SUPABASE_SERVICE_ROLE_KEY':'server-only-test-key'}):
+            with patch.object(self.portal,'upstream',side_effect=mock_upstream):
+                with self.assertRaisesRegex(ValueError,'Customer subscription expired'):
+                    self.portal.authenticate('customer1','test-password')
+
+    def test_expired_query_parameter_does_not_claim_current_account_is_expired(self):
+        view=self.client.get('/account/login?expired=1')
+        self.assertEqual(view.status_code,200)
+        self.assertIn('انتهت جلستك السابقة',view.text)
+        self.assertIn('اسم المستخدم',view.text)
+        self.assertNotIn('انتهت صلاحية اشتراكك',view.text)
+        self.assertNotIn('تم إيقاف المشاهدة',view.text)
+
+    def test_entitlement_lookup_failure_never_turns_into_fake_expiry(self):
+        import os
+        import requests
+        uid='12345678-1234-1234-1234-123456789abc'
+        def mock_upstream(method,endpoint,**kwargs):
+            if endpoint.startswith('/auth/v1/token'):
+                return {'user':{'id':uid,'app_metadata':{
+                    'alezz_customer':'active','alezz_expires_at':'2025-01-01T00:00:00Z'}}}
+            raise requests.Timeout('provider temporarily unreachable')
+        with patch.dict(os.environ, {'ALEZZ_SUPABASE_SERVICE_ROLE_KEY':'server-only-test-key'}):
+            with patch.object(self.portal,'upstream',side_effect=mock_upstream):
+                with self.assertRaises(requests.Timeout):
+                    self.portal.authenticate('customer1','test-password')
+
     def test_direct_pages_and_catalogue_require_session_and_role(self):
         for path in ('/web/','/web/index.html','/web/catalog.json','/admin/','/account/customers'):
             self.assertEqual(self.client.get(path).headers['location'], '/account/login' if path.startswith('/web/') else '/account/admin')
