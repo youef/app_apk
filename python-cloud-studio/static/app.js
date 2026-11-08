@@ -198,6 +198,7 @@
       if(app.catalogue)await syncEdits({silent:true});
       const result=await API('select-catalogue',{index});
       app.season=1;app.selected.clear();$('episodeSearch').value='';updateStatus(result);
+      showDiscoveryProgress(result.scan);
       location.hash='library';
     });
   }
@@ -222,6 +223,7 @@
       const result=await API('discover-batch',{urls,kind:$('sourceKind').value,
          deep:$('deepScan').checked,metadata:$('autoMetadata').checked});
       app.selected.clear();app.season=1;$('episodeSearch').value='';updateStatus(result);
+      showDiscoveryProgress(result.scan);
       activity(`اكتُشف ${result.batch.length} عملًا مع ${result.batch.reduce((n,w)=>n+w.episodes,0)} حلقة. راجع الأعمال ثم احفظ الدفعة.`, 'success');
       if(result.batch_errors.length)toast(`${result.batch_errors.length} رابطًا لم يُكتشف؛ راجع النتائج.`, 'error');
     });
@@ -249,9 +251,10 @@
     });
   }
 
-  let discoveryTimer, discoveryId;
+  let discoveryTimer, discoveryId, lastScanDone=-1;
   function showDiscoveryProgress(scan){
     clearTimeout(discoveryTimer);
+    if(discoveryId!==scan?.id)lastScanDone=-1;
     discoveryId=scan?.id;
     $('workspace').inert=!!scan?.running;
     $('toolsLinksBtn').disabled=!app.catalogue||$('workspace').inert;
@@ -260,26 +263,48 @@
     if(!scan)return;
     const bar=$('discoveryProgressBar');
     bar.max=Math.max(1,scan.total);bar.value=scan.done;
-    $('discoveryProgressLabel').textContent=scan.running?'جارٍ فحص روابط التشغيل':'اكتمل فحص العمل';
-    $('discoveryProgressCount').textContent=scan.done+' / '+scan.total+' مفحوصة · '+scan.verified+' سليمة';
+    $('discoveryProgressLabel').textContent=scan.running?'فحص متوازٍ وتلقائي للمصادر':'اكتمل فحص المصادر المتاحة';
+    $('discoveryProgressCount').textContent=scan.done+' / '+scan.total+' مفحوصة · '+scan.verified+' فيديو متحقق · '+(scan.sources_found||0)+' مصدر محتمل';
     $('discoveryReview').hidden=scan.running;
-    if(scan.running) discoveryTimer=setTimeout(()=>pollDiscovery(scan.id),1200);
+    const list=$('liveMediaLinks');
+    if(list && app.catalogue){
+      const entries=app.catalogue.kind==='series'?app.catalogue.episodes:[app.catalogue];
+      const found=entries.flatMap((item,index)=>(item.sources||[])
+        .filter(src=>src.kind==='direct'&&src.verified&&src.url)
+        .map(src=>({title:(item.title||app.catalogue.title||'العمل')+' · '+(index+1),url:src.url}))).slice(0,5);
+      list.replaceChildren();
+      if(found.length){
+        list.append(make('strong','','روابط فيديو مباشرة اجتازت فحص المصدر'));
+        found.forEach(item=>{
+          const link=make('a','live-source-link',item.title);
+          link.href=item.url;link.target='_blank';link.rel='noopener noreferrer';
+          list.append(link);
+        });
+      }
+    }
+    if(scan.running) discoveryTimer=setTimeout(()=>pollDiscovery(scan.id),900);
   }
   async function pollDiscovery(id){
     try {
       const result=await API('discovery-scan');
       if(discoveryId!==id)return;
-      showDiscoveryProgress(result.scan);
-      if(result.summary){
+      if(result.summary && result.scan && result.scan.done!==lastScanDone){
+        lastScanDone=result.scan.done;
         updateStatus(result.summary);
-        activity(result.scan.verified?'اكتمل الفحص. راجع بيانات العمل والمشغلات ثم احفظه للمزامنة.':
-          'اكتمل الفحص. لم يُعثر على رابط تشغيل صالح. يمكنك مراجعة المصادر وحفظ البيانات كمسودة.',
+      }
+      showDiscoveryProgress(result.scan);
+      if(result.scan?.running){
+        activity('فحص مباشر: '+result.scan.done+' من '+result.scan.total+
+          ' حلقة · '+result.scan.verified+' فيديو مباشر تم التحقق منه.','loading');
+      }else if(result.summary&&result.scan){
+        activity(result.scan.verified?'اكتمل الفحص؛ راجع النتائج ثم احفظ.':
+          'اكتمل الفحص ولم يُعثر على رابط مباشر مؤكد. يمكنك حفظ البيانات كمسودة.',
           result.scan.verified?'success':'info');
       }
     } catch(error) {
       if(discoveryId!==id)return;
       activity('تعذر تحديث التقدم. جارٍ إعادة المحاولة…','info');
-      discoveryTimer=setTimeout(()=>pollDiscovery(id),5000);
+      discoveryTimer=setTimeout(()=>pollDiscovery(id),3500);
     }
   }
   async function discoverWork(url, kind){
@@ -315,8 +340,9 @@
         return;
       }
       const matchingName=value=>value.replace(/^(فيلم|مسلسل)\s+/,'').trim().toLocaleLowerCase();
-      if(matches.length===1 && matchingName(matches[0].title)===matchingName(input)){
-        await discoverWork(matches[0].url,matches[0].kind);
+      const exact=matches.filter(item=>matchingName(item.title)===matchingName(input));
+      if(exact.length===1){
+        await discoverWork(exact[0].url,exact[0].kind);
         return;
       }
       results.append(make('h3','', 'اختر العمل لبدء الفحص'));
