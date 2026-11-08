@@ -4,10 +4,13 @@ const vm = require("node:vm");
 const assert = require("node:assert/strict");
 
 const page = fs.readFileSync("admin/catalog-import.html", "utf8");
+const serverView = fs.readFileSync("admin/catalog-import.view", "utf8");
+assert.equal(page, serverView, "Render's .view page must match the frontend HTML");
 const script = fs.readFileSync("admin/catalog-import.js", "utf8");
 const required = ["catalogFile","previewButton","seriesCount","movieCount","seasonCount",
   "episodeCount","preview","rights","updateExisting","updateStreams",
-  "start","stop","report","progress","activity","message","sample"];
+  "start","stop","report","progress","activity","message","sample",
+  "authPanel","authForm","authEmail","authPassword","authSubmit"];
 for (const id of required) assert.ok(page.includes('id="' + id + '"'), "Missing UI element: " + id);
 assert.ok(page.includes("catalog-import.js"), "Missing importer JS link");
 
