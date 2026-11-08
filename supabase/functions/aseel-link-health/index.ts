@@ -75,6 +75,19 @@ async function rest(table:string, query:string, opts:RequestInit={}) {
   if(!response.ok)throw new Error(table+" API "+response.status+": "+payload.slice(0,180));
   return payload?JSON.parse(payload):null;
 }
+// Page through the entire catalogue. A fixed REST limit silently truncates
+// aggregate results when the number of episodes grows beyond 1000.
+async function restAll(table:string,filter:string):Promise<Row[]> {
+  const rows:Row[]=[];
+  const pageSize=400;
+  for(let offset=0;offset<10000;offset+=pageSize){
+    const part=await rest(table,filter+"&order=id.asc&limit="+pageSize+"&offset="+offset);
+    if(!Array.isArray(part))throw new Error("Unexpected catalogue response: "+table);
+    rows.push(...part);
+    if(part.length<pageSize)return rows;
+  }
+  throw new Error("Catalogue exceeds the safe full-scan limit; narrow the scope.");
+}
 function safeUrl(raw:unknown):URL|null {
   try {
     const url=new URL(String(raw||""));
@@ -207,9 +220,9 @@ async function checkRow(table:string,row:Row,allSources=false){
   return {state:status,title:row.title_ar,newlyHidden:status==="broken"&&row.link_health_status!=="broken",recovered:status==="healthy"&&row.link_health_status==="broken",sources};
 }
 async function updateSeries(){
-  const series=await rest("aseel_series","select=id,link_health_status&status=eq.published&limit=200");
-  const seasons=await rest("aseel_seasons","select=id,series_id&limit=500");
-  const episodes=await rest("aseel_episodes","select=season_id,status,link_health_status&limit=1000");
+  const series=await restAll("aseel_series","select=id,link_health_status&status=eq.published");
+  const seasons=await restAll("aseel_seasons","select=id,series_id");
+  const episodes=await restAll("aseel_episodes","select=id,season_id,status,link_health_status");
   for(const show of series||[]){
     const seasonIds=(seasons||[]).filter((x:Row)=>x.series_id===show.id).map((x:Row)=>x.id);
     const children=(episodes||[]).filter((x:Row)=>seasonIds.includes(x.season_id)&&x.status==="published");
