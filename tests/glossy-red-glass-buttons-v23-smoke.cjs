@@ -18,8 +18,10 @@ ok("Viewer buttons have true focus, active and disabled states",
 ok("Browser caches only the public style and not private pages",
   sw.includes('"assets/al-ezz-glass-button.svg"')&&sw.includes('alezz-shell-member-privacy-')&&
   sw.includes('request.mode === "navigate"'));
-ok("Viewer and detail screens load the new texture",
-  ["web/index.html","web/index.view"].every(p=>read(p).includes("red-glass-buttons-v23-20261107")));
+ok("Viewer and detail screens load the shared red cinema texture",
+  ["web/index.html","web/index.view"].every(p=>
+    read(p).includes("css/red-cinema.css?v=")&&
+    /red-glass-buttons-v23-20261107|red-neon-v26-20261108/.test(read(p))));
 ok("Android TV has four native glass button states without bitmap blurring",
   drawable.includes("onStateChange(int[] state)")&&
   drawable.includes("state_pressed")&&drawable.includes("state_focused")&&
