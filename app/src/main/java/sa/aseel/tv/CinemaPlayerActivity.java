@@ -449,7 +449,7 @@ public final class CinemaPlayerActivity extends Activity {
         if(live){
             liveHud=txt("● LIVE  •  العز TV",18,WHITE,true);
             liveHud.setPadding(dp(19),dp(11),dp(19),dp(11));
-            liveHud.setBackgroundDrawable(GlassSurface.overlay(0xD4F06B7E,dp(14)));
+            liveHud.setBackgroundDrawable(GlassSurface.transparentHeader(dp(14)));
             liveHud.setMaxWidth(Math.max(dp(260),getResources().getDisplayMetrics().widthPixels*62/100));
             liveHud.setVisibility(View.GONE);
             FrameLayout.LayoutParams hudParams=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.RIGHT);
@@ -459,8 +459,11 @@ public final class CinemaPlayerActivity extends Activity {
         LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);
         controlPanel=panel;
         panel.setPadding(dp(22),dp(13),dp(22),dp(13));
-        panel.setBackgroundDrawable(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{0xE33A2435,0xED10141E}));
+        GradientDrawable glassControls=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+             new int[]{0x963A2435,0xAF10141E});
+         glassControls.setCornerRadii(new float[]{dp(23),dp(23),dp(23),dp(23),0,0,0,0});
+         glassControls.setStroke(dp(1),0x72E94463);
+         panel.setBackgroundDrawable(glassControls);
         FrameLayout.LayoutParams pp=new FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM);
         root.addView(panel,pp);
         title=txt("▶ "+itemTitle,21,WHITE,true);panel.addView(title);
@@ -745,12 +748,12 @@ public final class CinemaPlayerActivity extends Activity {
         leftRail=new LinearLayout(this);leftRail.setOrientation(LinearLayout.VERTICAL);
         leftRail.setPadding(dp(9),dp(15),dp(9),dp(8));
         leftRail.setBackgroundDrawable(new GradientDrawable(
-            GradientDrawable.Orientation.LEFT_RIGHT,new int[]{0xEB0A111F,0xD737435C}));
+            GradientDrawable.Orientation.LEFT_RIGHT,new int[]{0xAD0A111F,0x8237435C}));
         root.addView(leftRail,new FrameLayout.LayoutParams(leftWidth,-1,Gravity.LEFT));
         rightRail=new LinearLayout(this);rightRail.setOrientation(LinearLayout.VERTICAL);
         rightRail.setPadding(dp(7),dp(14),dp(7),dp(10));
         rightRail.setBackgroundDrawable(new GradientDrawable(
-            GradientDrawable.Orientation.LEFT_RIGHT,new int[]{0xD737435C,0xEB0A111F}));
+            GradientDrawable.Orientation.LEFT_RIGHT,new int[]{0x8237435C,0xAD0A111F}));
         root.addView(rightRail,new FrameLayout.LayoutParams(rightWidth,-1,Gravity.RIGHT));
         TextView heading=txt("العز TV  •  تحكم",17,WHITE,true);
         heading.setGravity(Gravity.CENTER);
