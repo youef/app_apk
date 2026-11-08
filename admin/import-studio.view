@@ -10,10 +10,19 @@
 <script defer src="importer.js?v=20261101-media-v6"></script>
 <link rel="stylesheet" href="member-ui.css?v=1">
 <link rel="stylesheet" href="glass.css?v=glass-v19-20261107-red-v20">
+<link rel="stylesheet" href="unified-console.css?v=20261108-v1">
 </head><body>
 <header class="masthead"><div class="brand"><img class="logo brand-logo-image" src="../web/alizz-tv-transparent.png" alt="شعار العز TV"><div><strong>العز <span>TV</span></strong><small>إدارة الأفلام والمسلسلات والقنوات</small></div></div>
 <div class="right"><span id="userLabel"></span><button type="button" id="logout" class="ghost hidden">تسجيل الخروج</button></div></header>
-<main class="shell">
+<main class="shell"><nav class="admin-switcher" aria-label="التنقل بين وحدات الإدارة">
+       <strong>مساحة إدارة العز TV</strong>
+       <a href="/admin/">لوحة التحكم</a>
+       <a href="/admin/series-quick.html">المسلسلات والحلقات</a>
+       <a href="/studio/">الاستوديو الذكي</a>
+       <a href="/admin/bulk-import.html">الاستيراد الجماعي</a>
+       <a href="/admin/import-studio.html" aria-current="page">الاستيراد المتقدم</a>
+       <a href="/studio/sources">فحص المصادر</a>
+     </nav>
 <section id="auth" class="auth-card">
 <h1>الدخول إلى إدارة العز</h1><p>للمسؤولين المعتمدين فقط. لا يتم تخزين كلمة المرور داخل المتصفح أو المستودع.</p>
 <form id="loginForm"><label>البريد الإلكتروني<input id="email" type="email" autocomplete="username" required></label>

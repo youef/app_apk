@@ -93,9 +93,18 @@ footer button{min-width:160px}
 </style>
 <link rel="stylesheet" href="member-ui.css?v=1">
 <link rel="stylesheet" href="glass.css?v=glass-v19-20261107-red-v20">
+<link rel="stylesheet" href="unified-console.css?v=20261108-v1">
 </head>
 <body>
-<main>
+<main><nav class="admin-switcher" aria-label="التنقل بين وحدات الإدارة">
+       <strong>مساحة إدارة العز TV</strong>
+       <a href="/admin/">لوحة التحكم</a>
+       <a href="/admin/series-quick.html" aria-current="page">المسلسلات والحلقات</a>
+       <a href="/studio/">الاستوديو الذكي</a>
+       <a href="/admin/bulk-import.html">الاستيراد الجماعي</a>
+       <a href="/admin/import-studio.html">الاستيراد المتقدم</a>
+       <a href="/studio/sources">فحص المصادر</a>
+     </nav>
 <header>
   <div class="brand"><img src="../web/assets/logo.svg" alt=""><div><h1>إضافة مسلسل سريعًا</h1><div class="subtitle">العز TV — المسلسل ← المواسم ← الحلقات في حفظ واحد</div></div></div>
   <div class="actions"><span class="pill">نشر تلقائي</span><a href="index.html#series">العودة لإدارة المسلسلات</a><a href="index.html#seasons">المواسم والحلقات</a></div>

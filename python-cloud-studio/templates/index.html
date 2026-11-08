@@ -19,6 +19,7 @@
   <link rel="stylesheet" href="/static/autosync.css?v=autosync2">
   <script src="/static/autosync.js?v=autosync-progress1" defer></script>
   <link rel="stylesheet" href="/static/studio-next.css?v=2">
+<link rel="stylesheet" href="/static/studio-unified.css?v=20261108-v1">
 </head>
 <body>
   <div class="app-shell" id="app">
@@ -34,6 +35,11 @@
         <a class="nav-link" href="/studio/sources"><span class="nav-icon">▣</span><span>مراجعة مصادر المسلسلات</span></a>
         <a class="nav-link" href="#tools"><span class="nav-icon">⌘</span><span>الإضافات والمميزات</span></a>
       </nav>
+      <div class="studio-backlinks">
+        <a href="/admin/">لوحة الإدارة</a>
+        <a href="/admin/series-quick.html">تحرير الحلقات</a>
+        <a href="/studio/sources">مراجعة المصادر</a>
+      </div>
       <div class="aside-label aside-label--second">روابط المشروع</div>
       <nav class="nav-list">
         <a class="nav-link" href="/admin/series-quick.html" target="_blank" rel="noopener"><span class="nav-icon">⌁</span><span>إدارة المسلسلات</span><span class="external">↗</span></a>
@@ -58,16 +64,20 @@
         <section class="section-panel discover-panel" aria-labelledby="discoverTitle">
           <div class="section-head"><div class="section-count" aria-hidden="true">⌕</div><div class="section-head-main"><h2 id="discoverTitle">البحث عن عمل</h2><p>اكتب الاسم للبحث في المصدر، أو أدخل رابط صفحة العمل لبدء الفحص.</p></div></div>
           <form class="source-form" id="discoveryForm" novalidate>
-            <label class="field field--source"><span class="field-label">اسم العمل أو رابط المصدر</span><input type="search" id="sourceUrl" dir="auto" spellcheck="false" autocomplete="off" placeholder="مثال: لا يعقل"></label>
+            <label class="field field--source"><span class="field-label">اسم العمل أو رابط المصدر</span><input type="search" id="sourceUrl" dir="auto" spellcheck="false" autocomplete="off" placeholder="مثال: Merlin أو https://example.org/series"></label>
             <label class="field field--type"><span class="field-label">النوع</span><select id="sourceKind"><option value="auto">الكل</option><option value="movie">فيلم</option><option value="series">مسلسل</option></select></label>
             <button id="discoverBtn" type="submit" class="primary-btn"><span aria-hidden="true">⌕</span> بحث وفحص</button>
           </form>
+          <p class="auto-discovery-note" id="autoDiscoveryStatus" role="status" aria-live="polite">
+            اكتب اسمًا أو الصق رابط HTTPS؛ يبدأ البحث واكتشاف المصادر تلقائيًا
+          </p>
           <section id="titleResults" class="title-results" aria-label="نتائج البحث" hidden></section>
           <ol class="studio-flow" aria-label="خطوات استيراد العمل"><li><span>١</span> اكتشاف العمل</li><li><span>٢</span> فحص المشغلات</li><li><span>٣</span> مراجعة وحفظ</li></ol>
           <section id="discoveryProgress" class="discovery-progress" aria-label="تقدم فحص العمل" hidden>
             <div><strong id="discoveryProgressLabel"></strong><span id="discoveryProgressCount"></span></div>
             <progress id="discoveryProgressBar" max="1" value="0" aria-label="العناصر المفحوصة"></progress>
             <button type="button" class="small-gold" id="discoveryReview" hidden>مراجعة العمل ←</button>
+            <div class="live-media-links" id="liveMediaLinks" aria-live="polite"></div>
           </section>
           <div id="activity" class="activity" role="status" aria-live="polite"><span class="activity-ico">✦</span><span id="activityText">جاهز للبحث عن عمل جديد.</span></div>
           <details class="discovery-tools" id="discoveryTools"><summary>خيارات الاستيراد</summary>

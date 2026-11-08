@@ -1,7 +1,16 @@
 <!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>العز TV | الاستيراد الجماعي</title><link rel="stylesheet" href="admin.css?v=bulk20261102"><link rel="stylesheet" href="bulk-import.css?v=metadata-first-20261102"><link rel="stylesheet" href="member-ui.css?v=1">
 <link rel="stylesheet" href="glass.css?v=glass-v19-20261107-red-v20">
+<link rel="stylesheet" href="unified-console.css?v=20261108-v1">
 </head><body>
-<div class="ambient"><span class="ambient-glow ambient-glow--gold"></span></div><main class="batch">
+<div class="ambient"><span class="ambient-glow ambient-glow--gold"></span></div><main class="batch"><nav class="admin-switcher" aria-label="التنقل بين وحدات الإدارة">
+       <strong>مساحة إدارة العز TV</strong>
+       <a href="/admin/">لوحة التحكم</a>
+       <a href="/admin/series-quick.html">المسلسلات والحلقات</a>
+       <a href="/studio/">الاستوديو الذكي</a>
+       <a href="/admin/bulk-import.html" aria-current="page">الاستيراد الجماعي</a>
+       <a href="/admin/import-studio.html">الاستيراد المتقدم</a>
+       <a href="/studio/sources">فحص المصادر</a>
+     </nav>
 <header class="batch-head"><div><p class="eyebrow">AL EZZ SMART IMPORT</p><h1>جلب مسلسل كامل من رابط واحد</h1><p>اكتشاف المواسم والحلقات · تدقيق التشغيل · إزالة التكرارات · حفظ آمن</p></div><a class="btn btn-ghost" href="./#channels">العودة للقنوات</a></header>
 <p id="batchMessage" class="batch-message" role="status" aria-live="polite">جارٍ التحقق من صلاحية الإدارة...</p>
 <section class="batch-panel"><h2>01 — اكتشاف رابط المصدر</h2><div class="batch-grid"><label>رابط صفحة الفيلم أو المسلسل<input id="batchUrl" type="url" dir="ltr" placeholder="https://archive.org/details/..." required></label><label>نوع العمل<select id="batchKind"><option value="auto">تلقائي</option><option value="movie">فيلم</option><option value="series">مسلسل مع الحلقات</option></select></label></div><div class="batch-actions"><button class="btn btn-gold" id="batchDiscover">جلب وفحص تلقائي</button><button class="btn btn-ghost" id="batchVerify" disabled>افحص روابط التشغيل</button><button class="btn btn-ghost" id="batchCancel" disabled>إيقاف</button></div><p class="hint">تقبل الأداة روابط صفحات HTTPS العامة من مواقع مختلفة بعد فحص أمان النطاق. قبول الرابط للفحص لا يعني الموافقة على الحقوق أو ضمان استخلاص روابط التشغيل. لا تتجاوز تسجيل الدخول أو DRM.</p></section>

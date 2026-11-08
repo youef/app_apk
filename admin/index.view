@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="admin.css?v=series-health-20261108-v3">
 <link rel="stylesheet" href="member-ui.css?v=1">
 <link rel="stylesheet" href="glass.css?v=glass-v19-20261107-red-v20">
+<link rel="stylesheet" href="unified-console.css?v=20261108-v1">
 </head>
 <body>
 
@@ -90,21 +91,24 @@
       </div>
 
       <div class="topbar-tools">
-        <a class="btn btn-gold btn-sm" href="/account/customers">حسابات العملاء</a>
-        <a class="btn btn-gold btn-sm" href="/studio/sources">مراجعة مصادر المسلسلات</a>
-        <form method="post" action="/account/logout"><button class="btn btn-ghost btn-sm">خروج الموقع</button></form>
+        <a class="btn btn-gold btn-sm" href="/studio/">✦ الاستوديو الذكي</a>
+        <a class="btn btn-ghost btn-sm" href="series-quick.html">＋ إضافة حلقات</a>
         <label class="topbar-search">
           <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
-          <input id="globalSearch" type="search" placeholder="بحث سريع في القسم الحالي…" aria-label="بحث سريع">
+          <input id="globalSearch" type="search" placeholder="ابحث في القسم الحالي…" aria-label="بحث في القسم الحالي">
         </label>
-        <a class="btn btn-gold btn-sm" href="series-quick.html">⚡ إضافة مسلسل وحلقاته</a>
-        <a class="btn btn-gold btn-sm" href="bulk-import.html" target="_blank" rel="noopener noreferrer">الاستيراد الجماعي الذكي</a>
-        <a class="btn btn-ghost btn-sm" href="/studio/#smart-sync" target="_blank" rel="noopener noreferrer">⟳ المزامنة الذكية</a>
-        <a class="btn btn-ghost btn-sm hide-sm" href="import-studio.html" target="_blank" rel="noopener noreferrer">استيراد الأفلام المتقدم</a>
-        <a class="btn btn-ghost btn-sm hide-sm" href="../web/index.html" target="_blank" rel="noopener noreferrer">
-          عرض الموقع
-          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M19 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4"/></svg>
-        </a>
+        <details class="admin-tools-menu">
+          <summary>☷ أدوات الإدارة</summary>
+          <div class="admin-tools-list">
+            <a href="/account/customers">إدارة حسابات العملاء</a>
+            <a href="bulk-import.html">الاستيراد الجماعي</a>
+            <a href="import-studio.html">الاستيراد المتقدم</a>
+            <a href="/studio/#smart-sync">المزامنة الذكية</a>
+            <a href="/studio/sources">مراجعة مصادر المسلسلات</a>
+            <a href="../web/index.html" target="_blank" rel="noopener">عرض منصة المشاهدة</a>
+            <form method="post" action="/account/logout"><button type="submit">خروج كامل من الموقع</button></form>
+          </div>
+        </details>
         <div class="account">
           <span class="account-email" id="accountEmail" dir="ltr"></span>
           <button class="icon-btn" id="logoutBtn" type="button" aria-label="تسجيل الخروج" title="تسجيل الخروج">

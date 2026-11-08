@@ -1,0 +1,97 @@
+/* AL EZZ TV / Smart Studio – cinematic unified control design */
+:root{--bg:#090d14;--sidebar:#111721;--panel:#151c28;--panel-light:#1c2533;
+ --border:rgba(224,233,249,.15);--gold:#eac68f;--muted:#a8b5c7;
+ --radius:18px;--border-soft:rgba(224,233,249,.12);color-scheme:dark}
+body{font-family:"Tajawal",system-ui,Tahoma,sans-serif;
+ background:radial-gradient(ellipse at 84% -13%,rgba(164,74,72,.19),transparent 52%),
+ radial-gradient(ellipse at 2% 99%,rgba(209,154,92,.09),transparent 53%),#0a0e16;
+ color:#f5f4f3}
+.sidebar,.topbar,.mobile-dock{background:rgba(16,21,31,.96)!important;border-color:var(--border)!important}
+.sidebar{padding-top:22px}
+.brand-symbol{background:linear-gradient(145deg,#f6dca8,#bc865a);color:#14121a}
+.brand strong em,.overline,.eyebrow,.heading-row h1 span{color:#f1cd94}
+.nav-link{color:#bdc8d7;border-radius:12px}
+.nav-link.active,.nav-link:hover{background:linear-gradient(95deg,rgba(223,83,86,.16),rgba(242,206,150,.06));
+ color:#fff0d9;border-color:rgba(241,205,149,.25)}
+.topbar{backdrop-filter:blur(16px)}
+.page{max-width:1650px;padding-bottom:110px}
+.studio-command-bar{background:linear-gradient(120deg,#25232d,#171f2a 65%);border-color:var(--border);
+ border-radius:17px;box-shadow:0 16px 34px #0003}
+.studio-command-bar .command-copy strong{color:#f8d49a}
+.studio-edit-state{background:#1b2430;border-color:#374051;color:#c3cfe0}
+.heading-row{margin-block:20px}
+.heading-row h1{font-size:clamp(28px,4vw,50px)}
+.heading-row .lead{max-width:650px}
+.section-panel,.stat-card,.preview-card,.auto-modal,.episode-row,.modal{
+ background:linear-gradient(150deg,#1c2432,#131b27)!important;border:1px solid var(--border)!important;
+ box-shadow:0 14px 36px rgba(0,0,0,.18)}
+.discover-panel{padding:clamp(17px,2.8vw,32px);
+ background:linear-gradient(118deg,#24232d,#191f2a 70%)!important;
+ border-top:2px solid rgba(242,193,132,.45)!important}
+.section-count{background:#3c3032;color:#fbd5a6}
+.field-label,.stat-top{color:#d7deea}
+.field input,.field select,.field textarea,.episodes-toolbar input{background-color:#101722;border-color:#424c60;color:#f3f5fb}
+.source-form{display:grid;grid-template-columns:minmax(0,1fr) minmax(110px,180px) auto;gap:11px;margin:15px 0}
+.source-form .field{min-width:0}
+.source-form input,.source-form select,.source-form button{min-height:53px}
+.primary-btn,.small-gold{background:linear-gradient(120deg,#f3d8a7,#dbb376);color:#18151b;border-color:#edce9d;
+ box-shadow:0 7px 21px #0002}
+.primary-btn:hover,.small-gold:hover{background:#f5dfaF;color:#17151b}
+.secondary-btn,.small-outline,.outline-action,.account-btn,.icon-btn{background:#252d3b;color:#dce5ef;border-color:#435064}
+.source-form .studio-paste-btn{grid-column:1/-1;justify-self:start;min-height:42px}
+.title-result{background:#273242;border-color:#425269;color:#f7f3ed}
+.title-result:hover{background:#334256}
+.title-results,.discovery-tools,.discovery-progress{background:#141d29;border-color:#394657}
+.studio-flow{margin:16px 0 0;color:#c4ccdb}
+.studio-flow li span{background:#37303a;color:#f5d0a1}
+.activity{background:#192634;border-color:#354760;color:#d2dded}
+.discovery-progress{padding:16px 18px;border-color:#816346;background:linear-gradient(120deg,#28242b,#192331)}
+.discovery-progress strong{color:#f5d4a3}
+.discovery-progress progress{height:12px;accent-color:#e6b881}
+.live-media-links{display:flex;flex-wrap:wrap;gap:8px;margin-top:11px}
+.live-media-links:empty{display:none}
+.live-media-links>strong{flex-basis:100%;font-size:12px;color:#a9dbc0}
+.live-source-link{display:inline-flex;min-height:37px;align-items:center;padding:7px 11px;border-radius:10px;
+ background:#233346;border:1px solid #46637c;color:#e5f2ff;font-size:12px}
+.live-source-link:hover{background:#304258}
+.auto-discovery-note{display:flex;align-items:center;gap:9px;color:#c1d6cf;
+ font-size:12px;font-weight:750;background:#182a31;border:1px solid #36525d;border-radius:12px;
+ padding:10px 14px;margin:10px 0 15px}
+.auto-discovery-note::before{content:"●";color:#75d6aa;font-size:11px}
+.discovery-tools .batch-import,.setting-choice{background:#202a38;border-color:#394657}
+.batch-head p,.section-head-main p,.lead,.stat-caption{color:#adbaca}
+.quick-stats .stat-number{color:#fff}
+.episode-row{background:#161f2d!important}
+.episode-details{background:#111e2a}
+.episode-filter[aria-pressed=true]{background:#4a3538;color:#ffd9a4;border-color:#9a7470}
+.studio-paste-btn{border-radius:11px}
+.studio-backlinks{display:flex;gap:8px;flex-wrap:wrap;padding-block:10px}
+.studio-backlinks a,.studio-backlinks button{display:inline-flex;align-items:center;min-height:37px;padding:7px 12px;
+ background:#253040;border-radius:10px;border:1px solid #425269;color:#dce7f5;font-size:12px;text-decoration:none}
+.studio-backlinks a:hover{background:#374256}
+input,button,select,textarea{touch-action:manipulation}
+:focus-visible{outline:2px solid #f2cd93!important;outline-offset:2px}
+@media(max-width:740px){
+ .page{padding:12px 12px calc(115px + env(safe-area-inset-bottom))}
+ .heading-row{margin-block:14px}
+ .heading-row h1{font-size:30px}
+ .source-form{grid-template-columns:minmax(0,1fr) 112px;gap:9px}
+ .source-form .field--source{grid-column:1/-1}
+ .source-form button.primary-btn{grid-column:1/-1}
+ .source-form .studio-paste-btn{width:100%;grid-column:1/-1}
+ .discover-panel{padding:16px}
+ .studio-flow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:14px}
+ .studio-flow li{font-size:10px;gap:5px}
+ .studio-flow li span{min-width:19px;min-height:19px}
+ .studio-command-bar{margin-block:8px;padding:11px}
+ .mobile-dock{grid-template-columns:repeat(6,minmax(64px,1fr));overflow-x:auto;scrollbar-width:none;gap:2px}
+ .mobile-dock a{min-width:64px;font-size:9px}
+ .mobile-dock .dock-icon{font-size:19px}
+ .topbar{height:62px}
+ .section-panel,.stat-card{border-radius:15px}
+ .live-media-links{display:grid;grid-template-columns:1fr}
+ .live-source-link{min-width:0;word-break:break-word}
+}
+@media(prefers-reduced-motion:reduce){
+ *{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important}
+}

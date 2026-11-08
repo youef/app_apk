@@ -1,0 +1,120 @@
+/* AL EZZ TV | Unified Cinema Console 2026-11-08
+   Additive RTL-first design shared by every protected admin view. */
+:root{
+  --ink:#080a10;--ink-2:#111620;--ink-3:#171d29;--surface:#151b27;
+  --gold:#f0cc91;--gold-2:#caa36c;--crimson:#e54c52;
+  --text:#f5f4f5;--text-2:#ccd3dd;--muted:#a7b0c0;
+  --line:rgba(221,231,248,.12);--line-strong:rgba(231,216,188,.20);
+  --sidebar-w:264px;--r-sm:12px;--r-md:14px;--r-lg:18px;--r-xl:24px;
+  --font:"Tajawal",system-ui,Tahoma,sans-serif;color-scheme:dark
+}
+html{scroll-behavior:smooth;scroll-padding-top:84px}
+body{
+  font-family:var(--font);color:var(--text);min-height:100dvh;
+  background:radial-gradient(ellipse at 76% -22%,rgba(148,55,56,.23),transparent 55%),
+             radial-gradient(ellipse at 5% 120%,rgba(122,88,59,.14),transparent 60%),#090c13;
+  background-attachment:fixed
+}
+button,a,input,textarea,select{touch-action:manipulation}
+[hidden]{display:none!important}
+:focus-visible{outline:2px solid #f4cc8a!important;outline-offset:3px}
+.login-card,.card,.table-card,.panel,.season,.saved-episode,.batch-panel,.batch-message,
+.auth-card,.imp-section,.imp-sidepanel,.imp-aside,.modal,.drawer,.status-bar,
+.dashboard-kpis>*{
+  border:1px solid rgba(226,231,246,.15)!important;
+  border-radius:18px;
+  box-shadow:0 20px 46px rgba(0,0,0,.18),inset 0 1px rgba(255,255,255,.035)
+}
+.login-card{max-width:480px;padding:clamp(24px,4vw,38px)}
+.sidebar{border-inline-start:0!important;border-inline-end:1px solid var(--line)!important;
+  background:linear-gradient(165deg,#171b28 0%,#0e121b 80%)!important}
+.sidebar .brand{padding-bottom:18px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.sidebar .nav{gap:5px}
+.sidebar .nav-item{min-height:46px;border-radius:12px;transition:background .2s,border-color .2s}
+.sidebar .nav-item.is-active{background:linear-gradient(95deg,rgba(229,76,82,.17),rgba(240,204,145,.07))!important;
+  border:1px solid rgba(240,204,145,.26)!important;box-shadow:inset -3px 0 0 var(--crimson)}
+.sidebar-foot{border-top-color:var(--line)}
+.topbar{z-index:30;min-height:84px;border-bottom:1px solid var(--line)!important;
+  background:rgba(14,18,27,.92)!important;backdrop-filter:blur(16px)}
+.topbar-tools{flex-wrap:wrap;justify-content:flex-end;gap:8px}
+.topbar-title h1{font-size:clamp(18px,2vw,23px)}
+.topbar-title p{font-size:12px}
+.topbar-search{min-width:165px;max-width:275px}
+.topbar-tools .btn{min-height:40px}
+.admin-tools-menu{position:relative;isolation:isolate}
+.admin-tools-menu>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;
+  border-radius:12px;padding:10px 16px;min-height:40px;color:#f3d3a1;
+  background:rgba(228,179,110,.07);border:1px solid rgba(241,202,139,.24);font-weight:800}
+.admin-tools-menu>summary::-webkit-details-marker{display:none}
+.admin-tools-menu[open]>summary{background:rgba(241,202,139,.14)}
+.admin-tools-list{position:absolute;z-index:70;left:0;top:calc(100% + 9px);
+  width:min(310px,calc(100vw - 30px));padding:12px;display:grid;gap:7px;
+  background:#1a202c;border:1px solid rgba(241,202,139,.24);border-radius:16px;
+  box-shadow:0 22px 50px #0009}
+.admin-tools-list a,.admin-tools-list button{display:block;width:100%;text-align:start;
+  padding:11px 12px;font-weight:700;border-radius:10px;background:#262c38!important;
+  color:#eceef4!important;border:1px solid #ffffff17}
+.admin-tools-list a:hover,.admin-tools-list button:hover{background:#343a46!important}
+.admin-tools-list form{margin:0}
+.content{max-width:1720px;margin-inline:auto;padding-bottom:calc(48px + env(safe-area-inset-bottom))}
+.view-head{align-items:center;flex-wrap:wrap}
+.toolbar{border-radius:15px}
+.table-card{overflow:hidden}
+.table-scroll{max-width:100%;overscroll-behavior-x:contain}
+.data-table{min-width:760px}
+.data-table th{background:rgba(10,13,20,.8);font-size:12px;white-space:nowrap}
+.data-table td{vertical-align:middle}
+.data-table tr:hover td{background:rgba(255,255,255,.035)}
+.field>label,.field-label,label{overflow-wrap:anywhere}
+input,select,textarea{accent-color:#e9bd7c}
+input:not([type=checkbox]):not([type=radio]),select,textarea{border-radius:12px;min-height:46px;max-width:100%}
+.btn,.primary,.ghost,.row-btn,button{transition:background .2s,border-color .2s,transform .18s}
+.btn:active,.primary:active,.ghost:active{transform:translateY(1px)}
+.batch,.shell{max-width:1320px;margin-inline:auto}
+.batch-head,.masthead{align-items:center;flex-wrap:wrap}
+.batch-panel,.panel,.imp-section{padding:clamp(16px,2.7vw,30px)}
+.saved-episode,.season{margin-bottom:13px}
+.admin-switcher{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 22px;
+  padding:12px;border:1px solid rgba(239,204,145,.20);border-radius:16px;
+  background:linear-gradient(115deg,rgba(221,69,78,.09),rgba(29,35,48,.92))}
+.admin-switcher a{display:inline-flex;align-items:center;justify-content:center;min-height:39px;
+  font-size:13px;font-weight:800;padding:8px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.13);
+  color:#dce3ec;background:rgba(255,255,255,.045)}
+.admin-switcher a[aria-current=page],.admin-switcher a:hover{
+  color:#17131a;background:#f0cc91;border-color:#f0cc91}
+.admin-switcher strong{margin-inline-end:auto;color:#f1ce96;font-size:12px}
+@media(max-width:1160px){
+ .topbar{height:auto!important;min-height:75px;align-items:flex-start;padding-block:12px}
+ .topbar-tools{flex-wrap:wrap}
+ .topbar-search{order:2;width:100%;max-width:none}
+}
+@media(max-width:900px){
+ :root{--sidebar-w:0px}
+ .topbar{position:sticky;top:0}
+ .content{padding-inline:clamp(12px,3vw,22px)}
+ .admin-tools-list{left:0}
+ .admin-switcher{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
+ .admin-switcher a{white-space:nowrap;flex:none}
+ .admin-switcher strong{white-space:nowrap}
+}
+@media(max-width:600px){
+ html{scroll-padding-top:70px}
+ .topbar-title h1{font-size:17px}
+ .topbar-title p{font-size:11px}
+ .topbar-tools{justify-content:flex-start;gap:6px}
+ .topbar-tools>.btn{min-height:39px;padding-inline:10px}
+ .topbar-search{min-width:0}
+ .topbar-tools .account-email{max-width:110px;overflow:hidden;text-overflow:ellipsis}
+ .admin-tools-list{position:fixed;inset:auto 10px 12px 10px;width:auto;z-index:100;
+   max-height:60dvh;overflow:auto}
+ .login-card{padding:23px 18px}
+ .table-scroll{margin-inline:-2px}
+ .data-table td,.data-table th{padding-inline:10px}
+ .batch,.shell,main{max-width:100%}
+ .batch-head h1,header h1{font-size:clamp(22px,5vw,30px)}
+ .panel,.season,.batch-panel,.imp-section{padding:14px}
+ .admin-switcher{margin-bottom:15px}
+}
+@media(prefers-reduced-motion:reduce){
+ *{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+}
