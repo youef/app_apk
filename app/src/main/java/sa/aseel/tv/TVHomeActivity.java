@@ -228,9 +228,39 @@ public final class TVHomeActivity extends Activity {
             }
         }
     }
+    /**
+     * Fill the complete landscape display on tablets and Android TV.
+     * FULLSCREEN alone hides only the status bar; navigation/cutout insets
+     * can otherwise leave a black strip beside the cinema wallpaper.
+     */
+    private void applyCinemaImmersiveLayout(){
+        final View decor=getWindow().getDecorView();
+        decor.setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_FULLSCREEN |
+            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
+            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
+            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION |
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+        // On Android 9+ a landscape display cutout can reserve a black strip
+        // along the short edge unless the window opts into that area.
+        if(android.os.Build.VERSION.SDK_INT>=28){
+            android.view.WindowManager.LayoutParams attrs=getWindow().getAttributes();
+            if(attrs.layoutInDisplayCutoutMode!=
+                 android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES){
+                attrs.layoutInDisplayCutoutMode=
+                    android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+                getWindow().setAttributes(attrs);
+            }
+        }
+    }
+    @Override public void onWindowFocusChanged(boolean hasFocus){
+        super.onWindowFocusChanged(hasFocus);
+        if(hasFocus)applyCinemaImmersiveLayout();
+    }
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
-        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN);
+        applyCinemaImmersiveLayout();
         catalog=new CatalogApi(this);
         kidsAge=getSharedPreferences("alezz_kids",MODE_PRIVATE).getInt("age",6);
         kidsDailyMinutes=getSharedPreferences("alezz_kids",MODE_PRIVATE).getInt("minutes",60);
