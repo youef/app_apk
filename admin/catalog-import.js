@@ -4,7 +4,7 @@
   const el = id => document.getElementById(id);
   let admin = false, busy = false, cancelled = false, manifest = null;
   let report = [];
-  const counters = { series_created: 0, seasons_created: 0, episodes_created: 0, skipped: 0, errors: 0 };
+  const counters = { series_created: 0, series_updated: 0, movies_created: 0, movies_updated: 0, seasons_created: 0, seasons_updated: 0, episodes_created: 0, episodes_updated: 0, skipped: 0, errors: 0 };
 
   function message(value, tone) {
     el("message").textContent = value;
@@ -35,10 +35,40 @@
     if (!Number.isInteger(value) || value < min || value > max) throw Error(label + ": رقم غير صالح.");
     return value;
   }
+  function uuid(value, label) {
+    if (value === undefined || value === null || value === "") return null;
+    if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {
+      throw Error(label + ": معرّف UUID غير صالح.");
+    }
+    return value.toLowerCase();
+  }
+  function metadata(item, title, year, source) {
+    const tags = item.genre_tags || [];
+    if (!Array.isArray(tags) || tags.length > 12 ||
+        tags.some(x => typeof x !== "string" || !/^[a-z]{2,20}$/.test(x))) {
+      throw Error(title + ": التصنيفات يجب أن تكون رموزًا إنجليزية.");
+    }
+    const country = str(item.country_code || "", title + ": الدولة", 2).toUpperCase() || null;
+    if (country && !/^[A-Z]{2}$/.test(country)) throw Error(title + ": رمز الدولة غير صالح.");
+    const quality = item.quality == null ? null : str(item.quality, title + ": الجودة", 3, true);
+    if (quality && !["SD","HD","FHD","4K"].includes(quality)) throw Error(title + ": الجودة غير مدعومة.");
+    const age = item.age_rating == null ? null : str(item.age_rating, title + ": العمر", 3, true);
+    if (age && !["all","7+","13+","16+","18+"].includes(age)) throw Error(title + ": تصنيف العمر غير مدعوم.");
+    return {
+      id: uuid(item.id, title + ": المعرف"),
+      title_ar: title, release_year: year, country_code: country, source_page_url: source,
+      description: str(item.description || "", title + ": الوصف", 2000),
+      poster_url: validUrl(item.poster_url, title + ": البوستر"),
+      backdrop_url: validUrl(item.backdrop_url, title + ": الخلفية"),
+      genre_tags: [...new Set(tags)], quality, age_rating: age
+    };
+  }
   function parse(input) {
-    const sources = Array.isArray(input) ? input : input && input.series;
-    if (!Array.isArray(sources) || !sources.length || sources.length > 500) {
-      throw Error("يجب أن يحتوي الملف على قائمة series من 1 إلى 500 مسلسل.");
+    const sources = Array.isArray(input) ? input : input && (input.series || []);
+    const movies = Array.isArray(input) ? [] : input && (input.movies || []);
+    if (!Array.isArray(sources) || !Array.isArray(movies) ||
+        !sources.length && !movies.length || sources.length + movies.length > 500) {
+      throw Error("الملف يجب أن يحتوي على series و/أو movies، بحد أقصى 500 عمل.");
     }
     const out = [], keys = new Set();
     let episodeTotal = 0;
@@ -47,22 +77,10 @@
       const title = str(item.title_ar, "اسم المسلسل", 250, true);
       const year = item.release_year == null ? null : integer(item.release_year, title + ": سنة الإنتاج", 1880, 2100);
       const source = validUrl(item.source_page_url, title + ": صفحة المصدر");
-      const key = source || title.toLocaleLowerCase("ar") + "|" + (year || "");
+      const key = "series:" + (source || title.toLocaleLowerCase("ar") + "|" + (year || ""));
       if (keys.has(key)) throw Error(title + ": نسخة مكررة داخل الملف.");
       keys.add(key);
-      const country = str(item.country_code || "", title + ": الدولة", 2).toUpperCase() || null;
-      if (country && !/^[A-Z]{2}$/.test(country)) throw Error(title + ": رمز الدولة غير صالح.");
-      const tags = item.genre_tags || [];
-      if (!Array.isArray(tags) || tags.length > 12 || tags.some(x => typeof x !== "string" || !/^[a-z]{2,20}$/.test(x))) {
-        throw Error(title + ": التصنيفات يجب أن تكون رموزًا إنجليزية.");
-      }
-      const s = {
-        title_ar: title, release_year: year, country_code: country, source_page_url: source,
-        description: str(item.description || "", title + ": الوصف", 2000),
-        poster_url: validUrl(item.poster_url, title + ": البوستر"),
-        backdrop_url: validUrl(item.backdrop_url, title + ": الخلفية"),
-        genre_tags: [...new Set(tags)]
-      };
+      const s = metadata(item, title, year, source);
       if (!Array.isArray(item.seasons || [])) throw Error(title + ": seasons ليست قائمة.");
       const seasons = [], seasonKeys = new Set();
       for (const season of item.seasons || []) {
@@ -80,6 +98,7 @@
           epKeys.add(number);
           episodes.push({
             number, title_ar: str(ep.title_ar || "الحلقة " + number, "عنوان الحلقة", 250, true),
+            description: str(ep.description || "", title + ": وصف الحلقة", 1800),
             stream_url: validUrl(ep.stream_url, title + ": رابط الفيديو"),
             source_page_url: validUrl(ep.source_page_url, title + ": رابط مصدر الحلقة"),
             poster_url: validUrl(ep.poster_url, title + ": صورة الحلقة")
@@ -89,39 +108,60 @@
         }
         seasons.push({ number: sn, title_ar: str(season.title_ar || "الموسم " + sn, "عنوان الموسم", 250), episodes });
       }
-      out.push({ series: s, seasons });
+      out.push({ type: "series", series: s, seasons });
+    }
+    for (const item of movies) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) throw Error("سجل فيلم غير صالح.");
+      const title = str(item.title_ar, "اسم الفيلم", 250, true);
+      const year = item.release_year == null ? null : integer(item.release_year, title + ": سنة الإصدار", 1880, 2100);
+      const source = validUrl(item.source_page_url, title + ": صفحة المصدر");
+      const key = "movie:" + (source || title.toLocaleLowerCase("ar") + "|" + (year || ""));
+      if (keys.has(key)) throw Error(title + ": نسخة مكررة داخل الملف.");
+      keys.add(key);
+      const movie = metadata(item, title, year, source);
+      movie.stream_url = validUrl(item.stream_url, title + ": رابط التشغيل");
+      movie.duration_minutes = item.duration_minutes == null ? null :
+        integer(item.duration_minutes, title + ": مدة الفيلم", 1, 99999);
+      out.push({ type: "movie", movie });
     }
     return out;
   }
   function counts() {
-    el("seriesCount").textContent = manifest ? manifest.length : "0";
-    el("seasonCount").textContent = manifest ? manifest.reduce((n, x) => n + x.seasons.length, 0) : "0";
-    el("episodeCount").textContent = manifest ? manifest.reduce((n, x) => n + x.seasons.reduce((m, y) => m + y.episodes.length, 0), 0) : "0";
+    el("seriesCount").textContent = manifest ? manifest.filter(x => x.type === "series").length : "0";
+    el("movieCount").textContent = manifest ? manifest.filter(x => x.type === "movie").length : "0";
+    el("seasonCount").textContent = manifest ? manifest.reduce((n, x) => n + (x.seasons?.length || 0), 0) : "0";
+    el("episodeCount").textContent = manifest ? manifest.reduce((n, x) =>
+      n + (x.seasons || []).reduce((m, y) => m + y.episodes.length, 0), 0) : "0";
     el("start").disabled = !admin || busy || !manifest || !el("rights").checked;
     el("stop").disabled = !busy;
     el("report").disabled = report.length === 0;
     el("previewButton").disabled = busy;
+    el("catalogFile").disabled = busy;
+    el("updateExisting").disabled = busy;
+    el("updateStreams").disabled = busy;
   }
   function preview() {
     const list = el("preview");
     list.replaceChildren();
     if (!manifest) { counts(); return; }
-    for (const item of manifest.slice(0, 12)) {
+    for (const work of manifest.slice(0, 12)) {
+      const item = work.type === "movie" ? work.movie : work.series;
       const card = document.createElement("div");
       card.className = "item";
       const label = document.createElement("b");
-      label.textContent = item.series.title_ar;
+      label.textContent = (work.type === "movie" ? "🎬 " : "📺 ") + item.title_ar;
       const detail = document.createElement("small");
-      const episodeCount = item.seasons.reduce((n, s) => n + s.episodes.length, 0);
-      const links = item.seasons.reduce((n, s) => n + s.episodes.filter(ep => ep.stream_url).length, 0);
-      detail.textContent = (item.series.release_year || "بدون سنة") + " · " + item.seasons.length + " موسم · " + episodeCount + " حلقة · " + links + " رابط تشغيل مُدخل";
+      const episodeCount = (work.seasons || []).reduce((n, s) => n + s.episodes.length, 0);
+      detail.textContent = (item.release_year || "بدون سنة") + " · " +
+        (work.type === "movie" ? "فيلم · " + (item.stream_url ? "رابط تشغيل مُدخل" : "بيانات فقط") :
+        work.seasons.length + " موسم · " + episodeCount + " حلقة");
       card.append(label, detail);
       list.append(card);
     }
     if (manifest.length > 12) {
       const rest = document.createElement("div");
       rest.className = "item";
-      rest.textContent = "و" + (manifest.length - 12) + " مسلسلًا آخر في الملف";
+      rest.textContent = "و" + (manifest.length - 12) + " عملًا آخر في الملف";
       list.append(rest);
     }
     counts();
