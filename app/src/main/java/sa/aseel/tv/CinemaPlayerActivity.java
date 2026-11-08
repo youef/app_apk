@@ -119,6 +119,13 @@ public final class CinemaPlayerActivity extends Activity {
     private Button skipIntroButton;
     private ScrollView channelsScroll;
     private TextView liveHud;
+    private LinearLayout playerHeader;
+    private TextView playerBadge,progressClock;
+    private CinemaSeekBar neonTimeline;
+    private Button mediaMuteButton;
+    private boolean mediaMuted=false,firstFrameRendered=false,playbackVisible=false;
+    private long lastChromeInteraction=0L;
+    private int progressTicks=0;
     private final Runnable hideLiveHud=new Runnable(){public void run(){
         if(liveHud!=null)liveHud.setVisibility(View.GONE);
     }};
@@ -161,28 +168,64 @@ public final class CinemaPlayerActivity extends Activity {
             rightRail.setVisibility(View.VISIBLE);
             if(rightRail.getChildCount()>1)rightRail.getChildAt(1).requestFocus();
         }
-        handler.removeCallbacks(autoHide);
         railVisible=true;
+        noteChromeInteraction();
     }
     private boolean railVisible=false;
     private final Runnable progressTick=new Runnable(){public void run(){
         if(isFinishing())return;
-        if(engine!=null&&engine.isPlaying()&&!live)saveProgress();
-        updateSkipButton();
-        handler.postDelayed(this,9000L);
-    }};
-    private static final long HIDE_DELAY=5500L;
-    private final Runnable autoHide=new Runnable(){public void run(){
-        if(isFinishing()||engine==null||!engine.isPlaying())return;
-        if((leftRail!=null&&leftRail.hasFocus())||(rightRail!=null&&rightRail.hasFocus())||
-            (controlPanel!=null&&controlPanel.hasFocus())){
-            // A viewer still navigating controls must not lose their focused button.
-            return;
+        if(engine!=null){
+            if(engine.isPlaying()&&!live&&(++progressTicks%9)==0)saveProgress();
+            updateTimeline();
         }
+        updateSkipButton();
+        handler.postDelayed(this,1000L);
+    }};
+    private static final long HIDE_DELAY=3000L;
+    private final Runnable autoHide=new Runnable(){public void run(){
+        if(isFinishing()||engine==null||!engine.isPlaying()||!playbackVisible)return;
+        long idle=android.os.SystemClock.uptimeMillis()-lastChromeInteraction;
+        if(idle<HIDE_DELAY){handler.postDelayed(this,HIDE_DELAY-idle);return;}
         hideControls();
     }};
+    private void armIdleHide(){
+        handler.removeCallbacks(autoHide);
+        if(engine!=null&&engine.isPlaying()&&playbackVisible)
+            handler.postDelayed(autoHide,HIDE_DELAY);
+    }
+    private void noteChromeInteraction(){
+        lastChromeInteraction=android.os.SystemClock.uptimeMillis();
+        if((controlPanel!=null&&controlPanel.getVisibility()==View.VISIBLE)||railVisible)
+            armIdleHide();
+    }
+    private void playbackBecameVisible(){
+        if(playbackVisible||engine==null||!engine.isPlaying())return;
+        playbackVisible=true;
+        lastChromeInteraction=android.os.SystemClock.uptimeMillis();
+        if(status!=null)status.setText(live?"● البث يعمل":"▶ بدأ التشغيل • اضغط OK لإظهار الأدوات");
+        armIdleHide();
+    }
+    private static String clockLabel(long time){
+        long seconds=Math.max(0L,time/1000L);
+        return String.format(Locale.US,"%02d:%02d:%02d",
+            seconds/3600,(seconds/60)%60,seconds%60);
+    }
+    private void updateTimeline(){
+        if(engine==null||neonTimeline==null)return;
+        long length=engine.getDuration(),position=engine.getCurrentPosition();
+        boolean hasDuration=length>0&&length!=C.TIME_UNSET;
+        neonTimeline.setProgress(position,hasDuration?length:0L,live);
+        if(progressClock!=null)progressClock.setText(live?"● LIVE  •  بث مباشر":
+            clockLabel(position)+"  /  "+(hasDuration?clockLabel(length):"--:--"));
+    }
+    private void refreshPlayerBadge(){
+        if(playerBadge!=null)playerBadge.setText("◈  العز TV  •  "+
+            (kidsPlayback?"الأطفال":live?"LIVE":
+             "episode".equals(mediaKind)?"المسلسلات":"الأفلام")+"  |  "+itemTitle);
+    }
     private void hideControls(){
         handler.removeCallbacks(autoHide);
+        if(playerHeader!=null)playerHeader.setVisibility(View.GONE);
         if(controlPanel!=null)controlPanel.setVisibility(View.GONE);
         if(leftRail!=null)leftRail.setVisibility(View.GONE);
         if(rightRail!=null)rightRail.setVisibility(View.GONE);
@@ -191,12 +234,13 @@ public final class CinemaPlayerActivity extends Activity {
     }
     private void showControls(boolean focusButton){
         if(controlPanel==null)return;
+        if(playerHeader!=null)playerHeader.setVisibility(View.VISIBLE);
         controlPanel.setVisibility(View.VISIBLE);
         // All sources share the same clean player: drawers appear only on demand.
         setRailsVisible(false);
-        handler.removeCallbacks(autoHide);
         if(focusButton&&playButton!=null)playButton.requestFocus();
-        if(engine!=null&&engine.isPlaying())handler.postDelayed(autoHide,HIDE_DELAY);
+        noteChromeInteraction();
+        armIdleHide();
     }
     private void toggleControls(){
         if(controlPanel!=null&&controlPanel.getVisibility()==View.VISIBLE)hideControls();
@@ -272,7 +316,7 @@ public final class CinemaPlayerActivity extends Activity {
         if(label.contains("الصوت")&&label.contains("كتم"))return "mute";
         if(label.contains("الصوت")&&label.contains("تشغيل"))return "volume";
         if(label.contains("الصوت")||label.contains("ترجمة"))return "audio";
-        if(label.contains("أبعاد"))return "screen";
+        if(label.contains("أبعاد")||label.contains("ملء الشاشة"))return "screen";
         if(label.contains("المزيد"))return "more";
         if(label.contains("العودة"))return "close";
         return "play";
@@ -284,7 +328,7 @@ public final class CinemaPlayerActivity extends Activity {
                 super.onDraw(canvas);
                 String icon=glyph;
                 if("star".equals(icon)&&isChannelFavorite())icon="star-filled";
-                if("mute".equals(icon)&&liveMuted)icon="volume";
+                if("mute".equals(icon)&&(live?liveMuted:mediaMuted))icon="volume";
                 int size=Math.min(dp(31),Math.min(getWidth(),getHeight())-dp(8));
                 if(size<1)return;
                 CinemaGlyph vector=new CinemaGlyph(icon,isFocused()?0xFFFFFFFF:0xFFF6CED5);
