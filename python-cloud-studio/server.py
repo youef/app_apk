@@ -392,52 +392,92 @@ async def title_search(request: Request, body: TitleSearchForm):
     return {'results': results}
 
 
+def _scan_media_entry(cat: Catalogue, entry):
+    """Bounded, independent discovery worker. Only its own result is returned.
+
+    Public HTTPS pages and media candidates are inspected. Embedded pages are
+    checked for reachability but never treated as verified direct playback.
+    """
+    page = cat.url if cat.kind == 'movie' else entry.page_url
+    candidates = list(entry.sources)
+    if entry.media_url and not any(item.get('url') == entry.media_url for item in candidates):
+        candidates.append({'url': entry.media_url,
+                           'kind': supported_source_kind(entry.media_url) or 'direct',
+                           'page_url': page})
+    pages = list(dict.fromkeys(url for url in [page, *entry.source_pages]
+                               if url and (cat.kind == 'movie' or url.rstrip('/') != cat.url.rstrip('/'))))
+    checked, playable, error = candidates, None, ''
+    try:
+        # HTTP checks run concurrently. Browser extraction is a controlled
+        # fallback and can take longer on source sites that throttle access.
+        resolver = MediaResolver(mode=AUTOSYNC.mode, timeout=9, max_pages=5)
+        if entry.media_url and supported_source_kind(entry.media_url) == 'embed':
+            checked = resolver.check(candidates)
+            errors = []
+        else:
+            checked, errors = resolver.resolve(pages, existing=candidates)
+        playable = next((item for item in checked
+                         if item.get('verified') and item.get('kind') == 'direct'), None)
+        embedded = any(item.get('kind') == 'embed' and item.get('reachable')
+                       and item.get('url') == entry.media_url for item in checked)
+        if not playable and not embedded:
+            error = '; '.join(errors[:2]) or 'لم يُعثر على رابط مباشر اجتاز الفحص.'
+    except Exception as exc:
+        error = safe_error(exc)
+    return entry, checked, pages, playable, error
+
+
 def scan_catalogue(state: UserState, cat: Catalogue, progress: dict):
+    """Inspect episodes concurrently and surface each result as soon as it lands."""
+    from concurrent.futures import as_completed
+
     targets = list(cat.episodes) if cat.kind == 'series' else [cat]
-    resolver = MediaResolver(mode=AUTOSYNC.mode)
-    for entry in targets:
+    if not targets:
         with state.lock:
-            if state.catalogue is not cat or state.scan is not progress:
-                return
-            page = cat.url if cat.kind == 'movie' else entry.page_url
-            candidates = list(entry.sources)
-            if entry.media_url and not any(item.get('url') == entry.media_url for item in candidates):
-                candidates.append({'url':entry.media_url,'kind':supported_source_kind(entry.media_url) or 'direct','page_url':page})
-        pages = []
-        try:
-            # Metadata-only episodes may point to the series page. Never assign that
-            # page's video to an episode without an episode-specific source.
-            pages = list(dict.fromkeys(url for url in [page, *entry.source_pages]
-                                       if url and (cat.kind == 'movie' or url.rstrip('/') != cat.url.rstrip('/'))))
-            if entry.media_url and supported_source_kind(entry.media_url) == 'embed':
-                # Validate only the authorized iframe page; do not scrape its media.
-                checked, errors = resolver.check(candidates), []
-            else:
-                checked, errors = resolver.resolve(pages, existing=candidates)
-            playable = next((item for item in checked if item.get('verified') and item.get('kind')=='direct'), None)
-            embed_page = next((item for item in checked if item.get('kind') == 'embed'
-                               and item.get('reachable') and item.get('url') == entry.media_url), None)
-            error = '' if (playable or embed_page) else ('; '.join(errors[:2]) or 'لم يُعثر على رابط تشغيل اجتاز الفحص.')
-        except Exception as exc:
-            checked, playable, error = candidates, None, safe_error(exc)
+            if state.scan is progress:
+                progress['running'] = False
+        return
+
+    # Keep the pool bounded so multiple administrators cannot exhaust Render.
+    workers = min(5, len(targets))
+    progress['workers'] = workers
+    try:
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix='studio-media') as executor:
+            pending = {executor.submit(_scan_media_entry, cat, entry): entry for entry in targets}
+            for future in as_completed(pending):
+                with state.lock:
+                    if state.catalogue is not cat or state.scan is not progress:
+                        for outstanding in pending:
+                            outstanding.cancel()
+                        return
+                try:
+                    entry, checked, pages, playable, error = future.result()
+                except Exception as exc:
+                    entry = pending[future]
+                    checked, pages, playable, error = list(entry.sources), [], None, safe_error(exc)
+                with state.lock:
+                    if state.catalogue is not cat or state.scan is not progress:
+                        return
+                    entry.sources = checked
+                    if pages:
+                        entry.source_pages = pages
+                    if playable:
+                        entry.media_url = playable['url']
+                    entry.verified = playable is not None
+                    entry.error = error
+                    progress['done'] += 1
+                    progress['verified'] += int(entry.verified)
+                    progress['sources_found'] += sum(
+                        item.get('kind') == 'direct' for item in checked)
+    finally:
         with state.lock:
-            if state.catalogue is not cat or state.scan is not progress:
-                return
-            entry.sources = checked
-            entry.source_pages = pages
-            if playable:
-                entry.media_url = playable['url']
-            entry.verified = playable is not None
-            entry.error = error
-            progress['done'] += 1
-            progress['verified'] += int(entry.verified)
-    with state.lock:
-        progress['running'] = False
+            if state.scan is progress:
+                progress['running'] = False
 
 
 def start_catalogue_scan(state: UserState, cat: Catalogue):
     total = len(cat.episodes) if cat.kind == 'series' else 1
-    progress = {'id':secrets.token_hex(8),'running':bool(total),'done':0,'total':total,'verified':0}
+    progress = {'id':secrets.token_hex(8),'running':bool(total),'done':0,'total':total,'verified':0,'sources_found':0,'workers':0}
     state.scan = progress
     state.scan_catalogue = cat
     if total: _discovery_scans.submit(scan_catalogue,state,cat,progress)
@@ -448,9 +488,11 @@ async def discovery_scan(request: Request):
     _, state = find_state(request)
     with state.lock:
         progress = scan_status(state)
-        if progress and not progress['running']:
-            return {'scan':progress,'summary':get_summary(state)}
-    return {'scan':progress}
+        if progress:
+            # Include incremental snapshots so the client shows verified links
+            # and episode status while the concurrent workers are still running.
+            return {'scan':dict(progress),'summary':get_summary(state)}
+    return {'scan':None}
 
 
 class DiscoverForm(BaseModel):
@@ -458,7 +500,7 @@ class DiscoverForm(BaseModel):
     kind: str = 'auto'
     deep: bool = True
     metadata: bool = True
-    scan_media: bool = False
+    scan_media: bool = True
 
 
 @app.post('/api/discover')
