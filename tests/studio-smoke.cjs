@@ -28,4 +28,10 @@ for(const feature of ["runSeriesHealthScan","seriesEpisodeIds","healthStopScan",
 }
 assert.ok(edgeHealth.includes('!children.length?"unchecked"'),"Series without published episodes must not be marked broken");
 assert.ok(edgeHealth.includes("checkRow(tab.name,row,true)"),"All saved variant links must be probed");
+assert.ok(health.includes("async function runFullHealthScan()"),"All-table health scan missing");
+assert.ok(health.includes("mode:'items'"),"Authenticated item batch checks missing");
+assert.ok(health.includes("refreshInFlight"),"Refresh calls must be coalesced");
+assert.ok(edgeHealth.includes('if(body.mode==="items")'),"Safe Edge item mode missing");
+assert.ok(edgeHealth.includes('if(!admin)return reply({error:"تسجيل دخول مسؤول مطلوب للفحص الشامل"},403)'),"Item scan must verify admin role");
+
 console.log("PASS: new admin, legacy importer, viewer assets, browser compatibility and download links");
