@@ -168,6 +168,41 @@
     window.addEventListener('beforeunload',event=>{
       if(!dirty)return;event.preventDefault();event.returnValue='';
     });
+
+    // The input stays passive while the user types; one scan begins after a
+    // short idle delay. Ambiguous title matches still require selecting a work.
+    const autoInput=$('sourceUrl'),autoType=$('sourceKind');
+    let autoTimer=0,lastAutoQuery='';
+    function scheduleAutomaticDiscovery(){
+      clearTimeout(autoTimer);
+      if(!autoInput)return;
+      const value=autoInput.value.trim(),kind=autoType?.value||'auto';
+      const label=$('autoDiscoveryStatus');
+      if(value.length<3){
+        if(label)label.textContent='اكتب اسمًا أو الصق رابط HTTPS؛ سيبدأ البحث تلقائيًا';
+        return;
+      }
+      if(value.toLowerCase().startsWith('http://')){
+        if(label)label.textContent='المصدر يجب أن يستخدم HTTPS الآمن';
+        return;
+      }
+      if(label)label.textContent='جاري الاستعداد للبحث التلقائي بعد توقف الكتابة…';
+      autoTimer=setTimeout(()=>{
+        const signature=kind+'|'+value;
+        if(autoInput.value.trim()!==value || signature===lastAutoQuery)return;
+        if($('discoverBtn')?.disabled){
+          autoTimer=setTimeout(scheduleAutomaticDiscovery,1200);
+          return;
+        }
+        lastAutoQuery=signature;
+        if(label)label.textContent='يبحث عن العمل ويجلب المصادر تلقائيًا…';
+        const form=$('discoveryForm');
+        if(form?.requestSubmit)form.requestSubmit();
+        else form?.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
+      },value.startsWith('https://')?900:1250);
+    }
+    autoInput?.addEventListener('input',scheduleAutomaticDiscovery);
+    autoType?.addEventListener('change',scheduleAutomaticDiscovery);
     // Link paste is opt-in and works with HTTPS clipboard permissions on modern Safari.
     const paste=document.createElement('button');
     paste.type='button';paste.className='secondary-btn studio-paste-btn';paste.textContent='▣ لصق الرابط من الآيفون';
@@ -177,7 +212,7 @@
         const value=(await navigator.clipboard.readText()).trim();
         if(!/^https:\/\//i.test(value)){notify('المنسوخ ليس رابط HTTPS صحيحًا.');return;}
         $('sourceUrl').value=value;$('sourceUrl').dispatchEvent(new Event('input',{bubbles:true}));
-        $('sourceUrl').focus();notify('تم لصق الرابط. اضغط «اكتشف المحتوى».');
+        $('sourceUrl').focus();notify('تم لصق الرابط؛ سيبدأ اكتشاف الفيديوهات تلقائيًا.');
       }catch(_){$('sourceUrl')?.focus();notify('اضغط مطولًا على حقل الرابط ثم اختر «لصق» من لوحة الآيفون.');}
     });
     $('discoverBtn')?.insertAdjacentElement('afterend',paste);
