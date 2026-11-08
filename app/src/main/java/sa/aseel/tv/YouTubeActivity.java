@@ -132,7 +132,7 @@ public final class YouTubeActivity extends Activity {
 
         LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);
         header.setPadding(dp(13),0,dp(13),0);
-        header.setBackgroundDrawable(GlassSurface.overlay(0x70F0D39B,0));
+        header.setBackgroundDrawable(GlassSurface.transparentHeader(0));
         body.addView(header,new LinearLayout.LayoutParams(-1,dp(54)));
         backButton=action("رجوع  ❯");
         header.addView(backButton,new LinearLayout.LayoutParams(dp(103),dp(44)));
@@ -349,10 +349,10 @@ public final class YouTubeActivity extends Activity {
             JSONObject item=queue.get(index);
             LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);
             row.setPadding(dp(10),dp(5),dp(12),dp(5));
-            row.setBackgroundDrawable(bg(0xFF1D1B20,0xFF3A343B));
+            row.setBackgroundDrawable(new CinemaNeonDrawable(0xFF1D1B20,dp(16),false));
             LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,dp(78));
             rp.setMargins(dp(12),dp(3),dp(12),dp(3));items.addView(row,rp);
-            ImageView poster=new ImageView(this);poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            CinemaPosterView poster=new CinemaPosterView(this);poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
             row.addView(poster,new LinearLayout.LayoutParams(dp(118),dp(68)));
             PosterLoader.load(poster,"https://i.ytimg.com/vi/"+field(item,"video_id")+"/hqdefault.jpg");
             LinearLayout details=new LinearLayout(this);details.setOrientation(LinearLayout.VERTICAL);
