@@ -203,82 +203,157 @@
     if (!Array.isArray(rows) || !rows[0]?.id) throw Error("فشل تأكيد إنشاء " + table);
     return rows[0];
   }
+  function providedFields(row, excludeStream) {
+    const result = {};
+    for (const [key, value] of Object.entries(row)) {
+      if (key === "id" || (excludeStream && key === "stream_url")) continue;
+      if (value === null || value === undefined || value === "" ||
+          (Array.isArray(value) && value.length === 0)) continue;
+      result[key] = value;
+    }
+    return result;
+  }
+  function different(left, right) {
+    return JSON.stringify(left ?? null) !== JSON.stringify(right ?? null);
+  }
+  async function patchChanged(table, old, fields, allowPlayback) {
+    if (!old) return false;
+    const safe = providedFields(fields, !allowPlayback);
+    // Metadata imports never modify rights, approval, status, account IDs or publish flags.
+    const patch = {};
+    for (const [key, value] of Object.entries(safe)) {
+      if (key === "source_page_url" && old.source_page_url && old.source_page_url !== value &&
+          !fields.id) continue;
+      if (different(old[key], value)) patch[key] = value;
+    }
+    if (patch.stream_url && different(patch.stream_url, old.stream_url)) {
+      patch.link_health_status = "unchecked";
+      patch.link_health_checked_at = null;
+      patch.link_health_failures = 0;
+      patch.link_health_reason = "تم تغيير رابط الفيديو من كتالوج مرخّص؛ يحتاج فحص تشغيل جديد";
+      patch.link_health_url = null;
+    }
+    if (!Object.keys(patch).length) return false;
+    const rows = await rest(table, {id: "eq." + old.id}, {
+      method: "PATCH", data: patch, prefer: "return=representation"
+    });
+    if (!Array.isArray(rows) || rows.length !== 1 || rows[0].id !== old.id) {
+      throw Error("لم تؤكد قاعدة البيانات تعديل " + table + "؛ راجع صلاحيات المسؤول.");
+    }
+    return true;
+  }
+  const seriesSelect = "id,title_ar,release_year,description,source_page_url,country_code,poster_url,backdrop_url,genre_tags,quality,age_rating";
+  const movieSelect = seriesSelect + ",stream_url,duration_minutes,link_health_status";
+  async function lookupWork(table, item, select) {
+    if (item.id) {
+      const found = await findOne(table, {id: "eq." + item.id}, select);
+      if (!found) throw Error("المعرّف المحدد لا يوجد في " + table + "، لن يُنشأ سجل آخر.");
+      return found;
+    }
+    let existing = item.source_page_url ?
+      await findOne(table, {source_page_url: "eq." + item.source_page_url}, select) : null;
+    if (!existing) {
+      const filter = {title_ar: "eq." + item.title_ar};
+      if (item.release_year) filter.release_year = "eq." + item.release_year;
+      existing = await findOne(table, filter, select);
+    }
+    return existing;
+  }
   async function existingEpisodes(seasonId) {
-    const numbers = new Set();
+    const episodes = new Map();
     let offset = 0;
     for (let page = 0; page < 20; page++) {
       const rows = await rest("aseel_episodes", {
-        season_id: "eq." + seasonId, select: "number",
+        season_id: "eq." + seasonId,
+        select: "id,number,title_ar,description,poster_url,source_page_url,stream_url,link_health_status",
         order: "number.asc", limit: "500", offset: String(offset)
       });
       if (!Array.isArray(rows)) throw Error("تعذر قراءة حلقات الموسم الموجودة.");
-      rows.forEach(row => numbers.add(row.number));
-      if (rows.length < 500) return numbers;
+      rows.forEach(row => episodes.set(row.number, row));
+      if (rows.length < 500) return episodes;
       offset += 500;
     }
-    throw Error("الموسم كبير جدًا؛ لا يمكن ضمان عدم التكرار.");
+    throw Error("لا يمكن جلب جميع حلقات الموسم بأمان بسبب حد الصفحات.");
   }
   function pushReport(title, state, details) {
     report.push({ title, state, details });
     el("activity").textContent = "تمت معالجة " + report.length + " / " + (manifest ? manifest.length : 0) +
-      " · مسلسلات جديدة: " + counters.series_created +
-      " · مواسم جديدة: " + counters.seasons_created +
-      " · حلقات جديدة: " + counters.episodes_created +
-      " · حلقات موجودة: " + counters.skipped +
+      " · المسلسلات: " + counters.series_created + " جديد، " + counters.series_updated + " محدّث" +
+      " · الأفلام: " + counters.movies_created + " جديد، " + counters.movies_updated + " محدّث" +
+      " · الحلقات: " + counters.episodes_created + " جديد، " + counters.episodes_updated + " محدّث" +
+      " · دون تغيير: " + counters.skipped +
       " · أخطاء: " + counters.errors +
       "\nآخر عمل: " + title + " — " + state;
     el("progress").value = manifest ? Math.round(100 * report.length / manifest.length) : 0;
     counts();
   }
   async function importOne(work) {
-    const s = work.series;
-    let existing = s.source_page_url ? await findOne("aseel_series", {
-      source_page_url: "eq." + s.source_page_url
-    }, "id,title_ar,source_page_url,release_year") : null;
-    if (!existing) {
-      const filter = { title_ar: "eq." + s.title_ar };
-      if (s.release_year) filter.release_year = "eq." + s.release_year;
-      existing = await findOne("aseel_series", filter, "id,title_ar,source_page_url,release_year");
-    }
-    let seriesId;
+    const allowUpdate = el("updateExisting").checked;
+    const allowStream = allowUpdate && el("updateStreams").checked;
+    const row = work.type === "movie" ? work.movie : work.series;
+    const isMovie = work.type === "movie";
+    const table = isMovie ? "aseel_movies" : "aseel_series";
+    const existing = await lookupWork(table, row, isMovie ? movieSelect : seriesSelect);
+    let id;
     if (existing) {
-      seriesId = existing.id;
+      id = existing.id;
+      if (allowUpdate) {
+        const updated = await patchChanged(table, existing, row, allowStream);
+        if (updated) counters[isMovie ? "movies_updated" : "series_updated"]++;
+        else counters.skipped++;
+      } else counters.skipped++;
     } else {
-      const payload = Object.fromEntries(Object.entries(s).filter(([, v]) =>
-        v !== null && v !== "" && !(Array.isArray(v) && v.length === 0)));
-      const row = await insertOne("aseel_series", {
-        ...payload, status: "draft", rights_status: "pending", quick_published: false
+      const data = providedFields(row, false);
+      const created = await insertOne(table, {
+        ...data, status: "draft", rights_status: "pending",
+        ...(isMovie ? {link_health_status: "unchecked"} : {quick_published: false})
       });
-      seriesId = row.id;
-      counters.series_created++;
+      id = created.id;
+      counters[isMovie ? "movies_created" : "series_created"]++;
     }
+    if (isMovie) return existing ? "تحديث الفيلم أو الاحتفاظ ببياناته" : "إضافة فيلم كمسودة";
     for (const season of work.seasons) {
-      if (cancelled) return "أوقف بعد حفظ المسلسل";
-      let row = await findOne("aseel_seasons", {
-        series_id: "eq." + seriesId, number: "eq." + season.number
-      }, "id,number");
-      if (!row) {
-        row = await insertOne("aseel_seasons", {
-          series_id: seriesId, number: season.number, title_ar: season.title_ar
+      if (cancelled) return "توقف بعد العمل الجاري";
+      let seasonRow = await findOne("aseel_seasons", {
+        series_id: "eq." + id, number: "eq." + season.number
+      }, "id,number,title_ar");
+      if (!seasonRow) {
+        seasonRow = await insertOne("aseel_seasons", {
+          series_id: id, number: season.number, title_ar: season.title_ar
         });
         counters.seasons_created++;
+      } else if (allowUpdate && season.title_ar &&
+                 await patchChanged("aseel_seasons", seasonRow, {title_ar: season.title_ar}, false)) {
+        counters.seasons_updated++;
       }
-      const present = await existingEpisodes(row.id);
-      const fresh = season.episodes.filter(ep => !present.has(ep.number));
-      counters.skipped += season.episodes.length - fresh.length;
+      const present = await existingEpisodes(seasonRow.id);
+      const fresh = [];
+      for (const ep of season.episodes) {
+        const old = present.get(ep.number);
+        if (!old) {
+          fresh.push(ep);
+        } else if (allowUpdate) {
+          const updated = await patchChanged("aseel_episodes", old, ep, allowStream);
+          if (updated) counters.episodes_updated++;
+          else counters.skipped++;
+        } else counters.skipped++;
+      }
       for (let idx = 0; idx < fresh.length; idx += 50) {
-        if (cancelled) return "أوقف بعد حفظ الحلقات الحالية";
+        if (cancelled) return "توقف بعد حفظ الحلقات الحالية";
         const chunk = fresh.slice(idx, idx + 50).map(ep => ({
-          ...Object.fromEntries(Object.entries(ep).filter(([, v]) => v !== null && v !== "")),
-          season_id: row.id, status: "draft", rights_status: "pending", link_health_status: "unchecked"
+          ...providedFields(ep, false), number: ep.number,
+          season_id: seasonRow.id, status: "draft", rights_status: "pending",
+          link_health_status: "unchecked"
         }));
-        await rest("aseel_episodes", { on_conflict: "season_id,number" }, {
-          method: "POST", prefer: "resolution=ignore-duplicates,return=minimal", data: chunk
+        const inserted = await rest("aseel_episodes", {on_conflict: "season_id,number"}, {
+          method: "POST", prefer: "resolution=ignore-duplicates,return=representation", data: chunk
         });
-        counters.episodes_created += chunk.length;
+        if (!Array.isArray(inserted)) throw Error("تعذّر تأكيد حفظ حلقات الموسم.");
+        counters.episodes_created += inserted.length;
+        counters.skipped += chunk.length - inserted.length;
       }
     }
-    return "تم حفظه كمسودة أو الحفاظ على حالته السابقة";
+    return existing ? "مزامنة مواسم وحلقات المسلسل" : "إضافة مسلسل جديد كمسودة";
   }
   async function checkAdmin() {
     const s = session();
@@ -308,7 +383,7 @@
     try {
       manifest = parse(JSON.parse(await file.text()));
       preview();
-      message("نجح فحص الملف: لم تُكتشف أرقام حلقات مكررة داخله. اضغط «استيراد كمسودات» بعد مراجعة الحقوق.", "success");
+      message("نجح فحص الملف دون تكرار؛ يمكنك تحديث بيانات الأعمال الموجودة وإضافة الأعمال الجديدة كمسودات. اختر خيارات التحديث أولًا.", "success");
     } catch (error) {
       preview();
       message("فشل فحص الملف: " + error.message, "error");
@@ -316,7 +391,7 @@
   }
   async function start() {
     if (!admin || busy || !manifest || !el("rights").checked) return;
-    if (!window.confirm("سيُضاف المحتوى الجديد كمسودات فقط؛ لن يتم نشر أي رابط فيديو تلقائيًا. تنفيذ الاستيراد؟")) return;
+    if (!window.confirm("ستُحفظ الأعمال الجديدة كمسودات. تحديث البيانات القديمة يحفظ حالة النشر والحقوق، وتحديث رابط تشغيل قائم يجعله غير مفحوص. متابعة؟")) return;
     busy = true; cancelled = false;
     report = [];
     for (const key of Object.keys(counters)) counters[key] = 0;
@@ -327,18 +402,20 @@
       if (cancelled) break;
       try {
         const detail = await importOne(item);
-        pushReport(item.series.title_ar, "نجاح", detail);
+        pushReport((item.series || item.movie).title_ar, "نجاح", detail);
       } catch (error) {
         counters.errors++;
-        pushReport(item.series.title_ar, "خطأ", error.message);
+        pushReport((item.series || item.movie).title_ar, "خطأ", error.message);
       }
     }
     busy = false;
     counts();
-    message((cancelled ? "توقف الاستيراد. " : "انتهى الاستيراد. ") +
-      "جديد: " + counters.series_created + " مسلسل، " + counters.seasons_created +
-      " موسم، " + counters.episodes_created + " حلقة؛ " + counters.errors +
-      " أخطاء. الأعمال الجديدة مسودات غير منشورة.", counters.errors ? "error" : "success");
+    message((cancelled ? "توقف الاستيراد. " : "انتهى التحديث. ") +
+      "مسلسلات: " + counters.series_created + " جديد و" + counters.series_updated + " محدّث؛ " +
+      "أفلام: " + counters.movies_created + " جديد و" + counters.movies_updated + " محدّث؛ " +
+      "حلقات: " + counters.episodes_created + " جديد و" + counters.episodes_updated + " محدّث؛ " +
+      "أخطاء: " + counters.errors + ". الأعمال الجديدة مسودات، وحالة الحقوق السابقة محفوظة.",
+      counters.errors ? "error" : "success");
   }
   function download(data, filename, type) {
     const object = URL.createObjectURL(new Blob([data], { type }));
@@ -355,9 +432,14 @@
       source_page_url: "https://licensed.example.org/series/1",
       genre_tags: ["drama"],
       seasons: [{ number: 1, episodes: [
-        { number: 1, stream_url: "https://licensed.example.org/series/1/ep1.m3u8" },
+        { number: 1, description: "يمكن تحديث وصف الحلقة", stream_url: "https://licensed.example.org/series/1/ep1.m3u8" },
         { number: 2, stream_url: "https://licensed.example.org/series/1/ep2.m3u8" }
       ] }]
+    }], movies: [{
+      title_ar: "مثال لفيلم مرخّص", release_year: 2026, country_code: "SA",
+      source_page_url: "https://licensed.example.org/movies/1",
+      stream_url: "https://licensed.example.org/movies/1.m3u8",
+      description: "البيانات قابلة للتعديل عند إعادة استيراد الملف"
     }] };
     download(JSON.stringify(example, null, 2), "al-ezz-licensed-catalog-example.json", "application/json;charset=utf-8");
   }
