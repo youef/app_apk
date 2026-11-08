@@ -490,6 +490,27 @@ public final class CinemaPlayerActivity extends Activity {
             }
         });
         root.addView(surface,new FrameLayout.LayoutParams(-1,-1));
+        playerHeader=new LinearLayout(this);
+        playerHeader.setGravity(Gravity.CENTER_VERTICAL);
+        playerHeader.setPadding(dp(14),dp(5),dp(14),dp(5));
+        playerHeader.setBackgroundDrawable(GlassSurface.transparentHeader(dp(18)));
+        int logoId=getResources().getIdentifier("alizz_brand","drawable",getPackageName());
+        if(logoId!=0){
+            ImageView brand=new ImageView(this);
+            brand.setImageResource(logoId);
+            brand.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            playerHeader.addView(brand,new LinearLayout.LayoutParams(dp(45),dp(35)));
+        }
+        playerBadge=txt("",14,WHITE,true);
+        playerBadge.setSingleLine(true);
+        playerBadge.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        playerBadge.setPadding(dp(7),0,0,0);
+        playerHeader.addView(playerBadge,new LinearLayout.LayoutParams(-2,dp(38)));
+        FrameLayout.LayoutParams headerPos=new FrameLayout.LayoutParams(
+            -2,dp(52),Gravity.TOP|Gravity.LEFT);
+        headerPos.setMargins(dp(22),dp(18),dp(22),0);
+        root.addView(playerHeader,headerPos);
+        refreshPlayerBadge();
         if(live){
             liveHud=txt("● LIVE  •  العز TV",18,WHITE,true);
             liveHud.setPadding(dp(19),dp(11),dp(19),dp(11));
@@ -515,6 +536,20 @@ public final class CinemaPlayerActivity extends Activity {
         status=txt("جاري تجهيز مشغّل الفيديو...",13,0xFFFFBCC6,false);
         LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(-1,-2);
         sp.topMargin=dp(7);panel.addView(status,sp);
+        neonTimeline=new CinemaSeekBar(this);
+        neonTimeline.setOnSeek(new CinemaSeekBar.OnSeek(){
+            @Override public void seekTo(long pointMs){
+                if(!live&&engine!=null&&engine.getDuration()>0){
+                    engine.seekTo(pointMs);updateTimeline();
+                    showControls(false);
+                }
+            }
+        });
+        LinearLayout.LayoutParams timelinePos=new LinearLayout.LayoutParams(-1,dp(21));
+        timelinePos.topMargin=dp(7);
+        panel.addView(neonTimeline,timelinePos);
+        progressClock=txt(live?"● LIVE":"00:00:00  /  --:--",12,0xFFFFAABB,false);
+        panel.addView(progressClock,new LinearLayout.LayoutParams(-1,dp(23)));
         HorizontalScrollView controlsScroll=new HorizontalScrollView(this);
         controlsScroll.setHorizontalScrollBarEnabled(false);
         controlsScroll.setFillViewport(true);
@@ -569,9 +604,28 @@ public final class CinemaPlayerActivity extends Activity {
             footer.addView(options,new LinearLayout.LayoutParams(dp(69),-1));
             options.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showLiveOptions();}});
         }
+        if(!live){
+            mediaMuteButton=tvTool("","كتم الصوت");
+            footer.addView(mediaMuteButton,new LinearLayout.LayoutParams(dp(66),-1));
+            mediaMuteButton.setOnClickListener(new View.OnClickListener(){
+                public void onClick(View v){
+                    mediaMuted=!mediaMuted;
+                    if(engine!=null)engine.setVolume(mediaMuted?0f:1f);
+                    mediaMuteButton.setContentDescription(mediaMuted?"تشغيل الصوت":"كتم الصوت");
+                    mediaMuteButton.invalidate();
+                    showLiveHud(mediaMuted?"تم كتم الصوت":"تم تشغيل الصوت");
+                    showControls(false);
+                }
+            });
+        }
         Button audioButton=tvTool("","الصوت والترجمة");
         footer.addView(audioButton,new LinearLayout.LayoutParams(dp(66),-1));
         audioButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showTrackMenu();}});
+        Button fullscreenButton=tvTool("","ملء الشاشة");
+        footer.addView(fullscreenButton,new LinearLayout.LayoutParams(dp(66),-1));
+        fullscreenButton.setOnClickListener(new View.OnClickListener(){
+            public void onClick(View v){hideControls();}
+        });
         Button screenButton=tvTool("","أبعاد الشاشة");
         footer.addView(screenButton,new LinearLayout.LayoutParams(dp(66),-1));
         screenButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){cycleAspectRatio();}});
@@ -583,7 +637,7 @@ public final class CinemaPlayerActivity extends Activity {
         backButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){finish();}});
         buildSideRails(root);
         if(live)showLiveHud("● البث المباشر  •  "+itemTitle+"\nOK: التحكم    MENU: دليل القنوات    CH±: تغيير");
-        handler.postDelayed(progressTick,9000L);
+        handler.postDelayed(progressTick,1000L);
         if(sources.isEmpty()){
             status.setText("لا يوجد رابط MP4/HLS صالح لهذا العنوان. يرجى تحديثه في لوحة الإدارة.");
             showControls(true);
@@ -597,7 +651,7 @@ public final class CinemaPlayerActivity extends Activity {
         index=StreamQuality.choose(sources,preferred,Build.VERSION.SDK_INT);
         if(index<0)index=0;
         initPlayer();playSource(index);
-        if(live)hideControls();else showControls(true);
+        showControls(false);
     }
     private void initPlayer(){
         try{
@@ -624,7 +678,7 @@ public final class CinemaPlayerActivity extends Activity {
         engine=new ExoPlayer.Builder(this)
             .setLoadControl(loadControl)
             .setMediaSourceFactory(new DefaultMediaSourceFactory(data)).build();
-        if(live)engine.setVolume(liveMuted?0f:1f);
+        engine.setVolume((live?liveMuted:mediaMuted)?0f:1f);
         handler.removeCallbacks(liveHealth);
         handler.postDelayed(liveHealth,5000L);
         engine.addListener(new Player.Listener(){
