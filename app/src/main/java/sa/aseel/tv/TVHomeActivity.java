@@ -156,6 +156,8 @@ public final class TVHomeActivity extends Activity {
         String country=value(item,"country_code").toUpperCase(Locale.US);
         if("ARAB".equals(code))return isArabOrigin(country);
         if("FOREIGN".equals(code))return country.length()==2&&!isArabOrigin(country);
+        if("GULF".equals(code))return country.length()==2&&
+            "SA KW AE BH QA OM ".contains(country+" ");
         return country.equals(code);
     }
     private boolean hasGenre(JSONObject item,String key){
@@ -878,6 +880,11 @@ public final class TVHomeActivity extends Activity {
             shelf("أفلام تركية","بلد الإنتاج: تركيا",originItems(movies,"TR"),30);
             shelf("أفلام أجنبية","بلد إنتاج غير عربي",originItems(movies,"FOREIGN"),30);
             shelf("أفلام عربية","بلد إنتاج عربي",originItems(movies,"ARAB"),30);
+            shelf("أفلام خليجية","إنتاج دول الخليج",originItems(movies,"GULF"),30);
+            shelf("أفلام سعودية","إنتاج سعودي",originItems(movies,"SA"),30);
+            shelf("أفلام مصرية","إنتاج مصري",originItems(movies,"EG"),30);
+            shelf("أفلام أمريكية","إنتاج أمريكي",originItems(movies,"US"),30);
+            shelf("أفلام هندية","إنتاج هندي",originItems(movies,"IN"),30);
             classifiedGenreShelves(movies,"أفلام",20);
             grid("كل الأفلام",movies);
         }
@@ -887,6 +894,12 @@ public final class TVHomeActivity extends Activity {
             shelf("مسلسلات تركية","بلد الإنتاج: تركيا",originItems(series,"TR"),30);
             shelf("مسلسلات أجنبية","بلد إنتاج غير عربي",originItems(series,"FOREIGN"),30);
             shelf("مسلسلات عربية","بلد إنتاج عربي",originItems(series,"ARAB"),30);
+            shelf("مسلسلات سورية","إنتاج سوري",originItems(series,"SY"),30);
+            shelf("مسلسلات خليجية","إنتاج دول الخليج",originItems(series,"GULF"),30);
+            shelf("مسلسلات سعودية","إنتاج سعودي",originItems(series,"SA"),30);
+            shelf("مسلسلات كويتية","إنتاج كويتي",originItems(series,"KW"),30);
+            shelf("مسلسلات مصرية","إنتاج مصري",originItems(series,"EG"),30);
+            shelf("مسلسلات رمضان","أعمال موسومة برمضان",genreItems(series,"ramadan"),30);
             classifiedGenreShelves(series,"مسلسلات",20);
             grid("كل المسلسلات",series);
         }
