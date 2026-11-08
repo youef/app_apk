@@ -353,7 +353,8 @@ public final class CinemaPlayerActivity extends Activity {
                 control.setScaleX(focused?1.055f:1f);
                 control.setScaleY(focused?1.055f:1f);
                 control.invalidate();
-                if(focused){showLiveHud(label);noteChromeInteraction();}
+                if(focused)showLiveHud(label);
+                if(focused)noteChromeInteraction();
             }
         });
         return control;
