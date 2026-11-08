@@ -1188,6 +1188,7 @@ public final class CinemaPlayerActivity extends Activity {
         if(index<0)index=0;
         attempted.clear();tries=0;requestToken++;liveRestarts=0;frozenTicks=0;lastLivePlayhead=-1;
         title.setText("▶ "+itemTitle);
+        refreshPlayerBadge();
         updateSkipButton();
         details.setText(String.format(Locale.US,"%d / %d  •  %s",mediaIndex+1,
             mediaPlaylist.size(),"episode".equals(mediaKind)?"حلقات":"أفلام"));
@@ -1222,6 +1223,7 @@ public final class CinemaPlayerActivity extends Activity {
         if(index<0)index=0;
         attempted.clear();tries=0;requestToken++;liveRestarts=0;frozenTicks=0;lastLivePlayhead=-1;
         title.setText(String.format(Locale.US,"● CH %03d  •  %s",tvChannelIndex+1,itemTitle));
+        refreshPlayerBadge();
         updateLiveFavorite();
         PlaybackMemory.lastChannel(this,profile,itemId);
         details.setText("بث مباشر • CH± للتنقل • اضغط MENU للدليل");
