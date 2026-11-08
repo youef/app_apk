@@ -76,7 +76,7 @@
     setChromeIdle(false);
     clearTimeout(hideTimer);
     if (!embedFrame && !el.video.paused && !qualityMenuOpen()) {
-      hideTimer = setTimeout(function () { if (!qualityMenuOpen()) setChromeIdle(true); }, 3200);
+      hideTimer = setTimeout(function () { if (!qualityMenuOpen()) setChromeIdle(true); }, 3000);
     }
   }
 
