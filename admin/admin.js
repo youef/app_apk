@@ -99,6 +99,7 @@
     bulkBusy: false,
     healthOnly: false,
     scanBusy: false,
+    scanCancelled: false,
     query: '',
     statusFilter: '',
     options: {},
@@ -540,27 +541,114 @@
     }).finally(function () { clearTimeout(timer); });
   }
 
+
+  /* Scan actual episodes in authenticated batches; never delete or alter source URLs. */
+  async function seriesEpisodeIds(seriesId, drafts) {
+    var seasonFilter = '';
+    if (seriesId) {
+      var seasons = await restList('aseel_seasons',
+        'select=id&series_id=eq.' + encodeURIComponent(seriesId) + '&limit=1000');
+      if (!Array.isArray(seasons) || !seasons.length) return [];
+      if (seasons.length === 1000) throw new Error('عدد المواسم كبير؛ افحص قسمًا أصغر.');
+      seasonFilter = '&season_id=in.(' + seasons.map(function (row) { return row.id; }).join(',') + ')';
+    }
+    var ids = [], offset = 0, size = 400;
+    for (;;) {
+      var query = 'select=id,status&order=id.asc&limit=' + size + '&offset=' + offset +
+        (drafts ? '' : '&status=eq.published') + seasonFilter;
+      var batch = await restList('aseel_episodes', query);
+      if (!Array.isArray(batch)) throw new Error('تعذر جلب قائمة الحلقات.');
+      batch.forEach(function (row) { if (row.id) ids.push(row.id); });
+      if (batch.length < size) return ids;
+      offset += size;
+      if (offset >= 10000) throw new Error('تجاوزت المكتبة حد الفحص الآمن؛ افحص مسلسلًا واحدًا.');
+    }
+  }
+
+  async function runSeriesHealthScan(seriesId, seriesName) {
+    if (state.scanBusy || !state.session || !state.adminVerified) {
+      toast('يلزم حساب مسؤول، ويجب اكتمال الفحص السابق أولًا.', 'error'); return;
+    }
+    var tableAtStart = state.table;
+    state.scanBusy = true; state.scanCancelled = false;
+    var button = $('#healthScanNow'), cancel = $('#healthStopScan');
+    if (button) { button.disabled = true; button.textContent = 'جارٍ فحص الحلقات…'; }
+    if (cancel) { cancel.hidden = false; cancel.disabled = false; cancel.textContent = 'إيقاف الفحص'; }
+    var drafts = !!($('#healthIncludeDrafts') && $('#healthIncludeDrafts').checked);
+    var completed = 0, total = 0, results = {healthy:0,suspect:0,broken:0,unchecked:0}, errors = [];
+    function progress(note) {
+      if (state.table !== tableAtStart) return;
+      var output = $('#healthMessage'), bar = $('#healthProgress'), report = $('#healthReport');
+      if (output) output.textContent = note;
+      if (bar) { bar.hidden = false; bar.max = Math.max(total,1); bar.value = completed; }
+      if (report) {
+        report.hidden = !errors.length;
+        var details = $('#healthReportText');
+        if (details) details.textContent = errors.slice(-40).join('\n');
+      }
+    }
+    try {
+      progress('جارٍ تحميل الحلقات من قاعدة البيانات…');
+      var ids = await seriesEpisodeIds(seriesId, drafts);
+      total = ids.length;
+      for (var i=0; i<ids.length && !state.scanCancelled; i+=6) {
+        var chunk = ids.slice(i,i+6);
+        try {
+          var info = await invokeLinkHealth({mode:'episodes',episode_ids:chunk}, false);
+          if (!Array.isArray(info.results)) throw new Error('لم تُرجع الدالة قائمة نتائج.');
+          info.results.forEach(function (row) {
+            var status = row.link_health_status || 'unchecked';
+            results[status] = (results[status] || 0) + 1;
+          });
+          Object.keys(info.errors || {}).forEach(function (id) {
+            errors.push('حلقة ' + id.slice(0,8) + ': ' + String(info.errors[id]).slice(0,180));
+          });
+          if (info.results.length < chunk.length) errors.push('لم يُستلم تقرير لبعض حلقات الدفعة.');
+        } catch (e) {
+          errors.push('دفعة ' + (Math.floor(i/6)+1) + ': ' + describeError(e));
+          if (e.status === 401 || e.status === 403) state.scanCancelled = true;
+        }
+        completed += chunk.length;
+        progress('التقدم: ' + completed + '/' + total + ' حلقة · صالح: ' + results.healthy +
+          ' · قيد التحقق: ' + results.suspect + ' · معطوب: ' + results.broken +
+          (errors.length ? ' · أخطاء: ' + errors.length : ''));
+      }
+      try { await invokeLinkHealth({mode:'series'}, false); }
+      catch (e) { errors.push('تحديث المسلسلات: ' + describeError(e)); }
+      var summary = (state.scanCancelled ? 'تم إيقاف' : 'اكتمل') + ' فحص ' +
+        (seriesName || 'المسلسلات') + ': ' + completed + ' من ' + total + ' حلقة. ' +
+        'سليم ' + results.healthy + '، يحتاج مراجعة ' + results.suspect +
+        '، معطوب ' + results.broken + (errors.length ? '، أخطاء ' + errors.length : '') + '.';
+      progress(total ? summary : 'لم توجد حلقات ' + (drafts ? '' : 'منشورة ') + 'في هذا النطاق.');
+      toast(summary, errors.length ? 'error' : 'success');
+      if (state.table === tableAtStart) loadTable(tableAtStart);
+    } catch (e) {
+      errors.push(describeError(e));
+      progress('تعذّر بدء فحص الحلقات: ' + describeError(e));
+      toast('فشل فحص الحلقات: ' + describeError(e), 'error');
+    } finally {
+      state.scanBusy = false; state.scanCancelled = false;
+      if (cancel) cancel.hidden = true;
+      if (button) { button.disabled = false; button.textContent = 'فحص حلقات المسلسلات'; }
+    }
+  }
+
   function runLinkHealthScan() {
     if (state.scanBusy || !state.adminVerified || !state.session) {
       toast('يلزم تسجيل دخول مسؤول لإجراء الفحص.', 'error');
       return;
     }
     var activeTable = state.table && state.table.table;
+    if (activeTable === 'aseel_series') { runSeriesHealthScan(null, ''); return; }
     var supported = ['aseel_channels', 'aseel_movies', 'aseel_episodes', 'aseel_youtube_videos'];
-    var payload = activeTable === 'aseel_series'
-      ? { mode: 'series' }
-      : { table: supported.indexOf(activeTable) !== -1 ? activeTable : 'aseel_channels', per_table: 6 };
+    var payload = { table: supported.indexOf(activeTable) !== -1 ? activeTable : 'aseel_channels', per_table: 12 };
     var button = $('#healthScanNow'), message = $('#healthMessage');
     state.scanBusy = true;
     if (button) { button.disabled = true; button.textContent = 'جارٍ فحص الروابط…'; }
-    if (message) message.textContent = activeTable === 'aseel_series'
-      ? 'جارٍ تحديث حالة المسلسلات من نتائج فحص حلقاتها…'
-      : 'جارٍ فحص ستة مصادر بحد أقصى من هذا القسم، دون حذف أي رابط…';
+    if (message) message.textContent = 'جارٍ فحص حتى 12 عنصرًا من هذا القسم دون حذف أو تغيير روابط…';
     invokeLinkHealth(payload, false).then(function (data) {
-      var summary = payload.mode === 'series'
-        ? 'تحدّثت حالة المسلسلات من نتائج الحلقات المنشورة.'
-        : 'تم فحص ' + Number(data.scanned || 0) + ' عنصر؛ صالح: ' + Number(data.healthy || 0) +
-          '، قيد التحقق: ' + Number(data.suspect || 0) + '، معطوب: ' + Number(data.broken || 0) + '.';
+      var summary = 'تم فحص ' + Number(data.scanned || 0) + ' عنصر؛ صالح: ' + Number(data.healthy || 0) +
+        '، قيد التحقق: ' + Number(data.suspect || 0) + '، معطوب: ' + Number(data.broken || 0) + '.';
       if (data.errors && (Array.isArray(data.errors) ? data.errors.length : Object.keys(data.errors).length)) {
         summary += ' بعض المصادر تعذر فحصها؛ راجع أسبابها وأعد المحاولة.';
       }
@@ -574,12 +662,13 @@
       // A failed network request is not proof the stream is broken.
     }).finally(function () {
       state.scanBusy = false;
-      if (button) { button.disabled = false; button.textContent = 'فحص الروابط الآن'; }
+      if (button) { button.disabled = false; button.textContent = 'فحص 12 رابطًا الآن'; }
     });
   }
 
   /* ---------- section + table rendering ---------- */
   function renderSection(section) {
+    if (state.scanBusy) state.scanCancelled = true;
     var view = $('#view');
     view.replaceChildren();
 
@@ -624,7 +713,19 @@
     var healthOnly = el('button', { class: 'btn btn-ghost btn-sm', type: 'button', id: 'healthOnly' }, 'عرض المعطوبة فقط');
     var scanNow = el('button', { class: 'btn btn-gold btn-sm', type: 'button', id: 'healthScanNow' }, 'فحص الروابط الآن');
     var healthMessage = el('small', { class: 'health-panel__message', id: 'healthMessage', role: 'status' }, '');
-    healthPanel.append(healthSummary, healthOnly, scanNow, healthMessage);
+    var option = el('label', { class:'health-panel__option', id:'healthDraftChoice' });
+    option.append(el('input',{type:'checkbox',id:'healthIncludeDrafts'}), ' شمول الحلقات المسودة');
+    var cancel = el('button',{class:'btn btn-ghost btn-sm',id:'healthStopScan',type:'button'},'إيقاف الفحص');
+    cancel.hidden = true;
+    var bar = el('progress',{id:'healthProgress',max:100,value:0,'aria-label':'تقدم فحص الحلقات'});
+    bar.hidden = true;
+    var detail = el('details',{class:'health-panel__report',id:'healthReport'});
+    detail.hidden = true;
+    detail.append(el('summary',null,'تفاصيل أخطاء الفحص'),el('pre',{id:'healthReportText'}));
+    healthPanel.append(healthSummary,healthOnly,scanNow,option,cancel,bar,healthMessage,detail);
+    cancel.addEventListener('click',function(){
+      state.scanCancelled = true; cancel.disabled = true; cancel.textContent = 'جارٍ الإيقاف…';
+    });
     healthPanel.hidden = true;
     view.append(healthPanel);
     healthOnly.addEventListener('click', function () {
@@ -700,6 +801,9 @@
     state.table = tableCfg;
     state.healthOnly = false;
     if (state.els.healthPanel) state.els.healthPanel.hidden = !hasLinkHealth(tableCfg);
+    if ($('#healthDraftChoice')) $('#healthDraftChoice').hidden = tableCfg.table !== 'aseel_series';
+    if ($('#healthScanNow')) $('#healthScanNow').textContent =
+      tableCfg.table === 'aseel_series' ? 'فحص حلقات المسلسلات' : 'فحص 12 رابطًا الآن';
     var healthButton = $('#healthOnly');
     if (healthButton) { healthButton.textContent = 'عرض المعطوبة فقط'; healthButton.classList.remove('is-active'); }
     state.rows = [];
@@ -937,7 +1041,11 @@
       empty.append(el('p', null, state.rows.length ? 'جرّب كلمة بحث أخرى أو أزل تصفية الحالة.' : 'ابدأ بإضافة أول سجل إلى ' + tableCfg.label + '.'));
       if (!state.rows.length) {
         var add = el('button', { class: 'btn btn-gold btn-sm', type: 'button' }, 'إضافة ' + tableCfg.singular);
-        add.addEventListener('click', function () { openDrawer(null); });
+        add.addEventListener('click', function () {
+          if (tableCfg.table === 'aseel_series' || tableCfg.table === 'aseel_seasons')
+            location.href = 'series-quick.html';
+          else openDrawer(null);
+        });
         empty.append(add);
       }
       td.append(empty);
@@ -1142,6 +1250,9 @@
   function buildActions(tableCfg, row) {
     var td = el('td', { class: 'cell-actions' });
     if (tableCfg.table === 'aseel_series' && row.id) {
+      td.append(actionButton('refresh', 'فحص حلقات هذا المسلسل', function () {
+        runSeriesHealthScan(row.id, String(row.title_ar || ''));
+      }));
       td.append(actionButton('layers', 'إضافة حلقات سريعة', function () {
         location.href = 'series-quick.html?series=' + encodeURIComponent(row.id);
       }));
