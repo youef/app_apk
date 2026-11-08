@@ -5,11 +5,17 @@ on:
     paths:
       - 'scripts/import_authorized_series.py'
       - 'tests/test_authorized_series_import.py'
+      - 'admin/catalog-import.js'
+      - 'admin/catalog-import.html'
+      - 'tests/catalog-import-smoke.cjs'
       - '.github/workflows/authorized-catalog-tests.yml'
   pull_request:
     paths:
       - 'scripts/import_authorized_series.py'
       - 'tests/test_authorized_series_import.py'
+      - 'admin/catalog-import.js'
+      - 'admin/catalog-import.html'
+      - 'tests/catalog-import-smoke.cjs'
   workflow_dispatch:
 jobs:
   test:
@@ -21,7 +27,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Compile importer
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify Python syntax
         run: python -m py_compile scripts/import_authorized_series.py
-      - name: Run importer tests
+      - name: Verify JavaScript syntax
+        run: node --check admin/catalog-import.js
+      - name: Run Python importer tests
         run: python -m unittest discover -s tests -p 'test_authorized_series_import.py' -v
+      - name: Run catalog uploader smoke tests
+        run: node tests/catalog-import-smoke.cjs
