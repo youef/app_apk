@@ -213,13 +213,17 @@ async function updateSeries(){
   for(const show of series||[]){
     const seasonIds=(seasons||[]).filter((x:Row)=>x.series_id===show.id).map((x:Row)=>x.id);
     const children=(episodes||[]).filter((x:Row)=>seasonIds.includes(x.season_id)&&x.status==="published");
-    const result=!children.length?"broken":
+    // Never call a series broken just because its episodes are still drafts.
+    const result=!children.length?"unchecked":
+      children.some((x:Row)=>x.link_health_status==="healthy")?"healthy":
       children.every((x:Row)=>x.link_health_status==="broken")?"broken":
-      children.some((x:Row)=>x.link_health_status==="healthy")?"healthy":"unchecked";
+      children.some((x:Row)=>x.link_health_status==="suspect")?"suspect":"unchecked";
     if(show.link_health_status!==result)await rest("aseel_series","id=eq."+encodeURIComponent(String(show.id)),{
       method:"PATCH",body:JSON.stringify({link_health_status:result,link_health_checked_at:new Date().toISOString(),
-        link_health_reason:result==="broken"?(children.length?"جميع الحلقات المنشورة غير صالحة":"لا توجد أي حلقات منشورة قابلة للمشاهدة"):
-          result==="healthy"?"توجد حلقات قابلة للتشغيل":null})
+        link_health_reason:result==="broken"?"جميع الحلقات المنشورة معطوبة بعد الفحص":
+          result==="healthy"?"توجد حلقات استجابت للفحص":
+          result==="suspect"?"نتائج الفحص غير حاسمة؛ راجع الحلقات":
+          children.length?"الحلقات المنشورة لم تفحص بعد":"لا توجد حلقات منشورة بعد"})
     });
   }
 }
@@ -308,7 +312,7 @@ Deno.serve(async(req:Request)=>{
     try {
       const timeFilter=before?"&or=(link_health_checked_at.is.null,link_health_checked_at.lt."+encodeURIComponent(before)+")":"";
       const rows=await rest(tab.name,"select="+tab.fields+"&status=eq.published"+timeFilter+"&order=link_health_checked_at.asc.nullsfirst&limit="+Math.min(requested,tab.max));
-      const results=await Promise.allSettled((rows||[]).map((row:Row)=>checkRow(tab.name,row)));
+      const results=await Promise.allSettled((rows||[]).map((row:Row)=>checkRow(tab.name,row,true)));
       for(const item of results){
         if(item.status==="rejected"){(summary.errors as string[]).push(tab.name+": "+String(item.reason).slice(0,110));continue;}
         summary.scanned=Number(summary.scanned)+1;
