@@ -503,6 +503,19 @@
 
   /* ---------------------------------------------------------------- router */
 
+  function viewDeveloper() {
+    return '<section class="developer-screen" dir="rtl"><div class="developer-screen__panel">' +
+      '<div class="developer-screen__eyebrow">AL EZZ TV · OFFICIAL DEVELOPER</div>' +
+      '<div class="developer-screen__avatar" aria-hidden="true">⌘</div>' +
+      '<h1>يوسف الحازمي</h1><h2>مطور ومبرمج تطبيق العز TV</h2>' +
+      '<p>للتواصل والاستفسارات التقنية ومقترحات تطوير التطبيق.</p>' +
+      '<div class="developer-screen__actions">' +
+      '<a class="btn btn--gold" href="https://wa.me/966538243481" target="_blank" rel="noopener noreferrer">واتساب · 0538243481</a>' +
+      '<a class="btn btn--ghost" href="https://www.snapchat.com/add/f.0x0" target="_blank" rel="noopener noreferrer">سناب شات · f.0x0</a>' +
+      '</div><div class="developer-screen__signature">العز TV · تصميم وتطوير يوسف الحازمي</div>' +
+      '</div></section>';
+  }
+
   function parseHash() {
     var fallback = (location.search.match(/[?&]section=([a-z]+)/i) || [])[1] || "home";
     var raw = (location.hash || "#/" + fallback).replace(/^#\/?/, "");
@@ -530,6 +543,7 @@
       case "kids": html = viewKids(route.arg); break;
       case "youtube": html = viewYoutube(route.arg); break;
       case "mylist": html = viewMyList(route.arg); break;
+       case "developer": html = viewDeveloper(); break;
       case "title": html = viewDetail(route.arg); break;
       case "watch": html = viewWatch(route.arg); break;
       default: html = viewHome();
