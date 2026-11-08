@@ -40,13 +40,13 @@ public final class CinemaSeekBar extends View {
         float end=left+(right-left)*portion;
         if(portion>0f){
             paint.setColor(0x30FF3455);
-            canvas.drawRoundRect(left,center-6*density,end,center+6*density,
+            canvas.drawRoundRect(new RectF(left,center-6*density,end,center+6*density),
                 6*density,6*density,paint);
             paint.setColor(0x80FF3E59);
-            canvas.drawRoundRect(left,center-4*density,end,center+4*density,
+            canvas.drawRoundRect(new RectF(left,center-4*density,end,center+4*density),
                 4*density,4*density,paint);
             paint.setColor(0xFFFF4965);
-            canvas.drawRoundRect(left,center-thick/2,end,center+thick/2,
+            canvas.drawRoundRect(new RectF(left,center-thick/2,end,center+thick/2),
                 thick,thick,paint);
         }
         if(!live&&durationMs>0){
