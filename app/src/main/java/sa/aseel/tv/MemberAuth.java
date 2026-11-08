@@ -92,17 +92,37 @@ public final class MemberAuth {
     public static final class AuthenticationException extends Exception{
         AuthenticationException(String message){super(message);}
     }
+    /**
+     * Parse server-owned ISO-8601 timestamps without assuming a single fractional
+     * precision. Android 4.4 does not provide java.time; all accepted formats
+     * have explicit UTC or offset information and must match completely.
+     */
+    private static java.util.Date parseBackendTimestamp(String raw){
+        if(raw==null || raw.length()<20 || raw.length()>48)return null;
+        String iso=raw.trim().replaceFirst("(\\.\\d{3})\\d+(?=(?:Z|[+-]\\d{2}:\\d{2})$)","$1");
+        String[] patterns={
+            "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
+            "yyyy-MM-dd'T'HH:mm:ssXXX"
+        };
+        for(String pattern:patterns){
+            SimpleDateFormat fmt=new SimpleDateFormat(pattern,Locale.US);
+            fmt.setTimeZone(TimeZone.getTimeZone("UTC"));
+            fmt.setLenient(false);
+            ParsePosition at=new ParsePosition(0);
+            java.util.Date value=fmt.parse(iso,at);
+            if(value!=null && at.getIndex()==iso.length())return value;
+        }
+        return null;
+    }
     private static long subscriptionDeadline(JSONObject user)throws AuthenticationException{
         JSONObject metadata=user.optJSONObject("app_metadata");
         if(metadata==null)throw new AuthenticationException("بيانات صلاحية الحساب غير صالحة.");
         String raw=metadata.optString("alezz_expires_at","");
         if(raw.isEmpty())return 0L; // Existing accounts await an assigned admin expiry.
-        SimpleDateFormat fmt=new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'",Locale.US);
-        fmt.setTimeZone(TimeZone.getTimeZone("UTC"));
-        fmt.setLenient(false);
-        ParsePosition cursor=new ParsePosition(0);
-        java.util.Date parsed=fmt.parse(raw,cursor);
-        if(parsed==null||cursor.getIndex()!=raw.length())
+        java.util.Date parsed=parseBackendTimestamp(raw);
+        if(parsed==null)
             throw new AuthenticationException("تاريخ صلاحية الحساب غير صحيح. راجع الإدارة.");
         return parsed.getTime();
     }
@@ -113,13 +133,8 @@ public final class MemberAuth {
         JSONObject metadata=user.optJSONObject("app_metadata");
         String reset=metadata==null?"":metadata.optString("alezz_devices_revoked_at","");
         if(!reset.isEmpty()){
-            SimpleDateFormat resetFormat=new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",Locale.US);
-            resetFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
-            resetFormat.setLenient(false);
-            ParsePosition resetAt=new ParsePosition(0);
-            java.util.Date cutOff=resetFormat.parse(reset,resetAt);
-            if(cutOff==null||resetAt.getIndex()!=reset.length()||
-                sessionStarted<=0L||sessionStarted<=cutOff.getTime())
+            java.util.Date cutOff=parseBackendTimestamp(reset);
+            if(cutOff==null||sessionStarted<=0L||sessionStarted<=cutOff.getTime())
                 throw new AuthenticationException("تم إلغاء ارتباط الجهاز من الإدارة. سجّل الدخول مجددًا.");
         }
         long deadline=subscriptionDeadline(user);
@@ -134,10 +149,10 @@ public final class MemberAuth {
     }
     /** Verify entitlement even during a long-lived session, not only at login. */
     public static synchronized void validateAccount(Context context)throws Exception{
-        if(isExpiredLocally(context)){
-            logoutLocal(context);
-            throw new AuthenticationException("انتهت صلاحية حسابك. تواصل مع الإدارة.");
-        }
+        // An administrator may have renewed the subscription after the local
+        // deadline was cached. Refresh from the server before denying access.
+        // resume() still rejects genuinely expired/disabled accounts.
+        if(isExpiredLocally(context))resume(context);
         ensureFresh(context);
         try{
             JSONObject user=authorizedUser(context,accessToken(context),
@@ -263,9 +278,10 @@ public final class MemberAuth {
     }
     /** Refresh only when necessary; serializing avoids refresh-token rotation races. */
     public static synchronized void ensureFresh(Context context)throws Exception{
+        // A stale locally cached deadline is not proof of server-side expiry.
         if(isExpiredLocally(context)){
-            logoutLocal(context);
-            throw new AuthenticationException("انتهت صلاحية حسابك. تواصل مع الإدارة.");
+            resume(context);
+            return;
         }
         long expiry=preferences(context).getLong("expires_at_ms",0L);
         if(accessToken(context).isEmpty()||System.currentTimeMillis()>expiry-90000L)

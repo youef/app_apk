@@ -42,14 +42,15 @@ public final class TVHomeActivity extends Activity {
     private boolean checkingEntitlement=false;
     private final Runnable entitlementGuard=new Runnable(){public void run(){
         if(!unlocked||isFinishing())return;
-        if(!MemberAuth.hasSession(TVHomeActivity.this) || MemberAuth.isExpiredLocally(TVHomeActivity.this)){
-            MemberAuth.logoutLocal(TVHomeActivity.this);
+        if(!MemberAuth.hasSession(TVHomeActivity.this)){
             ui.removeCallbacks(this);
-            showMemberLogin("انتهت صلاحية الحساب أو أُلغيت الجلسة. تواصل مع الإدارة.");
+            showMemberLogin("يلزم تسجيل الدخول للمشاهدة.");
             return;
         }
+        // A renewal may have happened in admin after we cached the expiry.
+        final boolean cachedExpired=MemberAuth.isExpiredLocally(TVHomeActivity.this);
         long now=android.os.SystemClock.elapsedRealtime();
-        if(!checkingEntitlement && (lastEntitlementCheckAt==0L || now-lastEntitlementCheckAt>=90000L)){
+        if(!checkingEntitlement && (cachedExpired || lastEntitlementCheckAt==0L || now-lastEntitlementCheckAt>=90000L)){
             checkingEntitlement=true;
             lastEntitlementCheckAt=now;
             background.execute(new Runnable(){public void run(){
@@ -63,7 +64,18 @@ public final class TVHomeActivity extends Activity {
                             showMemberLogin(denied.getMessage());
                         }
                     }});
-                }catch(Exception network){ /* Keep retrying; expired local deadline is checked each tick. */ }
+                }catch(Exception network){
+                    // Do not continue unverified access after a cached deadline.
+                    // Keep the refresh token so a newly renewed user can retry.
+                    if(MemberAuth.isExpiredLocally(TVHomeActivity.this))
+                        ui.post(new Runnable(){public void run(){
+                            if(unlocked&&!isFinishing()){
+                                unlocked=false;
+                                ui.removeCallbacks(entitlementGuard);
+                                showMemberLogin("تعذر التحقق من تجديد الاشتراك. تحقق من الإنترنت ثم أعد المحاولة.");
+                            }
+                        }});
+                }
                 finally{ui.post(new Runnable(){public void run(){checkingEntitlement=false;}});}
             }});
         }

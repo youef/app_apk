@@ -60,4 +60,12 @@ ok("Live subscription warnings appear in customer interface",
 ok("Native device registry uses Supabase authenticated RLS and admin can revoke",
  auth.includes("aseel_device_sessions")&&auth.includes('"Authorization","Bearer "+token')&&
  auth.includes('"alezz_devices_revoked_at"')&&portal.includes("DEVICE_REVOKED_KEY"));
+ok("Native accepts precise ISO-8601 subscription dates and administrator renewals",
+ auth.includes("parseBackendTimestamp(raw)")&&
+ auth.includes("SSSXXX")&&
+ auth.includes("if(isExpiredLocally(context))resume(context);")&&
+ auth.includes("if(isExpiredLocally(context)){\n            resume(context);")&&
+ home.includes("final boolean cachedExpired=MemberAuth.isExpiredLocally(TVHomeActivity.this)")&&
+ home.includes("cachedExpired || lastEntitlementCheckAt")&&
+ player.includes("the home screen can verify an admin renewal"));
 console.log("PASS | Native/portal customer auth acceptance; physical-device and end-to-end login tests require a provisioned test customer.");

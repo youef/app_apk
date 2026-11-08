@@ -60,7 +60,8 @@ public final class CinemaPlayerActivity extends Activity {
         if(isFinishing())return;
         if(!MemberAuth.hasSession(CinemaPlayerActivity.this) ||
             MemberAuth.isExpiredLocally(CinemaPlayerActivity.this)){
-            MemberAuth.logoutLocal(CinemaPlayerActivity.this);
+            // Stop playback at the locally known deadline, but retain the
+            // refresh token: the home screen can verify an admin renewal.
             if(engine!=null)engine.pause();
             finish();
             return;
