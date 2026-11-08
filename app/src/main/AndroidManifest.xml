@@ -23,6 +23,8 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name="sa.aseel.tv.DeveloperActivity" android:exported="false"
+            android:screenOrientation="landscape" />
         <activity android:name="sa.aseel.tv.YouTubeActivity" android:exported="false"
             android:screenOrientation="landscape" android:hardwareAccelerated="true"
             android:configChanges="orientation|screenSize|keyboardHidden" />
