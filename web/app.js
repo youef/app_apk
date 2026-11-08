@@ -11,7 +11,38 @@
    playback: null, hls: null, progressTimer: 0, lastProgressAt: 0, heroIndex:0, homeCollections:[],homeCollectionItems:[] };
  const labels = { movie: "فيلم", series: "مسلسل", channel: "قناة", episode: "حلقة" };
  const GENRE_FILTERS=[["action","أكشن"],["adventure","مغامرات"],["animation","كرتون"],["anime","أنمي"],["biography","سيرة ذاتية"],["comedy","كوميديا"],["crime","جريمة"],["documentary","وثائقي"],["drama","دراما"],["education","تعليمي"],["family","عائلي"],["fantasy","فانتازيا"],["history","تاريخي"],["horror","رعب"],["kids","أطفال"],["mystery","غموض"],["nature","طبيعة"],["romance","رومانسي"],["scifi","خيال علمي"],["science","علوم"],["short","قصير"],["sports","رياضة"],["thriller","إثارة"],["war","حرب"],["western","ويسترن"],["music","موسيقي"],["classic","كلاسيكي"]], COUNTRY_FILTERS=[["TR","تركية"],["US","أمريكية"],["GB","بريطانية"],["KR","كورية"],["IN","هندية"],["JP","يابانية"],["CN","صينية"],["FR","فرنسية"],["ES","إسبانية"],["EG","مصرية"],["SA","سعودية"],["DE","ألمانية"],["NL","هولندية"],["IT","إيطالية"],["MX","مكسيكية"],["BR","برازيلية"]], ARAB_COUNTRIES=["SA","EG","AE","KW","BH","QA","OM","YE","IQ","JO","LB","SY","PS","MA","DZ","TN","LY","SD","SO","MR","DJ","KM"];
- function itemCategoryMatches(x,v){if(!v)return true;if(v.indexOf("genre:")===0)return (x.genre_tags||[]).concat(x.auto_tags||[]).indexOf(v.slice(6))!==-1;var c=String(x.country_code||"").toUpperCase();if(v==="origin:arab")return ARAB_COUNTRIES.indexOf(c)!==-1;if(v==="origin:foreign")return !!c&&ARAB_COUNTRIES.indexOf(c)===-1;if(v.indexOf("country:")===0)return c===v.slice(8);return x.category_id===v;}
+ function itemCategoryMatches(x,v){
+    if(!v)return true;
+    const tags=(x.genre_tags||[]).concat(x.auto_tags||[]);
+    if(v.indexOf("genre:")===0)return tags.includes(v.slice(6));
+    const country=String(x.country_code||"").toUpperCase();
+    if(v==="origin:arab")return ARAB_COUNTRIES.includes(country);
+    if(v==="origin:foreign")return !!country&&!ARAB_COUNTRIES.includes(country);
+    if(v.indexOf("country:")===0)return country===v.slice(8);
+    if(x.category_id===v)return true;
+    // Named film/series categories also match existing titles by metadata, without
+    // replacing a title's primary category or duplicating catalog records.
+    const category=state.categories.find(c=>c.id===v);
+    if(!category)return false;
+    const name=String(category.name_ar||"");
+    if(!/^(مسلسلات|أفلام) /.test(name))return false;
+    const label=name.replace(/^(مسلسلات|أفلام) /,"");
+    const countries={"سورية":"SY","سعودية":"SA","كويتية":"KW","إماراتية":"AE","مصرية":"EG",
+      "لبنانية":"LB","أردنية":"JO","تركية":"TR","كورية":"KR","هندية":"IN",
+      "أمريكية":"US","بريطانية":"GB","يابانية":"JP","صينية":"CN"};
+    if(countries[label])return country===countries[label];
+    if(label==="خليجية")return ["SA","KW","AE","BH","QA","OM"].includes(country);
+    if(label==="عربية")return ARAB_COUNTRIES.includes(country);
+    if(label==="أجنبية")return !!country&&!ARAB_COUNTRIES.includes(country);
+    const genres={"أكشن":"action","كوميدية":"comedy","درامية":"drama","دراما":"drama",
+      "رومانسية":"romance","رعب":"horror","غموض وتشويق":"mystery","غموض":"mystery",
+      "إثارة وتشويق":"thriller","جريمة":"crime","بوليسية":"crime",
+      "خيال علمي":"scifi","فانتازيا":"fantasy","عائلية":"family","اجتماعية":"drama",
+      "مغامرات":"adventure","حرب":"war","تاريخية":"history","أطفال":"kids",
+      "كرتون":"animation","أنمي":"anime","وثائقية":"documentary",
+      "كلاسيكية":"classic","قصيرة":"short","سيرة ذاتية":"biography","رمضان":"ramadan"};
+    return !!genres[label]&&tags.includes(genres[label]);
+  }
  let toastTimer = null;
  const storageKey = "aseel-web-favorites-v1";
  function store() {
@@ -134,7 +165,7 @@
      api("aseel_movies", q),
      api("aseel_series", q),
      loadAllChannels(),
-     api("aseel_categories", "select=id,name_ar,sort_order&order=sort_order.asc&limit=100"),
+     api("aseel_categories", "select=id,name_ar,sort_order&published=eq.true&order=sort_order.asc&limit=400"),
      api("aseel_home_collections","select=id,title_ar,description,display_order&is_active=eq.true&order=display_order.asc&limit=40"),
      api("aseel_home_collection_items","select=collection_id,movie_id,series_id,channel_id,episode_id,display_order&order=display_order.asc&limit=400"),
      api("aseel_youtube_videos","select=id,title_ar,youtube_url,channel_name,language_code,topic,sort_order,source_page_url&status=eq.published&is_kids=eq.true&order=sort_order.asc&limit=200")
@@ -364,7 +395,13 @@
    const media=state.page==="movies"||state.page==="series";
    const nation=[{id:"origin:arab",name_ar:"عربية"},{id:"origin:foreign",name_ar:"أجنبية"}].concat(COUNTRY_FILTERS.map(x=>({id:"country:"+x[0],name_ar:x[1]})));
    const genre=GENRE_FILTERS.map(x=>({id:"genre:"+x[0],name_ar:x[1]}));
-   const all=[{id:"",name_ar:"الكل"},...(media?nation.concat(genre):[]),...state.categories];
+   const visibleCategories=state.categories.filter(x=>{
+      const n=String(x.name_ar||"");
+      if(state.page==="movies")return !n.startsWith("مسلسلات ")&&!n.startsWith("قنوات ");
+      if(state.page==="series")return !n.startsWith("أفلام ")&&!n.startsWith("قنوات ");
+      return !n.startsWith("أفلام ")&&!n.startsWith("مسلسلات ");
+    });
+    const all=[{id:"",name_ar:"الكل"},...(media?nation.concat(genre):[]),...visibleCategories];
    all.forEach(x=>{
      const button=el("button","chip"+(state.category===x.id?" active":""),x.name_ar);
      button.onclick=()=>{state.category=x.id;draw()};
