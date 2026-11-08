@@ -522,7 +522,7 @@ async function serverCheckSaved(ids,attempt){
    headers:{"apikey":cfg.publishableKey,"Authorization":"Bearer "+session.access_token,"Content-Type":"application/json"},
    body:JSON.stringify({mode:"episodes",episode_ids:ids})
   });
-  if(response.status===401&&!attempt&&await refresh())return serverCheckSaved(ids,1);
+  if((response.status===401||response.status===403)&&!attempt&&await refresh())return serverCheckSaved(ids,1);
   var data=await response.json().catch(function(){return {};});
   if(!response.ok&&response.status!==207)throw new Error(data.error||"فشل خادم الفحص: HTTP "+response.status);
   if(!Array.isArray(data.results))throw new Error("لم يرجع الخادم نتائج فحص للحلقات.");
