@@ -125,6 +125,7 @@ jobs:
           node tests/cinema-wallpaper-v22-smoke.cjs
           node tests/cinema-v24-profiles-and-shelves-smoke.cjs
           node tests/tv-red-glass-v25-profile-smoothness-smoke.cjs
+          node tests/red-neon-v26-developer-smoke.cjs
           node tests/glossy-red-glass-buttons-v23-smoke.cjs
           node tests/member-account-login-smoke.cjs
           node tests/member-cloud-sync-smoke.cjs
