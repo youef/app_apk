@@ -20,8 +20,8 @@ public final class CinemaPosterView extends ImageView {
         super.onSizeChanged(w,h,oldw,oldh);
         bounds.set(0,0,w,h);clip.reset();clip.addRoundRect(bounds,radius,radius,Path.Direction.CW);
     }
-    @Override protected void onDraw(Canvas canvas){
-        int saved=canvas.save();canvas.clipPath(clip);super.onDraw(canvas);canvas.restoreToCount(saved);
+    @Override public void draw(Canvas canvas){
+        int saved=canvas.save();canvas.clipPath(clip);super.draw(canvas);canvas.restoreToCount(saved);
         if(getWidth()<6||getHeight()<6)return;
         paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(stroke);
         paint.setColor(Color.argb(205,244,62,91));
