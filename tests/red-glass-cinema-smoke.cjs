@@ -20,7 +20,7 @@ assert(css.includes("@media(max-width:900px)")&&css.includes(".app-dock a{displa
   "Compact tablet navigation must preserve mobile dock and icon-only links");
 for(const p of ["web/index.html","web/index.view","web/youtube-player.html","web/youtube-player.view"]){
   const html=read(p);
-  assert(html.includes('red-cinema.css?v=red-glass-buttons-v23-20261107'),
+  assert(/red-cinema\.css\?v=(red-glass-buttons-v23-20261107|red-neon-v26-20261108)/.test(html),
     p+" must load the new theme after the glass layer");
   assert(html.indexOf("glass.css?v=")<html.indexOf("red-cinema.css?v="),
     p+" theme must be last");
