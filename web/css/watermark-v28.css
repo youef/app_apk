@@ -1,0 +1,32 @@
+/* Al Ezz TV V28 — fixed official identity on first-party direct video only.
+   Keep outside transient chrome, do not obstruct clicks/remote input or provider embeds. */
+.player__stage{position:relative}
+.player__watermark{
+  position:absolute;
+  top:12px;left:14px;
+  top:max(12px,env(safe-area-inset-top));
+  left:max(14px,env(safe-area-inset-left));
+  z-index:7;
+  display:block;
+  width:105px;max-width:18vw;
+  height:58px;
+  object-fit:contain;
+  object-position:left top;
+  opacity:.82;
+  pointer-events:none!important;
+  user-select:none;
+  -webkit-user-select:none;
+  -webkit-user-drag:none;
+  filter:drop-shadow(0 2px 5px rgba(0,0,0,.48));
+}
+/* Embedded third-party / official YouTube playback keeps the provider surface clear. */
+.player.is-embed .player__watermark{display:none!important}
+@media(max-width:600px){
+  .player__watermark{width:68px;max-width:20vw;height:42px;top:9px;left:9px}
+}
+@media(orientation:landscape) and (max-height:450px){
+  .player__watermark{width:74px;height:44px;top:9px;left:12px}
+}
+@media(prefers-reduced-transparency:reduce){
+  .player__watermark{opacity:1;filter:none}
+}
