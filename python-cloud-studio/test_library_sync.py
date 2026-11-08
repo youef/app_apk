@@ -19,6 +19,20 @@ class Site:
         return url,'text/html; charset=utf-8',self.urls[url]
 
 class LibraryCrawlerTests(unittest.TestCase):
+    def test_discovery_cache_survives_restart_with_original_page_and_media_history(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)/'jobs.sqlite'
+            cat=Catalogue('movie','Test','https://new.example.org/movie/',
+                          source_pages=['https://old.example.org/movie/'],
+                          sources=[{'url':'https://cdn.example.org/a.mp4','verified':True}])
+            JobDB(path).remember_discovery(cat)
+            restarted=JobDB(path)
+            saved=restarted.cached_discovery(cat.source_pages[0])
+            self.assertEqual(saved['url'],cat.url)
+            self.assertEqual(saved['source_pages'],cat.source_pages)
+            self.assertEqual(saved['sources'],cat.sources)
+            self.assertIsNone(restarted.cached_discovery(cat.url,max_age=-1))
+
     def test_three_list_pages_and_skip_a_failed_work(self):
         url1='https://example.org/series/first/'
         url2='https://example.org/series/second/'

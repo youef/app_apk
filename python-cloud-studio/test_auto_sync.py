@@ -10,7 +10,7 @@ from unittest.mock import patch
 from uuid import NAMESPACE_URL, uuid5
 
 from alezz_fetchv_importer import Catalogue, Episode
-from auto_sync import AutoSync, ProcessLock, QueueDB, expires_at, target_key
+from auto_sync import AutoSync, BackgroundSourceClient, ProcessLock, QueueDB, expires_at, target_key
 
 NOW = 1900000000.0
 ROOT = 'https://source.example.org/movie/a'
@@ -101,6 +101,16 @@ class FakeResolver:
 
 
 class AutoSyncTests(unittest.TestCase):
+    def test_background_source_uses_browser_after_connection_reset(self):
+        from alezz_fetchv_importer import SourceConnectionError
+        result=(ROOT,'text/html','<html><h1>Example</h1></html>')
+        with patch('auto_sync.SourceClient.get',side_effect=SourceConnectionError('reset')), \
+             patch('auto_sync.read_public_html',return_value=result) as browser:
+            client=BackgroundSourceClient(ROOT,'auto')
+            try:self.assertEqual(client.get(ROOT),result)
+            finally:client.session.close()
+            browser.assert_called_once_with(ROOT,1_500_000)
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -120,6 +130,27 @@ class AutoSyncTests(unittest.TestCase):
         self.worker = AutoSync(self.tmp.name, db_factory=lambda: self.db,
                                resolver_factory=lambda: self.resolver, clock=lambda: self.now)
         self.worker.db = self.db
+        # Existing playback tests stay offline; metadata repair is tested below
+        # through its real method with an explicit source catalogue.
+        metadata = patch.object(self.worker,'metadata_patch',return_value={})
+        metadata.start()
+        self.addCleanup(metadata.stop)
+
+    def test_metadata_repair_fills_only_missing_fields_and_throttles_retries(self):
+        row=self.row(description='وصف محرر',country_code='SA')
+        cat=Catalogue('movie','عنوان المصدر',ROOT,description='وصف المصدر',
+                      poster_url='https://images.example.org/poster.jpg',
+                      backdrop_url='https://images.example.org/background.jpg',
+                      year=2017,country='TR',language='tr',genres=['comedy'])
+        with patch('auto_sync.enrich'):
+            patch_data=AutoSync.metadata_patch(self.worker,self.job(row),[ROOT],cat)
+            self.assertEqual(patch_data['poster_url'],cat.poster_url)
+            self.assertEqual(patch_data['language_code'],'tr')
+            self.assertEqual(patch_data['genre_tags'],['comedy'])
+            self.assertNotIn('description',patch_data)
+            self.assertNotIn('country_code',patch_data)
+            self.assertNotIn('title_ar',patch_data)
+            self.assertEqual(AutoSync.metadata_patch(self.worker,self.job(row),[ROOT],cat),{})
 
     def row(self, table='aseel_movies', name='movie', source=ROOT, stream=OLD, **extra):
         row = dict(id=uid(name), title_ar='عنوان متشابه', source_page_url=source,

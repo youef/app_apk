@@ -16,6 +16,7 @@ from typing import Callable
 import requests
 
 from alezz_fetchv_importer import Catalogue, Episode, clean, public_url
+from title_cleaner import content_title
 
 TMDB_API = 'https://api.themoviedb.org/3'
 TVMAZE_API = 'https://api.tvmaze.com'
@@ -87,7 +88,8 @@ def fill(cat: Catalogue, *, original='', year=None, country='', language='', pos
     if not cat.country and re.fullmatch(r'[a-zA-Z]{2}',country or ''):cat.country=country.upper()
     if not cat.language and re.fullmatch(r'[a-zA-Z]{2,3}',language or ''):cat.language=language.lower()
     for attr,value in [('poster_url',poster),('backdrop_url',backdrop)]:
-        if not getattr(cat,attr) and value:
+        placeholder = attr=='backdrop_url' and cat.backdrop_url==cat.poster_url
+        if (not getattr(cat,attr) or placeholder) and value:
             try:setattr(cat,attr,public_url(value))
             except ValueError:pass
     if not cat.description and description:cat.description=clean(description,1800)
@@ -213,6 +215,73 @@ def tmdb(cat:Catalogue,*, requester=None,episodes=True,api_key='') -> str:
     return 'TMDB'
 
 
+def missing_metadata(cat):
+    return (not cat.poster_url or not cat.backdrop_url or cat.backdrop_url==cat.poster_url or
+            not cat.description or not cat.original_title or not cat.year or
+            not cat.country or not cat.language or not cat.genres)
+
+
+def google(cat:Catalogue, *, requester=None) -> str:
+    """Optional existing Google CSE account; use matched result metadata only.
+
+    CSE is closed to new customers and is scheduled to end January 1, 2027.
+    No anonymous scraping or fabricated API key is used when it is unavailable.
+    """
+    key=os.getenv('ALEZZ_GOOGLE_API_KEY','').strip()
+    engine=os.getenv('ALEZZ_GOOGLE_SEARCH_ENGINE_ID','').strip()
+    if not key or not engine:return ''
+    query=' '.join(filter(None,[cat.original_title or cat.title,str(cat.year or ''),
+                               'مسلسل' if cat.kind=='series' else 'فيلم']))
+    response=get_json('https://customsearch.googleapis.com','/customsearch/v1',
+                      {'key':key,'cx':engine,'q':query,'num':5,'safe':'active'},requester)
+    if not isinstance(response,dict):return ''
+    candidates=[]
+    for item in (response.get('items') or [])[:5]:
+        if not isinstance(item,dict):continue
+        pagemap=item.get('pagemap') or {}
+        metadata=next(iter(pagemap.get('metatags') or []),{})
+        works=pagemap.get('tvseries' if cat.kind=='series' else 'movie') or []
+        work=next(iter(works),{})
+        names=[work.get('name',''),metadata.get('og:title',''),item.get('title','')]
+        names=[content_title(name,cat.url) for name in names if isinstance(name,str)]
+        year=year_of(work.get('datepublished') or metadata.get('video:release_date'))
+        score=confidence(cat,names,year)
+        if score<.9:continue
+        # Exclude trailers, episode pages and contradictory work types.
+        kind=str(metadata.get('og:type','')).lower()
+        if cat.kind=='movie' and ('episode' in kind or 'tv_show' in kind):continue
+        if cat.kind=='series' and 'movie' in kind:continue
+        try: public_url(item.get('link',''))
+        except ValueError:continue
+        candidates.append((score,item,work,metadata,year))
+    if not candidates:return ''
+    _,item,work,metadata,year=max(candidates,key=lambda row:row[0])
+    fill(cat,original=work.get('alternatename') or metadata.get('original_title',''),year=year,
+         poster=work.get('image') or metadata.get('og:image') or '',
+         backdrop=metadata.get('og:image:secure_url') or '',
+         description=work.get('description') or metadata.get('og:description') or metadata.get('description') or '',
+         country=work.get('countryoforigin') or '',language=work.get('inlanguage') or '',
+         genres=[work['genre']] if isinstance(work.get('genre'),str) else [])
+    # Full-size image URLs only, with explicit dimensions. Never use Google's
+    # tiny cached thumbnails as a poster or use an unrelated wide image.
+    for attr,term,portrait in [('poster_url','poster',True),('backdrop_url','backdrop',False)]:
+        if getattr(cat,attr) and not (attr=='backdrop_url' and cat.backdrop_url==cat.poster_url):continue
+        images=get_json('https://customsearch.googleapis.com','/customsearch/v1',
+                        {'key':key,'cx':engine,'q':query+' '+term,'exactTerms':cat.original_title or cat.title,
+                         'searchType':'image','imgSize':'large','num':3,'safe':'active'},requester)
+        if not isinstance(images,dict):continue
+        for image in (images.get('items') or [])[:3]:
+            size=image.get('image') or {}
+            try:
+                width,height=int(size.get('width') or 0),int(size.get('height') or 0)
+                if min(width,height)<350 or (width<height)!=portrait:continue
+                if confidence(cat,[image.get('title','')],None)<.75:continue
+                setattr(cat,attr,public_url(image.get('link','')))
+                break
+            except (TypeError,ValueError):continue
+    return 'Google Search: '+item['link']
+
+
 def enrich(cat:Catalogue,*, requester=None, include_episodes=True) -> dict:
     """Enrichment is best effort; source data is retained on errors or ambiguous matches."""
     sources=[]
@@ -224,6 +293,11 @@ def enrich(cat:Catalogue,*, requester=None, include_episodes=True) -> dict:
                               not cat.year or not cat.country or not cat.language or not cat.genres):
         try:
             name=tvmaze(cat,requester=requester,episodes=include_episodes)
+            if name:sources.append(name)
+        except Exception:pass
+    if missing_metadata(cat):
+        try:
+            name=google(cat,requester=requester)
             if name:sources.append(name)
         except Exception:pass
     cat.metadata_sources=list(dict.fromkeys(cat.metadata_sources+sources))

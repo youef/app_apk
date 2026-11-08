@@ -2,6 +2,7 @@
 import json
 import unittest
 from unittest.mock import patch
+from unittest.mock import Mock
 from fastapi.testclient import TestClient
 
 import metadata_enrichment as m
@@ -20,6 +21,34 @@ class FakeResponse:
 
 
 class MetadataTests(unittest.TestCase):
+    def test_real_backdrop_replaces_source_poster_fallback(self):
+        cat=Catalogue('movie','Test','https://public.example.com/test',
+                      poster_url='https://images.example.org/poster.jpg',
+                      backdrop_url='https://images.example.org/poster.jpg')
+        m.fill(cat,backdrop='https://images.example.org/backdrop.jpg')
+        self.assertEqual(cat.backdrop_url,'https://images.example.org/backdrop.jpg')
+        self.assertTrue(cat.poster_url.endswith('poster.jpg'))
+
+    def test_google_without_configuration_never_makes_a_request(self):
+        requester=Mock(side_effect=AssertionError('No network without credentials'))
+        with patch.dict(m.os.environ,{'ALEZZ_GOOGLE_API_KEY':'','ALEZZ_GOOGLE_SEARCH_ENGINE_ID':''}):
+            self.assertEqual(m.google(Catalogue('movie','Test','https://example.org/a'),requester=requester),'')
+        requester.assert_not_called()
+
+    def test_google_matches_work_and_rejects_different_year(self):
+        cat=Catalogue('movie','Test Hero','https://example.org/a',year=2024)
+        payload={'items':[{'title':'Test Hero','link':'https://metadata.example.org/wrong',
+            'pagemap':{'movie':[{'name':'Test Hero','datepublished':'1980','image':'https://images.example.org/wrong.jpg'}]}},
+            {'title':'Test Hero','link':'https://metadata.example.org/right',
+            'pagemap':{'movie':[{'name':'Test Hero','datepublished':'2024',
+                'image':'https://images.example.org/right.jpg','description':'The right story'}],
+                'metatags':[{'og:image:secure_url':'https://images.example.org/backdrop.jpg'}]}}]}
+        with patch.dict(m.os.environ,{'ALEZZ_GOOGLE_API_KEY':'test','ALEZZ_GOOGLE_SEARCH_ENGINE_ID':'test'}):
+            source=m.google(cat,requester=lambda *a,**kw:FakeResponse(payload))
+        self.assertEqual(source,'Google Search: https://metadata.example.org/right')
+        self.assertEqual(cat.poster_url,'https://images.example.org/right.jpg')
+        self.assertEqual(cat.description,'The right story')
+
     def test_tvmaze_enrichment_and_episodes(self):
         cat=Catalogue('series','Test Hero','https://public.example.com/test',original_title='Test Hero')
         def api(url,**kw):

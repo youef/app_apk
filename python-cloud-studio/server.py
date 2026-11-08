@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from ipaddress import ip_address
 from contextlib import asynccontextmanager
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 import io
@@ -207,7 +207,8 @@ async def status(request: Request):
 
 class DiscoverySourceClient(SourceClient):
     def __init__(self, source):
-        super().__init__(timeout=11)
+        super().__init__(timeout=6)
+        self.retries = 1
         self.source = source
 
     def get(self, url, max_size=1_500_000):
@@ -232,6 +233,7 @@ def discover_full(source: str, kind: str='auto', deep: bool=True, enrich_metadat
     finally:
         client.session.close()
     if kind!='auto':cat.kind=kind
+    cat.source_pages=list(dict.fromkeys([source,cat.url,*cat.source_pages]))
     if enrich_metadata:
         enrich(cat,include_episodes=True)
     if deep and cat.kind=='series' and cat.episodes:
@@ -392,15 +394,15 @@ async def title_search(request: Request, body: TitleSearchForm):
     return {'results': results}
 
 
-def scan_catalogue(state: UserState, cat: Catalogue, progress: dict):
-    targets = list(cat.episodes) if cat.kind == 'series' else [cat]
+def scan_catalogue_entry(state: UserState, cat: Catalogue, progress: dict, entry):
     resolver = MediaResolver(mode=AUTOSYNC.mode)
-    for entry in targets:
+    try:
         with state.lock:
             if state.catalogue is not cat or state.scan is not progress:
                 return
             page = cat.url if cat.kind == 'movie' else entry.page_url
             candidates = list(entry.sources)
+            original_media = entry.media_url
             if entry.media_url and not any(item.get('url') == entry.media_url for item in candidates):
                 candidates.append({'url':entry.media_url,'kind':supported_source_kind(entry.media_url) or 'direct','page_url':page})
         pages = []
@@ -423,21 +425,57 @@ def scan_catalogue(state: UserState, cat: Catalogue, progress: dict):
         with state.lock:
             if state.catalogue is not cat or state.scan is not progress:
                 return
-            entry.sources = checked
-            entry.source_pages = pages
-            if playable:
-                entry.media_url = playable['url']
-            entry.verified = playable is not None
-            entry.error = error
+            # An editor can change media while a scan is in flight.
+            if entry.media_url == original_media:
+                entry.sources = checked
+                entry.source_pages = pages
+                if playable:
+                    entry.media_url = playable['url']
+                entry.verified = playable is not None
+                entry.error = error
             progress['done'] += 1
             progress['verified'] += int(entry.verified)
-    with state.lock:
-        progress['running'] = False
+            if time.time()-progress.get('persisted_at',0)>=2:
+                LIBRARY.remember_discovery(cat)
+                progress['persisted_at']=time.time()
+    except Exception as exc:
+        with state.lock:
+            progress['error'] = safe_error(exc)
+
+
+def scan_catalogue(state: UserState, cat: Catalogue, progress: dict):
+    targets = iter(list(cat.episodes) if cat.kind == 'series' else [cat])
+    workers = max(1,min(4,int(os.getenv('ALEZZ_DISCOVERY_CONCURRENCY','3'))))
+    try:
+        # Submit a bounded window so changing works does not leave thousands of
+        # abandoned episode tasks ahead of the next scan.
+        with ThreadPoolExecutor(max_workers=workers,thread_name_prefix='studio-episode') as pool:
+            pending=set()
+            while True:
+                with state.lock:
+                    if state.catalogue is not cat or state.scan is not progress: break
+                while len(pending)<workers:
+                    entry=next(targets,None)
+                    if entry is None: break
+                    pending.add(pool.submit(scan_catalogue_entry,state,cat,progress,entry))
+                if not pending: break
+                completed,pending=wait(pending,return_when=FIRST_COMPLETED)
+                for future in completed: future.result()
+    except Exception as exc:
+        with state.lock: progress['error']=safe_error(exc)
+    finally:
+        with state.lock:
+            try: LIBRARY.remember_discovery(cat)
+            except Exception as exc: progress['error']=safe_error(exc)
+            finally:
+                progress['running']=False
+                progress['finished_at']=time.time()
 
 
 def start_catalogue_scan(state: UserState, cat: Catalogue):
     total = len(cat.episodes) if cat.kind == 'series' else 1
-    progress = {'id':secrets.token_hex(8),'running':bool(total),'done':0,'total':total,'verified':0}
+    progress = {'id':secrets.token_hex(8),'running':bool(total),'done':0,'total':total,'verified':0,
+                'started_at':time.time(),'error':''}
     state.scan = progress
     state.scan_catalogue = cat
     if total: _discovery_scans.submit(scan_catalogue,state,cat,progress)
@@ -448,7 +486,7 @@ async def discovery_scan(request: Request):
     _, state = find_state(request)
     with state.lock:
         progress = scan_status(state)
-        if progress and not progress['running']:
+        if progress:
             return {'scan':progress,'summary':get_summary(state)}
     return {'scan':progress}
 
@@ -459,6 +497,7 @@ class DiscoverForm(BaseModel):
     deep: bool = True
     metadata: bool = True
     scan_media: bool = False
+    force_refresh: bool = False
 
 
 @app.post('/api/discover')
@@ -468,7 +507,15 @@ async def discover(request: Request, data: DiscoverForm):
         raise HTTPException(400, 'نوع العمل غير مدعوم')
     try:
         source = public_url(data.url)
-        cat = await run_in_threadpool(lambda: discover_full(source, data.kind, deep=data.deep, enrich_metadata=data.metadata))
+        cached = None if data.force_refresh else LIBRARY.cached_discovery(source)
+        if cached and (data.kind=='auto' or data.kind==cached['kind']):
+            cached=dict(cached)
+            episodes=[Episode(**row) for row in cached.pop('episodes',[])]
+            cat=Catalogue(**cached,episodes=episodes)
+        else:
+            cat = await run_in_threadpool(lambda: discover_full(source, data.kind, deep=data.deep, enrich_metadata=data.metadata))
+        cat.source_pages=list(dict.fromkeys([source,cat.url,*cat.source_pages]))
+        LIBRARY.remember_discovery(cat)
         with state.lock:
             state.catalogue, state.catalogues, state.batch_errors = cat, [cat], []
             state.current_index, state.demo = 0, False

@@ -1,6 +1,7 @@
 """Offline integration tests for the Python website. No internet or DB required."""
 import unittest
 import time
+import threading
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 
@@ -78,6 +79,35 @@ class DemoTest(unittest.TestCase):
         self.assertEqual(first['source_pages'], [episode_page])
         self.assertFalse(second['verified'])
         self.assertFalse(second['media_url'])
+
+    def test_fast_episode_is_visible_while_slow_episode_is_still_running(self):
+        root='https://source.example.org/series/progressive/'
+        cat=Catalogue('series','Progressive',root,episodes=[
+            Episode(1,1,'Slow',root+'slow'),Episode(1,2,'Fast',root+'fast')])
+        release=threading.Event()
+        fast=threading.Event()
+        def resolve(pages,existing):
+            if pages==[root+'slow']:release.wait(timeout=5)
+            else:fast.set()
+            return [{'url':'https://cdn.example.org/'+pages[0].split('/')[-1]+'.mp4',
+                     'kind':'direct','verified':True}],[]
+        with patch.object(server,'discover_full',return_value=cat), \
+             patch.object(server.MediaResolver,'resolve',side_effect=resolve):
+            try:
+                self.post('discover',{'url':root,'scan_media':True,'force_refresh':True})
+                self.assertTrue(fast.wait(timeout=3))
+                for _ in range(100):
+                    result=self.client.get('/api/discovery-scan').json()
+                    if result['scan']['done']:break
+                    time.sleep(.01)
+                self.assertTrue(result['scan']['running'])
+                self.assertEqual(result['scan']['done'],1)
+                self.assertTrue(result['summary']['catalogue']['episodes'][1]['verified'])
+            finally:
+                release.set()
+                for _ in range(100):
+                    if not self.client.get('/api/discovery-scan').json()['scan']['running']:break
+                    time.sleep(.01)
 
     def test_local_worker_reuses_admin_login_and_releases_it_on_logout(self):
         db = DummyDB()
