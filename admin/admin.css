@@ -901,3 +901,13 @@ body.is-drawer-open { overflow: hidden; }
 .movie-quick-extra>.form-group{padding:8px 16px 16px}
 .movie-quick-extra>.form-group legend{padding-inline:16px}
 @media(max-width:540px){.movie-quick-grid{grid-template-columns:1fr}.drawer--quick-movie .drawer-body{padding-inline:16px}}
+
+/* Accessible media-health progress, diagnostics and batch controls */
+.health-panel__option{display:inline-flex;align-items:center;gap:7px;font-size:12px;white-space:nowrap;cursor:pointer}
+.health-panel__option input{width:16px;height:16px;accent-color:#cda66f}
+.health-panel progress{width:100%;height:8px;accent-color:#d7ab74}
+.health-panel progress[hidden],.health-panel__report[hidden],.health-panel__option[hidden]{display:none}
+.health-panel__report{width:100%;font-size:12px}
+.health-panel__report summary{padding:6px 0;cursor:pointer}
+.health-panel__report pre{padding:12px;margin:6px 0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:200px;overflow:auto;direction:rtl;background:rgba(0,0,0,.24);border-radius:10px;line-height:1.8}
+.health-panel__message{overflow-wrap:anywhere}
