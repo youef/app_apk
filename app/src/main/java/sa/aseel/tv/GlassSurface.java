@@ -38,6 +38,15 @@ public final class GlassSurface {
         return drawable;
     }
 
+    /** Near-clear chrome over gradient artwork. No expensive blur on API19. */
+    public static GradientDrawable transparentHeader(float cornerPixels){
+        GradientDrawable drawable=new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+            new int[]{0x2B1A1723,0x130E1119,0x080A0B10});
+        drawable.setCornerRadius(Math.max(0,cornerPixels));
+        drawable.setStroke(1,0x4BEF4D68);
+        return drawable;
+    }
+
     public static GradientDrawable canvas(){
         return new GradientDrawable(GradientDrawable.Orientation.TL_BR,
             new int[]{0xFF090B12,0xFF21141F,0xFF090C14});
