@@ -195,7 +195,8 @@ class PortalTests(unittest.TestCase):
         self.assertEqual(expired.status_code,401)
         self.assertFalse(expired.json()['active'])
         landing=self.client.get('/account/login?expired=1')
-        self.assertIn('انتهت صلاحية حسابك',landing.text)
+        self.assertIn('انتهت جلستك السابقة',landing.text)
+        self.assertNotIn('انتهت صلاحية اشتراكك',landing.text)
 
     def test_customer_is_limited_to_one_registered_browser(self):
         self.login('customer')
@@ -229,7 +230,7 @@ class PortalTests(unittest.TestCase):
         user={'id':uid,'email':'customer1@members.alezz.invalid',
               'created_at':'2026-10-01T05:00:00Z','last_sign_in_at':'2026-11-05T06:00:00Z',
               'app_metadata':{'alezz_customer':'active'}}
-        csrf=next(iter(self.portal.sessions.values()))[3]
+        csrf=self.portal.admin_sessions.get(self.client.cookies.get('alezz_member'))[0][3]
         with patch.object(self.portal,'upstream',return_value={'users':[user]}):
             response=self.client.get('/account/customers')
             self.assertEqual(response.status_code,200)
@@ -283,7 +284,7 @@ class PortalTests(unittest.TestCase):
     def test_admin_customer_creation_checks_csrf(self):
         self.login('admin')
         self.assertIn('admin protected',self.client.get('/admin/').text)
-        csrf=next(iter(self.portal.sessions.values()))[3]
+        csrf=self.portal.admin_sessions.get(self.client.cookies.get('alezz_member'))[0][3]
         with patch.object(self.portal,'upstream',return_value={}) as upstream:
             end=(datetime.now(ZoneInfo('Asia/Riyadh')).date()+timedelta(days=40)).isoformat()
             data={'username':'customer1','password':'new-password-123','action':'create','expires_on':end}
@@ -299,7 +300,7 @@ class PortalTests(unittest.TestCase):
     def test_default_create_is_90_days_with_no_manual_expiry(self):
         from member_expiry import expiry_date
         self.login('admin')
-        csrf=next(iter(self.portal.sessions.values()))[3]
+        csrf=self.portal.admin_sessions.get(self.client.cookies.get('alezz_member'))[0][3]
         with patch.object(self.portal,'upstream',return_value={}) as upstream:
             result=self.client.post('/account/customers',data={
                 'username':'plan90','password':'a-strong-customer-password',
@@ -341,8 +342,10 @@ class PortalTests(unittest.TestCase):
         self.assertEqual(summary.status_code,200)
         self.assertEqual(summary.json()['remaining_days'],7)
         self.assertTrue(summary.json()['warning'])
+        self.assertEqual(self.client.post('/account/logout',headers=self.headers).status_code,303)
         screen=self.client.get('/account/login?expired=1')
-        self.assertIn('انتهت صلاحية اشتراكك',screen.text)
+        self.assertIn('انتهت جلستك السابقة',screen.text)
+        self.assertNotIn('انتهت صلاحية اشتراكك',screen.text)
         self.assertIn('تسجيل الدخول بعد التجديد',screen.text)
 
     def test_device_reset_updates_authoritative_cutoff(self):
@@ -366,13 +369,21 @@ class PortalTests(unittest.TestCase):
         user={'id':'12345678-1234-1234-1234-123456789abc',
               'app_metadata':{'alezz_customer':'active',
                               'alezz_expires_at':expired+'T00:00:00Z'}}
-        with patch.object(self.portal,'upstream',return_value={'user':user}):
-            with self.assertRaisesRegex(ValueError,'expired'):
-                self.portal.authenticate('customer1','correct-password')
-            response=self.client.post('/account/login',headers=self.headers,
-                        data={'username':'customer1','password':'correct-password'})
-            self.assertEqual(response.status_code,200)
-            self.assertIn('انتهت صلاحية اشتراكك',response.text)
+        import os
+        def mock_upstream(method,endpoint,**kwargs):
+            if endpoint.startswith('/auth/v1/token'):
+                return {'user':user}
+            if endpoint.startswith('/auth/v1/admin/users/'):
+                return {**user,'email':'customer1@members.alezz.invalid'}
+            raise AssertionError(endpoint)
+        with patch.dict(os.environ, {'ALEZZ_SUPABASE_SERVICE_ROLE_KEY':'server-only-test-key'}):
+            with patch.object(self.portal,'upstream',side_effect=mock_upstream):
+                with self.assertRaisesRegex(ValueError,'expired'):
+                    self.portal.authenticate('customer1','correct-password')
+                response=self.client.post('/account/login',headers=self.headers,
+                            data={'username':'customer1','password':'correct-password'})
+                self.assertEqual(response.status_code,200)
+                self.assertIn('انتهت صلاحية اشتراكك',response.text)
 
     def test_admin_updates_date_and_invalidates_expired_browser_sessions(self):
         from member_expiry import expiration_from_date, expiry_epoch
@@ -415,8 +426,11 @@ class PortalTests(unittest.TestCase):
     def test_authentication_checks_server_controlled_customer_metadata(self):
         uid='12345678-1234-1234-1234-123456789abc'
         user={'id':uid,'user_metadata':{'alezz_customer':'active'}}
-        with patch.object(self.portal,'upstream',return_value={'user':user}):
-            with self.assertRaises(ValueError):
-                self.portal.authenticate('customer1','password')
-            user['app_metadata']={'alezz_customer':'active'}
-            self.assertEqual(self.portal.authenticate('customer1','password'),(uid,'customer',0))
+        import os
+        with patch.dict(os.environ, {'ALEZZ_SUPABASE_SECRET_KEY':'',
+                                     'ALEZZ_SUPABASE_SERVICE_ROLE_KEY':''}):
+            with patch.object(self.portal,'upstream',return_value={'user':user}):
+                with self.assertRaises(ValueError):
+                    self.portal.authenticate('customer1','password')
+                user['app_metadata']={'alezz_customer':'active'}
+                self.assertEqual(self.portal.authenticate('customer1','password'),(uid,'customer',0))
