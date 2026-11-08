@@ -229,12 +229,14 @@
   }
 
   /* ---------- auth ---------- */
+  var refreshInFlight = null;
   function refreshSession() {
+    if (refreshInFlight) return refreshInFlight;
     var current = state.session;
     if (!current || !current.refresh_token) return Promise.resolve(false);
     var controller = new AbortController();
     var timer = setTimeout(function () { controller.abort(); }, cfg.requestTimeout);
-    return fetch(cfg.supabaseUrl + '/auth/v1/token?grant_type=refresh_token', {
+    refreshInFlight = fetch(cfg.supabaseUrl + '/auth/v1/token?grant_type=refresh_token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', apikey: cfg.publishableKey },
       body: JSON.stringify({ refresh_token: current.refresh_token }),
@@ -244,7 +246,7 @@
         if (!res.ok) return false;
         var data = null;
         try { data = JSON.parse(text); } catch (e) { return false; }
-        if (!data || !data.access_token) return false;
+        if (!data || !data.access_token || state.session !== current) return false;
         writeSession(Object.assign({}, current, {
           access_token: data.access_token,
           refresh_token: data.refresh_token || current.refresh_token,
@@ -252,7 +254,11 @@
         }));
         return true;
       });
-    }).catch(function () { return false; }).finally(function () { clearTimeout(timer); });
+    }).catch(function () { return false; }).finally(function () {
+      clearTimeout(timer);
+      refreshInFlight = null;
+    });
+    return refreshInFlight;
   }
 
   function signIn(email, password) {
@@ -506,13 +512,17 @@
       signal: controller.signal,
       cache: 'no-store'
     }).then(function (response) {
-      if (response.status === 401 && !retry) {
+      if ((response.status === 401 || response.status === 403) && !retry) {
+        // The Edge function can return 403 for an expired JWT; retry once
+        // with a fresh token before interpreting this as revoked admin access.
         return refreshSession().then(function (ok) {
           if (ok) return invokeLinkHealth(payload, true);
-          sessionExpired();
-          var expired = new Error('انتهت جلسة Supabase. سجّل الدخول مرة أخرى.');
-          expired.status = 401;
-          throw expired;
+          if (response.status === 401) sessionExpired();
+          var error = new Error(response.status === 403
+            ? 'تعذر تأكيد صلاحية المسؤول في دالة الفحص؛ تحقق من حساب Supabase.'
+            : 'انتهت جلسة Supabase. سجّل الدخول مرة أخرى.');
+          error.status = response.status;
+          throw error;
         });
       }
       return response.text().then(function (text) {
