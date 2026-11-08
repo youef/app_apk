@@ -495,6 +495,10 @@
       attemptedJsHls = {};
       errorHandledToken = -1;
       current = Object.assign({}, item);
+      el.root.classList.remove("cinema--movie","cinema--series","cinema--live","cinema--kids");
+      el.root.classList.add(current.kids?"cinema--kids":
+        current.live?"cinema--live":
+        (current.kind==="episode"||current.kind==="series")?"cinema--series":"cinema--movie");
       if (options.next) nextItem = options.next; else nextItem = null;
       nextHandler = typeof options.onNext === "function" ? options.onNext : null;
       nextDismissed = false;
