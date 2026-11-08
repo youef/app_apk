@@ -39,6 +39,7 @@ public final class EmbedPlayerActivity extends Activity {
     private View fullscreenView;
     private WebChromeClient.CustomViewCallback fullscreenCallback;
     private String sourceUrl;
+    private boolean embedLoadFailure=false;
     private final Handler chromeHandler=new Handler();
     private final Runnable hideChrome=new Runnable(){
         @Override public void run(){
@@ -52,7 +53,7 @@ public final class EmbedPlayerActivity extends Activity {
         chromeHandler.removeCallbacks(hideChrome);
         if(toolbar!=null)toolbar.setVisibility(View.VISIBLE);
         if(notice!=null)notice.setVisibility(View.VISIBLE);
-        chromeHandler.postDelayed(hideChrome,6500L);
+        if(!embedLoadFailure)chromeHandler.postDelayed(hideChrome,3000L);
     }
 
     public static boolean isAllowed(String value) {
@@ -154,10 +155,12 @@ public final class EmbedPlayerActivity extends Activity {
             }
             @Override public void onReceivedError(WebView view, int code, String description, String failingUrl) {
                 if (sourceUrl.equals(failingUrl))
-                    message("تعذّر تحميل صفحة المشغل؛ جرّب إعادة المحاولة أو فتح المصدر.");
+                    {embedLoadFailure=true;chromeHandler.removeCallbacks(hideChrome);
+                     message("تعذّر تحميل صفحة المشغل؛ جرّب إعادة المحاولة أو فتح المصدر.");}
             }
             @Override public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
-                handler.cancel();
+                handler.cancel();embedLoadFailure=true;
+                chromeHandler.removeCallbacks(hideChrome);
                 message("شهادة أمان المصدر غير صالحة. تم منع الاتصال.");
             }
             @Override public void onPageFinished(WebView view, String url) {
@@ -182,10 +185,15 @@ public final class EmbedPlayerActivity extends Activity {
         toolbar.setOrientation(LinearLayout.HORIZONTAL);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
         toolbar.setPadding(dp(8), dp(4), dp(8), dp(4));
-        toolbar.setBackgroundColor(0xD9131419);
+        toolbar.setBackgroundDrawable(GlassSurface.transparentHeader(dp(14)));
         FrameLayout.LayoutParams top = new FrameLayout.LayoutParams(-1, dp(60), Gravity.TOP);
         root.addView(toolbar, top);
 
+        TextView brand=new TextView(this);
+        brand.setText("◈ العز TV");brand.setTextColor(0xFFFF8DA6);
+        brand.setTextSize(14);brand.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+        brand.setGravity(Gravity.CENTER_VERTICAL);
+        toolbar.addView(brand,new LinearLayout.LayoutParams(dp(105),-1));
         Button back = button("✕ رجوع");
         toolbar.addView(back, new LinearLayout.LayoutParams(dp(94), -1));
         back.setOnClickListener(new View.OnClickListener() {
@@ -207,7 +215,9 @@ public final class EmbedPlayerActivity extends Activity {
         Button reload = button("↻ إعادة");
         toolbar.addView(reload, new LinearLayout.LayoutParams(dp(100), -1));
         reload.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View view) { message("إعادة تحميل المشغل…"); web.reload(); }
+            @Override public void onClick(View view) {
+                embedLoadFailure=false;message("إعادة تحميل المشغل…");web.reload();
+            }
         });
 
         if(PlaybackSources.hasAlternatives(this)){
@@ -236,7 +246,7 @@ public final class EmbedPlayerActivity extends Activity {
         notice.setTextSize(12);
         notice.setGravity(Gravity.CENTER);
         notice.setPadding(dp(12), dp(8), dp(12), dp(8));
-        notice.setBackgroundColor(0xC9151419);
+        notice.setBackgroundDrawable(GlassSurface.transparentHeader(dp(12)));
         FrameLayout.LayoutParams noticeParams =
             new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
         root.addView(notice, noticeParams);
@@ -258,6 +268,10 @@ public final class EmbedPlayerActivity extends Activity {
         }
     }
 
+    @Override public boolean dispatchTouchEvent(android.view.MotionEvent event){
+        if(event.getAction()==android.view.MotionEvent.ACTION_DOWN)revealChrome();
+        return super.dispatchTouchEvent(event);
+    }
     @Override public boolean dispatchKeyEvent(KeyEvent event){
         if(event.getAction()==KeyEvent.ACTION_DOWN){
             int code=event.getKeyCode();
