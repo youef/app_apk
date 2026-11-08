@@ -140,6 +140,7 @@ try {
 
     <div class="player__chrome" id="playerChrome">
       <div class="player__top">
+        <span class="player__brand-mark" aria-label="شعار العز TV">◈ العز TV</span>
         <button class="iconbtn iconbtn--round" id="playerClose" aria-label="إغلاق المشغل">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
         </button>
