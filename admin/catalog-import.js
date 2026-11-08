@@ -14,6 +14,69 @@
     try { return JSON.parse(localStorage.getItem(cfg.storagePrefix + "session") || "null"); }
     catch (_) { return null; }
   }
+  let refreshing = null;
+  async function authorizedSession() {
+    let saved = session();
+    if (!saved?.access_token) throw Error("يرجى تسجيل دخول المسؤول من الصفحة الحالية.");
+    if (saved.expires_at && Date.now() >= saved.expires_at - 60000) {
+      if (!saved.refresh_token) throw Error("انتهت صلاحية الجلسة؛ سجّل الدخول مرة أخرى.");
+      if (!refreshing) {
+        refreshing = (async () => {
+          const res = await fetch(cfg.supabaseUrl + "/auth/v1/token?grant_type=refresh_token", {
+            method: "POST",
+            headers: {"apikey": cfg.publishableKey, "Content-Type": "application/json"},
+            body: JSON.stringify({refresh_token: saved.refresh_token}),
+            cache: "no-store"
+          });
+          const data = await res.json();
+          if (!res.ok || !data.access_token) throw Error("تعذر تجديد جلسة الإدارة؛ سجل الدخول مجددًا.");
+          const updated = {...saved, access_token: data.access_token,
+            refresh_token: data.refresh_token || saved.refresh_token,
+            expires_at: Date.now() + Number(data.expires_in || 3600) * 1000};
+          localStorage.setItem(cfg.storagePrefix + "session", JSON.stringify(updated));
+          return updated;
+        })().finally(() => { refreshing = null; });
+      }
+      saved = await refreshing;
+    }
+    return saved;
+  }
+  async function loginAdmin(event) {
+    event.preventDefault();
+    const email = el("authEmail").value.trim();
+    const password = el("authPassword").value;
+    if (!email || !password) { message("أدخل البريد وكلمة المرور.", "error"); return; }
+    el("authSubmit").disabled = true;
+    try {
+      const response = await fetch(cfg.supabaseUrl + "/auth/v1/token?grant_type=password", {
+        method: "POST",
+        headers: {"apikey": cfg.publishableKey, "Content-Type": "application/json"},
+        body: JSON.stringify({email,password}), cache: "no-store"
+      });
+      const data = await response.json();
+      if (!response.ok || !data.access_token || !data.user?.id) {
+        throw Error("بيانات الدخول غير صحيحة أو تعذر الاتصال بحساب الإدارة.");
+      }
+      const verify = await fetch(cfg.supabaseUrl + "/rest/v1/aseel_admins?select=active&user_id=eq." +
+        encodeURIComponent(data.user.id) + "&limit=1", {
+        headers: {"apikey": cfg.publishableKey, "Authorization": "Bearer " + data.access_token},
+        cache: "no-store"
+      });
+      if (!verify.ok || !(await verify.json()).some(x => x.active)) {
+        throw Error("الحساب لا يملك صلاحية إدارة معتمدة.");
+      }
+      const next = {access_token: data.access_token, refresh_token: data.refresh_token || "",
+        expires_at: Date.now() + Number(data.expires_in || 3600) * 1000,
+        email, user_id: data.user.id};
+      localStorage.setItem(cfg.storagePrefix + "session", JSON.stringify(next));
+      el("authPassword").value = "";
+      await checkAdmin();
+    } catch (error) {
+      message("فشل تسجيل الدخول: " + error.message, "error");
+    } finally {
+      el("authSubmit").disabled = false;
+    }
+  }
   function validUrl(value, label) {
     if (value === undefined || value === null || value === "") return null;
     if (typeof value !== "string" || value.length > 2048) throw Error(label + ": رابط HTTPS غير صحيح.");
@@ -167,8 +230,7 @@
     counts();
   }
   async function rest(table, params, options) {
-    const s = session();
-    if (!s || !s.access_token) throw Error("انتهت جلسة الإدارة. سجل الدخول مرة أخرى.");
+    const s = await authorizedSession();
     const query = new URLSearchParams(params || {});
     const url = cfg.supabaseUrl + "/rest/v1/" + table + (query.toString() ? "?" + query : "");
     const opts = options || {};
@@ -358,16 +420,22 @@
   async function checkAdmin() {
     const s = session();
     if (!s?.access_token || !s?.user_id) {
-      message("يرجى تسجيل الدخول إلى إدارة العز TV أولًا.", "error");
+      admin = false;
+      el("authPanel").hidden = false;
+      message("سجل دخول المسؤول إلى Supabase لإتمام المزامنة.", "info");
+      counts();
       return;
     }
     try {
-      const rows = await rest("aseel_admins", { select: "active", user_id: "eq." + s.user_id, limit: "1" });
-      if (!Array.isArray(rows) || !rows.some(row => row.active)) throw Error("لا توجد صلاحية إدارة نشطة لهذا الحساب.");
+      const rows = await rest("aseel_admins", {select: "active", user_id: "eq." + s.user_id, limit: "1"});
+      if (!Array.isArray(rows) || !rows.some(row => row.active)) throw Error("الحساب لا يملك صلاحية إدارة نشطة.");
       admin = true;
-      message("تم التحقق من صلاحيات الإدارة. اختر ملف JSON مرخّصًا لمعاينته.", "success");
+      el("authPanel").hidden = true;
+      message("تم التحقق من الإدارة. يمكنك اختيار الملف ثم المزامنة.", "success");
     } catch (err) {
-      message("تعذر التحقق من الإدارة: " + err.message, "error");
+      admin = false;
+      el("authPanel").hidden = false;
+      message("تعذر الدخول إلى قاعدة البيانات: " + err.message, "error");
     }
     counts();
   }
@@ -450,6 +518,7 @@
     download("\uFEFF" + csv, "al-ezz-catalog-report.csv", "text/csv;charset=utf-8");
   }
 
+  el("authForm").addEventListener("submit", loginAdmin);
   el("catalogFile").addEventListener("change", () => {
     manifest = null;
     report = [];
