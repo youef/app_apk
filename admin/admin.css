@@ -911,3 +911,5 @@ body.is-drawer-open { overflow: hidden; }
 .health-panel__report summary{padding:6px 0;cursor:pointer}
 .health-panel__report pre{padding:12px;margin:6px 0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:200px;overflow:auto;direction:rtl;background:rgba(0,0,0,.24);border-radius:10px;line-height:1.8}
 .health-panel__message{overflow-wrap:anywhere}
+
+.health-panel button[hidden],.health-panel progress[hidden],.health-panel__report[hidden],.health-panel__option[hidden]{display:none!important}
