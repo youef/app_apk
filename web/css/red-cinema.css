@@ -410,3 +410,39 @@ body{
   }
   .card:hover,.card:focus-visible,.card__media img{transform:none!important}
 }
+
+/* Red Neon V26: transparent headers, glowing 19px poster corners, developer page */
+.topbar,.topbar.is-stuck{background:linear-gradient(110deg,rgba(19,12,22,.30),rgba(5,7,11,.13))!important;
+-webkit-backdrop-filter:blur(13px);backdrop-filter:blur(13px);
+border-bottom:1px solid rgba(245,62,91,.24)!important;
+box-shadow:0 6px 18px rgba(0,0,0,.1)!important}
+.player__top,.player__controls,.player__info,.live-channel-hud{
+background:rgba(14,12,20,.28)!important;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+border-color:rgba(255,64,88,.32)!important}
+.card,.episode-card,.ep,.watch-episode,.kid-card,.live-guide__item,.hero__poster,.detail__poster,.watch-player-slot{
+border-radius:19px!important;border:1px solid rgba(255,63,86,.57)!important;
+box-shadow:0 0 0 1px rgba(255,34,62,.13),0 0 18px rgba(235,21,57,.18)!important}
+.card:hover,.card:focus-visible,.ep:hover,.ep:focus-visible,
+.watch-episode:hover,.watch-episode:focus-visible,.kid-card:hover,.kid-card:focus-visible,
+.live-guide__item:hover,.live-guide__item:focus-visible{
+border-color:rgba(255,127,145,.95)!important;
+box-shadow:0 0 0 2px rgba(255,59,85,.55),0 0 24px rgba(251,41,77,.35)!important}
+.card__media,.card__art,.kid-card__art,.ep__thumb,.watch-episode__thumb,.hero__poster img{
+border-radius:16px!important;overflow:hidden}
+.developer-screen{min-height:calc(100vh - 110px);padding:clamp(20px,5vw,65px);display:grid;place-items:center}
+.developer-screen__panel{width:min(100%,720px);padding:clamp(22px,5vw,55px);text-align:center;
+border-radius:28px;border:1px solid rgba(255,83,113,.6);
+background:linear-gradient(145deg,rgba(63,23,39,.68),rgba(13,14,24,.86));
+box-shadow:0 0 35px rgba(239,39,68,.16)}
+.developer-screen__eyebrow{color:#ff8ca0;font-size:12px;letter-spacing:.1em;font-weight:700}
+.developer-screen__avatar{width:84px;height:84px;margin:22px auto 15px;border-radius:26px;
+display:grid;place-items:center;font-size:42px;color:#fff;background:#3b152a;
+border:1px solid #f34b67;box-shadow:0 0 26px #ff244a42}
+.developer-screen h1{font-size:clamp(28px,4vw,44px);margin:10px 0;color:#fff}
+.developer-screen h2{font-size:clamp(16px,2vw,22px);margin:0;color:#ffc4cf}
+.developer-screen p{color:#c6c7d0;margin:19px 0 24px}
+.developer-screen__actions{display:flex;justify-content:center;flex-wrap:wrap;gap:12px}
+.developer-screen__actions .btn{min-height:50px;min-width:180px}
+.developer-screen__signature{margin-top:30px;font-size:12px;color:#afb1bd}
+@media(max-width:600px){.developer-screen__actions{flex-direction:column}.developer-screen__actions .btn{width:100%}}
+@media(prefers-reduced-motion:reduce){.card,.ep,.watch-episode{transition:none!important}}
