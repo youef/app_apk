@@ -415,7 +415,7 @@ public final class TVHomeActivity extends Activity {
         root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
         setContentView(root);
         LinearLayout top=row();top.setPadding(dp(16),dp(6),dp(16),dp(6));
-        top.setBackgroundDrawable(GlassSurface.overlay(0x86EF6A80,dp(0)));
+        top.setBackgroundDrawable(GlassSurface.transparentHeader(0));
         root.addView(top,new LinearLayout.LayoutParams(-1,dp(79)));
         ImageView logo=new ImageView(this);
         int logoId=getResources().getIdentifier("alizz_brand","drawable",getPackageName());
@@ -457,7 +457,7 @@ public final class TVHomeActivity extends Activity {
         top.addView(refresh,space(dp(108),dp(49),2));
         refresh.setOnClickListener(new View.OnClickListener(){public void onClick(View v){loadCatalog();}});
         navBar=row();navBar.setPadding(dp(15),dp(3),dp(15),dp(3));
-        navBar.setBackgroundDrawable(GlassSurface.overlay(0x66F06E86,0));
+        navBar.setBackgroundDrawable(GlassSurface.transparentHeader(0));
         root.addView(navBar,new LinearLayout.LayoutParams(-1,dp(57)));
         scroller=new ScrollView(this);scroller.setFillViewport(true);scroller.setVerticalScrollBarEnabled(false);
         root.addView(scroller,new LinearLayout.LayoutParams(-1,0,1));
@@ -479,6 +479,7 @@ public final class TVHomeActivity extends Activity {
         return "اختر عالمك";
     }
     private void goTo(String target){
+        if("developer".equals(target)){startActivity(new Intent(this,DeveloperActivity.class));return;}
         episodeGeneration++;detailVisible=false;section=target;
         render();if(scroller!=null)scroller.scrollTo(0,0);
     }
@@ -507,7 +508,7 @@ public final class TVHomeActivity extends Activity {
         final LinearLayout tile=column();tile.setPadding(dp(19),dp(13),dp(19),dp(12));
         tile.setFocusable(true);tile.setClickable(true);
         tile.setTag("nav:"+target);
-        tile.setBackgroundDrawable(bg(baseColor,0x74B88B9C,19));
+        tile.setBackgroundDrawable(new CinemaNeonDrawable(baseColor,dp(19),false));
         FrameLayout symbolSpace=new FrameLayout(this);
         tile.addView(symbolSpace,new LinearLayout.LayoutParams(-1,0,1));
         FrameLayout capsule=new FrameLayout(this);
@@ -525,8 +526,7 @@ public final class TVHomeActivity extends Activity {
         tile.addView(caption,space(-1,-2,0));
         tile.setOnFocusChangeListener(new View.OnFocusChangeListener(){
             public void onFocusChange(View v,boolean focused){
-                tile.setBackgroundDrawable(bg(focused?0xFF692039:baseColor,
-                    focused?0xFFFF758A:0x74B88B9C,19));
+                tile.setBackgroundDrawable(new CinemaNeonDrawable(focused?0xFF692039:baseColor,dp(19),focused));
                 capsule.setBackgroundDrawable(bg(focused?0xFFAE2B4A:0xFF4D2233,
                     focused?0xFFFFA0B0:0x8AD85B73,15));
                 tile.setScaleX(focused?1.015f:1f);
@@ -631,7 +631,7 @@ public final class TVHomeActivity extends Activity {
         TextView secondaryTitle=text("المزيد",16,MUTED,true);
         content.addView(secondaryTitle,space(-1,dp(29),7));
         final String[][] small={
-            {"الأطفال","kids"},{"قائمتي","favorites"},{"الإعدادات","settings"},{"بروفايلي","profiles"}
+            {"الأطفال","kids"},{"قائمتي","favorites"},{"الإعدادات","settings"},{"المطور","developer"}
         };
         LinearLayout secondary=row();
         secondary.setFocusable(false);
@@ -642,7 +642,7 @@ public final class TVHomeActivity extends Activity {
             tile.setGravity(Gravity.CENTER);
             tile.setFocusable(true);tile.setClickable(true);
             tile.setTag("nav:"+target);
-            tile.setBackgroundDrawable(bg(0xFF201B28,0x628D6376,16));
+            tile.setBackgroundDrawable(new CinemaNeonDrawable(0xFF201B28,dp(16),false));
             ImageView icon=new ImageView(this);
             icon.setImageDrawable(new CinemaGlyph(target,0xFFFF778A));
             icon.setContentDescription(small[i][0]);
@@ -653,8 +653,7 @@ public final class TVHomeActivity extends Activity {
             final LinearLayout focusTile=tile;
             tile.setOnFocusChangeListener(new View.OnFocusChangeListener(){
                 public void onFocusChange(View v,boolean focused){
-                    focusTile.setBackgroundDrawable(bg(focused?0xFF60233A:0xFF201B28,
-                        focused?0xFFFF8094:0x628D6376,16));
+                    focusTile.setBackgroundDrawable(new CinemaNeonDrawable(focused?0xFF60233A:0xFF201B28,dp(16),focused));
                     focusTile.setScaleX(focused?1.015f:1f);
                     focusTile.setScaleY(focused?1.015f:1f);
                 }
@@ -1156,6 +1155,9 @@ public final class TVHomeActivity extends Activity {
         reload.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
             loadCatalog();refreshLocalPlaylist(true);
         }});
+        Button developer=primaryButton("المطور  •  يوسف الحازمي");
+        content.addView(developer,space(dp(290),dp(58),4));
+        developer.setOnClickListener(new View.OnClickListener(){public void onClick(View v){goTo("developer");}});
         Button youtube=button("▶  مكتبة فيديوهات يوتيوب المعتمدة");
         content.addView(youtube,space(-1,dp(58),6));
         youtube.setOnClickListener(new View.OnClickListener(){public void onClick(View v){goTo("youtube");}});
@@ -1353,13 +1355,13 @@ public final class TVHomeActivity extends Activity {
         line.setPadding(dp(16),dp(8),dp(16),dp(8));
         line.setFocusable(true);line.setClickable(true);
         line.setTag("channel:"+value(channel,"id"));
-        line.setBackgroundDrawable(bg(0xFF172236,0x7B9DB2CD,12));
+        line.setBackgroundDrawable(new CinemaNeonDrawable(0xFF172236,dp(15),false));
         LinearLayout.LayoutParams outer=space(-1,dp(83),4);
         line.setLayoutParams(outer);
         TextView number=text(String.format(Locale.US,"%03d",position+1),20,0xFFF3D293,true);
         number.setGravity(Gravity.CENTER);
         line.addView(number,new LinearLayout.LayoutParams(dp(59),-1));
-        ImageView poster=new ImageView(this);poster.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        CinemaPosterView poster=new CinemaPosterView(this);poster.setScaleType(ImageView.ScaleType.FIT_CENTER);
         poster.setBackgroundDrawable(bg(0xFF1E2634,0,8));
         String image=value(channel,"poster_url");
         if(image.startsWith("https://"))PosterLoader.load(poster,image);
@@ -1375,8 +1377,7 @@ public final class TVHomeActivity extends Activity {
         line.addView(action,new LinearLayout.LayoutParams(dp(91),-1));
         line.setOnFocusChangeListener(new View.OnFocusChangeListener(){
             public void onFocusChange(View v,boolean focused){
-                line.setBackgroundDrawable(bg(focused?0xFF3D4E67:0xFF172236,
-                    focused?0xFFF3D293:0x7B9DB2CD,12));
+                line.setBackgroundDrawable(new CinemaNeonDrawable(focused?0xFF3D4E67:0xFF172236,dp(15),focused));
             }
         });
         line.setOnClickListener(new View.OnClickListener(){public void onClick(View v){play(channel);}});
@@ -1396,15 +1397,16 @@ public final class TVHomeActivity extends Activity {
     private LinearLayout card(final JSONObject item,boolean wide){
         final LinearLayout outer=column();outer.setFocusable(true);outer.setClickable(true);
         outer.setTag("item:"+kind(item)+":"+value(item,"id"));
-        outer.setBackgroundDrawable(bg(0xFF201C25,0xFF342B38,13));
+        outer.setBackgroundDrawable(new CinemaNeonDrawable(0xFF201C25,dp(19),false));
         outer.setPadding(dp(7),dp(7),dp(7),dp(7));
         LinearLayout.LayoutParams p=space(wide?dp(205):-1,dp(241),6);
         if(wide)outer.setLayoutParams(p);
         FrameLayout imageSurface=new FrameLayout(this);
-        imageSurface.setBackgroundDrawable(bg(0xFF412335,0,11));
+        imageSurface.setBackgroundDrawable(new CinemaNeonDrawable(0xFF412335,dp(16),false));
+        imageSurface.setPadding(dp(4),dp(4),dp(4),dp(4));
         imageSurface.setClipChildren(true);
         outer.addView(imageSurface,new LinearLayout.LayoutParams(-1,dp(159)));
-        ImageView image=new ImageView(this);image.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        CinemaPosterView image=new CinemaPosterView(this);image.setScaleType(ImageView.ScaleType.CENTER_CROP);
         image.setBackgroundDrawable(bg(0xFF412335,0,10));
         imageSurface.addView(image,new FrameLayout.LayoutParams(-1,-1));
         String poster=value(item,"poster_url");
@@ -1465,7 +1467,7 @@ public final class TVHomeActivity extends Activity {
         String desc="channel".equals(kind(item))?("official_link".equals(value(item,"playback_mode"))?"↗ موقع رسمي":"● مباشر"):"series".equals(kind(item))?"▤ مسلسل":"youtube".equals(kind(item))?"▶ يوتيوب":"▶ فيلم";
         outer.addView(text(desc,12,0xFFFF8DA6,false));
         outer.setOnFocusChangeListener(new View.OnFocusChangeListener(){public void onFocusChange(View v,boolean focused){
-            outer.setBackgroundDrawable(bg(focused?0xFF79203A:0xFF201C25,focused?0xFFFFB0C6:0xFF342B38,13));
+            outer.setBackgroundDrawable(new CinemaNeonDrawable(focused?0xFF79203A:0xFF201C25,dp(19),focused));
             outer.setScaleX(focused?1.015f:1);outer.setScaleY(focused?1.015f:1);
             if(focused&&"home".equals(section))scheduleFeatured(item);
         }});
@@ -1500,7 +1502,7 @@ public final class TVHomeActivity extends Activity {
         content.removeAllViews();
         heading(label(item),"channel".equals(kind(item))?("official_link".equals(value(item,"playback_mode"))?"↗ مشاهدة في الموقع الرسمي":"● قناة مباشرة"):"فيلم • مشاهدة مباشرة");
         LinearLayout hero=row();content.addView(hero,space(-1,dp(240),7));
-        ImageView poster=new ImageView(this);poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        CinemaPosterView poster=new CinemaPosterView(this);poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
         hero.addView(poster,new LinearLayout.LayoutParams(dp(190),dp(235)));
         String image=value(item,"poster_url");if(image.startsWith("https://"))PosterLoader.load(poster,image);
         LinearLayout info=column();hero.addView(info,new LinearLayout.LayoutParams(0,-1,1));
@@ -1660,9 +1662,8 @@ public final class TVHomeActivity extends Activity {
             card.setPadding(dp(10),dp(7),dp(10),dp(7));
             card.setFocusable(true);card.setClickable(true);
             card.setTag("episode:"+id);
-            card.setBackgroundDrawable(bg(resume?0xFF532039:0xFF241C28,
-                resume?0xFFFF728B:0x665C4B5D,15));
-            ImageView thumb=new ImageView(this);
+            card.setBackgroundDrawable(new CinemaNeonDrawable(resume?0xFF532039:0xFF241C28,dp(17),resume));
+            CinemaPosterView thumb=new CinemaPosterView(this);
             thumb.setScaleType(ImageView.ScaleType.CENTER_CROP);
             thumb.setBackgroundDrawable(bg(0xFF402333,0,9));
             String image=value(ep,"poster_url");
@@ -1688,9 +1689,7 @@ public final class TVHomeActivity extends Activity {
             card.addView(action,new LinearLayout.LayoutParams(dp(30),dp(30)));
             card.setOnFocusChangeListener(new View.OnFocusChangeListener(){
                 public void onFocusChange(View v,boolean focused){
-                    card.setBackgroundDrawable(bg(focused?0xFF75243E:
-                        resume?0xFF532039:0xFF241C28,
-                        focused?0xFFFFA0AE:resume?0xFFFF728B:0x665C4B5D,15));
+                    card.setBackgroundDrawable(new CinemaNeonDrawable(focused?0xFF75243E:resume?0xFF532039:0xFF241C28,dp(17),focused||resume));
                     card.setScaleX(focused?1.018f:1f);card.setScaleY(focused?1.018f:1f);
                 }
             });
