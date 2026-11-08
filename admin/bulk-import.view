@@ -9,6 +9,7 @@
        <a href="/studio/">الاستوديو الذكي</a>
        <a href="/admin/bulk-import.html" aria-current="page">الاستيراد الجماعي</a>
        <a href="/admin/import-studio.html">الاستيراد المتقدم</a>
+       <a href="/admin/catalog-import.html">مزامنة الأفلام والمسلسلات والحلقات</a>
        <a href="/studio/sources">فحص المصادر</a>
      </nav>
 <header class="batch-head"><div><p class="eyebrow">AL EZZ SMART IMPORT</p><h1>جلب مسلسل كامل من رابط واحد</h1><p>اكتشاف المواسم والحلقات · تدقيق التشغيل · إزالة التكرارات · حفظ آمن</p></div><a class="btn btn-ghost" href="./#channels">العودة للقنوات</a></header>
