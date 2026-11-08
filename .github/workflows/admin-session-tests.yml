@@ -1,0 +1,27 @@
+name: Administrator session regression tests
+on:
+  push:
+    branches: [main]
+    paths:
+      - "python-cloud-studio/member_portal.py"
+      - "python-cloud-studio/member_sessions.py"
+      - "python-cloud-studio/test_admin_sessions.py"
+      - ".github/workflows/admin-session-tests.yml"
+  pull_request:
+    paths:
+      - "python-cloud-studio/member_portal.py"
+      - "python-cloud-studio/member_sessions.py"
+      - "python-cloud-studio/test_admin_sessions.py"
+      - ".github/workflows/admin-session-tests.yml"
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Compile modified Python modules
+        run: python -m py_compile python-cloud-studio/member_portal.py python-cloud-studio/member_sessions.py
+      - name: Check administrator session persistence
+        run: python python-cloud-studio/test_admin_sessions.py

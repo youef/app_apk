@@ -20,12 +20,11 @@ from fastapi import Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from starlette.concurrency import run_in_threadpool
 from member_devices import DeviceRegistry, DEVICE_COOKIE, DEVICE_MAX_AGE, friendly_device
-from member_sessions import MemberSessions, CUSTOMER_SESSION_SECONDS
+from member_sessions import (MemberSessions, AdminSessions, CUSTOMER_SESSION_SECONDS, ADMIN_SESSION_SECONDS)
 from member_expiry import (account_state, expiration_from_date, expiry_epoch, expiry_date,
     plan_90_dates, subscription_summary, EXPIRES_KEY, PLAN_KEY, PLAN_DAYS, DEVICE_REVOKED_KEY)
 
 COOKIE = 'alezz_member'
-SESSION_SECONDS = 8 * 3600
 USERNAME = re.compile(r'[a-z0-9][a-z0-9_.-]{2,39}\Z')
 ALIAS_DOMAIN = 'members.alezz.invalid'
 HEADERS = {'Cache-Control':'private, no-store','X-Frame-Options':'DENY',
@@ -43,12 +42,32 @@ class Portal:
         self.db_url = db_url.rstrip('/')
         self.public_key = public_key
         self.secure = secure
-        self.sessions = {}
         self.attempts = {}
         private_dir = os.getenv('ALEZZ_DATA_DIR') or root
         device_secret = os.getenv('ALEZZ_SITE_SECRET') or 'alezz-local-only-device-secret-not-for-hosted-production'
         self.devices = DeviceRegistry(private_dir, device_secret)
         self.member_sessions = MemberSessions(private_dir)
+        self.admin_sessions = AdminSessions(private_dir)
+
+    def admin_active(self, uid):
+        rows = self.upstream('GET', '/rest/v1/aseel_admins', secret=True,
+                             params={'user_id': 'eq.' + uid, 'active': 'eq.true',
+                                     'select': 'user_id', 'limit': 1})
+        return bool(rows)
+
+    def renew_browser_cookie(self, response, token, session, renewed, device_token=''):
+        if not renewed:
+            return response
+        if session[1] == 'admin':
+            ttl = max(1, min(ADMIN_SESSION_SECONDS, int(session[2] - time.monotonic())))
+            response.set_cookie(COOKIE, token, max_age=ttl, path='/', httponly=True,
+                                secure=self.secure, samesite='strict')
+        else:
+            response.set_cookie(COOKIE, token, max_age=CUSTOMER_SESSION_SECONDS, path='/',
+                                httponly=True, secure=self.secure, samesite='lax')
+            response.set_cookie(DEVICE_COOKIE, device_token, max_age=DEVICE_MAX_AGE,
+                                path='/', httponly=True, secure=self.secure, samesite='lax')
+        return response
 
     def upstream(self, method, endpoint, *, secret=False, token='', prefer='', **options):
         key = (os.getenv('ALEZZ_SUPABASE_SECRET_KEY') or os.getenv('ALEZZ_SUPABASE_SERVICE_ROLE_KEY')) if secret else self.public_key
@@ -124,9 +143,6 @@ class Portal:
         return {k:v[0] for k,v in parse_qs(body.decode('utf-8'),max_num_fields=8).items()}
 
     def revoke(self, uid):
-        for key,value in list(self.sessions.items()):
-            if value[0]==uid:
-                self.sessions.pop(key,None)
         self.member_sessions.revoke_user(uid)
 
     def manage(self, form):
@@ -297,12 +313,9 @@ class Portal:
             except (KeyError,requests.RequestException):
                 return self.login_page('تعذّر الاتصال بخادم الحسابات. حاول مجددًا.',mode=mode)
             self.attempts.pop(host,None)
-            self.sessions={k:v for k,v in self.sessions.items() if v[2]>now}
-            if len(self.sessions)>=4096:
-                return HTMLResponse('الخادم مشغول. حاول لاحقًا.',503,headers=HEADERS)
             token=secrets.token_urlsafe(32)
-            self.sessions.pop(request.cookies.get(COOKIE,''),None)
-            self.member_sessions.delete(request.cookies.get(COOKIE,''))
+            await run_in_threadpool(self.member_sessions.delete, request.cookies.get(COOKIE,''))
+            await run_in_threadpool(self.admin_sessions.delete, request.cookies.get(COOKIE,''))
             csrf=secrets.token_urlsafe(24)
             if role=='customer':
                 try:
@@ -310,33 +323,43 @@ class Portal:
                 except OSError:
                     return HTMLResponse('تعذّر حفظ الجلسة بأمان، تحقق من القرص الخاص بالخادم.',503,headers=HEADERS)
             else:
-                self.sessions[token]=(uid,role,now+SESSION_SECONDS,csrf)
+                try:
+                    await run_in_threadpool(self.admin_sessions.create, token, uid, csrf)
+                except (OSError, RuntimeError):
+                    return HTMLResponse('تعذّر حفظ جلسة الإدارة على قرص الخادم.',503,headers=HEADERS)
             response=RedirectResponse('/studio/' if role=='admin' else '/web/',303,headers=HEADERS)
-            response.set_cookie(COOKIE,token,max_age=CUSTOMER_SESSION_SECONDS if role=='customer' else SESSION_SECONDS,httponly=True,secure=self.secure,samesite='lax' if role=='customer' else 'strict')
+            response.set_cookie(COOKIE,token,max_age=CUSTOMER_SESSION_SECONDS if role=='customer' else ADMIN_SESSION_SECONDS,
+                                httponly=True,secure=self.secure,path='/',
+                                samesite='lax' if role=='customer' else 'strict')
             if role == 'customer':
                 response.set_cookie(DEVICE_COOKIE,browser_token,max_age=DEVICE_MAX_AGE,
                                     httponly=True,secure=self.secure,samesite='lax')
             return response
         token=request.cookies.get(COOKIE,'')
-        session=self.sessions.get(token)
+        session=None
         cookie_renewed=False
-        if session is None:
-            persisted=await run_in_threadpool(self.member_sessions.get,token)
-            if persisted:
-                session,cookie_renewed=persisted
+        needs_admin_check=False
+        persisted=await run_in_threadpool(self.member_sessions.get,token)
+        if persisted:
+            session,cookie_renewed=persisted
+        else:
+            admin_persisted=await run_in_threadpool(self.admin_sessions.get,token)
+            if admin_persisted:
+                session,cookie_renewed,needs_admin_check=admin_persisted
         if session and session[1] == 'customer':
             if not await run_in_threadpool(self.devices.matches, session[0], request.cookies.get(DEVICE_COOKIE, '')):
-                self.sessions.pop(token, None)
                 await run_in_threadpool(self.member_sessions.delete,token)
                 session = None
         if path in ('/account/login','/account/admin'):
+            expected_role = 'admin' if path == '/account/admin' else 'customer'
+            if session and session[2] > time.monotonic() and session[1] == expected_role:
+                return RedirectResponse('/studio/' if expected_role == 'admin' else '/web/',303,headers=HEADERS)
             expired_notice=('انتهت صلاحية حسابك وأصبح غير نشط. تواصل مع الإدارة لتجديد الصلاحية.'
                             if path=='/account/login' and request.query_params.get('expired')=='1' else '')
             return self.login_page(expired_notice,mode='admin' if path=='/account/admin' else 'customer')
         section=path.split('/')[1]
         admin_area=section in ('admin','studio','static','api') or path=='/account/customers'
         if not session or session[2]<=time.monotonic():
-            self.sessions.pop(token,None)
             if path=='/account/status':
                 from fastapi.responses import JSONResponse
                 return JSONResponse({'active':False,'detail':'انتهت الجلسة أو صلاحية الحساب.'},status_code=401,headers=HEADERS)
@@ -347,8 +370,8 @@ class Portal:
         if path=='/account/logout' and request.method=='POST':
             if request.headers.get('origin')!=str(request.base_url).rstrip('/'):
                 return Response(status_code=403,headers=HEADERS)
-            self.sessions.pop(token,None)
             await run_in_threadpool(self.member_sessions.delete,token)
+            await run_in_threadpool(self.admin_sessions.delete,token)
             response=RedirectResponse('/',303,headers={**HEADERS,'Clear-Site-Data':'"cache"'})
             response.delete_cookie(COOKIE,secure=self.secure,httponly=True,samesite='strict')
             response.delete_cookie('alezz_studio_session',secure=self.secure,httponly=True,samesite='strict')
@@ -358,11 +381,26 @@ class Portal:
                 from fastapi.responses import JSONResponse
                 return JSONResponse({'detail':'صلاحية المسؤول مطلوبة.'},status_code=403,headers=HEADERS)
             return HTMLResponse('هذه الصفحة مخصصة للإدارة.',403,headers=HEADERS)
+        if admin_area and session[1]=='admin' and needs_admin_check:
+            try:
+                permitted=await run_in_threadpool(self.admin_active,session[0])
+            except (ValueError, requests.RequestException):
+                # A transient Supabase outage must not erase a valid browser session.
+                if section=='api':
+                    from fastapi.responses import JSONResponse
+                    return JSONResponse({'detail':'تعذّر التحقق مؤقتًا من صلاحية الإدارة.'},503,headers=HEADERS)
+                return HTMLResponse('تعذّر التحقق من صلاحية الإدارة مؤقتًا. أعد المحاولة.',503,headers=HEADERS)
+            if not permitted:
+                await run_in_threadpool(self.admin_sessions.delete,token)
+                result=RedirectResponse('/account/admin',303,headers=HEADERS)
+                result.delete_cookie(COOKIE,path='/',secure=self.secure,httponly=True,samesite='strict')
+                return result
+            await run_in_threadpool(self.admin_sessions.mark_verified,token)
         if path=='/account/customers':
             raw_page=request.query_params.get('page','1')
             page_number=min(100,max(1,int(raw_page))) if re.fullmatch(r'[0-9]{1,3}',raw_page) else 1
             if request.method=='GET':
-                return await run_in_threadpool(self.customers_page,session,page=page_number)
+                return self.renew_browser_cookie(await run_in_threadpool(self.customers_page,session,page=page_number),token,session,cookie_renewed,request.cookies.get(DEVICE_COOKIE,''))
             if request.method=='POST':
                 try:
                     form=await self.form(request)
@@ -377,11 +415,11 @@ class Portal:
                                 else 'تم تحديث تاريخ صلاحية الحساب.' if action=='set-expiry'
                                 else 'تم فك ارتباط الجهاز وإبطال الجلسات السابقة.' if action=='reset-device'
                                 else 'تم تحديث حالة الحساب.')
-                    return await run_in_threadpool(self.customers_page,session,result,page_number)
+                    return self.renew_browser_cookie(await run_in_threadpool(self.customers_page,session,result,page_number),token,session,cookie_renewed,request.cookies.get(DEVICE_COOKIE,''))
                 except ValueError as exc:
-                    return await run_in_threadpool(self.customers_page,session,str(exc),page_number)
+                    return self.renew_browser_cookie(await run_in_threadpool(self.customers_page,session,str(exc),page_number),token,session,cookie_renewed,request.cookies.get(DEVICE_COOKIE,''))
                 except requests.RequestException:
-                    return await run_in_threadpool(self.customers_page,session,'تعذّر تنفيذ العملية. تحقق من حالة الحساب وإعدادات Supabase.',page_number)
+                    return self.renew_browser_cookie(await run_in_threadpool(self.customers_page,session,'تعذّر تنفيذ العملية. تحقق من حالة الحساب وإعدادات Supabase.',page_number),token,session,cookie_renewed,request.cookies.get(DEVICE_COOKIE,''))
         if path=='/account/status':
             from fastapi.responses import JSONResponse
             if request.method!='GET' or session[1]!='customer':
@@ -428,7 +466,7 @@ class Portal:
             response=await call_next(request)
             response.headers['Cache-Control']='private, no-store'
             response.headers.setdefault('X-Content-Type-Options','nosniff')
-            return response
+            return self.renew_browser_cookie(response,token,session,cookie_renewed,request.cookies.get(DEVICE_COOKIE,''))
         if request.method not in ('GET','HEAD') or path.startswith('/account/'):
             return Response(status_code=404,headers=HEADERS)
         if path in ('/web','/admin'):
@@ -462,16 +500,6 @@ class Portal:
             # correct account namespace, even after switching logins on one device.
             markup=markup.replace(marker,script+marker) if marker in markup else markup+script
             result=HTMLResponse(markup,headers=headers)
-            if cookie_renewed:
-                result.set_cookie(COOKIE,token,max_age=CUSTOMER_SESSION_SECONDS,
-                                  httponly=True,secure=self.secure,samesite='lax')
-                result.set_cookie(DEVICE_COOKIE,request.cookies.get(DEVICE_COOKIE,''),max_age=DEVICE_MAX_AGE,
-                                  httponly=True,secure=self.secure,samesite='lax')
-            return result
+            return self.renew_browser_cookie(result,token,session,cookie_renewed,request.cookies.get(DEVICE_COOKIE,''))
         result=FileResponse(target,media_type=mime,headers=headers)
-        if cookie_renewed and session[1]=='customer':
-            result.set_cookie(COOKIE,token,max_age=CUSTOMER_SESSION_SECONDS,
-                              httponly=True,secure=self.secure,samesite='lax')
-            result.set_cookie(DEVICE_COOKIE,request.cookies.get(DEVICE_COOKIE,''),max_age=DEVICE_MAX_AGE,
-                              httponly=True,secure=self.secure,samesite='lax')
-        return result
+        return self.renew_browser_cookie(result,token,session,cookie_renewed,request.cookies.get(DEVICE_COOKIE,''))
