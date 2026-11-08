@@ -631,7 +631,7 @@ public final class TVHomeActivity extends Activity {
         TextView secondaryTitle=text("المزيد",16,MUTED,true);
         content.addView(secondaryTitle,space(-1,dp(29),7));
         final String[][] small={
-            {"الأطفال","kids"},{"قائمتي","favorites"},{"الإعدادات","settings"},{"المطور","developer"}
+            {"الأطفال","kids"},{"قائمتي","favorites"},{"الإعدادات","settings"},{"بروفايلي","profiles"},{"المطور","developer"}
         };
         LinearLayout secondary=row();
         secondary.setFocusable(false);
