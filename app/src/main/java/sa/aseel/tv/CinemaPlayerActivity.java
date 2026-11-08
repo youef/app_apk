@@ -353,8 +353,7 @@ public final class CinemaPlayerActivity extends Activity {
                 control.setScaleX(focused?1.055f:1f);
                 control.setScaleY(focused?1.055f:1f);
                 control.invalidate();
-                if(focused)showLiveHud(label);
-                handler.removeCallbacks(autoHide);
+                if(focused){showLiveHud(label);noteChromeInteraction();}
             }
         });
         return control;
@@ -413,8 +412,7 @@ public final class CinemaPlayerActivity extends Activity {
                     focused?0xFF77233E:0xFF292330));
                 v.setScaleX(focused?1.03f:1f);v.setScaleY(focused?1.03f:1f);
                 if(focused&&controlPanel!=null&&controlPanel.getVisibility()==View.VISIBLE){
-                    handler.removeCallbacks(autoHide);
-                    if(engine!=null&&engine.isPlaying())handler.postDelayed(autoHide,HIDE_DELAY);
+                    noteChromeInteraction();
                 }
             }
         });return v;
@@ -1095,11 +1093,11 @@ public final class CinemaPlayerActivity extends Activity {
             status.setText("قائمة التشغيل غير متاحة لهذا العنوان.");showControls(true);return;
         }
         updateMediaRail();
-        handler.removeCallbacks(autoHide);
         if(controlPanel!=null)controlPanel.setVisibility(View.GONE);
         if(rightRail!=null)rightRail.setVisibility(View.GONE);
         if(leftRail!=null)leftRail.setVisibility(View.VISIBLE);
         railVisible=true;
+        noteChromeInteraction();
         focusGuideChannel();
     }
     private void updateMediaRail(){
@@ -1197,11 +1195,11 @@ public final class CinemaPlayerActivity extends Activity {
     private void showChannelGuide(){
         if(tvChannels.isEmpty()){status.setText("دليل القنوات غير متاح.");showControls(true);return;}
         updateChannelRail();
-        handler.removeCallbacks(autoHide);
         if(controlPanel!=null)controlPanel.setVisibility(View.GONE);
         if(rightRail!=null)rightRail.setVisibility(View.GONE);
         if(leftRail!=null)leftRail.setVisibility(View.VISIBLE);
         railVisible=true;
+        noteChromeInteraction();
         focusGuideChannel();
     }
     private void switchChannel(int position){
