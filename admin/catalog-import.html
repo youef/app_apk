@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#090b11">
+<title>العز TV | استيراد كتالوج مرخّص</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,"Tajawal",sans-serif;background:#090b11;color:#f7f8fc}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 85% 0,rgba(180,30,47,.17),transparent 45%),#090b11}
+a{color:#e7b8bc;text-decoration:none}
+.page{width:min(980px,100%);margin:auto;padding:max(18px,env(safe-area-inset-top)) 16px max(32px,env(safe-area-inset-bottom))}
+header{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0 24px}
+.logo{display:flex;align-items:center;gap:12px;font-size:16px;font-weight:800}
+.logo span{display:grid;place-items:center;background:linear-gradient(140deg,#a52a3e,#3f101c);border:1px solid #c84d63;border-radius:14px;width:50px;height:50px}
+.back{border:1px solid #49404a;padding:10px 13px;border-radius:12px;font-size:13px}
+.eyebrow{font-size:12px;letter-spacing:2px;color:#e68d9c;font-weight:800}
+h1{font-size:clamp(26px,5vw,38px);margin:6px 0}
+.intro{color:#b7bac6;line-height:1.9;max-width:750px}
+.panel{margin-top:18px;border:1px solid #31333d;background:linear-gradient(130deg,#181b24,#10131b);padding:22px;border-radius:21px}
+.step{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.num{display:grid;place-items:center;flex:0 0 30px;width:30px;height:30px;background:#641d2d;border:1px solid #b34058;border-radius:10px;font-weight:800}
+h2{font-size:18px;margin:0}
+label{display:block;font-size:14px;font-weight:650;margin:12px 0}
+input[type=file]{width:100%;margin-top:10px;padding:18px;border:1px dashed #7b5560;background:#15121a;color:#fff;border-radius:13px}
+label.check{display:flex;align-items:flex-start;gap:10px;line-height:1.8;color:#e0e1e5;font-weight:500}
+input[type=checkbox]{width:19px;height:19px;accent-color:#bb4157;flex:0 0 auto;margin:4px 0 0}
+.note{font-size:13px;line-height:1.85;color:#b6b9c5}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+button{border:1px solid #484851;background:#262934;color:#fff;padding:12px 17px;border-radius:12px;font-size:14px;font-weight:750;min-height:44px;cursor:pointer}
+button.primary{background:linear-gradient(120deg,#a32e44,#711d31);border-color:#c44960}
+button:disabled{opacity:.43;cursor:not-allowed}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.stat{border:1px solid #393942;border-radius:13px;background:#11131a;padding:14px 10px;text-align:center}
+.stat strong{display:block;font-size:25px;font-variant-numeric:tabular-nums}
+.stat small{color:#a7aab7}
+#preview{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:14px}
+.item{min-width:0;border:1px solid #333741;border-radius:12px;padding:12px;line-height:1.75;background:#10131a}
+.item b{display:block;overflow-wrap:anywhere}
+.item small{color:#b5b8c4}
+#message{white-space:pre-wrap;line-height:1.8;border-radius:12px;padding:13px 15px;background:#22232b;border:1px solid #353943;color:#f2f2f2}
+#message[data-tone=error]{border-color:#a6414f;color:#ffd7d9}
+#message[data-tone=success]{border-color:#326955;color:#b8e8ce}
+progress{width:100%;height:12px;accent-color:#ca4d62;display:block;margin:18px 0 8px}
+#activity{white-space:pre-line;color:#d4d6de;font-size:13px;line-height:2}
+footer{margin-top:22px;color:#858997;font-size:12px;line-height:1.8;text-align:center}
+@media(max-width:580px){.panel{padding:16px}.stats{gap:6px}.stat strong{font-size:21px}#preview{grid-template-columns:1fr}button{flex-grow:1}}
+</style>
+</head>
+<body>
+<main class="page">
+<header><div class="logo"><span>عز</span><div>AL EZZ TV<br><small style="color:#b7b8c7">CATALOG IMPORT</small></div></div><a class="back" href="./">عودة للإدارة</a></header>
+<div class="eyebrow">LICENSED CATALOGS ONLY</div>
+<h1>استيراد مكتبة مسلسلات دفعة واحدة</h1>
+<p class="intro">أضف عشرات أو مئات المسلسلات مع المواسم والحلقات من ملف JSON مرخّص من صاحب المحتوى. يعاين النظام البيانات أولًا ويمنع التكرار ويُبقي الأعمال الجديدة مسودات حتى مراجعة حقوق العرض والتشغيل.</p>
+<section class="panel">
+  <div class="step"><span class="num">1</span><h2>اختيار الملف</h2></div>
+  <label for="catalogFile">ملف كتالوج JSON مصرح باستخدامه</label>
+  <input id="catalogFile" type="file" accept=".json,application/json" aria-describedby="fileHelp">
+  <p id="fileHelp" class="note">لا تستخرج الأداة روابط الفيديو من المواقع الخارجية. أدخل في الملف روابط المصادر المرخصة فقط، أو اترك روابط الحلقات فارغة لإضافة بياناتها كمسودات.</p>
+  <div class="actions"><button type="button" id="sample">تنزيل نموذج JSON</button><button class="primary" type="button" id="previewButton">فحص الملف ومعاينته</button></div>
+</section>
+<section class="panel">
+  <div class="step"><span class="num">2</span><h2>معاينة المحتوى</h2></div>
+  <div class="stats">
+    <div class="stat"><strong id="seriesCount">0</strong><small>مسلسل</small></div>
+    <div class="stat"><strong id="seasonCount">0</strong><small>موسم</small></div>
+    <div class="stat"><strong id="episodeCount">0</strong><small>حلقة</small></div>
+  </div>
+  <div id="preview" aria-live="polite"></div>
+</section>
+<section class="panel">
+  <div class="step"><span class="num">3</span><h2>الحفظ الآمن</h2></div>
+  <p class="note">يعمل الاستيراد باستخدام جلسة المسؤول وصلاحيات Supabase. لن يعدل الأعمال والحلقات الموجودة، ولن يمنح ترخيصًا أو ينشر فيديو تلقائيًا.</p>
+  <label class="check"><input type="checkbox" id="rights"><span>أؤكد أن الملف وارد من مالك المحتوى أو مزود مرخّص، وأن لدي إذنًا باستخدام بياناته وروابطه في العز TV.</span></label>
+  <div class="actions"><button class="primary" type="button" id="start" disabled>استيراد كمسودات</button><button type="button" id="stop" disabled>إيقاف بعد الطلب الحالي</button><button type="button" id="report" disabled>تنزيل تقرير النتائج</button></div>
+  <progress id="progress" max="100" value="0" aria-label="تقدم الاستيراد"></progress>
+  <div id="activity"></div>
+</section>
+<p id="message" role="status" aria-live="polite">جارٍ التحقق من جلسة الإدارة...</p>
+<footer>العز TV — لا تتضمن هذه الأداة زحفًا للمواقع أو تجاوزًا للحماية أو اعتمادًا تلقائيًا لحقوق البث.</footer>
+</main>
+<script src="config.js"></script>
+<script src="catalog-import.js"></script>
+</body>
+</html>
