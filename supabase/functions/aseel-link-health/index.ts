@@ -252,6 +252,98 @@ Deno.serve(async(req:Request)=>{
   const admin=!github && await verifyAdmin(authorization);
   if(!github&&!admin)return reply({error:"غير مصرح: يتطلب تشغيل GitHub الموثق أو تسجيل مسؤول"},403);
   const body=await req.json().catch(()=>({}));
+  // Authenticated GitHub Actions may read live-channel inventory for exact-ID
+  // matching. This never exposes the catalogue or write operations publicly.
+  if(body.mode==="channel_inventory"){
+    try{
+      const channels=await restAll("aseel_channels",
+        "select=id,title_ar,description,status,stream_url,stream_variants,official_url,youtube_url,playback_mode,link_health_status,link_health_failures,link_health_url");
+      return reply({channels,count:channels.length});
+    }catch(e){return reply({error:"Live inventory error: "+String(e).slice(0,150)},500);}
+  }
+  // Replace only an already verified stream of the SAME channel, or remove a
+  // channel after repeated definitive broken results and a fresh full audit.
+  // A timeout, HTTP 403, regional block or rate limit is NEVER proof of death.
+  if(body.mode==="channel_repair"){
+    const raw=Array.isArray(body.actions)?body.actions:[];
+    if(!raw.length||raw.length>12)return reply({error:"1..12 channel actions required"},400);
+    const changes:Record<string,unknown>[]=[];
+    const errors:string[]=[];
+    let renewed=0,deleted=0,unchanged=0;
+    const seen=new Set<string>();
+    for(const entry of raw){
+      const id=String(entry?.id||"");
+      if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)||seen.has(id)){
+        errors.push("Invalid or repeated ID");continue;
+      }
+      seen.add(id);
+      try{
+        const rows=await rest("aseel_channels",
+          "select=id,title_ar,description,status,stream_url,stream_variants,official_url,youtube_url,playback_mode,link_health_status,link_health_failures,link_health_url&id=eq."+encodeURIComponent(id)+"&limit=1");
+        if(!Array.isArray(rows)||!rows.length){unchanged++;continue;}
+        const row=rows[0] as Row;
+        if(row.playback_mode==="official_link"||row.official_url||row.youtube_url){
+          unchanged++;continue;
+        }
+        const before=String(row.stream_url||"");
+        const newUrl=String(entry?.new_url||"");
+        if(newUrl){
+          const candidate=safeUrl(newUrl);
+          if(!candidate){errors.push(id+": URL rejected");continue;}
+          const variants=Array.isArray(row.stream_variants)?row.stream_variants:[];
+          const wasSaved=variants.some((v:any)=>v?.url===newUrl);
+          if(!wasSaved){
+            const match=String(row.description||"").match(/IPTV(?:-org)?(?: source)? ID:\s*([A-Za-z0-9_.+-]+(?:@[A-Za-z0-9_.+-]+)?)/i);
+            const expected=match?.[1]?.split("@")[0]||"";
+            if(!expected||String(entry?.iptv_id||"")!==expected){
+              errors.push(id+": IPTV source identity mismatch");continue;
+            }
+          }
+          const checked=await probe(newUrl,"stream");
+          if(checked.kind!=="healthy"){
+            unchanged++;continue;
+          }
+          const latest=await rest("aseel_channels","select=stream_url&id=eq."+encodeURIComponent(id)+"&limit=1");
+          if(!Array.isArray(latest)||latest[0]?.stream_url!==row.stream_url){
+            errors.push(id+": source changed during verification");continue;
+          }
+          if(newUrl!==before){
+            await rest("aseel_channels","id=eq."+encodeURIComponent(id),{
+              method:"PATCH",body:JSON.stringify({stream_url:newUrl,link_health_status:"healthy",
+                link_health_reason:"Verified replacement from exact IPTV broadcaster identity",
+                link_health_failures:0,link_health_checked_at:new Date().toISOString(),
+                link_health_url:JSON.stringify([{url:newUrl,mode:"stream",label:"الرابط الأساسي",role:"primary"}])})
+            });
+            renewed++;changes.push({id,name:row.title_ar,action:"renewed"});
+          }else{unchanged++;}
+          continue;
+        }
+        if(entry?.alternatives_checked!==true){unchanged++;continue;}
+        const sources=mediaList(row,true);
+        if(sources.some(s=>s.mode!=="stream")){unchanged++;continue;}
+        if(!sources.length){
+          await rest("aseel_channels","id=eq."+encodeURIComponent(id),{method:"DELETE"});
+          deleted++;changes.push({id,name:row.title_ar,action:"deleted",reason:"No media sources"});continue;
+        }
+        // For permanent deletion all existing sources must be definitively
+        // 404/410 or invalid HTML; the saved 3-strike result must still match.
+        if(row.link_health_status!=="broken"||Number(row.link_health_failures||0)<3 ||
+          row.link_health_url!==JSON.stringify(sources)){unchanged++;continue;}
+        const checks=await Promise.all(sources.map(s=>probe(s.url,"stream")));
+        if(!checks.every(p=>p.kind==="definite")){unchanged++;continue;}
+        const latest=await rest("aseel_channels",
+          "select=stream_url,link_health_status,link_health_failures,link_health_url&id=eq."+encodeURIComponent(id)+"&limit=1");
+        if(!Array.isArray(latest)||!latest.length||
+          latest[0].stream_url!==row.stream_url||latest[0].link_health_status!=="broken"||
+          Number(latest[0].link_health_failures||0)<3||
+          latest[0].link_health_url!==row.link_health_url){unchanged++;continue;}
+        await rest("aseel_channels","id=eq."+encodeURIComponent(id),{method:"DELETE"});
+        deleted++;changes.push({id,name:row.title_ar,action:"deleted",reason:"Three-strike confirmed dead sources"});
+      }catch(e){errors.push(id+": "+String(e).slice(0,120));}
+    }
+    return reply({mode:"channel_repair",renewed,deleted,unchanged,changes,errors},
+      errors.length?207:200);
+  }
   // On-demand administrator-only checks for the exact saved episodes selected in Studio.
   // No automatic deletion; results are recorded using the existing 3-strike health policy.
   if(body.mode==="episodes"){
