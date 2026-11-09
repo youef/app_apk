@@ -45,7 +45,8 @@ public final class CatalogApi {
                 boolean approvedLink="official_link".equals(mode)
                     && "approved".equals(item.optString("rights_status",""))
                     && (external.startsWith("https://www.qanwatlive.com/")
-                        || external.startsWith("https://qanwatlive.com/"));
+                        || external.startsWith("https://qanwatlive.com/")
+                        || external.startsWith("https://roya.tv/"));
                 if(approvedLink){
                     // Catalogue-only external navigation; never send web pages to video players.
                 }else{
