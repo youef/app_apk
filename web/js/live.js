@@ -144,7 +144,7 @@
       var type=channelGenre(channel);
       counts[type]=(counts[type]||0)+1;
     });
-    genreOrder.forEach(function(type){if(counts[type])result.push({name:type,count:counts[type]});});
+    genreOrder.forEach(function(type){result.push({name:type,count:counts[type]||0});});
     return result;
   }
   function companyStats(channels){
@@ -167,7 +167,8 @@
   function renderTypes() {
     var tabs=$("liveTypeTabs");
     if(!tabs)return;
-    var stats=categoryStats(state.channels);
+    var companyChannels=state.company==="الكل"?state.channels:state.channels.filter(function(c){return channelCompany(c)===state.company;});
+    var stats=categoryStats(companyChannels);
     if(!stats.some(function(x){return x.name===state.type;}))state.type="الكل";
     tabs.innerHTML=stats.map(function(type){
       return '<button type="button" class="live-type-tab'+(state.type===type.name?' is-on':'')+
@@ -208,9 +209,9 @@
   function updateGuide() {
     var list = $("liveGuideItems"), count = $("liveFilteredCount");
     if (!list) return;
-    state.shown = sortedChannels();
-    renderTypes();
     renderCompanies();
+    renderTypes();
+    state.shown = sortedChannels();
     list.innerHTML = state.shown.length ? state.shown.map(row).join("") :
       '<p class="live-guide__empty">لم نعثر على قنوات تطابق البحث. غيّر التصنيف أو جرّب اسمًا آخر.</p>';
     if (count) count.textContent = state.shown.length + " قناة • " + (state.company==="الكل"?"جميع الشركات":state.company) + " • " + state.type;
