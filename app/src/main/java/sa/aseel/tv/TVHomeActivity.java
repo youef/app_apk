@@ -1841,7 +1841,8 @@ public final class TVHomeActivity extends Activity {
         if("channel".equals(kind(item)) && "official_link".equals(value(item,"playback_mode"))){
             String external=value(item,"official_url");
             if(!(external.startsWith("https://www.qanwatlive.com/")
-                || external.startsWith("https://qanwatlive.com/"))){
+                || external.startsWith("https://qanwatlive.com/")
+                || external.startsWith("https://roya.tv/"))){
                 heading("صفحة المصدر غير متاحة","هذه القناة لا تملك رابط صفحة مشاهدة خارجيًا صالحًا.");
                 return;
             }
