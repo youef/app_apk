@@ -74,7 +74,7 @@
    return url && /\.(?:mp4|m3u8)(?:[?#]|$)/i.test(url) ? url : "";
  }
  function officialNavigation(item,type) {
-   return type === "channel" && item && item.status==="published" && item.rights_status==="pending" &&
+   return type === "channel" && item && item.status==="published" && (item.rights_status==="pending"||item.rights_status==="approved") &&
      item.playback_mode==="official_link" && !item.stream_url && !item.youtube_url &&
      /^https:\/\//i.test(safeUrl(item.official_url));
  }
@@ -223,7 +223,7 @@
      frame.append(img);
    }
    const badge=el("span","poster-badge"+(type==="channel"?" live":""),
-      youtubeId(item.youtube_url)?"▶ YouTube":officialNavigation(item,type)?"↗ موقع رسمي":type==="channel"?"● مباشر":item.quality||(type==="series"?"مسلسل":"فيلم"));
+      youtubeId(item.youtube_url)?"▶ YouTube":officialNavigation(item,type)?"↗ مشاهدة خارجية":type==="channel"?"● مباشر":item.quality||(type==="series"?"مسلسل":"فيلم"));
    frame.append(badge,el("span","poster-play","▶"));
    return frame;
  }
@@ -252,7 +252,7 @@
    const meta = el("div","media-meta");
    meta.append(el("span","",item.release_year||itemCategory(item)||labels[type]));
    meta.append(el("span","meta-dot"));
-   meta.append(el("span","",officialNavigation(item,type)?"رابط رسمي":type==="channel"?"بث مباشر":(item.quality||"شاهد الآن")));
+   meta.append(el("span","",officialNavigation(item,type)?"صفحة مشاهدة خارجية":type==="channel"?"بث مباشر":(item.quality||"شاهد الآن")));
    card.append(meta);
    card.addEventListener("click",() => details(item,type));
    card.addEventListener("keydown",e => {
@@ -558,7 +558,7 @@
    const buttons=el("div","detail-buttons");
    if (type!=="series") {
      const isOfficial=officialNavigation(item,type);
-     buttons.append(detailButton(isOfficial?"↗  فتح موقع القناة الرسمي":type==="channel"?"◉  شاهد الآن":"▶  تشغيل الآن","btn-primary",()=>{
+     buttons.append(detailButton(isOfficial?"↗  فتح صفحة المشاهدة الخارجية":type==="channel"?"◉  شاهد الآن":"▶  تشغيل الآن","btn-primary",()=>{
        if(isOfficial) window.open(safeUrl(item.official_url),"_blank","noopener,noreferrer");
        else startPlayer(item,type);
      }));
