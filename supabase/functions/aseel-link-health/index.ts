@@ -313,7 +313,7 @@ Deno.serve(async(req:Request)=>{
   // remain separate explicit requirements.
   if(body.mode==="imported"){
     const before=typeof body.before==="string"?body.before:"";
-    if(before && (!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$/.test(before)||isNaN(Date.parse(before))))
+    if(before && (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(before)||isNaN(Date.parse(before))))
       return reply({error:"Invalid before timestamp"},400);
     const limit=Math.max(1,Math.min(24,Number(body.per_table)||24));
     const timeFilter=before?"&or=(link_health_checked_at.is.null,link_health_checked_at.lt."+encodeURIComponent(before)+")":"";
