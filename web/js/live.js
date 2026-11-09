@@ -247,16 +247,20 @@
     desc.textContent = channelGenre(channel) + " • " + channelKind(channel);
     art.innerHTML = poster(channel);
     art.hidden = false;
-    // All channels are played inside Al Ezz TV. Do not offer browser exits.
+    // Third-party page entries remain navigation links, not fake HLS streams.
     var external = $("liveOfficial");
-    if (external) { external.hidden = true; external.removeAttribute("href"); }
-    $("liveStart").textContent = "تشغيل الآن";
+    if (external) {
+      external.hidden = !isOfficial(channel);
+      if (isOfficial(channel)) { external.href = https(channel.official); external.textContent = "↗ فتح صفحة المشاهدة الخارجية"; }
+      else external.removeAttribute("href");
+    }
+    $("liveStart").textContent = isOfficial(channel) ? "↗ فتح صفحة المشاهدة" : "تشغيل الآن";
     var direct = !isOfficial(channel);
     $("liveRetry").disabled = !direct;
     $("liveMute").disabled = !direct;
     $("liveGoLive").disabled = !direct;
     var badges = $("liveFormat");
-    badges.textContent = isOfficial(channel) ? "رابط رسمي" :
+    badges.textContent = isOfficial(channel) ? "صفحة خارجية" :
       channel.playback === "youtube_embed" ? "YouTube" : mediaType(channel.stream).toUpperCase() || "غير معروف";
   }
 
@@ -465,7 +469,7 @@
     $("livePoster").hidden = false;
     stateText("جارٍ الاتصال بمصدر القناة…", false);
     var url = https(channel.stream), type = mediaType(url);
-    if (!url || !type) { error("لا يوجد رابط فيديو مباشر صالح لهذه القناة. افتح المصدر الرسمي إن توفر."); return; }
+    if (!url || !type) { error("لا يوجد رابط فيديو مباشر صالح لهذه القناة. افتح صفحة المصدر الخارجي إن توفر."); return; }
     if (window.AlezzCast) window.AlezzCast.bind("live",video,{
       stream:url,title:channel.title,subtitle:"بث مباشر • العز TV",poster:channel.poster,live:true,kids:channel.kids,
       youtubeId:channel.youtubeId
@@ -536,7 +540,7 @@
     markGuideSelection();
     if (Store && Store.setPref) Store.setPref("lastLiveChannel", channel.key);
     if (isOfficial(channel)) {
-      stateText("هذه القناة تُشاهد عبر موقع الناشر. لا يمكن تشغيل صفحة ويب كرابط فيديو.", false);
+      stateText("هذه القناة تفتح صفحة مشاهدة خارجية. لم يتم التحقق من وجود رابط بث مباشر داخل العز TV.", false);
       if (autoplay) window.open(https(channel.official), "_blank", "noopener,noreferrer");
       return;
     }
@@ -700,6 +704,10 @@
     });
     $("liveStart").addEventListener("click", function () {
       if (!state.current) return;
+      if (isOfficial(state.current)) {
+        window.open(https(state.current.official), "_blank", "noopener,noreferrer");
+        return;
+      }
       // Resume the already-loaded media synchronously inside the user's click.
       // Restarting async HLS setup here would lose the gesture again.
       var video = $("liveVideo");
@@ -915,7 +923,7 @@
       '<button id="liveAirPlay" type="button" class="live-control live-icon-action cast-airplay" title="اختيار شاشة AirPlay" aria-label="اختيار شاشة AirPlay" hidden>AirPlay</button>' +
       '<span id="liveCastStatus" class="cast-status" role="status" aria-live="polite" hidden></span>' +
       '<button id="liveFullscreen" type="button" class="live-control live-icon-action" title="ملء الشاشة" aria-label="ملء الشاشة">' + icon("expand") + '</button></div>' +
-      '<a id="liveOfficial" class="live-official" target="_blank" rel="noopener noreferrer" hidden>' + icon("external") + ' فتح المصدر الرسمي</a>' +
+      '<a id="liveOfficial" class="live-official" target="_blank" rel="noopener noreferrer" hidden>' + icon("external") + ' فتح صفحة المصدر الخارجي</a>' +
       '<p class="live-help">البث متاح وفق المصدر وبلد المشاهدة. قد يرفض بعض الناشرين تشغيله داخل المتصفح (CORS)، كما أن iPhone وiPad يتحكمان تلقائيًا في جودات HLS الأصلية.</p>' +
       '</div><aside class="live-guide" aria-label="دليل القنوات">' +
       '<div class="live-guide__head"><div><span class="live-eyebrow">TV GUIDE</span><h2>دليل القنوات</h2></div>' +
