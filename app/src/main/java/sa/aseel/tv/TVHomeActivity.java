@@ -108,7 +108,7 @@ public final class TVHomeActivity extends Activity {
     private String lastLoadError="";
     private boolean loading=false,unlocked=false;
     private static final long CATALOG_REFRESH_INTERVAL_MS=2L*60L*1000L;
-    private String browseKind="movie",browseMode="all",browseKey="",browseTitle="عرض الكل";
+    private String browseKind="movie",browseMode="all",browseKey="",browseTitle="عرض الكل",browseOrigin="home";
     private int cardGridLimit=72;
     private final Runnable libraryHeartbeat=new Runnable(){public void run(){
         if(!unlocked||isFinishing())return;
@@ -582,7 +582,7 @@ public final class TVHomeActivity extends Activity {
     }
     private void goTo(String target){
         if("developer".equals(target)){startActivity(new Intent(this,DeveloperActivity.class));return;}
-        episodeGeneration++;detailVisible=false;section=target;
+        episodeGeneration++;detailVisible=false;section=target;cardGridLimit=72;
         render();if(scroller!=null)scroller.scrollTo(0,0);
     }
     private void updateNav(){
@@ -1353,7 +1353,7 @@ public final class TVHomeActivity extends Activity {
         content.addView(headingRow,space(-1,dp(62),4));
         content.addView(text(note,12,MUTED,false),space(-1,-2,3));
         all.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-            browseTitle=name; browseKind=itemKind; browseMode=filter;
+            browseOrigin=section; browseTitle=name; browseKind=itemKind; browseMode=filter;
             browseKey=filterKey;cardGridLimit=72;section="browse";render();
             if(scroller!=null)scroller.scrollTo(0,0);
         }});
@@ -2169,6 +2169,9 @@ public final class TVHomeActivity extends Activity {
         }
         if(code==KeyEvent.KEYCODE_BACK && detailVisible){
             detailVisible=false;episodeGeneration++;render();return true;
+        }
+        if(code==KeyEvent.KEYCODE_BACK && "browse".equals(section)){
+            goTo(browseOrigin);return true;
         }
         if(code==KeyEvent.KEYCODE_BACK && !"home".equals(section)){
             goTo("home");return true;
