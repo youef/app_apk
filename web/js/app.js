@@ -444,7 +444,18 @@
     var list = catalog.series;
     var shown = list.filter(function(x) { return itemMatches(x, filterCat); });
     var resume = shown.filter(function(s) { return !!seriesResume(s); }).slice(0, 12);
+    // Licensed distribution is not implied by a public catalogue entry.
+    // This feature links to the rights holder's official viewing page rather than
+    // bypassing the Supabase rights gate or rebroadcasting the videos.
+    var royaOfficial = !filterCat ?
+      '<section aria-label="مسلسل حارتنا ضيقة على رؤيا" style="margin:16px 0 24px;padding:22px;border:1px solid rgba(226,64,83,.35);border-radius:20px;background:linear-gradient(120deg,rgba(96,14,30,.32),rgba(18,19,28,.98));display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap">' +
+      '<div><p style="margin:0 0 6px;font-size:12px;color:#f4a8b2">منصة رؤيا الرسمية · مسلسل أردني كوميدي</p>' +
+      '<h2 style="margin:0 0 5px;font-size:23px;color:#fff">حارتنا ضيقة</h2>' +
+      '<p style="margin:0;color:#d7c9ce;font-size:14px">الموسم الأول · 15 حلقة · مشاهدة من المصدر الرسمي</p></div>' +
+      '<a href="https://roya.tv/program/1703/episodes" target="_blank" rel="noopener noreferrer" class="btn btn--gold" aria-label="فتح حلقات حارتنا ضيقة على منصة رؤيا الرسمية">مشاهدة الحلقات على رؤيا ↗</a>' +
+      '</section>' : "";
     return pageHead("المسلسلات", "", shown.length) +
+      royaOfficial +
       (resume.length && !filterCat ? railHTML("أكمل مسلسلاتك", resume) : "") +
       classifiedFilterBar(list, filterCat, "series") +
       (shown.length ? gridHTML(shown) : emptyHTML("لا توجد مسلسلات في هذا القسم."));
