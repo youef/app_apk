@@ -1,0 +1,57 @@
+name: Al Ezz TV — Refresh And Clean Live Channels
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/maintain_live_channels.py'
+      - '.github/workflows/live-channel-maintenance.yml'
+  schedule:
+    - cron: '41 */6 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: al-ezz-tv-live-channel-maintenance
+  cancel-in-progress: false
+
+jobs:
+  refresh-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SUPABASE_URL: https://qyzmlwtvzzgooccqxglq.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || secrets.ALEZZ_SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check Python syntax
+        run: python -m py_compile scripts/arabic_iptv_import.py scripts/maintain_live_channels.py
+      - name: Require database write permission
+        shell: bash
+        run: |
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::Missing service role key; live streams could not be updated."
+            exit 1
+          fi
+      - name: Probe current streams and verified same-channel alternatives
+        run: python scripts/maintain_live_channels.py
+      - name: Save report including removed channel IDs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: al-ezz-live-channel-maintenance
+          path: live-channel-maintenance-report.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Report result
+        if: always()
+        shell: bash
+        run: |
+          if [ -f live-channel-maintenance-report.json ]; then
+            echo "### Live channel refresh and cleanup" >> "$GITHUB_STEP_SUMMARY"
+            python -c 'import json; d=json.load(open("live-channel-maintenance-report.json")); print("Scanned:", d["total"], "Healthy:", d["healthy"], "Renewed:", d["renewed"], "Deleted:", d["deleted"], "Uncertain:", d["suspect"], "Errors:", len(d["errors"]))' | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
