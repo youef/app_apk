@@ -38,7 +38,7 @@ public final class AppUpdater {
     private static final String TAG="AlezzUpdater";
     private static final String FEED="https://raw.githubusercontent.com/youef/app_apk/main/data/android-update.json";
     private static final String PACKAGE="sa.alezz.tv";
-    private static final long CHECK_EVERY_MS=6L*60L*60L*1000L;
+    private static final long CHECK_EVERY_MS=30L*60L*1000L;
     private static final String FILENAME="al-ezz-tv-stable-update.apk";
     private final Activity activity;
     private final SharedPreferences preferences;
@@ -128,15 +128,18 @@ public final class AppUpdater {
                     if(manual)say("لم يصدر تحديث ثابت جديد بعد. سيظهر هنا بعد اكتمال بناء النسخة وتوقيعها.");
                 }else if(release.optInt("version_code",0)>installedVersionCode()){
                     selected=release;
-                    showAvailable();
+                    showAvailable(manual);
                 }else if(manual){
                     say("نسختك محدّثة بالفعل: "+installedVersionName());
                 }
             }});
         }});
     }
-    private void showAvailable(){
+    private void showAvailable(boolean manual){
         if(activity.isFinishing() || selected==null || downloading)return;
+        final int versionCode=selected.optInt("version_code",0);
+        if(!manual && preferences.getInt("snoozed_version",-1)==versionCode &&
+            System.currentTimeMillis()<preferences.getLong("snoozed_until",0L))return;
         final String version=selected.optString("version_name","جديد");
         new AlertDialog.Builder(activity)
             .setTitle("تحديث جديد للعز TV")
@@ -144,7 +147,12 @@ public final class AppUpdater {
             .setPositiveButton("تنزيل وتحديث",new android.content.DialogInterface.OnClickListener(){
                 public void onClick(android.content.DialogInterface d,int w){beginDownload();}
             })
-            .setNegativeButton("لاحقًا",null).show();
+            .setNegativeButton("لاحقًا",new android.content.DialogInterface.OnClickListener(){
+                public void onClick(android.content.DialogInterface d,int w){
+                    preferences.edit().putInt("snoozed_version",versionCode)
+                        .putLong("snoozed_until",System.currentTimeMillis()+6L*60L*60L*1000L).apply();
+                }
+            }).show();
     }
     private File outputFile(){
         File dir=activity.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
