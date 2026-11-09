@@ -1,0 +1,30 @@
+name: Arabic HLS source diagnostics — manifest only
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/audit-arabic-hls.mjs'
+      - '.github/workflows/arabic-hls-probe.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check eight streams without rebroadcasting or claiming rights
+        run: node scripts/audit-arabic-hls.mjs
+      - name: Archive diagnostic report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arabic-hls-diagnostics
+          path: |
+            arabic-hls-audit.json
+            arabic-hls-audit.md
+          if-no-files-found: warn
