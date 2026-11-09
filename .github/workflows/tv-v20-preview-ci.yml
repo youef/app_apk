@@ -9,6 +9,10 @@ on:
       - 'app/src/main/AndroidManifest.xml'
       - 'app/build.gradle'
       - 'tests/tv-dynamic-update-smoke.cjs'
+      - 'app/src/main/java/sa/aseel/tv/**'
+      - 'app/src/main/AndroidManifest.xml'
+      - 'app/build.gradle'
+      - 'tests/tv-dynamic-update-smoke.cjs'
   workflow_dispatch:
 
 permissions:
