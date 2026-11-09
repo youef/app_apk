@@ -14,7 +14,8 @@ on:
   schedule:
     - cron: '19 4 * * 1'
 permissions:
-  contents: read
+  contents: write
+  actions: read
 concurrency:
   group: al-ezz-qanwatlive-discovery
   cancel-in-progress: false
@@ -41,6 +42,51 @@ jobs:
           path: qanwatlive-catalog-report.json
           if-no-files-found: warn
           retention-days: 14
+      - name: Retrieve first verified metadata report (temporary baseline)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download 42669801053 -n qanwatlive-catalog-report -D .baseline || true
+      - name: Preserve previously discovered channel metadata
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,os
+          current='qanwatlive-catalog-report.json'
+          if not os.path.isfile(current): raise SystemExit('No report to preserve')
+          new=json.load(open(current))
+          previous='data/qanwatlive-catalog-report.json'
+          if not os.path.isfile(previous): previous='.baseline/qanwatlive-catalog-report.json'
+          prior=json.load(open(previous)) if os.path.isfile(previous) else {'channels':[]}
+          merged={r.get('url'):r for r in prior.get('channels',[]) if r.get('url')}
+          for row in new.get('channels',[]):
+              url=row.get('url')
+              if url and (url not in merged or not (row.get('error') and not merged[url].get('error'))): merged[url]=row
+          channels=list(merged.values())
+          new['channels']=channels
+          new['discovered']=max(new.get('discovered',0),len(channels))
+          new['inspected']=len(channels)
+          new['with_image']=sum(bool(r.get('poster')) for r in channels)
+          new['with_embed']=sum(bool(r.get('embedded_players')) for r in channels)
+          new['hls_verified']=sum(bool(r.get('verified_hls')) for r in channels)
+          new['verified_metadata']=sum('error' not in r for r in channels)
+          new['notes']='Unreachable pages may retain earlier metadata; individual stream verification is separate.'
+          with open(current,'w',encoding='utf-8') as f: json.dump(new,f,ensure_ascii=False,indent=2)
+          print('Merged channel pages:',len(channels),'with metadata:',new['verified_metadata'])
+          PY
+      - name: Save catalog report into repository for editorial import
+        shell: bash
+        run: |
+          set -e
+          mkdir -p data
+          cp qanwatlive-catalog-report.json data/qanwatlive-catalog-report.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/qanwatlive-catalog-report.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: refresh QanwatLive channel discovery report [skip ci]'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
       - name: Report progress
         if: always()
         shell: bash
