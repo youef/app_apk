@@ -115,6 +115,8 @@ public final class TVHomeActivity extends Activity {
         if(!loading && getSharedPreferences(SETTINGS,MODE_PRIVATE).getBoolean("auto_refresh",true)
             && android.os.SystemClock.elapsedRealtime()-lastCatalogRefreshAt>=CATALOG_REFRESH_INTERVAL_MS)
             loadCatalog();
+        // New signed app versions are checked periodically without interrupting playback.
+        if(appUpdater!=null)appUpdater.check(false);
         ui.postDelayed(this,30000L);
     }};
     private long lastCatalogRefreshAt=0L;
@@ -1586,10 +1588,18 @@ public final class TVHomeActivity extends Activity {
         if(matching==0)heading("لا توجد قنوات متاحة حاليًا لهذا الاختيار","غيّر الشركة أو النوع، أو حدّث المصادر من لوحة الإدارة.");
         if(matching>displayed){
             final int remaining=matching-displayed;
-            Button more=button("＋ عرض المزيد من القنوات  ("+remaining+" متبقية)");
-            content.addView(more,space(-1,dp(56),6));
+            LinearLayout actions=row();content.addView(actions,space(-1,dp(61),5));
+            Button more=button("＋ عرض المزيد ("+remaining+")");
+            more.setTag("live:more");
+            actions.addView(more,space(dp(275),dp(56),3));
             more.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
                 liveGuideLimit=Math.min(channels.size(),liveGuideLimit+48);render();
+            }});
+            Button all=primaryButton("عرض الكل • "+matching+" قناة  ❯");
+            all.setTag("live:all");
+            actions.addView(all,space(dp(290),dp(56),3));
+            all.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                liveGuideLimit=channels.size();render();
             }});
         }
         // Every matching channel remains reachable through progressive paging.
