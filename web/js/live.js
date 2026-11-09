@@ -4,7 +4,7 @@
   var Explore=window.AlezzExplore;
   var Store=window.AlezzStore;
   var state = {
-    channels: [], shown: [], current: null, search: "", category: "",
+    channels: [], shown: [], current: null, search: "", category: "", company: "الكل",
     hls: null, dash: null, frame: null, request: 0, timeout: null, mounted: false,
     hlsRecoveries: 0, favoritesOnly: false, favorites: [], awaitingGesture: false,
     dial: "", dialTimer: null, qualityLevels: [], qualityChoice: -1,
@@ -81,6 +81,35 @@
       (cover ? '<img class="live-channel-art__cover" src="' + esc(cover) + '" alt="" loading="lazy" onerror="this.remove()">' : "") +
       '</span>';
   }
+  var companyOrder=["MBC","beIN SPORTS","روتانا","OSN","الجزيرة","العربية","الشرق",
+    "القنوات السعودية","قنوات دبي","قنوات أبوظبي","الكأس","BBC","TRT","France 24","Sky"];
+  function channelCompany(channel) {
+    var title=String(channel.title||"").trim().toLowerCase();
+    var category=String(channel.category||"").trim().toLowerCase();
+    if (/^mbc(?=\s|\+|\d|$)/i.test(title) || /^ام\s*بي\s*سي/.test(title) || category.indexOf("قنوات mbc")>=0) return "MBC";
+    if (/^bein\b|^بي\s*إن/.test(title)) return "beIN SPORTS";
+    if (/^rotana\b|^روتانا/.test(title)) return "روتانا";
+    if (/^osn\b/.test(title)) return "OSN";
+    if (/^al[ -]?jazeera\b|^الجزيرة/.test(title)) return "الجزيرة";
+    if (/^al[ -]?arabiya\b|^العربية/.test(title)) return "العربية";
+    if (/^(asharq|الشرق|اقتصاد الشرق)/.test(title)) return "الشرق";
+    if (/^(saudi|al saud|السعودية|الإخبارية|sbc\b|ksa\b)/.test(title)) return "القنوات السعودية";
+    if (/^(dubai|دبي|سما دبي)/.test(title)) return "قنوات دبي";
+    if (/^(abu dhabi|أبوظبي|ابوظبي|أبو ظبي)/.test(title)) return "قنوات أبوظبي";
+    if (/^(alkass|al kass|الكأس)/.test(title)) return "الكأس";
+    if (/^bbc\b/.test(title)) return "BBC";
+    if (/^trt\b/.test(title)) return "TRT";
+    if (/^france\s*24\b/.test(title)) return "France 24";
+    if (/^sky\b/.test(title)) return "Sky";
+    return "أخرى";
+  }
+  var alphabetic = typeof Intl!=="undefined" && Intl.Collator
+    ? new Intl.Collator("ar",{sensitivity:"base",numeric:true,ignorePunctuation:true}) : null;
+  function compareChannels(a,b){
+    var x=String(a.title||"").trim(), y=String(b.title||"").trim();
+    return (alphabetic ? alphabetic.compare(x,y) : x.toLowerCase().localeCompare(y.toLowerCase())) ||
+      String(a.key||"").localeCompare(String(b.key||""));
+  }
   var genreOrder=["أخبار","رياضة","أفلام","مسلسلات","أطفال","وثائقيات",
     "دينية","موسيقى","تعليمية","طبخ","منوعات","عامة"];
   function hasAny(value,keywords) {
@@ -92,8 +121,9 @@
     var category=String(channel.category||"").toLowerCase();
     var extra=Array.isArray(channel.genreTags)?channel.genreTags.join(" ").toLowerCase():"";
     var title=String(channel.title||"").toLowerCase();
-    var text=(category+" "+extra).trim();
-    if (!text || hasAny(text,["غير مصنف","uncategorized","general","عام","other","misc"])) text=title;
+    var text=extra && !hasAny(extra,["general","other","misc"]) ? extra : (category+" "+extra).trim();
+    if (!text || hasAny(category,["قنوات mbc","غير مصنف","uncategorized","general","عام","other","misc"]) ||
+        hasAny(text,["general","other","misc"])) text=title;
     if(hasAny(text,["أخبار","الاخبار","اخبار","news","الحدث","سياسة","politic"]))return "أخبار";
     if(hasAny(text,["رياض","sport","football","soccer","bein","كورة","كرة","ملاعب"]))return "رياضة";
     if(hasAny(text,["أطفال","اطفال","kids","cartoon","كرتون","spacetoon","baby","junior"]))return "أطفال";
@@ -116,6 +146,23 @@
     genreOrder.forEach(function(type){if(counts[type])result.push({name:type,count:counts[type]});});
     return result;
   }
+  function companyStats(channels){
+    var counts={},result=[{name:"الكل",count:channels.length}];
+    channels.forEach(function(channel){var name=channelCompany(channel);counts[name]=(counts[name]||0)+1;});
+    companyOrder.forEach(function(name){if(counts[name])result.push({name:name,count:counts[name]});});
+    if(counts["أخرى"])result.push({name:"أخرى",count:counts["أخرى"]});
+    return result;
+  }
+  function renderCompanies(){
+    var tabs=$("liveCompanyTabs");if(!tabs)return;
+    var stats=companyStats(state.channels);
+    if(!stats.some(function(x){return x.name===state.company;}))state.company="الكل";
+    tabs.innerHTML=stats.map(function(company){
+      return '<button type="button" class="live-type-tab'+(state.company===company.name?' is-on':'')+
+        '" data-live-company="'+esc(company.name)+'" aria-pressed="'+String(state.company===company.name)+'">'+
+        '<span>'+esc(company.name)+'</span><b>'+company.count+'</b></button>';
+    }).join("");
+  }
   function renderTypes() {
     var tabs=$("liveTypeTabs");
     if(!tabs)return;
@@ -130,6 +177,7 @@
   function channelScope() {
     return state.channels.filter(function(c){
       return (state.type==="الكل" || channelGenre(c)===state.type) &&
+        (state.company==="الكل" || channelCompany(c)===state.company) &&
         (!state.favoritesOnly || state.favorites.indexOf(c.key)>=0) &&
         (!state.category || Explore.matches(c,state.category));
     });
@@ -152,7 +200,7 @@
   function sortedChannels() {
     var query=state.search.trim().toLocaleLowerCase();
     return channelScope().filter(function(c){
-      return !query || (c.title+" "+(c.category||"")+" "+channelGenre(c)+" "+(c.country||""))
+      return !query || (c.title+" "+(c.category||"")+" "+channelGenre(c)+" "+channelCompany(c)+" "+(c.country||""))
         .toLocaleLowerCase().indexOf(query)>=0;
     });
   }
@@ -161,9 +209,10 @@
     if (!list) return;
     state.shown = sortedChannels();
     renderTypes();
+    renderCompanies();
     list.innerHTML = state.shown.length ? state.shown.map(row).join("") :
       '<p class="live-guide__empty">لم نعثر على قنوات تطابق البحث. غيّر التصنيف أو جرّب اسمًا آخر.</p>';
-    if (count) count.textContent = state.shown.length + " قناة • " + state.type;
+    if (count) count.textContent = state.shown.length + " قناة • " + (state.company==="الكل"?"جميع الشركات":state.company) + " • " + state.type;
     var label = $("liveSearchClear");
     if (label) label.hidden = !state.search;
     var filterButton = $("liveFavoritesFilter");
@@ -568,6 +617,7 @@
     if (!Array.isArray(state.favorites)) state.favorites = [];
     state.favoritesOnly = false;
     state.type=Store && Store.pref ? Store.pref("liveType","الكل") : "الكل";
+    state.company=Store && Store.pref ? Store.pref("liveCompany","الكل") : "الكل";
     updateGuide();
     var last = Store && Store.pref ? Store.pref("lastLiveChannel","") : "";
     var first = null;
@@ -590,6 +640,15 @@
       }
       select(item, true);
       cinemaMode(true);
+    });
+    $("liveCompanyTabs").addEventListener("click",function(event){
+      var button=event.target.closest("[data-live-company]");
+      if(!button)return;
+      state.company=button.getAttribute("data-live-company")||"الكل";
+      if(Store&&Store.setPref)Store.setPref("liveCompany",state.company);
+      updateGuide();
+      var active=$("liveCompanyTabs").querySelector(".is-on");
+      if(active){active.focus();active.scrollIntoView({block:"nearest",inline:"nearest"});}
     });
     $("liveTypeTabs").addEventListener("click",function(event){
       var button=event.target.closest("[data-live-type]");
@@ -807,11 +866,12 @@
     state.channels = ((catalog && catalog.channels) || []).filter(function (channel) {
       return channel.playback === "stream" && !!https(channel.stream) &&
         /\.(m3u8|mp4)(\?|$)/i.test(channel.stream);
-    });
+    }).sort(compareChannels);
     state.catalogCategories=(catalog && catalog.categories)||[];
     state.search = "";
     state.category = initialCategory || "";
     state.type = "الكل";
+    state.company = "الكل";
     state.shown = [];
     state.current = null;
     var count = state.channels.length;
@@ -858,6 +918,8 @@
       '</div><aside class="live-guide" aria-label="دليل القنوات">' +
       '<div class="live-guide__head"><div><span class="live-eyebrow">TV GUIDE</span><h2>دليل القنوات</h2></div>' +
       '<span class="live-guide__count" id="liveFilteredCount">' + count + ' قناة</span></div>' +
+      '<div class="live-guide__category-head">اختر شبكة القنوات أو الشركة</div>' +
+      '<div class="live-type-tabs live-company-tabs" id="liveCompanyTabs" role="group" aria-label="الشركة أو شبكة القنوات"></div>' +
       '<div class="live-guide__category-head">اختر نوع القنوات</div>' +
       '<div class="live-type-tabs" id="liveTypeTabs" role="group" aria-label="نوع القنوات"></div>' +
       '<details class="live-extra-filters"><summary>الدولة والفلاتر المتقدمة</summary><div class="live-discovery" id="liveFilters">' + categoryButtons + '</div></details>' +
@@ -870,5 +932,6 @@
   }
 
   window.AlezzLive = { render: render, mount: mount, destroy: destroy,
-    playable: playable, mediaType: mediaType, channelGenre:channelGenre, categoryStats:categoryStats };
+    playable: playable, mediaType: mediaType, channelGenre:channelGenre, categoryStats:categoryStats,
+    channelCompany:channelCompany, companyStats:companyStats, compareChannels:compareChannels };
 })();
