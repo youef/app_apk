@@ -13,7 +13,7 @@ const calls=[];
 const fake={window:{ALEZZ_ADMIN_CONFIG:{
   supabaseUrl:"https://fake.supabase.co",publishableKey:"sb_publishable_test",storagePrefix:"test.",requestTimeout:15000,
   pageLimit:300
-}},document:{readyState:"loading",addEventListener:()=>{}},Promise,URL,AbortController,Date,console,
+}},document:{readyState:"loading",addEventListener:()=>{},querySelector:()=>null},Promise,URL,AbortController,Date,console,
 setTimeout,clearTimeout,fetch:async(url,init={})=>{
   const parsed=new URL(url),method=init.method||"GET";
   assert.equal(parsed.hostname,"fake.supabase.co");
