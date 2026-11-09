@@ -101,7 +101,7 @@ public final class TVHomeActivity extends Activity {
     private String section="home",lastRenderedSection="";
     private boolean detailVisible=false, showingWelcome=false;
     private String detailOrigin="home";
-    private String pendingResumeEpisodeId="",activeChannelCategory="الكل";
+    private String pendingResumeEpisodeId="",activeChannelCategory="الكل",activeChannelCompany="الكل";
     private int liveGuideLimit=48;
     private int kidsAge=6,kidsDailyMinutes=60;
     private String lastLoadError="";
@@ -740,6 +740,7 @@ public final class TVHomeActivity extends Activity {
                     for(int i=channels.size()-1;i>=0;i--)
                         if(channels.get(i).optBoolean("_local_iptv",false))channels.remove(i);
                     channels.addAll(localChannels);
+                    sortChannels();
                     if(status!=null)status.setText("● أضيفت "+result.size()+" قناة محلية (الروابط تُفحص عند التشغيل)");
                     if("live".equals(section)||"settings".equals(section))render();
                 }else if(status!=null){
@@ -785,9 +786,27 @@ public final class TVHomeActivity extends Activity {
             JSONArray data=null;String error="";
             try{data=catalog.listQuery("aseel_channels","?select=*&status=eq.published&rights_status=eq.approved&playback_mode=eq.stream&link_health_status=eq.healthy&order=display_order.asc,created_at.desc&limit=500");}
             catch(Exception e){error="قنوات: "+CatalogApi.describe(e);}
+            if(data!=null){
+                // The channels API exposes category_id, not category_name: attach the
+                // published labels so native TV uses the same genres as the web UI.
+                try{
+                    JSONArray categories=catalog.listQuery("aseel_categories",
+                        "?select=id,name_ar&published=eq.true&limit=400");
+                    java.util.HashMap<String,String> labels=new java.util.HashMap<String,String>();
+                    for(int i=0;i<categories.length();i++){
+                        JSONObject category=categories.optJSONObject(i);
+                        if(category!=null)labels.put(value(category,"id"),value(category,"name_ar"));
+                    }
+                    for(int i=0;i<data.length();i++){
+                        JSONObject item=data.optJSONObject(i);
+                        if(item!=null&&labels.containsKey(value(item,"category_id")))
+                            item.put("category_name",labels.get(value(item,"category_id")));
+                    }
+                }catch(Exception ignored){ /* Existing title and tag inference remain available offline. */ }
+            }
             final JSONArray rows=data;final String issue=error;
             ui.post(new Runnable(){public void run(){if(token!=generation||!unlocked)return;
-                if(rows!=null){putAll(channels,rows,"channel");channels.addAll(localChannels);}
+                if(rows!=null){putAll(channels,rows,"channel");channels.addAll(localChannels);sortChannels();}
                 completeCatalog(token,issue);
             }});
         }});
@@ -1301,6 +1320,17 @@ public final class TVHomeActivity extends Activity {
         }
     }
     private String channelCategory(JSONObject x){return ChannelGuideCategory.from(x);}
+    private String channelCompany(JSONObject x){return ChannelGuideCategory.broadcaster(x);}
+    private void sortChannels(){
+        final java.text.Collator alphabet=java.text.Collator.getInstance(new Locale("ar"));
+        alphabet.setStrength(java.text.Collator.PRIMARY);
+        java.util.Collections.sort(channels,new java.util.Comparator<JSONObject>(){
+            public int compare(JSONObject first,JSONObject second){
+                int order=alphabet.compare(label(first).trim(),label(second).trim());
+                return order!=0?order:value(first,"id").compareTo(value(second,"id"));
+            }
+        });
+    }
     private String epgNow(JSONObject x){
         String s=value(x,"epg_now_title");
         if(s.isEmpty())s=value(x,"current_program");
@@ -1326,6 +1356,8 @@ public final class TVHomeActivity extends Activity {
     private void liveGuide(){
         activeChannelCategory=getSharedPreferences("alezz_tv_settings_v14",MODE_PRIVATE)
             .getString("live_selected_group",activeChannelCategory);
+        activeChannelCompany=getSharedPreferences("alezz_tv_settings_v14",MODE_PRIVATE)
+            .getString("live_selected_company",activeChannelCompany);
         heading("● تلفزيون العز المباشر",channels.size()+" قناة • اختر التصنيف، ثم اضغط OK للمشاهدة • MENU للدليل أثناء البث");
         if(channels.isEmpty()){
             heading("لا توجد قنوات منشورة","استخدم تحديث المكتبة أو راجع المصادر.");return;
@@ -1338,12 +1370,39 @@ public final class TVHomeActivity extends Activity {
             resume.setOnClickListener(new View.OnClickListener(){public void onClick(View v){play(recent);}});
             break;
         }
+        java.util.LinkedHashMap<String,Integer> companies=new java.util.LinkedHashMap<String,Integer>();
+        companies.put("الكل",channels.size());
+        for(JSONObject x:channels){
+            String network=channelCompany(x);
+            companies.put(network,companies.containsKey(network)?companies.get(network)+1:1);
+        }
+        if(!companies.containsKey(activeChannelCompany))activeChannelCompany="الكل";
+        content.addView(text("الشركات والشبكات • اختر مثل MBC أو beIN SPORTS",14,0xFFE8C993,true),space(-1,-2,4));
+        HorizontalScrollView companyScroll=new HorizontalScrollView(this);
+        companyScroll.setHorizontalScrollBarEnabled(false);
+        content.addView(companyScroll,space(-1,dp(60),3));
+        LinearLayout companyFilters=row();companyScroll.addView(companyFilters);
+        for(final String network:companies.keySet()){
+            Button b=button((network.equals(activeChannelCompany)?"✓ ":"")+network+"  "+companies.get(network));
+            b.setContentDescription("شبكة "+network+"، "+companies.get(network)+" قناة");
+            b.setTag("company:"+network);
+            companyFilters.addView(b,space(dp(168),dp(52),3));
+            b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                activeChannelCompany=network;liveGuideLimit=48;
+                getSharedPreferences("alezz_tv_settings_v14",MODE_PRIVATE).edit()
+                    .putString("live_selected_company",network).apply();
+                render();
+            }});
+        }
+        content.addView(text("أنواع القنوات • رياضة، أخبار، أفلام، أطفال وغيرها",14,0xFFE8C993,true),space(-1,-2,4));
         java.util.LinkedHashMap<String,Integer> counts=new java.util.LinkedHashMap<String,Integer>();
         for(String group:new String[]{"أخبار","رياضة","أفلام","مسلسلات","أطفال",
                 "وثائقيات","دينية","موسيقى","تعليمية","طبخ","منوعات","عامة"})
             counts.put(group,0);
         int favoriteCount=0;
         for(JSONObject x:channels){
+            if(!"الكل".equals(activeChannelCompany) &&
+                !activeChannelCompany.equals(channelCompany(x)))continue;
             String group=channelCategory(x);
             counts.put(group,counts.containsKey(group)?counts.get(group)+1:1);
             if(isFavorite(x))favoriteCount++;
@@ -1377,9 +1436,11 @@ public final class TVHomeActivity extends Activity {
         LinearLayout pair=null;
         for(int i=0;i<channels.size();i++){
             JSONObject x=channels.get(i);
-            boolean match="الكل".equals(activeChannelCategory) ||
+            boolean companyMatch="الكل".equals(activeChannelCompany) ||
+                activeChannelCompany.equals(channelCompany(x));
+            boolean match=companyMatch&&("الكل".equals(activeChannelCategory) ||
                 ("المفضلة".equals(activeChannelCategory)&&isFavorite(x)) ||
-                activeChannelCategory.equals(channelCategory(x));
+                activeChannelCategory.equals(channelCategory(x)));
             if(!match)continue;
             matching++;
             if(displayed>=Math.min(350,liveGuideLimit))continue;
@@ -1423,7 +1484,7 @@ public final class TVHomeActivity extends Activity {
         line.addView(poster,new LinearLayout.LayoutParams(dp(76),dp(55)));
         LinearLayout information=column();information.setPadding(dp(14),0,dp(14),0);
         information.addView(text(label(channel),17,WHITE,true));
-        information.addView(text("● بث مباشر   •   "+channelCategory(channel),12,0xFF9FE2BF,false));
+        information.addView(text("● "+channelCompany(channel)+"   •   "+channelCategory(channel),12,0xFF9FE2BF,false));
         String now=epgNow(channel),next=epgNext(channel);
         if(!now.isEmpty()||!next.isEmpty())information.addView(text(
             (!now.isEmpty()?"الآن: "+now:"")+(!next.isEmpty()?"  التالي: "+next:""),12,MUTED,false));
@@ -1869,6 +1930,13 @@ public final class TVHomeActivity extends Activity {
             for(int channelIndex=from;channelIndex<to;channelIndex++){
                 JSONObject candidate=channels.get(channelIndex);
                 if(kidsMode && !kidsDirect(candidate))continue;
+                if("live".equals(section) && !value(candidate,"id").equals(value(item,"id"))){
+                    if(!"الكل".equals(activeChannelCompany) &&
+                        !activeChannelCompany.equals(channelCompany(candidate)))continue;
+                    if(!"الكل".equals(activeChannelCategory) &&
+                        !("المفضلة".equals(activeChannelCategory)&&isFavorite(candidate)) &&
+                        !activeChannelCategory.equals(channelCategory(candidate)))continue;
+                }
                 if("official_link".equals(value(candidate,"playback_mode")))continue;
                 String candidateUrl=value(candidate,"stream_url");
                 String variants=candidate.optJSONArray("stream_variants")==null?"[]":
@@ -1882,6 +1950,7 @@ public final class TVHomeActivity extends Activity {
                     record.put("quality",value(candidate,"quality"));
                     record.put("variants",new JSONArray(variants));
                     record.put("category",channelCategory(candidate));
+                    record.put("company",channelCompany(candidate));
                     record.put("favorite",isFavorite(candidate));
                     record.put("poster_url",value(candidate,"poster_url"));
                     record.put("epg_now_title",epgNow(candidate));
