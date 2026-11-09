@@ -1,12 +1,12 @@
 {
-  "time": "2026-11-09T18:05:06.552601+00:00",
+  "time": "2026-11-09T18:12:10.787543+00:00",
   "source": "https://www.qanwatlive.com",
   "dry_run": true,
   "discovered": 77,
   "inspected": 77,
   "with_image": 77,
   "with_embed": 77,
-  "hls_verified": 0,
+  "hls_verified": 1,
   "existing": 0,
   "inserted_drafts": 0,
   "errors": [],
@@ -21,11 +21,15 @@
       ],
       "network": "other",
       "genre": "movies",
-      "sources": [],
+      "sources": [
+        "https://ml-pull-hwc.myco.io/MixTV/hls/index.m3u8"
+      ],
       "embedded_players": [
         "https://tv.qanwatlive.com/2025/03/blog-post_93.html"
       ],
-      "verified_hls": []
+      "verified_hls": [
+        "https://ml-pull-hwc.myco.io/MixTV/hls/index.m3u8"
+      ]
     },
     {
       "url": "https://www.qanwatlive.com/2024/12/ALHayat-Drama-Live.html",
