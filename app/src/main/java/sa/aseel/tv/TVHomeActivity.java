@@ -784,7 +784,7 @@ public final class TVHomeActivity extends Activity {
         }});
         background.execute(new Runnable(){public void run(){
             JSONArray data=null;String error="";
-            try{data=catalog.listQuery("aseel_channels","?select=*&status=eq.published&rights_status=eq.approved&playback_mode=eq.stream&link_health_status=eq.healthy&order=display_order.asc,created_at.desc&limit=500");}
+            try{data=catalog.listQuery("aseel_channels","?select=*&status=eq.published&rights_status=eq.approved&order=display_order.asc,created_at.desc&limit=500");}
             catch(Exception e){error="قنوات: "+CatalogApi.describe(e);}
             if(data!=null){
                 // The channels API exposes category_id, not category_name: attach the
@@ -1581,7 +1581,7 @@ public final class TVHomeActivity extends Activity {
             int seen=PlaybackMemory.seenEpisodeCount(this,PlaybackMemory.activeProfile(this),value(item,"id"));
             if(seen>=0&&count>seen)outer.addView(text("● حلقة جديدة",12,0xFF44C892,true));
         }
-        String desc="channel".equals(kind(item))?("official_link".equals(value(item,"playback_mode"))?"↗ موقع رسمي":"● مباشر"):"series".equals(kind(item))?"▤ مسلسل":"youtube".equals(kind(item))?"▶ يوتيوب":"▶ فيلم";
+        String desc="channel".equals(kind(item))?("official_link".equals(value(item,"playback_mode"))?"↗ مشاهدة خارجية":"● مباشر"):"series".equals(kind(item))?"▤ مسلسل":"youtube".equals(kind(item))?"▶ يوتيوب":"▶ فيلم";
         outer.addView(text(desc,12,0xFFFF8DA6,false));
         outer.setOnFocusChangeListener(new View.OnFocusChangeListener(){public void onFocusChange(View v,boolean focused){
             outer.setBackgroundDrawable(new CinemaNeonDrawable(focused?0xFF79203A:0xFF201C25,dp(19),focused));
@@ -1617,14 +1617,14 @@ public final class TVHomeActivity extends Activity {
         if("youtube".equals(kind(item))){openYouTube(item);return;}
         detailVisible=true;detailOrigin=section;
         content.removeAllViews();
-        heading(label(item),"channel".equals(kind(item))?("official_link".equals(value(item,"playback_mode"))?"↗ مشاهدة في الموقع الرسمي":"● قناة مباشرة"):"فيلم • مشاهدة مباشرة");
+        heading(label(item),"channel".equals(kind(item))?("official_link".equals(value(item,"playback_mode"))?"↗ صفحة مشاهدة خارجية":"● قناة مباشرة"):"فيلم • مشاهدة مباشرة");
         LinearLayout hero=row();content.addView(hero,space(-1,dp(240),7));
         CinemaPosterView poster=new CinemaPosterView(this);poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
         hero.addView(poster,new LinearLayout.LayoutParams(dp(190),dp(235)));
         String image=value(item,"poster_url");if(image.startsWith("https://"))PosterLoader.load(poster,image);
         LinearLayout info=column();hero.addView(info,new LinearLayout.LayoutParams(0,-1,1));
         info.addView(text(value(item,"description"),16,MUTED,false),space(-1,-2,9));
-        Button play=primaryButton("official_link".equals(value(item,"playback_mode"))?"↗ فتح الموقع الرسمي":"▶ ابدأ المشاهدة");
+        Button play=primaryButton("official_link".equals(value(item,"playback_mode"))?"↗ فتح صفحة المشاهدة":"▶ ابدأ المشاهدة");
         info.addView(play,space(dp(260),dp(56),7));
         play.setOnClickListener(new View.OnClickListener(){public void onClick(View v){play(item);}});
         Button favorite=button(isFavorite(item)?"♥ إزالة من قائمتي":"♡ أضف إلى قائمتي");
@@ -1839,8 +1839,18 @@ public final class TVHomeActivity extends Activity {
             }
         }
         if("channel".equals(kind(item)) && "official_link".equals(value(item,"playback_mode"))){
-            heading("المحتوى غير قابل للتشغيل داخل التطبيق",
-                "القناة تعرض رابطًا رسميًا خارجيًا وليست لديها وصلة بث مرخصة مباشرة. حدّث المصدر من لوحة الإدارة.");
+            String external=value(item,"official_url");
+            if(!(external.startsWith("https://www.qanwatlive.com/")
+                || external.startsWith("https://qanwatlive.com/"))){
+                heading("صفحة المصدر غير متاحة","هذه القناة لا تملك رابط صفحة مشاهدة خارجيًا صالحًا.");
+                return;
+            }
+            try {
+                startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse(external)));
+            } catch(android.content.ActivityNotFoundException e){
+                heading("تعذّر فتح المصدر الخارجي","ثبّت متصفحًا متوافقًا على جهاز Android TV.");
+            }
             return;
         }
         // A title can have an MP4/HLS stream, several approved alternatives, and/or
