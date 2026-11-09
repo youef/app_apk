@@ -1,13 +1,8 @@
 name: Al Ezz TV — Refresh And Clean Live Channels
+# Optional manual fallback (requires a GitHub service-role secret).
+# Automatic production maintenance uses link-health-agent.yml with OIDC.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/maintain_live_channels.py'
-      - '.github/workflows/live-channel-maintenance.yml'
-  schedule:
-    - cron: '41 */6 * * *'
 
 permissions:
   contents: read
