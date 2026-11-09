@@ -63,7 +63,7 @@ jobs:
             -PezzVersionCode=200000 \
             -PezzVersionName=20.0.0-preview
           test -s app/build/outputs/apk/debug/app-debug.apk
-          aapt dump badging app/build/outputs/apk/debug/app-debug.apk | head -10
+          "$ANDROID_HOME/build-tools/33.0.2/aapt" dump badging app/build/outputs/apk/debug/app-debug.apk | head -10
           mkdir -p dist
           cp app/build/outputs/apk/debug/app-debug.apk dist/al-ezz-tv-v20.0.0-preview-debug.apk
 
