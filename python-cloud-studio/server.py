@@ -207,7 +207,8 @@ async def status(request: Request):
 
 class DiscoverySourceClient(SourceClient):
     def __init__(self, source):
-        super().__init__(timeout=11)
+        super().__init__(timeout=6)
+        self.retries = 1
         self.source = source
 
     def get(self, url, max_size=1_500_000):
@@ -232,6 +233,7 @@ def discover_full(source: str, kind: str='auto', deep: bool=True, enrich_metadat
     finally:
         client.session.close()
     if kind!='auto':cat.kind=kind
+    cat.source_pages=list(dict.fromkeys([source,cat.url,*cat.source_pages]))
     if enrich_metadata:
         enrich(cat,include_episodes=True)
     if deep and cat.kind=='series' and cat.episodes:
@@ -439,7 +441,7 @@ def scan_catalogue(state: UserState, cat: Catalogue, progress: dict):
         return
 
     # Keep the pool bounded so multiple administrators cannot exhaust Render.
-    workers = min(5, len(targets))
+    workers = min(3, len(targets))
     progress['workers'] = workers
     try:
         with ThreadPoolExecutor(max_workers=workers, thread_name_prefix='studio-media') as executor:
@@ -469,15 +471,25 @@ def scan_catalogue(state: UserState, cat: Catalogue, progress: dict):
                     progress['verified'] += int(entry.verified)
                     progress['sources_found'] += sum(
                         item.get('kind') == 'direct' for item in checked)
+                    if time.monotonic()-progress.get('persisted_at',0)>=2:
+                        LIBRARY.remember_discovery(cat)
+                        progress['persisted_at']=time.monotonic()
+    except Exception as exc:
+        with state.lock: progress['error']=safe_error(exc)
     finally:
         with state.lock:
             if state.scan is progress:
-                progress['running'] = False
+                try:
+                    LIBRARY.remember_discovery(cat)
+                except Exception as exc:
+                    progress['error'] = safe_error(exc)
+                finally:
+                    progress['running'] = False
 
 
 def start_catalogue_scan(state: UserState, cat: Catalogue):
     total = len(cat.episodes) if cat.kind == 'series' else 1
-    progress = {'id':secrets.token_hex(8),'running':bool(total),'done':0,'total':total,'verified':0,'sources_found':0,'workers':0}
+    progress = {'id':secrets.token_hex(8),'running':bool(total),'done':0,'total':total,'verified':0,'sources_found':0,'workers':0,'error':''}
     state.scan = progress
     state.scan_catalogue = cat
     if total: _discovery_scans.submit(scan_catalogue,state,cat,progress)
@@ -501,6 +513,7 @@ class DiscoverForm(BaseModel):
     deep: bool = True
     metadata: bool = True
     scan_media: bool = True
+    force_refresh: bool = False
 
 
 @app.post('/api/discover')
@@ -510,7 +523,15 @@ async def discover(request: Request, data: DiscoverForm):
         raise HTTPException(400, 'نوع العمل غير مدعوم')
     try:
         source = public_url(data.url)
-        cat = await run_in_threadpool(lambda: discover_full(source, data.kind, deep=data.deep, enrich_metadata=data.metadata))
+        cached = None if data.force_refresh else LIBRARY.cached_discovery(source)
+        if cached and (data.kind=='auto' or data.kind==cached['kind']):
+            cached=dict(cached)
+            episodes=[Episode(**row) for row in cached.pop('episodes',[])]
+            cat=Catalogue(**cached,episodes=episodes)
+        else:
+            cat = await run_in_threadpool(lambda: discover_full(source, data.kind, deep=data.deep, enrich_metadata=data.metadata))
+        cat.source_pages=list(dict.fromkeys([source,cat.url,*cat.source_pages]))
+        LIBRARY.remember_discovery(cat)
         with state.lock:
             state.catalogue, state.catalogues, state.batch_errors = cat, [cat], []
             state.current_index, state.demo = 0, False

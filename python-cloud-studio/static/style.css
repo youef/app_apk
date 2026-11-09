@@ -55,3 +55,4 @@
 .lib-work strong{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:ltr;text-align:left}
 .lib-work small{font-size:11px;color:#96b0c6}.lib-work.failed{border-color:#a45056}.lib-work.done{border-color:#42765e}
 @media(max-width:760px){.library-input-grid{grid-template-columns:1fr}.library-sync{padding:17px}.library-actions button{width:100%}.library-counters span{flex:1}}
+.poster-art img{object-fit:contain}

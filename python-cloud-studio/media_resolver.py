@@ -7,17 +7,20 @@ The caller persists source history; merging does not silently discard old URLs.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor
 import html as html_lib
 import json
 import os
 import re
 import time
+import threading
 from urllib.parse import parse_qs, urljoin, urlsplit, urlunsplit
 
 from bs4 import BeautifulSoup
 from alezz_fetchv_importer import MEDIA_EXT, SourceClient, check_dns, clean, find_static_media, public_url
 
 MAX_CANDIDATES = 128
+_BROWSER_SLOTS = threading.BoundedSemaphore(2)
 
 # Reachability of an embed page is not evidence of playable media.
 ONEVID_EMBED_PATH = re.compile(r'^/embed-[A-Za-z0-9_-]+\.html$', re.I)
@@ -182,11 +185,21 @@ def extract_candidates(body: str, base: str, *, now: float | None = None) -> tup
 
 class MediaResolver:
     def __init__(self, mode='auto', client_factory=SourceClient, browser_capture=None,
-                 max_pages=10, timeout=12):
+                 max_pages=10, timeout=6, workers=4, max_seconds=45):
         if mode not in ('http', 'auto', 'headless'): raise ValueError('Invalid extraction mode')
         self.mode, self.client_factory = mode, client_factory
         self.browser_capture = browser_capture or capture_headless
         self.max_pages, self.timeout = max(1, min(max_pages, 30)), timeout
+        self.workers = max(1, min(workers, 4))
+        self.max_seconds = max(1, min(max_seconds, 90))
+
+    def _client(self, deadline):
+        client = self.client_factory(timeout=max(.1, min(self.timeout, deadline-time.monotonic())))
+        # Each request has its own session. Retries belong to the durable queue,
+        # rather than multiplying interactive latency on an unavailable host.
+        if isinstance(client, SourceClient):
+            client.deadline, client.retries = deadline, 1
+        return client
 
     @staticmethod
     def _pages(pages):
@@ -197,51 +210,78 @@ class MediaResolver:
             if value not in output: output.append(value)
         return output
 
-    def _browser(self, pages):
+    def _browser(self, pages, *, deadline=None):
+        deadline = deadline or time.monotonic()+self.max_seconds
         sources, errors = [], []
         for url in self._pages(pages)[:3]:
-            try: sources = merge_sources(sources, self.browser_capture(url))
+            if time.monotonic() >= deadline: break
+            try:
+                if self.browser_capture is capture_headless:
+                    result = self.browser_capture(url, max_seconds=max(1, deadline-time.monotonic()))
+                else:
+                    result = self.browser_capture(url)
+                sources = merge_sources(sources, result)
             except Exception as exc: errors.append(safe_error(exc))
+            if any(row.get('kind') == 'direct' for row in sources): break
         return sources, errors
 
-    def _http(self, pages: list[str]) -> tuple[list[dict], list[str]]:
+    def _http(self, pages: list[str], *, deadline=None) -> tuple[list[dict], list[str]]:
+        deadline = deadline or time.monotonic()+self.max_seconds
         roots = self._pages(pages)
         queue = [(url, 0) for url in roots]
         seen, sources, errors = set(), [], []
-        while queue and len(seen) < self.max_pages:
-            url, depth = queue.pop(0)
-            if url in seen: continue
-            seen.add(url)
+
+        def fetch(url):
+            client = self._client(deadline)
             try:
-                client = self.client_factory(timeout=self.timeout)
-                try:
-                    final, typ, body = client.get(url)
-                    public_url(final)
-                    if 'html' in typ.lower() or 'json' in typ.lower() or body.lstrip().startswith(('{', '[')):
-                        found, embeds = extract_candidates(body, final)
-                        sources = merge_sources(sources, found)
-                        if depth < 2:
-                            queue.extend((u, depth+1) for u in embeds if u not in seen and len(queue) < 36)
-                finally:
-                    if hasattr(client, 'session'): client.session.close()
-            except Exception as exc: errors.append(safe_error(exc))
+                if time.monotonic() >= deadline: return [], [], 'انتهت مهلة قراءة المصادر'
+                final, typ, body = client.get(url)
+                public_url(final)
+                if MEDIA_EXT.search(final):
+                    return [dict(url=final,kind='direct',page_url=url,verified=False)], [], ''
+                if 'html' in typ.lower() or 'json' in typ.lower() or body.lstrip().startswith(('{', '[')):
+                    found, embeds = extract_candidates(body, final)
+                    return found, embeds, ''
+                return [], [], ''
+            except Exception as exc: return [], [], safe_error(exc)
+            finally:
+                if hasattr(client, 'session'): client.session.close()
+
+        with ThreadPoolExecutor(max_workers=self.workers) as pool:
+            while queue and len(seen) < self.max_pages and time.monotonic() < deadline:
+                batch=[]
+                while queue and len(batch)<self.workers and len(seen)<self.max_pages:
+                    url, depth=queue.pop(0)
+                    if url in seen: continue
+                    seen.add(url)
+                    batch.append((url, depth))
+                for (_, depth), (found, embeds, error) in zip(batch, pool.map(fetch, [url for url,_ in batch])):
+                    sources = merge_sources(sources, found)
+                    if error: errors.append(error)
+                    if depth < 2:
+                        queue.extend((u, depth+1) for u in embeds if u not in seen and len(queue) < 36)
         return sources, errors[:6]
 
     def extract(self, pages: list[str], *, force_browser=False) -> tuple[list[dict], list[str]]:
         """Return candidates. Use resolve() to retry headless after expired URLs."""
-        sources, errors = self._http(pages)
+        deadline = time.monotonic()+self.max_seconds
+        sources, errors = self._http(pages, deadline=deadline)
         if self.mode == 'headless' or self.mode == 'auto' and (force_browser or not any(x.get('kind') == 'direct' for x in sources)):
-            browser_sources, browser_errors = self._browser(pages)
+            browser_sources, browser_errors = self._browser(pages, deadline=deadline)
             sources = merge_sources(sources, browser_sources)
             errors.extend(browser_errors)
         return sources, errors[:6]
 
-    def check(self, sources: list[dict]) -> list[dict]:
+    def check(self, sources: list[dict], *, deadline=None) -> list[dict]:
         """Probe all supplied candidates; an HTML embed is never a verified video."""
-        results = []
-        client = self.client_factory(timeout=self.timeout)
-        try:
-            for item in merge_sources(sources):
+        deadline = deadline or time.monotonic()+self.max_seconds
+        def probe(item):
+            row = dict(item)
+            if time.monotonic() >= deadline:
+                row.update(verified=False,reachable=False,error='انتهت مهلة الفحص؛ سيُعاد تلقائيًا')
+                return row
+            client = self._client(deadline)
+            try:
                 row = dict(item)
                 try:
                     public_url(row['url'])
@@ -260,21 +300,24 @@ class MediaResolver:
                     row['confidence'] = confidence(row)
                 expiry = signed_expiry(row['url'])
                 if expiry is not None: row['expires_at'] = expiry
-                results.append(row)
-        finally:
-            if hasattr(client, 'session'): client.session.close()
-        return results
+                return row
+            finally:
+                if hasattr(client, 'session'): client.session.close()
+        with ThreadPoolExecutor(max_workers=self.workers) as pool:
+            return list(pool.map(probe, merge_sources(sources)))
 
     def resolve(self, pages: list[str], existing=()) -> tuple[list[dict], list[str]]:
         """HTTP first; conditional browser fallback includes all-expired candidates."""
-        candidates, errors = self._http(pages)
-        checked = self.check(merge_sources(existing, candidates))
+        deadline = time.monotonic()+self.max_seconds
+        candidates, errors = self._http(pages, deadline=deadline)
+        checked = self.check(merge_sources(existing, candidates), deadline=deadline)
         if self.mode == 'headless' or self.mode == 'auto' and not any(x.get('verified') for x in checked):
-            browser_sources, browser_errors = self._browser(pages)
+            # Leave time to verify captured candidates within the same budget.
+            browser_sources, browser_errors = self._browser(pages, deadline=deadline-min(10,self.max_seconds/3))
             errors.extend(browser_errors)
             previous = {x['url'] for x in checked}
             new = [x for x in browser_sources if x.get('url') not in previous]
-            checked = merge_sources(checked, self.check(new))
+            checked = merge_sources(checked, self.check(new, deadline=deadline))
         return checked, errors[:6]
 
 
@@ -323,6 +366,19 @@ def read_public_html(url: str, max_size: int) -> tuple[str, str, str]:
 
 
 def capture_headless(url: str, *, max_seconds=35) -> list[dict]:
+    """Limit Chromium memory use across interactive and maintenance workers."""
+    started=time.monotonic()
+    if not _BROWSER_SLOTS.acquire(timeout=max(0,max_seconds)):
+        raise TimeoutError('المتصفح مشغول؛ سيُعاد الفحص تلقائيًا')
+    try:
+        remaining=max_seconds-(time.monotonic()-started)
+        if remaining<=0: return []
+        return _capture_headless(url,max_seconds=remaining)
+    finally:
+        _BROWSER_SLOTS.release()
+
+
+def _capture_headless(url: str, *, max_seconds=35) -> list[dict]:
     """Fresh invisible Chromium with request, host, time, and response-size limits.
 
     URL/DNS checks are a best-effort application guard. Production should also
@@ -393,10 +449,10 @@ def capture_headless(url: str, *, max_seconds=35) -> list[dict]:
                 except Exception: pass
 
             page.on('response', observe_json)
-            try: page.goto(url, wait_until='domcontentloaded', timeout=18000)
+            try: page.goto(url, wait_until='domcontentloaded', timeout=max(1,min(18000,(max_seconds-(time.monotonic()-started))*1000)))
             except Exception:
                 if page.is_closed(): return merge_sources(found)
-            page.wait_for_timeout(1500)
+            page.wait_for_timeout(max(0,min(1500,(max_seconds-(time.monotonic()-started))*1000)))
             for frame in page.frames[:8]:
                 if time.monotonic()-started > max_seconds: break
                 try:

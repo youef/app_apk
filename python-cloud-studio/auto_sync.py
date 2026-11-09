@@ -21,13 +21,27 @@ from urllib.parse import parse_qs, urlsplit
 from uuid import UUID
 
 import requests
-from alezz_fetchv_importer import SourceClient, public_url, pull_html
-from media_resolver import MediaResolver, safe_error, signed_expiry, supported_source_kind
+from alezz_fetchv_importer import SourceClient, SourceConnectionError, public_url, pull_html, imported_fields
+from media_resolver import MediaResolver, read_public_html, safe_error, signed_expiry, supported_source_kind
+from metadata_enrichment import enrich
 from title_cleaner import content_title
 
 TABLES = ('aseel_movies', 'aseel_episodes', 'aseel_series')
 RETIRED_LINK = 'أُزيل من التشغيل بعد تأكيد تعطّله: '
 GONE_RESPONSE = re.compile(r'^(?:HTTP (?:404|410)\b|(?:404|410) Client Error\b)', re.I)
+
+
+class BackgroundSourceClient(SourceClient):
+    """Use the same public-document fallback as the interactive studio."""
+    def __init__(self, source, mode):
+        super().__init__(timeout=6)
+        self.source,self.mode,self.retries=source,mode,1
+
+    def get(self,url,max_size=1_500_000):
+        try:return super().get(url,max_size)
+        except SourceConnectionError:
+            if url!=self.source or self.mode=='http':raise
+            return read_public_html(url,max_size)
 
 
 def iso(value):
@@ -362,6 +376,35 @@ class AutoSync:
         if not capture:self.force_import=True
         self.wake_event.set()
 
+    def metadata_patch(self, job, pages, cat=None):
+        """Retry missing metadata independently of playback; retain editor values."""
+        if job['table_name'] not in ('aseel_movies','aseel_series') or not pages:return {}
+        saved=json.loads(job['data'])
+        fields=('title_original','description','poster_url','backdrop_url','release_year',
+                'country_code','language_code','genre_tags')
+        if all(saved.get(field) for field in fields) and saved.get('backdrop_url')!=saved.get('poster_url'):
+            return {}
+        key='metadata-next:'+job['table_name']+':'+job['target_id']
+        if self.queue.get_setting(key,0)>self.clock():return {}
+        self.queue.setting(key,self.clock()+6*3600)
+        try:
+            if cat is None:
+                client=BackgroundSourceClient(pages[0],self.mode)
+                try:
+                    cat=pull_html(pages[0],client,kind='movie',max_pages=1)
+                finally:client.session.close()
+            cat.kind='series' if job['table_name']=='aseel_series' else 'movie'
+            enrich(cat,include_episodes=False)
+            values=imported_fields(cat)
+            patch={field:values[field] for field in fields if not saved.get(field) and values.get(field)}
+            if (saved.get('backdrop_url')==saved.get('poster_url') and cat.backdrop_url and
+                    cat.backdrop_url!=cat.poster_url):patch['backdrop_url']=cat.backdrop_url
+            if patch:self.queue.event('metadata_completed','استُكملت بيانات وصور العمل تلقائيًا',job['table_name'],job['target_id'])
+            return patch
+        except Exception as exc:
+            self.queue.event('metadata_retry',safe_error(exc),job['table_name'],job['target_id'])
+            return {}
+
     @property
     def enabled(self): return self.queue.get_setting('enabled',os.getenv('ALEZZ_AUTOSYNC_ENABLED','1')=='1')
 
@@ -498,7 +541,7 @@ class AutoSync:
         candidates=[dict(url=r['url'],kind=r['kind'],label=r['label'],page_url=r['page_url'])
                     for r in sources if r['kind']!='original'
                     and (r['url'] in active_urls or not r['error'].startswith(RETIRED_LINK))]
-        # Re-extraction happens daily even while current media still works.
+        # Periodic re-extraction also happens while current media still works.
         errors=[]
         extracted=False
         browser_requested=False
@@ -570,6 +613,7 @@ class AutoSync:
             error='المصدر الأصلي مفقود؛ حُفظ العمل مسودة حتى مراجعة مصادره'
         payload=dict(link_health_status=status,link_health_reason=error or None,
                      link_health_checked_at=iso(now),link_health_failures=failures,link_health_url=selected or None)
+        if extracted:payload.update(self.metadata_patch(job,pages))
         if should_draft and saved.get('status')=='published':
             payload['status']='draft'
             self.queue.event('auto_draft',
@@ -692,9 +736,13 @@ class AutoSync:
                 self.flush(pending)
             return
         found_episodes=False
+        metadata={}
         for page in pages:
-            cat=pull_html(page,SourceClient(timeout=12),kind='series',max_pages=500,max_episodes=5000,
-                resume_progress=json.loads(job['checkpoint']),progress_hook=lambda data:self.queue.update(table,identifier,checkpoint=json.dumps(data,ensure_ascii=False)))
+            client=BackgroundSourceClient(page,self.mode)
+            try:
+                cat=pull_html(page,client,kind='series',max_pages=500,max_episodes=5000,
+                    resume_progress=json.loads(job['checkpoint']),progress_hook=lambda data:self.queue.update(table,identifier,checkpoint=json.dumps(data,ensure_ascii=False)))
+            finally:client.session.close()
             found_episodes=found_episodes or bool(cat.episodes)
             seasons={}
             for episode in cat.episodes:
@@ -718,17 +766,21 @@ class AutoSync:
                 if episode.page_url!=cat.url:self.queue.remember('aseel_episodes',old['id'],dict(url=episode.page_url,kind='original'))
             for warning in cat.discovery_warnings:
                 self.queue.event('episode_gap',warning,table,identifier)
+            metadata.update(self.metadata_patch(job,pages,cat))
         now=self.clock()
         failures=0 if found_episodes else job['failures']+1
         retry=now+(self.interval if found_episodes else min(self.check_interval,60*2**min(failures-1,6)))
         auto_draft=(not found_episodes and failures>=3 and
                     json.loads(job['data']).get('status')=='published')
+        pending=json.loads(job['dirty'] or '{}')
+        pending.update(metadata)
+        if auto_draft:pending['status']='draft'
         self.queue.update(table,identifier,next_check=retry,next_refresh=retry,
                           last_check=now,last_refresh=now,failures=failures,checkpoint='{}',
                           status='discovered' if found_episodes else 'broken' if failures>=3 else 'suspect',
                           error='' if found_episodes else 'لم تظهر صفحات حلقات في المصدر.',
-                          **(dict(dirty=json.dumps({'status':'draft'},ensure_ascii=False),
-                                  upload_at=now) if auto_draft else {}))
+                          **(dict(dirty=json.dumps(pending,ensure_ascii=False),
+                                  upload_at=now) if pending else {}))
         if auto_draft:
             self.queue.event('auto_draft','نُقل المسلسل إلى مسودة بعد 3 محاولات لم تُرجع حلقات',
                              table,identifier)
