@@ -210,7 +210,7 @@ class MediaResolver:
             if value not in output: output.append(value)
         return output
 
-    def _browser(self, pages, *, deadline=None):
+    def _browser(self, pages, *, deadline=None, known=()):
         deadline = deadline or time.monotonic()+self.max_seconds
         sources, errors = [], []
         for url in self._pages(pages)[:3]:
@@ -222,7 +222,7 @@ class MediaResolver:
                     result = self.browser_capture(url)
                 sources = merge_sources(sources, result)
             except Exception as exc: errors.append(safe_error(exc))
-            if any(row.get('kind') == 'direct' for row in sources): break
+            if any(row.get('kind') == 'direct' and row['url'] not in known for row in sources): break
         return sources, errors
 
     def _http(self, pages: list[str], *, deadline=None) -> tuple[list[dict], list[str]]:
@@ -313,9 +313,10 @@ class MediaResolver:
         checked = self.check(merge_sources(existing, candidates), deadline=deadline)
         if self.mode == 'headless' or self.mode == 'auto' and not any(x.get('verified') for x in checked):
             # Leave time to verify captured candidates within the same budget.
-            browser_sources, browser_errors = self._browser(pages, deadline=deadline-min(10,self.max_seconds/3))
-            errors.extend(browser_errors)
             previous = {x['url'] for x in checked}
+            browser_sources, browser_errors = self._browser(pages, deadline=deadline-min(10,self.max_seconds/3),
+                                                           known=previous)
+            errors.extend(browser_errors)
             new = [x for x in browser_sources if x.get('url') not in previous]
             checked = merge_sources(checked, self.check(new, deadline=deadline))
         return checked, errors[:6]

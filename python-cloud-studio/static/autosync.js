@@ -117,7 +117,8 @@
       meta.append(el('span','',target.table_name === 'aseel_movies' ? 'فيلم' : target.table_name === 'aseel_series' ? 'مسلسل' : 'حلقة'),
         el('span','',`مصادر: ${target.source_count||0} · صالحة: ${target.valid_sources||0}`),
         el('span','',`آخر فحص: ${date(target.last_check)}`),
-        el('span','',`التالي: ${date(target.next_check)}`));
+        el('span','',`الفحص القادم: ${date(target.next_check)}`),
+        el('span','',`التجديد القادم: ${date(target.next_refresh)}`));
       info.append(meta);
       if (!target.page_url) info.append(el('p','auto-target-error','المصدر الأصلي مفقود؛ أضف صفحة الفيلم أو الحلقة من «المصادر».'));
       if (target.error) info.append(el('p','auto-target-error',target.error));

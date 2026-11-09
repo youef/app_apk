@@ -335,13 +335,14 @@
   }
   async function discoverWork(url, kind){
     activity('جارٍ اكتشاف البيانات والمواسم وصفحات الحلقات…','loading');
-    const result=await API('discover',{url,kind,scan_media:true,
+    const result=await API('discover',{url,kind,scan_media:true,auto_track:$('autoTrack').checked,
       deep:$('deepScan').checked,metadata:$('autoMetadata').checked});
     app.selected.clear();app.season=1;$('episodeSearch').value='';
     discoveryDone=-1;
     updateStatus(result);
     showDiscoveryProgress(result.scan);
     activity(result.scan?.running?'بدأ فحص المشغلات. يمكنك متابعة التقدم هنا.':'تم تحميل بيانات العمل، ولم تظهر حلقات قابلة للفحص.','info');
+    if(result.tracking)toast(result.tracking.message,result.tracking.saved?'success':'info');
   }
   async function startDiscover(demo=false){
     await action(async()=>{

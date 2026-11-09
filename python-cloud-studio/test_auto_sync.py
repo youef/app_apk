@@ -416,6 +416,22 @@ class AutoSyncTests(unittest.TestCase):
         self.assertEqual(expires_at(OLD), 0)
         self.assertEqual(expires_at(signed), NOW+3600)
 
+    def test_periodic_refresh_discovers_direct_media_when_primary_is_embed(self):
+        embed='https://1vid.xyz/embed-example.html'
+        row=self.row(stream=embed)
+        self.resolver=FakeResolver(healthy=[NEW],fresh=[dict(url=NEW,kind='direct')])
+        self.worker.check_target(self.job(row))
+        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['stream_url'],NEW)
+        self.assertIn(embed,self.resolver.extractions[0][0])
+        self.assertGreater(self.job(row)['next_refresh'],NOW)
+
+    def test_renewal_can_switch_to_verified_alternative_on_another_cdn(self):
+        current=OLD+'?expires='+str(int(NOW+120))
+        row=self.row(stream=current)
+        self.resolver=FakeResolver(healthy=[current,NEW],fresh=[dict(url=NEW,kind='direct')])
+        self.worker.check_target(self.job(row))
+        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['stream_url'],NEW)
+
     def test_verified_backup_expiry_advances_refresh_for_healthy_primary(self):
         signed=NEW+'?expires='+str(int(NOW+600))
         row=self.row(stream_variants=[dict(url=signed,label='backup')])

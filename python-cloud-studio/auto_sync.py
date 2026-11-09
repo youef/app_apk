@@ -353,7 +353,7 @@ class AutoSync:
                          (now,int(self.check_interval),now,int(self.interval)))
         self.queue.setting('maintenance_policy',revision)
 
-    def remember_saved(self,cat,result,*,capture=False,auto_publish=None):
+    def remember_saved(self,cat,result,*,capture=False,auto_publish=None,refresh=False):
         """Preserve all local discoveries, including sources beyond eight variants."""
         by_number={(ep.season,ep.number):ep for ep in cat.episodes}
         if cat.kind=='series' and result.get('work_id'):
@@ -362,7 +362,7 @@ class AutoSync:
                 for page in cat.source_pages:self.queue.remember('aseel_series',result['work_id'],dict(url=page,kind='original'))
                 if auto_publish is not None:
                     self.queue.setting('publish-series:'+result['work_id'],bool(auto_publish))
-                if not capture:self.queue.queue('aseel_series',result['work_id'],refresh=True)
+                if not capture or refresh:self.queue.queue('aseel_series',result['work_id'],refresh=True)
             except ValueError:pass
         for binding in result.get('bindings',[]):
             entry=cat if cat.kind=='movie' else by_number.get((binding['season'],binding['number']))
@@ -379,7 +379,7 @@ class AutoSync:
                         self.queue.remember(table,identifier,dict(url=original,kind='original'))
                 if auto_publish and binding.get('awaiting_playback'):
                     self.queue.setting('discovered-episode:'+identifier,result['work_id'])
-                self.queue.queue(table,identifier,refresh=not capture)
+                self.queue.queue(table,identifier,refresh=not capture or refresh)
             except ValueError:pass
         if not capture:self.force_import=True
         self.wake_event.set()
@@ -549,12 +549,14 @@ class AutoSync:
         candidates=[dict(url=r['url'],kind=r['kind'],label=r['label'],page_url=r['page_url'])
                     for r in sources if r['kind']!='original'
                     and (r['url'] in active_urls or not r['error'].startswith(RETIRED_LINK))]
+        extraction_pages=list(dict.fromkeys([*pages, *(item['url'] for item in candidates
+                                                       if item['kind']=='embed')]))
         # Periodic re-extraction also happens while current media still works.
         errors=[]
         extracted=False
         browser_requested=False
-        if job['next_refresh']<=now and pages and supported_source_kind(job['stream_url'])!='embed':
-            fresh,errors=resolver.extract(pages)
+        if job['next_refresh']<=now and extraction_pages:
+            fresh,errors=resolver.extract(extraction_pages)
             extracted=True
             browser_requested=self.mode=='headless' or self.mode=='auto' and not any(s.get('kind')=='direct' for s in fresh)
             for source in fresh:self.queue.remember(table,identifier,source)
@@ -564,9 +566,16 @@ class AutoSync:
         good=[s for s in checked if s.get('verified') and s.get('kind','direct')=='direct']
         failed_active=any(not item.get('verified') and not item.get('reachable') and item['url'] in active_urls
                           for item in checked)
-        if (not good or failed_active) and pages and not browser_requested and supported_source_kind(job['stream_url'])!='embed':
+        reachable_primary=any(item.get('kind')=='embed' and item.get('reachable')
+                              and item['url']==job['stream_url'] for item in checked)
+        primary_expiry=expires_at(job['stream_url'])
+        renewal_due=bool(primary_expiry and primary_expiry<=now+300)
+        has_replacement=any(item['url']!=job['stream_url'] and
+                            (not expires_at(item['url']) or expires_at(item['url'])>now+300) for item in good)
+        if ((not good and not reachable_primary) or failed_active or (renewal_due and not has_replacement)
+                ) and extraction_pages and not browser_requested and (not extracted or self.mode!='http'):
             # Includes retry of expired HTTP discoveries with conditional headless fallback.
-            fresh,extra=resolver.extract(pages,force_browser=self.mode!='http')
+            fresh,extra=resolver.extract(extraction_pages,force_browser=self.mode!='http')
             extracted=True
             errors+=extra
             for source in fresh:self.queue.remember(table,identifier,source)
@@ -598,13 +607,16 @@ class AutoSync:
                         renewed.append(url)
             if renewed:
                 selected=max(renewed,key=expires_at)
+            else:
+                selected=next((item['url'] for item in good if item['url']!=selected and
+                               (not expires_at(item['url']) or expires_at(item['url'])>now+300)),selected)
         failures=0 if good or primary_embed_reachable else job['failures']+1
         status='healthy' if good else 'suspect' if primary_embed_reachable else 'broken' if failures>=3 else 'suspect'
         error='' if good else ('صفحة Embed متاحة؛ لم يتم التحقق من تشغيل الفيديو' if primary_embed_reachable else
                               'المصدر الأصلي مفقود؛ أضف صفحة الفيلم أو الحلقة' if not pages else
                               'لا يوجد رابط مباشر اجتاز الفحص؛ '+('; '.join(errors) if errors else 'تعذرت الروابط المحفوظة'))
         next_check=now+self.check_interval if good or primary_embed_reachable else now+min(self.check_interval,60*2**min(failures-1,6))
-        next_refresh=now+self.interval if extracted or not pages else job['next_refresh']
+        next_refresh=now+self.interval if extracted or not extraction_pages else job['next_refresh']
         if not good and not primary_embed_reachable and pages:next_refresh=min(next_refresh,next_check)
         allowed={s['url'] for s in checked if s.get('verified') or s.get('kind')=='embed' and s.get('reachable')}
         variants=[]

@@ -513,6 +513,7 @@ class DiscoverForm(BaseModel):
     metadata: bool = True
     scan_media: bool = True
     force_refresh: bool = False
+    auto_track: bool = False
 
 
 @app.post('/api/discover')
@@ -531,11 +532,26 @@ async def discover(request: Request, data: DiscoverForm):
             cat = await run_in_threadpool(lambda: discover_full(source, data.kind, deep=data.deep, enrich_metadata=data.metadata))
         cat.source_pages=list(dict.fromkeys([source,cat.url,*cat.source_pages]))
         LIBRARY.remember_discovery(cat)
+        tracking = None
+        if data.auto_track:
+            if state.db is None:
+                tracking = {'saved':False,'message':'سجّل دخول المسؤول لتفعيل التجديد الدائم لهذا العمل.'}
+            else:
+                db = state.db
+                def track():
+                    with state.save_lock, _capture_write_lock:
+                        result = store(cat,db,publish=False,rights=False,capture_merge=True)
+                        AUTOSYNC.remember_saved(cat,result,capture=True,refresh=True)
+                try:
+                    await run_in_threadpool(track)
+                    tracking = {'saved':True,'message':'أُضيف العمل إلى طابور الفحص والتجديد التلقائي.'}
+                except Exception as exc:
+                    tracking = {'saved':False,'message':'تعذّر تفعيل التجديد: '+safe_error(exc)}
         with state.lock:
             state.catalogue, state.catalogues, state.batch_errors = cat, [cat], []
             state.current_index, state.demo = 0, False
             if data.scan_media: start_catalogue_scan(state,cat)
-        return get_summary(state)
+        return {**get_summary(state),'tracking':tracking}
     except SourceConnectionError as exc:
         raise HTTPException(502, str(exc)) from None
     except Exception as exc:
@@ -1326,7 +1342,7 @@ async def autosync_targets(request:Request,limit:int=50,offset:int=0,q:str='',sc
     if scope not in scopes: raise HTTPException(400,'قسم غير معروف')
     rows=AUTOSYNC.queue.targets(max(1,min(limit,100)),max(0,offset),q[:250],scopes[scope])
     # Source metadata is returned separately; do not duplicate saved row payloads.
-    fields=('table_name','target_id','title','page_url','status','last_check','next_check','error','source_count','valid_sources')
+    fields=('table_name','target_id','title','page_url','status','last_check','next_check','next_refresh','error','source_count','valid_sources')
     targets=[{k:row[k] for k in fields} for row in rows]
     now = time.time()
     for item,row in zip(targets,rows):

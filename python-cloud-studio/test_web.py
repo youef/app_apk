@@ -35,6 +35,20 @@ class DummyDB:
 
 
 class DemoTest(unittest.TestCase):
+    def test_discover_can_register_a_draft_for_immediate_renewal(self):
+        source = 'https://source.example.org/movies/example'
+        cat = Catalogue('movie','Example',source)
+        db = DummyDB()
+        with patch.object(server,'Supabase',return_value=db), \
+             patch.object(server.AUTOSYNC,'bind_local_session'), \
+             patch.object(server,'discover_full',return_value=cat), \
+             patch.object(server.AUTOSYNC,'remember_saved') as queue:
+            self.assertEqual(self.post('login',{'email':'admin@example.org','password':'example'}).status_code,200)
+            response=self.post('discover',{'url':source,'scan_media':False,'auto_track':True,'force_refresh':True})
+        self.assertTrue(response.json()['tracking']['saved'])
+        self.assertEqual(db.rows['aseel_movies'][0]['status'],'draft')
+        self.assertTrue(queue.call_args.kwargs['refresh'])
+
     def test_discovery_extracts_direct_media_from_existing_embed(self):
         source = 'https://source.example.org/movies/example'
         embed = 'https://source.example.org/embed/abc'
