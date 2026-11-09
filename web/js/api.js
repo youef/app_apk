@@ -256,6 +256,11 @@
       item.playback = "stream";
       item.official = null;
       return item;
+    }).sort(function (a, b) {
+      // Keep every channel rail, including the home preview, in Arabic-aware A–Z order.
+      var aName = String(a.title || "").trim(), bName = String(b.title || "").trim();
+      var order = aName.localeCompare(bName, "ar", { sensitivity: "base", numeric: true });
+      return order || String(a.key || "").localeCompare(String(b.key || ""));
     });
 
     var youtube = (raw.youtube || []).map(function (r) {
