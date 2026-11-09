@@ -1,0 +1,1258 @@
+{
+  "time": "2026-11-09T18:05:06.552601+00:00",
+  "source": "https://www.qanwatlive.com",
+  "dry_run": true,
+  "discovered": 77,
+  "inspected": 77,
+  "with_image": 77,
+  "with_embed": 77,
+  "hls_verified": 0,
+  "existing": 0,
+  "inserted_drafts": 0,
+  "errors": [],
+  "channels": [
+    {
+      "url": "https://www.qanwatlive.com/2024/12/MIX-Hollywood-Live.html",
+      "name": "قناة ميكس هوليوود MIX Hollywood",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEin8jy6LoPg_O-wadcObOrSVZDQc152lCjeOR0D4p3t-hbPNO7qBJFFm1ZISHOydOyQDRZwoqllug-7T-Q0TIyXRPKxcBSb57DIOdfW71Rd_6JtwLzdgJLRNL2z1D2yuAaPosgTxuPRoRzzuEnwzaDHcrZ01wWFoXmhXk0Xbtrd5RwCFpfO30mrEFM9xGYr/s72-c-rw/mixhollywood.jpg",
+      "labels": [
+        "قنوات الأفلام",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "movies",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_93.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/ALHayat-Drama-Live.html",
+      "name": "قناة الحياة دراما ALHayat Drama",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiQXTM87qRGAAaJRyu1UWoLZ4tHNC6oxuz4kh74r4FdmlQBtasc93GCGzVjjdwEfhhLaD-EOoNVzb5zVdFA63YX0DPjK5oZJmeQYUAYCDNF5JiQknvUESCB3JAifGu1ppmEWRVGNr0nrGOEd4IYCJh73zzrXQIeV05WwDu6W_26xV3j_WzudaXgXsWgpwn4/s72-c-rw/AlhayatDrama.jpg",
+      "labels": [
+        "قنوات المسلسلات",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "series",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_5.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/MIX-Arabi-Live.html",
+      "name": "قناة ميكس بالعربي MIX Arabi",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhLx9l3QKeUEmOiTxWGnMYshz3ALYuEeUMjTqG_Br-60mezlm71MUXFFa5Plfb8D1EMyynW6hqrorkQXm0X0oInCOfeDR99MniC3CHcUP2aZDTpfYq9QGKEK0qk9Yw8wChhbvJ249kik8Rnzs7YZPxEfwslRIkZHlI76wSC9Mno14jRTUWCfZXxU9nh2ful/s72-c-rw/mixarabi.jpg",
+      "labels": [
+        "قنوات المسلسلات",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "series",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/04/blog-post_30.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/MIX-One-Live.html",
+      "name": "قناة ميكس وان MIX One",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgTvmuyUoGMFdJAbsCK_hOtFsFNLHipwUpjzBSfJfyzRyQ65WbeHAOPfKy9gHN5UqooIA-19xjDV6BzQyMIXM3bGGpAPtMaMTF-GmhqJEETKgLaEh2Iwfdl6uw57qX5HdK55cK5CE5JPrgT2vTMVHsgrWjoT2I0VwNydZx6jJwhU_jeOorCP7t7n74AJwmr/s72-c-rw/mixone.jpg",
+      "labels": [
+        "قنوات المسلسلات",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "series",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/04/blog-post_3.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/ALJadeed-TV-Live.html",
+      "name": "قناة الجديد اللبنانية AL Jadeed TV",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgbJwYYhglfV22HNIDxi9wdsvxAqtqNvLxj3xqEcZQN_HeQX2AHozrNBS26U872RRv5GsEQzl6wWKC1gq9JK6fwyrgcsDQ3KK8y4Y0HnH_kGG_9ux2_ccVgVJBMnqcPJWJUACJ80D_6nTCConmIqZ25iN0P9EVGjiBA0wv_s6bOE2vVDsw1rYzKNvapDagt/s72-c-rw/aljadeed.jpg",
+      "labels": [
+        "قنوات عامة",
+        "قنوات لبنانية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/06/blog-post_3.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/MBC-5-Cinq-Live.html",
+      "name": "قناة إم بي سي المغربية MBC 5 Cinq",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjzrFTi1z5NAJKvrWvziUQrXFVUM8MuYydHcFxwri0OEjSl8v2dUFEqHkdUvaax5g7pH-_pBSTvGXkwVNZE9QwjpAX5yTHpkvKgZsbOElf6K1zMDEWt7alEKf6L0T87N4hHXPRWNIGSwbgwPpYQ9yTbcVtpj86cZTD-pDLUfg3hoeNuYDUng1BOBRzAfz2C/s72-c-rw/mbc5.jpg",
+      "labels": [
+        "قنوات MBC",
+        "قنوات عامة",
+        "قنوات مغربية بث مباشر"
+      ],
+      "network": "mbc",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/5.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Maspero-Zaman-Live.html",
+      "name": "قناة ماسبيرو زمان Maspero Zaman",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjClPoWiGmDTEdlk7RqguMF8IO4xpnXOvXKVkhbEP67tSoMRNZ-owDAkBAXqT96kZCX_AIjeMmwCSpnq62zEq3_s7I6q12guY3unB55CGXliL_Y0UwBGJNAj2R5rv3UaLAjbc4MULfZV7NBHk-hXMfs3sRl_JZF2rpJtR2ldY91CSe5o6pz4iw4ftcoFzQW/s72-c-rw/masperoZaman.jpg",
+      "labels": [
+        "قنوات كلاسيكيات",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/06/blog-post_62.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/blog-post.html",
+      "name": "قناة النهار المصرية AL Nahar ONE",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjkh3rU0o9FmxF_FfvWYfVC_zmc8omwI1dBizwPWMJWUfjsMQiLJAWT5LgZwTyHSMneW_SNrfioA6k-PvUjrGCvcUEdFw2AVzddHNnhb7tW5yXDceIHuoAvGY8_6Nj0f8lymlowlNcgrRWzEPLAGByp25VwZxmb9SOFD7RL6DkzEc68HjH5bK-klxkykDm_/s72-c-rw/alnahar.jpg",
+      "labels": [
+        "قنوات عامة",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/06/blog-post_78.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/ALNahar-Drama-Live.html",
+      "name": "قناة النهار دراما AL Nahar Drama",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhGjRf3O2w8Efw4R3u3hFV1Yn71tn1Y1ir93U9av4gmzYHXfsVuqAvxVIfgRK4TScKbfO3VgtpL-qYbWa3W5nySxVFRRYzk1xa06GCbpLmCnlHmS2_sXWOVJmH-prkaocweWqDPFT-2zXcbwW25Mk3h-bziNkpEIlfId0PhL53IUWpCPKGpD3giuKO09GNO/s72-c-rw/alnahar-drama.jpg",
+      "labels": [
+        "قنوات المسلسلات",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "series",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/06/blog-post_68.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2025/02/ALOula-Egypt-Live.html",
+      "name": "القناة الأولى المصرية ALOula Egypt",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEi7Pd4xfH8oNW5C4YW-84fjv0TuWI20HRqOGamNfETbn_dVlWsXUgjSX1MFf6khMmYkKAKV12e9aF6eXBAIYLcEPY86PlD-tUAsLYiP0c6rRYy14XsW-EZS-Q2bLWUoNb0gJNx8fyoRsYaCe_0C2x4M0hbL0AumZBL-LRIcyV4S9cVHoBvpHWh9U5h_Hg8q/s72-c-rw/ALOula.jpg",
+      "labels": [
+        "قنوات عامة",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/06/blog-post_16.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2025/06/Syria-Two-Live.html",
+      "name": "قناة سوريا الثانية Syria 2",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEisERfG9I6dXvpFpRv5oVUivrS6oM_Kl3uSD_kknl9XWsMnCJ6rW00UzvGXP8fCGU91NW3M_wB5OQCuziADTL4B691IVmPjYyKn-pyBdmlF4-p-BHXptAUUaA406x9VQ-1r-WmFwfcvM2u-TgTfBbD4o_1jkshJGjlZdvS7y8fzsmpOT81hN5Kg0Ku74T9h/s72-c-rw/Syria2.jpg",
+      "labels": [
+        "قنوات المسلسلات",
+        "قنوات سورية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "series",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/06/2.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2025/06/Syria-One-TV-Live.html",
+      "name": "قناة سوريا الأولى Syria 1 TV",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgdQKnI_n8EQs4JxsyjTYqHrJkvVx462YeQVMfi9tHYUcikjuSuaJLy8WLNiNao2H6h5VOGQfcGB39-iEPOgS-J5FoMqKU3U3TRH534-xUMASdsL4Q8bm3SeQaMIl0aG9GfILjuE-WNlpUssfb_m1wXNT0rJLN5Km1_j-7SqdpRcozdgGYbtgp4dbAwAjrV/s72-c-rw/Syria1.jpg",
+      "labels": [
+        "قنوات الأخبار",
+        "قنوات سورية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "news",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/06/1.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2025/06/DAZN-live.html",
+      "name": "قناة DAZN الرياضية",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhR7IXX-Pko9p0fjlVA8RPEAzjsPVLeMeDwWkxiqiUjA4wlSPnZUVTSTOP2dnNowYj0SnMJSWEdJ3lvZUfW7qZ6yDLIjYz5Kfr6aTOEgHEKXZboBjXhO_MSUohZk4Kl46-G4_hmwme1QUSlbW0qeFXX-WRQ9L0IXeu7rYvQE9ZT7QAOVCRYZuwmsREReLZk/s72-c-rw/DAZN.jpg",
+      "labels": [
+        "قنوات الرياضة"
+      ],
+      "network": "other",
+      "genre": "sports",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/06/blog-post_15.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Fadjer-DZ-Live.html",
+      "name": "قناة الفجر الجزائرية Fadjer DZ",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiIM_2m6F02pa4WPP3dFtbmUg7N6JhRsH8e1fgXN2vksNNwXSPr-EtxlndGqupGlEvPFzGUB-FOZuGXYzLFZPN13lBk80-ERX3kLUgptV4CQSUzX0mv-5l8yP2MASr4ZgT_T3fiNsXD8OD9D_n8e_4zxaw0lEZGtnqepF8k8gUl9bVQ8aM4Gt3jj907VZv4/s72-c-rw/fadjer-dz.jpg",
+      "labels": [
+        "قنوات المسلسلات",
+        "قنوات جزائرية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "series",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_19.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Baraaem-Kids-Live.html",
+      "name": "قناة براعم للأطفال Baraaem Kids",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhk_qjsa0hM2f7pWVrmerQ9vnC5niXKbPw4XL4st_0CfHr4tnhmJLTzcdsV-GjMl5Tcmq72SII9LXAbPQCbcdV0zW8O6iA4ZHWCycYT90_pnqztt8wnMiK8NUkirXPX3i8Hp9bSpA6Xkpt6k6H91xt9EjNMZZvWjZQc3zlebO6wv_a8k0_T7OEc8XiUk2Xk/s72-c-rw/baraaem.jpg",
+      "labels": [
+        "قنوات الأطفال"
+      ],
+      "network": "other",
+      "genre": "kids",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_10.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2025/03/ALKass-Sports-Live.html",
+      "name": "قناة الكأس الرياضية ALKass Sports",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjqdeDV3FHZKwgLj2SR84qrU7qNCZmWBG6CmrCUe-FmgPfPnEII083EnpYjagJDRKaLdbHApbbSHuf4eUGIbCyzJb59HhkWQmeVMcqxj5evip7ot6CXPGjRb4ROBxZj4YEVVOSmTLTMQ6p_qstW-kkflkjZpASLwBf1DcN_q4jjcuJx-nsE2012yHGyJ-h1/s72-c-rw/ALKass.jpg",
+      "labels": [
+        "قنوات الرياضة",
+        "قنوات قطرية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "sports",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/1_28.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Sharijah-Live.html",
+      "name": "قناة الشارقة الإماراتية Sharijah",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEh8jZt52bodxtHVG2-8hE-9Ole8e425Rhu3tbP0FbZVDp_WplHL0T4zGEB_HaX2-lxKFL5gXZxyJ1iMIx2ajvEP-KvEIjCainUKboT2cxYm7PemHHuf5G_DZvsuxtHPvXz8GQA2s881r-_6vfPGmtWXhpbyQfLdGt2t7cQ4ccNYdTeUj_DN-An3itmT8qao/s72-c-rw/Sharjah-TV.jpg",
+      "labels": [
+        "قنوات إماراتية بث مباشر",
+        "قنوات عامة"
+      ],
+      "network": "other",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_40.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Sharijah-Sports-Live.html",
+      "name": "قناة الشارقة الرياضية Sharijah Sports",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiRxA-0_UCX3nAbGWvwmaOB6GmO6m7F3NlrE9LKhnNz511kggnyLVNgstoPmqzJoTqOmnNCjX_lABM-2xKulUYMd4G2jTy3Qmc9xyphXRL8JlfNUa3hfU28gpa_lfA1uSeDVxzoy8b3aDgQl9HM63YQQn373zZlLxjiKFWbanFd86fncay7HyL9KyFkLxo8/s72-c-rw/sharjah-sports.jpg",
+      "labels": [
+        "قنوات إماراتية بث مباشر",
+        "قنوات الرياضة"
+      ],
+      "network": "other",
+      "genre": "sports",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_69.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Dubai-One-Live.html",
+      "name": "قناة دبي وان Dubai ONE",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjwayC0Kv6EhQB-0UwousHYjrMgrbmn0t67baJjnfOfWfnV_lc9MIF8liGqEdjWCYNDz2rMMRovqmQMHdU59KJRjXC6s6_DCNqqU51MS8-z1uua82q_BJoGR9Z1Ye5SBNdrBKybOfMMPYBziZ1X6stiG9y7EnBAdf-PKkUGEUXxvppbcyA2g9lFdxUndZ_E/s72-c-rw/dubaiONE.jpg",
+      "labels": [
+        "قنوات إماراتية بث مباشر",
+        "قنوات الأفلام",
+        "قنوات دبي"
+      ],
+      "network": "other",
+      "genre": "movies",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_74.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/KSA-Sports-Live.html",
+      "name": "السعودية الرياضية KSA Sports",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgKFdmHlxhyiaz-PJ3Or-0i6f9uQLO7ZkboBDEbTquUHiL4sRnHbJVB5GiQZRXQW4BOzRlc4NfWS2rvpbHKNvUAj6-PqdvWpjoPSPPUYMafEI0GQmC188rEBpv3eL0CvpyNKtUYvDawZH1dXZ1Tx15boj5PqKjY3MMxaRPyh0Y7DJwvk9VVXGxmj5zCNjPO/s72-c-rw/ksa-sports.jpg",
+      "labels": [
+        "قنوات الرياضة",
+        "قنوات سعودية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "sports",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/1_20.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2025/02/Jeem-Kids-Channel-Live.html",
+      "name": "قناة جيم للأطفال Jeem Kids",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiw0Rh0b7hFmV28-vtAFvj1qacJUtGF8oCnKHP2OfaHnB_Ro8-X94cF9GfVIwG6N8rjGdTA2un36cJBNnhQiKZhp3Oy0foWJHnOJROuqQ1wv2PJsc724uXoeQXuUTmg70fqPVBVfYi4ESRweJY6g86tgLZbfkWlHDOxCLi6amWynvmss77XFxjYj05QcRjj/s72-c-rw/jeemKids.jpg",
+      "labels": [
+        "قنوات الأطفال"
+      ],
+      "network": "other",
+      "genre": "kids",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_41.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/ON-Time-Sports-Live.html",
+      "name": "قناة أون تايم سبورت ON Time Sports",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhJlwSPZkgrkA5AVetk2_JMaXvJjmFSbxQqTf2ZaNfhd4tr3K1uXt6TEsSBqwC9vtaByJUXOeWBzyfvk0dfaw94K_-G5vO_vn9m_wk4kn_Zsc45Q41M0Ce-QpaMYy_LlXUi7bNRJ3yGUUO6DnQFqKnYRMYqcwmfVHMU6tlaf2HeagKh2viUYLiG8maW_TC4/s72-c-rw/ontimesports.jpg",
+      "labels": [
+        "قنوات ON",
+        "قنوات الرياضة",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "on",
+      "genre": "sports",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/1_18.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Alhayat-1-Live.html",
+      "name": "قناة الحياة الحمراء المصرية AL Hayat 1",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj_oUn19IRaSwRIEBTwAKQAfqZZXsAqSZzEaef15qJl2x6wXpx7b4PZhnMTdmfAU534awbbDHLdwvUzWKowYFZrFUlGfw8LqwipRHDcgVSqihu06updkcvznAh08xsmNt4mT3nxGhpkZ89869b5c4lkT2ekmyL5NRAZIP3WdbFK9eacwdoGh2ckRKhe7oRQ/s72-c-rw/Alhayat.jpg",
+      "labels": [
+        "قنوات عامة",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_65.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Abu-Dhabi-Live.html",
+      "name": "قناة أبو ظبي Abu Dhabi TV",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiBFVM3lgblh4M-jJvvtGaXeJ5m1lx9hPuglv89upfuZxS1H4ekDT8FamhIY_IXD-d17fIg1eveg2vSqSTVfcGFiezxat_XsGgzEd783h2lo3b2zCxoN3S6xdOkqrcRvW7cj9vmsXyu4oaU51Ny-eW5YLdWDKX691CyDRmrgWc7twqVSpiMPVfaCQwh-mhe/s72-c-rw/AbuDhabi.jpg",
+      "labels": [
+        "قنوات إماراتية بث مباشر",
+        "قنوات عامة"
+      ],
+      "network": "other",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_28.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/National-Geographic-AbuDhabi-Live.html",
+      "name": "قناة ناشونال جيوغرافيك أبو ظبي National Geographic Abu Dhabi",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEh5niCW5xwIWgTV4UcVvIO35XvpTXMPuuxYrfi6W-CunK_blZTMxqCrNZv0h8qJWEl2P8MvfeC22bBhwVjubS6n9oaApdTyD-QeZhF3YmG7WlN8It2AWUpHiLcLeGbUUqDBANdBGvP0GteUzaaTiYpgOqx0-haGl5bSBuxdD0Cl_rhCdpE2_oeWVDdv57dj/s72-c-rw/nationalgiographic-abudhabi.jpg",
+      "labels": [
+        "قنوات إماراتية بث مباشر",
+        "قنوات وثائقية"
+      ],
+      "network": "other",
+      "genre": "documentary",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_16.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Abu-Dhabi-Sports-Live.html",
+      "name": "أبو ظبي الرياضية Abu Dhabi Sports",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjCrmMp67DlQT7OIhkSeHivKfL2bDe8M5gUR4NgWNeAvQ3aqmRyMJOL_4yd0H5AWuIDSWe_dbkcOgVwK9PKOxwRdggavIbGqeEJ2VdneP2HeYzyCvl7xWxTtYd6cSBOHxvr2S9f3pFn_mQ-G5ndFE48QHcAAhL49SkNegoWcpuO2W7Igh60qxYt2MrZfmDg/s72-c-rw/abudhabi-sports.jpg",
+      "labels": [
+        "قنوات إماراتية بث مباشر",
+        "قنوات الرياضة"
+      ],
+      "network": "other",
+      "genre": "sports",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/1_37.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Zee-Aflam-Live.html",
+      "name": "قناة زي أفلام Zee Aflam",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjiUqydHlzSBPrOK46ponu1u3OMe6Mio4XPRgPo2DzcnD9X0lC0jztMsJbsfikR2UPYTtqvctjcio-RbghycLCu02tWzS9mNNeG-RH8ukn1Ql0DSIZhHOkWfavSqdembJjVnRPEuTflSm6kjq19obWfJwj-5XFoWlAR9s0wWnYOI5eZzbZkREcpOg0o-XKc/s72-c-rw/zeeaflam.jpg",
+      "labels": [
+        "قنوات الأفلام"
+      ],
+      "network": "other",
+      "genre": "movies",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_36.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Zee-Alwan-Live.html",
+      "name": "قناة زي ألوان Zee Alwan",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgOHxgp8zfmvmEilBqH2_ha_8Zpa21S4FsflN2FOmxCCiPqTzg9bj7ExrRaKWQrQ3SCRzY33Yvh517glahPdECDQem233HM8mXkRjLaxECEsrVyWI6E9Ljjd_VK24V9monIJCZZ8JGkG7lq1QonJn5aus_W06z1q5b6AQoZZKmT80wl07j6ZMzH4BFC0Rni/s72-c-rw/zeealwan.jpg",
+      "labels": [
+        "قنوات المسلسلات",
+        "قنوات عامة"
+      ],
+      "network": "other",
+      "genre": "series",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_83.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/DMC-Egypt-Live.html",
+      "name": "قناة دي إم سي DMC",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhTEX1h1dY6uxJu8e76oWlht8WKJ2xm0gnacuPWAHESkGXPDl5DUEojuKXkqEPWzVzbsFwR_jnZ7CP6Q-W6ywM5cVK8VyU33VRGzNMnbQym2Bin2ZdCTjgQwEYzv5ULO1SRmVQndw-PR2F68U2A19enN0zkRlWbzqkT9tkVYEgbKqApbeXVzSVbQ3NhM3rF/s72-c-rw/dmc.jpg",
+      "labels": [
+        "قنوات عامة",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_43.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/SSC-Sports-Live.html",
+      "name": "إس إس سي SSC Sports بث مباشر لجميع الأجهزة",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEidLjc-TsX-8tJdTbZlebCRTlUvPoNej-PK9ZMzk74Fqoy9qHZqB3F3nVgzWJCARMiDrdLqSY94cLGDAkgsyN_DHIOR2emG9B-MX4O_k5z-aIFaSt7icw2wcSJ0qsED_aIPHr3uHGnYhN6vateGjbE4iK7hmxqfQ5z1aiYu6a0ZzWDAAfDqA45tI5PpVWnR/s72-c-rw/ssc.jpg",
+      "labels": [
+        "قنوات الرياضة",
+        "قنوات سعودية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "sports",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_49.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/MBC-3-Live.html",
+      "name": "قناة إم بي سي ثري MBC 3 HD",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgVzdBYIaY-fp-puW90n5Xk9_xnVyA3GeJda1lU1e7l7-yy-8d2v622bvUjwszQA8dr_Wxq76TpMZs3dyPtXzY_PkwSrnBX5y86Wm7YFBfzGHzmWKuFWZSRQyfMX-t0zMHnRsAmMuQUa1EtBLeLnDneoKLzP8UqEHztuNSrIatC0BGGim2m7daJZXXs75s6/s72-c-rw/mbc-3.jpg",
+      "labels": [
+        "قنوات MBC",
+        "قنوات الأطفال"
+      ],
+      "network": "mbc",
+      "genre": "kids",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/3.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/MBC-4-Live.html",
+      "name": "قناة ام بي سي فور MBC 4 HD",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEig5in9dw2u28W8lTQlkBqR-ZL4Nn9ThR7MCrQxo2RKHDJRl5bdAAd3jViK0oGg4vDeHOT7TrMOZ28_7yYBBzmqzlfsQ0zRX8OWVKeEILAFc_EiHisDAEpOSMmnhvWgCxg5wCmg_75x6WM8zP-3_gfXKDS337C2VUBBhnWJUOIv6eAFVhFsuzqRl0l4kT95/s72-c-rw/mbc4.jpg",
+      "labels": [
+        "قنوات MBC",
+        "قنوات المسلسلات"
+      ],
+      "network": "mbc",
+      "genre": "series",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/4.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/MBC-IRAQ-Live.html",
+      "name": "قناة ام بي سي العراق MBC IRAQ",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhb0eQN6w7Xsk7Px91Eu9gVIXowbpP94HeyponWdYDBJ2zvHBxyHX9hB1_Qj7qBcK76AG7rVJSoADCb-SGsZf2bN8q2DxoHJRRKdJ5Xzl8EfJNxjeUee8L5hJ68JVGhIw2W7QCeKXTvSEeBgUaT8Fk3NcAGrILNQZaOhJneuC1U5-7tPhNLNCUFLps94JGD/s72-c-rw/MBCIraq.jpg",
+      "labels": [
+        "قنوات MBC",
+        "قنوات عامة",
+        "قنوات عراقية بث مباشر"
+      ],
+      "network": "mbc",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_47.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/MBC-Drama-Live.html",
+      "name": "قناة إم بي سي دراما MBC Drama",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjCd9quyhgDaxCKpyylh0-ztbUTmeC8rqnjE3CMLLvOF9Svs3t7-9MsbTOl0ZhF0BKgWY6KWDriR7-4ToM3hGaVBPKvtJ7gN8iJF21wiWG7ZvnUeEHzNJ-o-AcNj2CxsYSYYuQOKcp0YVcPIgiy5cU6ON-uHWhdv9kWtVzsSZ86ehiNXq_nGk0rLC831tv4/s72-c-rw/mbcdrama.jpg",
+      "labels": [
+        "قنوات MBC",
+        "قنوات المسلسلات",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "mbc",
+      "genre": "series",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_98.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/MBC-Max-Live.html",
+      "name": "قناة إم بي سي ماكس MBC Max HD",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEibYka6X_mz8X8l6cGlfM6RXGDnig6WJww0_rgttisbiWPfL6H3QZ2Mn84DsAwL3OSvSfrWEc5F6C7s_6Vf5kdeG97mmQwlPEdgOxKZETDvOves7cdONmhBkXXNfnJpUAk9DHCKz8ZbCIFsdAhqnU2WVnJM62jvQhIASx9_c_OwgUR7wrezWUjiFLyO1C54/s72-c-rw/mbcmax.jpg",
+      "labels": [
+        "قنوات MBC",
+        "قنوات الأفلام"
+      ],
+      "network": "mbc",
+      "genre": "movies",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_0.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/MBC-Action-Live.html",
+      "name": "قناة إم بي سي أكشن MBC Action HD",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEi8HAmvSyDEtS4g9ypuukxtFuHe-33szuCb3SZLVoewXmJI1Kjlg0U1sdVt6aS9yt7n9t0YdVtsI0aIt479x6fPJ2n124mLjS_hQ28d0oVmwg0DFLnFUddcqYnDKTO8A5F3ANDvpislpfun3GNM2O_id7Rp9Ke2R1VDgHOPXUEzE1XznjZWD2dBvYTfnJPf/s72-c-rw/mbcaction.jpg",
+      "labels": [
+        "قنوات MBC",
+        "قنوات الأفلام"
+      ],
+      "network": "mbc",
+      "genre": "movies",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_33.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/MBC-Bollywood-Live.html",
+      "name": "قناة ام بي سي بوليوود MBC Bollywood",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiCxlILC9xfS044eqlXFYlFMljkn0w6a8hRqDtcSXe_j5hhc1IgMBGZwTmW0v6tlAIP7_Y2iv6f7bRn6RXIG50VXsNUaqI87X0zXkxQ-nbO4AuQdlesXcxMgbPIXdMURePicpFRGrtQhEwsF4dI2nbcFd9ArS-KYlJHG2IBPcGkXblVu94fSUzxnsVNqWGX/s72-c/mbcbollywood.jpg",
+      "labels": [
+        "قنوات MBC",
+        "قنوات المسلسلات"
+      ],
+      "network": "mbc",
+      "genre": "series",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_22.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/MBC-2-Two-Live.html",
+      "name": "قناة إم بي سي تو MBC 2 TV",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhBJVX6ZhdYqL-srJHw6aIUzTd4G3b5Bah1QPbRmB3gLgbJoxFVnWH_NkMRnvl0ykmAODTC8v7pv5YCox6TAOMUEBzWF4ZOxQOd3nYg_2UDnjLwcTHdSfWY52ejR7WKAATkL1NT3Zss9_3a6XxmUaPzLksA50r3zIaADLo7S1ptiyTMff8hoYGRkZn_4wBW/s72-c-rw/mbc-2.jpg",
+      "labels": [
+        "قنوات MBC",
+        "قنوات الأفلام"
+      ],
+      "network": "mbc",
+      "genre": "movies",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/2_17.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/MBC-1-Live.html",
+      "name": "قناة إم بي سي الأولى MBC 1",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgXqXbGozEXxNDlelzjuSkDdFC4o1-6Ooq10kZQRoOj2-h_IhdZ5wYDRCIZ0sPKZs242uVDH-JrcPRi519vnFKRB27OelCr72epTT6dN9_Ef5uSq2wOO604KdKXKNeYZcHniyLWQdXo1_VoWDUmFqq9ThOpwHAQkEiQacn7RMW8j6GTgNyntMxXTZMj8kF2/s72-c-rw/mbc-1.jpg",
+      "labels": [
+        "قنوات MBC",
+        "قنوات عامة"
+      ],
+      "network": "mbc",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/1_17.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/ON-Drama-Live.html",
+      "name": "قناة أون دراما ON Drama",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiPJ5SP6C2TvFsewIxJwIsSkuWbNiQv4SHEGhiFDeEcSE7PtRs_0YoLWjktk89wabHxUMK0mhN4DR24sYRSCdywvZ_7yKOCGSn-wgw8xHldr7NC6FMgueijjwyQ_ZXFSv3UECNPg406pcRAgKvcSgwtphiuIdJCzvZjShEw0Bn8CjpCGy6d532fqR8w3BPp/s72-c-rw/ondrama.jpg",
+      "labels": [
+        "قنوات ON",
+        "قنوات المسلسلات",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "on",
+      "genre": "series",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_68.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/ON-Egypt-TV-Live.html",
+      "name": "قناة أون المصرية ON TV",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhB55EgKZgBdrma3JTLROeMv-LLR2oiJ-slCzO9xUTIgHyzPyNSF84LKqrwkYTt4eaR6B6IapZfwd0Y2mtexPO7YhkYE1M4S5fMHt_mklFGpD91NHuj8CYkVKipqSdrneEb5_eN06MVL8aTBI9tNIW1a2lSO3_MynUmTR6wvYgnsmbfeyd1H-kgGGFUbg4Z/s72-c-rw/ON.jpg",
+      "labels": [
+        "قنوات ON",
+        "قنوات عامة",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "on",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_17.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2025/02/MBC-Masr-Drama-Live.html",
+      "name": "قناة إم بي سي مصر دراما MBC Masr Drama",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEh1gmDutdtX8QOTeIjr0H1jkxmaVJL_uaTRJoZdEBmhJr7tQGJSXQroIcP05nTogIUNGeU8zkDEvIse24mxKZCX083MCkbwC4hRIAyOR6d56Qv8BBev2XQ4Bc49lsezTBaaMhxuftpA9wvIDQWrAYN3nrkpRpYnijMZPZZua73xFIn_dnHOj6kY_hOm9ZdH/s72-c-rw/MBC-Masr-Drama.jpg",
+      "labels": [
+        "قنوات MBC",
+        "قنوات المسلسلات",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "mbc",
+      "genre": "series",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_13.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/MBC-Masr-Two-2-Live.html",
+      "name": "قناة إم بي سي مصر الثانية MBC Masr 2",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj3YvzX0Ypq98BoQm696Pg1n5wOy_FeFGbZqpPLqlL-XQI7XvC2iwd-ddeWmIOrNsCKG_oN8ktpPSxAmk7AUkhV83J5hyphenhyphenj0QrcJQu8fpd0pd4EFPJJODPSdnHimeQAfKSQNs3RtjdBon1MS6jaC7aQRX9mcl4M4H-xlg6qxG14LbnhR2Ej6awxJ5hwa73Ii/s72-c-rw/mbcmasr2.jpg",
+      "labels": [
+        "قنوات MBC",
+        "قنوات عامة",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "mbc",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/2.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/MBC-Masr-Live.html",
+      "name": "قناة ام بي سي مصر MBC Masr HD",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjrNFIsCSIGk3QhyCwOvH-YNNnW_h2PaZiuCG2rmBywNkvCnWAvEphceoRua1Qo-6qZ1mMNxV2r5RQCmqZyRy8QMOUmq2GZpLV_9pN48GXi-TXQRmb1ONsQHQZMeL9cqMM5FvykdR05JOfVtFIpi7ZoSUVZ-vGbF2djZmNtQ_F9MB06VmA7TsXERV1CrPmM/s72-c-rw/mbcmasr.jpg",
+      "labels": [
+        "قنوات MBC",
+        "قنوات عامة",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "mbc",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/1.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Cartoon-Network-Arabic-Live.html",
+      "name": "قناة كرتون نتورك بالعربية CN Arabic",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjyyk3grMJjsDfbVuD_hMkytMWxajGiDyggOn5VWVwjmaZsQLpg_9hRGnOyrt0Uvy_CyIFYsZPlUD8M_LqxYhRIRAnKjLQXttyiWeWLLI0A6EeQfuV-iUauwQhFYbRngPIcLw7RtFJIE8BvVvEnm7h0vAGh5SkN8QWaQBWhsmfAqSrzHcOQ6xVUyh1w9bck/s72-c-rw/cnarabic.jpg",
+      "labels": [
+        "قنوات الأطفال"
+      ],
+      "network": "other",
+      "genre": "kids",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2025/02/ALKahera-Wal-Nas-Live.html",
+      "name": "مشاهدة قناة القاهرة والناس Kahera Wal Nas",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjHW7i0e-Loi778ZJVzYt-4mfOQJG9b0FGI3TnFnZEmOjFXVWpqEux3B6YQyRHhdrP4ZyQ_q3_XkMRraA_I0wRqQ80IfDWh1O9X9hYqvaW7-XXCPfpaK5pamZhCPJK0knu5a1Z2Joox58cD4c-EMvFtQcl6lRBNMoe0qQyEH5iLH5pzuwCwNPxt8NLkeftZ/s72-c-rw/KaheraWalnas.jpg",
+      "labels": [
+        "قنوات عامة",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://pl.qanwatlive.com/2025/02/kahera-walnas-1.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2025/02/Qatar-Channels-Live.html",
+      "name": "قطر الفضائية Qatar TV",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjLtS4I3owlz2H1zloqiMWsqFiXKYwTxIjEFeof5aiUkifTGSHqQC3eM4OTaQjY1XT_pz63HJYLyUXUWtklLoY0dDfoTS1h9aDlm1xDlM54zoToGD2Zool2l90QjJwqI9HOrjua8ikmIeE6t-XIx6zOtSUhtf1eS9x8_sDLY4jt9rU_lGYatexIRpkAA3bg/s72-c-rw/QatarTV.jpg",
+      "labels": [
+        "قنوات عامة",
+        "قنوات قطرية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://pl.qanwatlive.com/2025/02/qatar1.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2025/02/Dhafrah-Live-Stream.html",
+      "name": "قناة الظفرة الإماراتية Dhafrah",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEg5uRgCZKMTaAcAA9QqZnVLCXJt8GyS2oIUomtCmz5Gd_zGWkIset8KuHqComUGP5KNaSJKHmkiA340SrBxMkoiwQdDZ0XD3PJUsCpcTC6s-zHBsxmagu8M18AZVLS_vQAbSbFFpsEzHb7S8AgaYPXTIjaEIgEoy2tUgFDFIwh9yFfWNVvPno0czDV6GSfF/s72-c-rw/Dhafrah.jpg",
+      "labels": [
+        "قنوات إماراتية بث مباشر",
+        "قنوات عامة"
+      ],
+      "network": "other",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://pl.qanwatlive.com/2025/02/dhafrah.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2025/02/Majd-Quran-Live.html",
+      "name": "قناة المجد للقرآن الكريم Majd Quran",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgsOemlno0n7l2Ied14_soatJlmNaNmcuCoAr9GGoeGn6lWBYZe57kcNKtY0AYV0Cwr6dXmKgpsf6WgrxFbtdafRz2gfcgiWmtJnRltN8RKCODmvS0qVesYX97CqSBIjg0YiG3xfQfOE8zDNCtSGLsJnuA6XlNauFfFfhuP9aV5PTdmSwh2Dfo_clsYWDxG/s72-c-rw/MajdQuran.jpg",
+      "labels": [
+        "قنوات دينية"
+      ],
+      "network": "other",
+      "genre": "religious",
+      "sources": [],
+      "embedded_players": [
+        "https://pl.qanwatlive.com/2025/02/majdquran.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Sada-ELBalad-Live.html",
+      "name": "قناة صدى البلد Sada EL Balad",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj33uZU8FeB5dnkAZjnW5WNikuZAfPZ_KaJemkwMFxyD1uhrOpI97FnfJBVGzNxom-ZoSYjDd6ExxPhosiKWbTaqUqe6C0SvW-daSo9qCfa9YhWuTKLKlvHKis8Txo4N1TGwG4lMfQaobjeJsuCOTBGH2qi_Qq-qYdMK4jtC-oTzg4dBO5v3BPBCQ6l8K95/s72-c-rw/SadaElBalad.jpg",
+      "labels": [
+        "قنوات عامة",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://pl.qanwatlive.com/2024/12/sadaelbalad.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2025/02/Panorama-Drama-Live.html",
+      "name": "قناة بانوراما دراما Panorama Drama",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjbg6omXKxKVEPyOYOBGraN7K57j8jbXkl5Xo6D2CIxhwX-Bh0KTu1DSPGsM0OkM2thjKYs8C7AF_n9QoLRCPzLsmCS3M-w_HWfGWBFFiKZlxtfdjyfqcwP1Of4zs7gHcB0XCy-vM-1sMOIvbAcHaOoUloQiAgolBfO1ErGqoVSWEIFEoS8eseU2oziFsbG/s72-c-rw/panoramadrama.jpg",
+      "labels": [
+        "قنوات المسلسلات",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "series",
+      "sources": [],
+      "embedded_players": [
+        "https://pl.qanwatlive.com/2025/02/panoramadrama.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2025/02/Mehwar-TV-Live.html",
+      "name": "قناة المحور ELMehwar",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhCOz1qGPgdmX9Nr3YcibIGznNOodOuQTZeRGUsDQxeQNv4c-ko5sNkwJlLXhsmB-PHkP2aWAnXx284qNMOwR5Nhkekzjr0B_zXEi4unVgSmBP6OjsXW73AVlw1otd_oUhbBMM7dysv0kpBlRM5sg5Dg6euQeMazsMuyDouY-9rw8BhGzJxnnrZGYAPg2mZ/s72-c-rw/mehwar.jpg",
+      "labels": [
+        "قنوات عامة",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://pl.qanwatlive.com/2025/02/mehwar.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2025/02/ART-Hekayat-Live.html",
+      "name": "قناة آي آر تي حكايات ART Hekayat",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEixXns29z3Mu5haK_wHyX1IRhw7K1yM4LQkezhm1jecCx2fiNJa9BfpCRN2VV55QMAKXKr6dantlEqK-NtbnOZmqmptXcU9R3-6Od7qdWGShyphenhyphenKKDYxJeUx0JdYETOyB-54uQM8v-5uKepSQ09z3AMPclcGxRX2l4REhYGzNsABOKA3hXPktxNm0x8RW9M_e/s72-c-rw/ARTHekayat.jpg",
+      "labels": [
+        "قنوات المسلسلات",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "series",
+      "sources": [],
+      "embedded_players": [
+        "https://pl.qanwatlive.com/2025/02/arthekayat1.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2025/02/ART-Aflam-Live.html",
+      "name": "قناة آي آر تي أفلام ART Aflam",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhM0GRJwagII7GTb-waufRwcq2-VTEswkiOE7JCPybYEcUI8wL7gJmzeu2WIqK8Wj86nan0AbcvwZi_QZC_6yBB8CEUvD7BT8q0lkBjV11PTIDQ7Xk_GdU65zK981xEM4EDqOkFQbbONSUS6umxIkfZbsx_nstJfKxf__wDp1hL1lMTbc3Kw8P9O8WQzSr7/s72-c-rw/artaflam.jpg",
+      "labels": [
+        "قنوات الأفلام",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "movies",
+      "sources": [],
+      "embedded_players": [
+        "https://pl.qanwatlive.com/2025/02/artaflam1.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Heya-Egyptian-TV-Live.html",
+      "name": "قناة هي المصرية Heya TV",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEg0GNiNrvDz5l6tCGCbYII887fxGNFinNVL8NPxQsItYjwhM6pKb65i6dxQmIRJimxul33whgzsHVVsZ5ev8r5F3TwONRIv-G_8HfK6r6RGqSSTI58f5EZnXeLfLXYQfBVw9bx_rOCJZvdoSHOiDrjETod9nYXZJcXu3iBdX-Q2UMJUCQFWJDU0cLJO6FKj/s72-c-rw/Heya-TV.jpg",
+      "labels": [
+        "قنوات عامة",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://pl.qanwatlive.com/2024/12/heya-tv.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Majid-Kids-Live.html",
+      "name": "قناة ماجد للأطفال Majid Kids",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjvSbiy1Nb6ewH1DxyEVJAlsXryl3JdjtNkC5YHfYBQGnyzPFrfQqy9i0VjnPO3flcQhMN_Vn8aemtWUTmR32JwRYb83ghltmOX1Bkw8FKwHPEns_2hLliwK7BHrPQ4C0Xq5Dokb4GNJ6WQq2XsCSp4OkSxrT5xCJxY9A7xishHgbFDab72QdrucMXyFUxQ/s72-c-rw/majidKids.jpg",
+      "labels": [
+        "قنوات إماراتية بث مباشر",
+        "قنوات الأطفال"
+      ],
+      "network": "other",
+      "genre": "kids",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/06/blog-post_1.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Spacetoon-Live.html",
+      "name": "قناة سبيستون Spacetoon",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiPKfN9SHkWAf0FgLqZZmg57JiRjBCErh4p2-t7UNFrS-cUY97eGBAT6gUErjW2YGeZWf2sOMkBNAIml4KvNcfqmxCNGEUPJl4dW1xGVttgsXqqtmjIDWwgeRib22CreLCy8jV7VqRgP9E6yaGz5u8_1PZcuz14MfW-dcmNBOYAcXD-OpK8ewpqbj_b2NQx/s72-c-rw/spacetoon.jpg",
+      "labels": [
+        "قنوات الأطفال"
+      ],
+      "network": "other",
+      "genre": "kids",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/06/blog-post.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Fujairah-Live.html",
+      "name": "قناة الفجيرة الإماراتية Fujairah",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiGOisM2yiAkdVZ4iEYybCQ2163kv4OtRAILI5wlkG1UMExD-hkxQZxUtdYFuoHKhp4UiVyvz8UNBKP5OuvjQnITSy61R2MOSYxPvgKjovO6LbjK-HxaIBlzqsjz_F4Z1I8kiTdwb4l2oqEtRtBoRyYOdU6Vf0bWP1Mx_BcKF7D9gbmRGI7bfFBjnxD_hf_/s72-c-rw/fujairah.jpg",
+      "labels": [
+        "قنوات إماراتية بث مباشر",
+        "قنوات عامة"
+      ],
+      "network": "other",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://pl.qanwatlive.com/2024/12/fujairah.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Wousta-Men-Alzeed-Live.html",
+      "name": "قناة الوسطى من الذيد",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEikXGXVsB4TKqD67uoSBWQ7EhmMRSzbmbmtsbpG9U_BheF2D1oBHSUuTQaKfLzAy5K6etfI2CBk01Ke0a4B-yzcTolSyIXBfbf0aQdi4GCAO631UqbcP30Kr5YnJCXV5FD7wL5IZcxSXvhTrGHOTOg6JkldS4bQfBD8hCGDTnuKPS9xG2VFc4-zdXQcSxkP/s72-c-rw/Wousta.jpg",
+      "labels": [
+        "قنوات إماراتية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://pl.qanwatlive.com/2024/12/wostamnelzeed.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/CBC-Drama-Live.html",
+      "name": "قناة سي بي سي دراما CBC Drama",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEi2uHVfOMJEyp1S18GcMBgsYajyj2nLXFbnKhAS6wdWi_0bupM2I-dwftmykdUXSSzPkrSSLeA9BuzQ5u7ZTNRlYwXd34Mw90xqC86LMiVNWN-Dr-0I2mIierfP0CebX6uKOenSLp9zd8bYetOIiUbKTb3JnVO3CN1IKAuhRUgciXqhDzmtEe6KTGOLuC4c/s72-c-rw/cbcdrama.jpg",
+      "labels": [
+        "قنوات المسلسلات",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "series",
+      "sources": [],
+      "embedded_players": [
+        "https://qnwatlive.ahlamontada.com/h7-page"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/CBC-Egypt-TV-Live.html",
+      "name": "قناة سي بي سي CBC 1",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjMYQ6RHcnFn69Yl261wpKTZnwwx6vfACSxEMpcVNGuGhILcVStwK2eea857JCBuOeS-YPo9EyS0gkoct1jM4SU4jOqgSbBaUQ2KX4C1Th49sPdFR8-fRsiiuG18A6goV9wJpUB-F_i-cFcRG3HTo6I_KXBxOeUGT754NncxCfaAl4lvoiVyF5zG7uLqkLo/s72-c-rw/cbc.jpg",
+      "labels": [
+        "قنوات عامة",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://qnwatlive.ahlamontada.com/h6-page"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Nour-Dubai-Live.html",
+      "name": "قناة نور دبي Nour Dubai",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgZkqVg-0kSVAHVXngnjxQTUgtwpKIkLd-b3ahQD_Lvkj-eDx51Y9dlI3ck_tDK6p5hHhcSc4NWAZZSBJTgFJ5ZCwsF9XZFUBaVZtnrYIuVKGfbDkaaWgKY29OyRXNoW4bw3blYFhyphenhyphenTkBjiRqusb121vpSWfXO0hTeQDZwa1QRt_s7xptSysr0EpjvngGQh/s72-c-rw/noorDubai.jpg",
+      "labels": [
+        "قنوات إماراتية بث مباشر",
+        "قنوات دبي",
+        "قنوات دينية"
+      ],
+      "network": "other",
+      "genre": "religious",
+      "sources": [],
+      "embedded_players": [
+        "https://pl.qanwatlive.com/2024/12/noor-dubai.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Dubai-Sports-Live.html",
+      "name": "دبي الرياضية Dubai Sports",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiO0nYbSN5W_uaP8ifD_iWa0dqiHMsye8ei725MmhQYF6crIgSCW7KUAaxPLV2hk4uinIVceAvcwnmz_-BZSUZnWWRO7GQfOMA5ItpNn77C8bR_VYD_oNUGkkfGLVDYd4rwp_R21gtt4uS-3OSdaAa3dIzmCmkI0coYqQq07PxRl6JBTeTGiK79s0j-wOmG/s72-c-rw/DubaiSports.jpg",
+      "labels": [
+        "قنوات إماراتية بث مباشر",
+        "قنوات الرياضة",
+        "قنوات دبي"
+      ],
+      "network": "other",
+      "genre": "sports",
+      "sources": [],
+      "embedded_players": [
+        "https://pl.qanwatlive.com/2024/12/dubaisports1.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Sama-Dubai-Live.html",
+      "name": "قناة سما دبي Sama Dubai TV",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjc1a-vEEFUuugHyycjuhx-FhoH8CU7e_A94r1_rFanj8epH67Q5ByM6AiGVK26AKcbFvmUWlgpjGezA_5lWgaKZzcY0mwOVgN0dK3_kHYHJluTSHiElVClpu58tC4d3P9f29poAEshAEqPTFDCUwPOTrRFNlcasXbDbo2VbmNq-UOlm6Ud8tT_9zlBLQh7/s72-c-rw/samadubai.jpg",
+      "labels": [
+        "قنوات إماراتية بث مباشر",
+        "قنوات دبي",
+        "قنوات عامة"
+      ],
+      "network": "other",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://pl.qanwatlive.com/2024/12/sama-dubai.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Dubai-Zaman-Live.html",
+      "name": "قناة دبي زمان Dubai Zaman",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjUt_zecfMcyhauUUJL5H2eFFa6OKPtf3QJHq2TRLjrNh58AUefotY_Ss1AqkqMktPK6e6tWdOlbgfaFDkwhGMx7Uy0Gy9FBNtarC1PwS90sEjb_pLX_BwhRaDQYj517aRDn1k62dqryIHN2hbawdNH0t3cIxBpb18m7g8g07tf-MCRN1J_1Vgb64b3fT95/s72-c-rw/dubaizaman.jpg",
+      "labels": [
+        "قنوات إماراتية بث مباشر",
+        "قنوات المسلسلات",
+        "قنوات دبي"
+      ],
+      "network": "other",
+      "genre": "series",
+      "sources": [],
+      "embedded_players": [
+        "https://pl.qanwatlive.com/2024/12/dubaizaman.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Dubai-Oula-Live.html",
+      "name": "قناة دبي الأولى Dubai TV",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgj7AfoQqFKhRay1_HnAHrQSuJoVTN6505TB3bZ-P8IYaD9avJIwpaNp8i7K1LjktmM5a5h9eXvuR6IJ6lOUvHQueBmGYUebkBuwaymYkhP7-qBuL3n-jb9Gz6U9KQhyphenhyphenaSLYnAVwWmVS0a0-tDAvYBdZ-xX7UXhdi51MPtc57vVwqUx4ePYgloQs-6oICvX/s72-c-rw/dubai.jpg",
+      "labels": [
+        "قنوات إماراتية بث مباشر",
+        "قنوات دبي",
+        "قنوات عامة"
+      ],
+      "network": "other",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://pl.qanwatlive.com/2024/12/dubai1.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Sunnah-Tv-Live.html",
+      "name": "قناة السنة النبوية Sunnah",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjfxjyqcFYJtRqvQSl4YOFTklX6XuQtXRX60B8ctpqhsiaJwZ9ybFOBW2M6w9iHYhigCUQVBBxsCy5BfbsUWqoWbzMUxPJlT1HPE9W9ImHwrGSljmZPnH_SM7eeWx8vsZ9qMvguB-zoVhIIA5t3NqYGiYdQXDGN-Yc-KdkqXi6Uc8MHI4hyMaqdZHEou3ed/s72-c-rw/Sunnah.jpg",
+      "labels": [
+        "قنوات دينية",
+        "قنوات سعودية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "religious",
+      "sources": [],
+      "embedded_players": [
+        "https://pl.qanwatlive.com/2024/12/sunnah.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Makkah-Quran-Live.html",
+      "name": "قناة القرآن الكريم من الحرم المكي",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhRrfJnPT68f08ZfbevyfmU28cDB2JSha2pK4ZqBtvqm4-BfcrX5e_vJRdMRRj6flAxZFbpEgNjKK6IYqCLQXPFU-GGx2ONvILGTeRptc8LUZY_BUTkT3AnfC-ea6fBMwC3uwD2crFHtOPq0in6eKTV40FCbBy8SNuEmnr1kGvW3M6U9zMurk0fwhTRpOnF/s72-c-rw/saudiQuran.jpg",
+      "labels": [
+        "قنوات دينية",
+        "قنوات سعودية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "religious",
+      "sources": [],
+      "embedded_players": [
+        "https://pl.qanwatlive.com/2024/12/quranmakkah.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Zekrayat-TV-Live.html",
+      "name": "قناة ذكريات السعودية Zekrayat TV",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj-91ecYeBdYX3eQT8Mg9rmjBhKK8JhlZHJTxyueDrcBGljSk2sABCQ35wnTxU3B0ut11utTWMGYHc0zWaVKAQHO0-YITyjirx_Wsi2dLktlz6eHL1uFSEilCdHrOhcB5tr3lSRJp0NGskeiFIhMR8NZcKy-SQnqzqWIVGFMuxmht8ogb0dSAOwB1B1T0og/s72-c-rw/zekrayat.jpg",
+      "labels": [
+        "قنوات المسلسلات",
+        "قنوات سعودية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "series",
+      "sources": [],
+      "embedded_players": [
+        "https://pl.qanwatlive.com/2024/12/zekrayat.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/SBC-TV-Live.html",
+      "name": "قناة إس بي سي السعودية SBC TV",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjCYYRTvDtP36ItZy_HcmkLHbEtgcov0liYBSxmNQlkb9-kyCEh-6PgzdwDwnugjRIhiyaWdifdp9MLOVLJY0fybxkaIZLudLHzxnUpXru4BG1c0GDCfbS47wPS9i2N9pbOZuPnGlrmKpD5Ok3eLXFJXw0GiMISoImmKMePKzg2RgSaugi0eHlZdfFQquxS/s72-c-rw/sbc.jpg",
+      "labels": [
+        "قنوات سعودية بث مباشر",
+        "قنوات عامة"
+      ],
+      "network": "other",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://pl.qanwatlive.com/2024/12/sbc1.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/DMC-Drama-Live.html",
+      "name": "قناة دي ام سي دراما DMC Drama",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhaB6_sFzKomgrA_nkkAaiQ177SIZO8Alw9pl-W7ZNrN2lcwBuNrGhc1_CFVz1xFIOM8FRdB0ayzFCcE0YaquWlPO7SBOy5_zuNOIxp7tkXIqWptQ-XpP3SP5KZ2sCUvd9Ixel5mLUeOs1PNwmzc1rCtOsT8hI2-NCFjazIxbZ1nF5UxVNvwU7eTkTSEi0d/s72-c-rw/dmcdrama.jpg",
+      "labels": [
+        "قنوات المسلسلات",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "other",
+      "genre": "series",
+      "sources": [],
+      "embedded_players": [
+        "https://pl.qanwatlive.com/2024/12/dmcdrama.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Rotana-Kids-Live.html",
+      "name": "قناة روتانا كيدز Rotana Kids",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEi4J5XcNcm4j_bOX10P7qwdwkTUydZMlul7Evlm_gPTvWUEfNt8JZQ4cU6V5ecrdwv9WDlm43tF1evveF7ocLY7YO3tOXWd6eRXPvwYDdT3fygZW7O1VFjC8Prl7WZnXNQ1wCf9meH4LErmG82Wq8kQtDnDVP3E2xn2nRVQbhIESUKEMLufIUjGavDjzIeY/s72-c-rw/rotanakids.jpg",
+      "labels": [
+        "قنوات الأطفال",
+        "قنوات روتانا"
+      ],
+      "network": "rotana",
+      "genre": "kids",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_86.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Rotana-Drama-Live.html",
+      "name": "قناة روتانا دراما Rotana Drama",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgN8CgLz1Hix0PNldk5oeL1lpui3DPNBeWQ82xSi7vrAmUWpJBW5bmtLyz4Q3j30NzwbDxczSsGLwpgxWkRspjGqLPjx673FAK4bdR-MKNClum2tCG7UxJUF4Gta07ybO0xfhNrVTluGLJNUwzLJ-v-668Y8c3YuvIJwk1st0zcw5kkF-YEBQbf16ATOFEN/s72-c-rw/rotanadrama.jpg",
+      "labels": [
+        "قنوات المسلسلات",
+        "قنوات روتانا"
+      ],
+      "network": "rotana",
+      "genre": "series",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_80.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Rotana-Classic-Live.html",
+      "name": "قناة روتانا كلاسيك Rotana Classic",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgDUV_d4oDKPde7qqyb9PqeO2_sfoyQrRCbgRqpUjjeytzxq5L33fOOMkHxOjk9fcCnDqRnSZqAyfF_ZA7vKMJjTXcJQjJxb-l5m33D8WMW2OynPaec1TtfwuZmjKyUAk4Xbl4rqMf76Z970UMVMapTMFAv15triA_HkwrLhjzBUZVE5QfETHZcOvEuI5V3/s72-c-rw/rotanaclassic.jpg",
+      "labels": [
+        "قنوات الأفلام",
+        "قنوات روتانا",
+        "قنوات كلاسيكيات"
+      ],
+      "network": "rotana",
+      "genre": "movies",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_52.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Rotana-Comedy-Live.html",
+      "name": "قناة روتانا كوميدي Rotana Comedy",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEi3yE4tUcv3CDrVMSN7hqkkJzfyIjeovxwy1xADCwyUMu7AJfXMyyr4b_lhyZCGVwVyR7ua9v3OLJBJ0i9Hfqe5VVMmxguHBCEOC9sr5DwJNv5N1EIm0V8W26Q8UUCpdhSm1dc4QsS3S0YpeB7dqtt3k5irxY15ojWV3GmlAmHBvjhU1PCF_PBVPNGbSzDZ/s72-c-rw/rotanacomedy.jpg",
+      "labels": [
+        "قنوات الأفلام",
+        "قنوات روتانا"
+      ],
+      "network": "rotana",
+      "genre": "movies",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_25.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/12/Rotana-Khalejia-Live.html",
+      "name": "قناة روتانا خليجية Rotana Khalejia",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjTY6n84kOiIIrX8xT0tlSFbk4iijam3uZYSD5eImNnzexOfXdGRgZl9arAD099sdIwdUDYQCv8TBMQPxxTTON8g9KQrqvxP5c3OVw-cpvi0MdWaJPoLQvtG7mR33UJhMifhyUyAwW2PIMEwHixsO2enpurVZaK8sbx36atb3DPptipBFZ29WwIS6Ctr737/s72-c-rw/rotanakhalejia.jpg",
+      "labels": [
+        "قنوات روتانا",
+        "قنوات عامة"
+      ],
+      "network": "rotana",
+      "genre": "general",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_73.html"
+      ],
+      "verified_hls": []
+    },
+    {
+      "url": "https://www.qanwatlive.com/2024/11/Rotana-Cinema-Live.html",
+      "name": "قناة روتانا سينما Rotana Cinema",
+      "poster": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiohwCmmpRzp0olKuDNJYBbFYouXMn6oRjOstLS1p8KsFX4B7DZyKzhn5lOJGII3r9rv9Potqyzwy1QWSu5ZvhiZwYeVVZRvqMOO6TT0xgZzV3IKVektZNszEyWO3EkErRSs3LYmprFng3KZ4KKyx148C9UMkjlweb5P2bCtPPlgDxH45aGUF0FVc39otFw/s72-c-rw/rotanacinema.jpg",
+      "labels": [
+        "قنوات الأفلام",
+        "قنوات روتانا",
+        "قنوات مصرية بث مباشر"
+      ],
+      "network": "rotana",
+      "genre": "movies",
+      "sources": [],
+      "embedded_players": [
+        "https://tv.qanwatlive.com/2025/03/blog-post_20.html"
+      ],
+      "verified_hls": []
+    }
+  ],
+  "verified_metadata": 77,
+  "notes": "Unreachable pages may retain earlier metadata; individual stream verification is separate."
+}
