@@ -121,9 +121,24 @@ public final class CatalogApi {
         JSONArray all=new JSONArray();
         for(int offset=0;offset<AppConfig.MAX_ITEMS;offset+=pageSize){
             int size=Math.min(pageSize,AppConfig.MAX_ITEMS-offset);
-            JSONArray page=listQuery(table,queryPrefix+"&limit="+size+"&offset="+offset);
-            for(int i=0;i<page.length();i++)all.put(page.opt(i));
-            if(page.length()<size)break;
+            String query=queryPrefix+"&limit="+size+"&offset="+offset;
+            String key=table+query;
+            JSONArray raw;
+            try{
+                raw=new JSONArray(request(AppConfig.API_ROOT+table+query));
+                cache.edit().putString(key,raw.toString())
+                    .putLong(key+"_cached_at",System.currentTimeMillis()).apply();
+            }catch(Exception failure){
+                String stored=cache.getString(key,null);
+                long age=System.currentTimeMillis()-cache.getLong(key+"_cached_at",0L);
+                if(stored==null||age<0||age>MAX_OFFLINE_CACHE_AGE_MS)throw failure;
+                raw=new JSONArray(stored);
+            }
+            JSONArray permitted=directMediaOnly(table,raw);
+            for(int i=0;i<permitted.length();i++)all.put(permitted.opt(i));
+            // Use raw row count: filtering rejected/invalid streams must NOT truncate
+            // the subsequent published pages in a larger catalogue.
+            if(raw.length()<size)break;
         }
         return all;
     }
