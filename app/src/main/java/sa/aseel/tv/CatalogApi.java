@@ -51,6 +51,8 @@ public final class CatalogApi {
                     && (external.startsWith("https://www.qanwatlive.com/")
                         || external.startsWith("https://qanwatlive.com/")
                         || external.startsWith("https://roya.tv/")
+                        || external.startsWith("https://rotana.net/")
+                        || external.startsWith("https://www.rotana.net/")
                         || external.startsWith("https://www.alarabiya.net/live-stream")
                         || external.startsWith("https://www.alhadath.net/live-stream"));
                 if(approvedLink){
@@ -106,6 +108,24 @@ public final class CatalogApi {
                 return directMediaOnly(table,new JSONArray(local));
             throw error;
         }
+    }
+    /**
+     * Loads every published item in small pages so the UI is driven by live
+     * Supabase metadata, not by the limited first 80 rows shipped in old APKs.
+     * Existing per-page cache is used only for brief network interruptions.
+     */
+    public JSONArray listPaged(String table,String queryPrefix) throws Exception {
+        if (!queryPrefix.startsWith("?") || queryPrefix.contains("limit=") ||
+            queryPrefix.contains("offset="))throw new IllegalArgumentException("Invalid pagination");
+        final int pageSize=150;
+        JSONArray all=new JSONArray();
+        for(int offset=0;offset<AppConfig.MAX_ITEMS;offset+=pageSize){
+            int size=Math.min(pageSize,AppConfig.MAX_ITEMS-offset);
+            JSONArray page=listQuery(table,queryPrefix+"&limit="+size+"&offset="+offset);
+            for(int i=0;i<page.length();i++)all.put(page.opt(i));
+            if(page.length()<size)break;
+        }
+        return all;
     }
     private String request(String uri) throws Exception {
         URL url = new URL(uri);
