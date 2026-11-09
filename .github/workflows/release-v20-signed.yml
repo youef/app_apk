@@ -25,14 +25,19 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Set up Java and Android SDK
+      - name: Java 17 for current Android SDK manager
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-33" "build-tools;33.0.2" "platform-tools"
+      - name: Java 11 for legacy Android Gradle plugin
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '11'
-      - uses: android-actions/setup-android@v4
-      - name: Install Android SDK packages
-        run: sdkmanager "platforms;android-33" "build-tools;33.0.2" "platform-tools"
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '7.6'
