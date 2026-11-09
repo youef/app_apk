@@ -44,6 +44,22 @@ class DemoTest(unittest.TestCase):
     def post(self, path, payload):
         return self.client.post('/api/'+path, json=payload, headers=self.headers)
 
+    def test_authorized_series_can_be_saved_while_scan_is_running(self):
+        source = 'https://source.example.org/series/during-scan/'
+        cat = Catalogue('series', 'During scan', source, episodes=[
+            Episode(1, 1, 'First', source + 'episode-1/'),
+        ])
+        state = server.UserState(catalogue=cat, db=DummyDB(),
+                                 scan_catalogue=cat, scan={'running':True})
+        with patch.object(server,'protected',return_value=state), \
+             patch.object(server.AUTOSYNC,'remember_saved') as remember:
+            payload = {'publish':True,'rights_authorized':True}
+            self.assertEqual(self.post('save',payload).status_code,409)
+            response = self.post('save',{**payload,'auto_publish_episodes':True})
+        self.assertEqual(response.status_code,200,response.text)
+        self.assertEqual(state.db.rows['aseel_episodes'][0]['status'],'draft')
+        self.assertTrue(remember.call_args.kwargs['auto_publish'])
+
     def test_title_search_filters_wrong_types_and_duplicate_pages(self):
         html = b'''<a href="/movies/example/">Example Film</a>
             <a href="/movies/example/?x=1">Duplicate</a>

@@ -323,6 +323,15 @@ class MediaResolver:
 
 def read_public_html(url: str, max_size: int) -> tuple[str, str, str]:
     """Read a public document through Chromium when the HTTP client disconnects."""
+    if not _BROWSER_SLOTS.acquire(timeout=15):
+        raise TimeoutError('المتصفح مشغول؛ تعذرت قراءة المصدر ضمن المهلة')
+    try:
+        return _read_public_html(url, max_size)
+    finally:
+        _BROWSER_SLOTS.release()
+
+
+def _read_public_html(url: str, max_size: int) -> tuple[str, str, str]:
     from playwright.sync_api import sync_playwright
     check_dns(url)
     with sync_playwright() as playwright:

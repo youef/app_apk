@@ -25,7 +25,7 @@
     else $('activity').querySelector('.activity-ico').classList.remove('spin');
   }
   function busy(value){app.busy=value; for(const id of ['discoverBtn','discoverBatchBtn','scanListingBtn','saveBatchBtn','demoBtn','applyLinksBtn','updateBtn','verifyAllBtn','verifySelectedBtn','verifyMovieBtn','edgeCaptureBtn','saveBtn','addEpisodeBtn']){
-    if($(id))$(id).disabled=value || (id==='saveBtn' && app.demo) || (app.scanning && !['discoverBtn','discoverBatchBtn','scanListingBtn','demoBtn','updateBtn'].includes(id));
+    if($(id))$(id).disabled=value || (id==='saveBtn' && app.demo) || (app.scanning && !['discoverBtn','discoverBatchBtn','scanListingBtn','demoBtn','updateBtn','saveBtn'].includes(id));
   }}
   function text(el, value){el.textContent = value==null?'':String(value);return el;}
   function make(tag, cls='', content){const el=document.createElement(tag);if(cls)el.className=cls;if(content!=null)text(el,content);return el;}
@@ -158,8 +158,8 @@
       country:$('metaCountry').value.trim(),language:$('metaLanguage').value.trim(),
       genres:$('metaGenres').value.split(/[,،]+/).map(x=>x.trim()).filter(Boolean),
       description:$('metaDescription').value.trim(),poster_url:$('metaPoster').value.trim(),backdrop_url:$('metaBackdrop').value.trim(),
-      media_url:cat.kind==='movie'?$('movieMediaUrl').value.trim():undefined,
-      episodes:cat.kind==='series'?cat.episodes.map(e=>({season:e.season,number:e.number,title:e.title,description:e.description,
+      media_url:cat.kind==='movie'&&!app.scanning?$('movieMediaUrl').value.trim():undefined,
+      episodes:cat.kind==='series'&&!app.scanning?cat.episodes.map(e=>({season:e.season,number:e.number,title:e.title,description:e.description,
         poster_url:e.poster_url,media_url:e.media_url})):undefined};
   }
   async function syncEdits({silent=false}={}){
@@ -239,6 +239,7 @@
       if(!confirm(`حفظ ${app.batch.length} عملًا وحلقاتها في Supabase دفعة واحدة؟`))return;
       activity('تُحفظ الأعمال والمواسم والحلقات بالتسلسل الآمن مع منع التكرار...','loading');
       const result=await API('save-batch',{publish,rights_authorized,
+        auto_publish_episodes:publish&&$('autoPublishEpisodes').checked,
         rights_holder:$('rightsHolder').value.trim(),license_reference:$('licenseRef').value.trim()});
       const total=result.totals;
       const message=`✓ ${result.ok_count} عمل ناجح، ${result.error_count} أخطاء، ${total.works_new} جديد، ${total.works_updated} محدّث، ${total.episodes_new} حلقة جديدة، ${total.episodes_updated} محدّثة.`;
@@ -280,9 +281,10 @@
     // Metadata can be reviewed while media is checked. Avoid racing link edits
     // and publishing with an unfinished probe.
     for(const control of document.querySelectorAll('#episodeList input,#episodeList textarea,#movieMediaUrl'))control.disabled=!!scan?.running;
-    for(const id of ['toolsLinksBtn','verifyAllBtn','verifySelectedBtn','verifyMovieBtn','edgeCaptureBtn','saveBtn','saveBatchBtn','applyLinksBtn','addEpisodeBtn']){
+    for(const id of ['toolsLinksBtn','verifyAllBtn','verifySelectedBtn','verifyMovieBtn','edgeCaptureBtn','saveBatchBtn','applyLinksBtn','addEpisodeBtn']){
       if($(id))$(id).disabled=app.busy||!!scan?.running||!app.catalogue||(id==='saveBtn'&&app.demo);
     }
+    $('saveBtn').disabled=app.busy||!app.catalogue||app.demo;
     document.dispatchEvent(new Event('studio:catalogue'));
     $('discoveryProgress').hidden=!scan;
     if(!scan)return;
@@ -450,9 +452,12 @@
       if(!confirm('تأكيد حفظ '+app.catalogue.title+' في مكتبة العز TV؟ '+(publish?'سيُطلب نشر المحتوى للجمهور.':'سيُحفظ كمسودة.')))return;
       activity('جارٍ الاتصال بقاعدة البيانات وحفظ المواسم والحلقات...','loading');
       const result=await API('save',{publish,rights_authorized:authorized,
+        auto_publish_episodes:publish&&$('autoPublishEpisodes').checked,
         rights_holder:$('rightsHolder').value.trim(),license_reference:$('licenseRef').value.trim()});
       const obj=result.result;
-      const sentence=`✓ تم حفظ العمل: ${obj.works_new} عمل جديد، ${obj.works_updated} محدّث، ${obj.episodes_new||0} حلقة جديدة، ${obj.episodes_updated||0} محدّثة.`;
+      const queued=(obj.bindings||[]).filter(row=>row.awaiting_playback).length;
+      const sentence=`✓ تم حفظ العمل: ${obj.works_new} عمل جديد، ${obj.works_updated} محدّث، ${obj.episodes_new||0} حلقة جديدة، ${obj.episodes_updated||0} محدّثة.`+
+        (queued?` ${queued} حلقة تنتظر التحقق من التشغيل قبل نشرها تلقائيًا.`:'');
       const panel=$('saveResult');panel.hidden=false;panel.textContent=sentence;
       activity(sentence,'success');toast('تمت مزامنة مكتبتك مع Supabase.','success');
     });

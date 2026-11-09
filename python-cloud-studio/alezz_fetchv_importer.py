@@ -921,7 +921,8 @@ def playback_variants(entry, existing=None, *, primary=None) -> list[dict]:
 
 
 def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:str="",
-          license_reference:str="",source_id:str="",category_id:str="",capture_merge=False) -> dict:
+          license_reference:str="",source_id:str="",category_id:str="",capture_merge=False,
+          defer_unverified_episodes=False) -> dict:
     if publish and not rights:
         raise ValueError("For public publishing, declare that you are authorized to display the work using --rights-authorized")
     # Parent works have a rights_holder column, but aseel_episodes does not.
@@ -1004,8 +1005,9 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
             seasons[ep.season]=season["id"]
         season_id=seasons[ep.season]
         old=db.single("aseel_episodes",{"select":"*" if capture_merge else "id,number,stream_variants","season_id":"eq."+season_id,"number":"eq."+str(ep.number)})
+        episode_page = ep.page_url if ep.page_url.rstrip('/') != cat.url.rstrip('/') else None
         payload={"title_ar":ep.title[:250] or "الحلقة "+str(ep.number),"description":ep.description or cat.description or None,
-                 "poster_url":ep.poster_url or cat.poster_url or None,'source_page_url':ep.page_url}
+                 "poster_url":ep.poster_url or cat.poster_url or None,'source_page_url':episode_page}
         if ep.sources: payload['stream_variants'] = playback_variants(ep, (old or {}).get('stream_variants'))
         payload={k:v for k,v in payload.items() if v is not None}
         if ep.verified and ep.media_url or approved_embed_page(ep):
@@ -1013,14 +1015,17 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
             payload["link_health_status"]="healthy" if ep.verified else "suspect"
             result["media_verified" if ep.verified else "embed_reachable"]+=1
         else:result["metadata_only"]+=1
+        awaiting_playback = defer_unverified_episodes and publish and not payload.get("stream_url")
         if old:
-            db.patch("aseel_episodes",old["id"],{**merge_capture(payload,old,ep),**({"status":"published","rights_status":"approved"} if publish and rights else {})})
+            db.patch("aseel_episodes",old["id"],{**merge_capture(payload,old,ep),**({"status":"published","rights_status":"approved"} if publish and rights and not awaiting_playback else {})})
             result["episodes_updated"]+=1
         else:
             old=db.insert("aseel_episodes",{"season_id":season_id,"number":ep.number,
-                        **payload,**episode_rights})
+                        **payload,**({"status":"draft","rights_status":"pending"} if awaiting_playback else episode_rights)})
             result["episodes_new"]+=1
         result['bindings'].append(dict(season=ep.season,number=ep.number,id=old['id'],table='aseel_episodes'))
+        if awaiting_playback:
+            result['bindings'][-1]['awaiting_playback'] = True
         if capture_merge: result['bindings'][-1]['stream_url']=old.get('stream_url') or ep.media_url
     result['work_id'] = series['id']
     return result
