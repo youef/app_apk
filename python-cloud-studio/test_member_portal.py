@@ -11,6 +11,28 @@ from member_portal import Portal
 
 
 class PortalTests(unittest.TestCase):
+    def test_admin_catalogue_read_preserves_user_token_and_filters(self):
+        route='/admin/_data/aseel_movies?select=id,title_ar&limit=25'
+        self.assertEqual(self.client.get(route).status_code,401)
+        self.login('admin')
+        self.assertEqual(self.client.get(route).status_code,401)
+        headers={'Authorization':'Bearer test.jwt.signature'}
+        with patch.object(self.portal,'upstream',return_value=[{'id':'movie-1'}]) as upstream:
+            response=self.client.get(route,headers=headers)
+            self.assertEqual(response.json(),[{'id':'movie-1'}])
+            upstream.assert_called_once_with('GET','/rest/v1/aseel_movies',token='test.jwt.signature',
+                                             params=[('select','id,title_ar'),('limit','25')])
+            self.assertEqual(self.client.post(route,headers=headers).status_code,404)
+            self.assertEqual(self.client.get('/admin/_data/other',headers=headers).status_code,404)
+
+    def test_customer_cannot_use_admin_catalogue_read(self):
+        self.login('customer')
+        with patch.object(self.portal,'upstream') as upstream:
+            response=self.client.get('/admin/_data/aseel_movies',
+                                     headers={'Authorization':'Bearer test.jwt.signature'})
+        self.assertEqual(response.status_code,403)
+        upstream.assert_not_called()
+
     def setUp(self):
         folder=TemporaryDirectory()
         self.addCleanup(folder.cleanup)

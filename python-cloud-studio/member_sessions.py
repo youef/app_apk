@@ -7,6 +7,7 @@ Administrator sessions have a separate persistent, role-checked table with an ab
 """
 from __future__ import annotations
 
+from contextlib import closing, contextmanager
 import hashlib
 import re
 import sqlite3
@@ -38,10 +39,11 @@ class MemberSessions:
                 conn.execute("ALTER TABLE member_sessions ADD COLUMN account_expires_at INTEGER NOT NULL DEFAULT 0")
             conn.execute("CREATE INDEX IF NOT EXISTS member_sessions_user_idx ON member_sessions(user_id)")
 
+    @contextmanager
     def _db(self):
-        connection = sqlite3.connect(str(self.path), timeout=15)
-        connection.execute("PRAGMA busy_timeout=15000")
-        return connection
+        with closing(sqlite3.connect(str(self.path), timeout=15)) as connection, connection:
+            connection.execute("PRAGMA busy_timeout=15000")
+            yield connection
 
     @staticmethod
     def _digest(token):

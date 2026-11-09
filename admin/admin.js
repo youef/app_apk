@@ -167,7 +167,9 @@
   /* ---------- REST layer ---------- */
   function api(path, options) {
     var opts = options || {};
-    var url = cfg.supabaseUrl + '/rest/v1/' + path;
+    var method = opts.method || 'GET';
+    var hostedRead = method === 'GET' && document.querySelector('meta[name="alezz-admin-data"]');
+    var url = (hostedRead ? '/admin/_data/' : cfg.supabaseUrl + '/rest/v1/') + path;
     var headers = Object.assign({
       apikey: cfg.publishableKey,
       Authorization: 'Bearer ' + (state.session ? state.session.access_token : ''),
@@ -177,7 +179,7 @@
     var timer = setTimeout(function () { controller.abort(); }, cfg.requestTimeout);
 
     return fetch(url, {
-      method: opts.method || 'GET',
+      method: method,
       headers: headers,
       body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
       signal: controller.signal,
@@ -199,7 +201,7 @@
         var data = null;
         if (text) { try { data = JSON.parse(text); } catch (e) { data = text; } }
         if (!response.ok) {
-          var detail = (data && (data.message || data.error_description || data.hint || data.error)) || text || ('HTTP ' + response.status);
+          var detail = (data && (data.message || data.detail || data.error_description || data.hint || data.error)) || text || ('HTTP ' + response.status);
           var err = new Error(String(detail).slice(0, 400));
           err.status = response.status;
           throw err;

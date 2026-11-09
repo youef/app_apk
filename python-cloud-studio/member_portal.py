@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 from fastapi import Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from starlette.concurrency import run_in_threadpool
 from member_devices import DeviceRegistry, DEVICE_COOKIE, DEVICE_MAX_AGE, friendly_device
 from member_sessions import (MemberSessions, AdminSessions, CUSTOMER_SESSION_SECONDS, ADMIN_SESSION_SECONDS)
@@ -29,6 +29,11 @@ USERNAME = re.compile(r'[a-z0-9][a-z0-9_.-]{2,39}\Z')
 ALIAS_DOMAIN = 'members.alezz.invalid'
 HEADERS = {'Cache-Control':'private, no-store','X-Frame-Options':'DENY',
            'X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin'}
+ADMIN_READ_TABLES = frozenset({
+    'aseel_admins', 'aseel_movies', 'aseel_series', 'aseel_seasons', 'aseel_episodes',
+    'aseel_channels', 'aseel_youtube_videos', 'aseel_home_collections',
+    'aseel_home_collection_items', 'aseel_categories', 'aseel_content_sources',
+})
 
 
 class DeviceBindingError(ValueError):
@@ -282,6 +287,29 @@ class Portal:
         from customer_directory import page as render_customer_directory
         return render_customer_directory(self, session, message, number=page)
 
+    async def admin_data(self, request, table):
+        if request.method != 'GET' or table not in ADMIN_READ_TABLES:
+            return Response(status_code=404,headers=HEADERS)
+        authorization = request.headers.get('authorization','')
+        if not re.fullmatch(r'Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+',authorization):
+            return JSONResponse({'detail':'سجّل الدخول إلى قاعدة البيانات بحساب المسؤول.'},401,headers=HEADERS)
+        if len(request.url.query)>8192:
+            return JSONResponse({'detail':'طلب البيانات أكبر من الحد المسموح.'},400,headers=HEADERS)
+        try:
+            data = await run_in_threadpool(self.upstream,'GET','/rest/v1/'+table,
+                                           token=authorization[7:],params=request.query_params.multi_items())
+        except requests.HTTPError as exc:
+            response=exc.response
+            status=response.status_code if response is not None else 502
+            try:
+                detail=response.json().get('message','') if response is not None else ''
+            except (TypeError,ValueError,AttributeError):
+                detail=''
+            return JSONResponse({'message':str(detail)[:300] or 'رفضت قاعدة البيانات طلب القراءة.'},status,headers=HEADERS)
+        except (requests.RequestException, ValueError):
+            return JSONResponse({'message':'تعذّر الاتصال بقاعدة البيانات مؤقتًا.'},502,headers=HEADERS)
+        return JSONResponse(data,headers=HEADERS)
+
     async def middleware(self, request: Request, call_next):
         path=request.url.path
         # Local development remains usable without hosting credentials. Public Render is always gated.
@@ -384,7 +412,7 @@ class Portal:
             if path=='/account/status':
                 from fastapi.responses import JSONResponse
                 return JSONResponse({'active':False,'detail':'انتهت الجلسة أو صلاحية الحساب.'},status_code=401,headers=HEADERS)
-            if section=='api':
+            if section=='api' or path.startswith('/admin/_data/'):
                 from fastapi.responses import JSONResponse
                 return JSONResponse({'detail':'يجب تسجيل الدخول بحساب مسؤول.'},status_code=401,headers=HEADERS)
             return RedirectResponse('/account/admin' if admin_area else '/account/login',303,headers=HEADERS)
@@ -398,7 +426,7 @@ class Portal:
             response.delete_cookie('alezz_studio_session',secure=self.secure,httponly=True,samesite='strict')
             return response
         if admin_area and session[1]!='admin':
-            if section=='api':
+            if section=='api' or path.startswith('/admin/_data/'):
                 from fastapi.responses import JSONResponse
                 return JSONResponse({'detail':'صلاحية المسؤول مطلوبة.'},status_code=403,headers=HEADERS)
             return HTMLResponse('هذه الصفحة مخصصة للإدارة.',403,headers=HEADERS)
@@ -417,6 +445,8 @@ class Portal:
                 result.delete_cookie(COOKIE,path='/',secure=self.secure,httponly=True,samesite='strict')
                 return result
             await run_in_threadpool(self.admin_sessions.mark_verified,token)
+        if path.startswith('/admin/_data/'):
+            return await self.admin_data(request,path.removeprefix('/admin/_data/'))
         if path=='/account/customers':
             raw_page=request.query_params.get('page','1')
             page_number=min(100,max(1,int(raw_page))) if re.fullmatch(r'[0-9]{1,3}',raw_page) else 1

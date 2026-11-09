@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="alezz-admin-data" content="same-origin">
 <meta name="theme-color" content="#06070A">
 <title>العز | استوديو الإدارة</title>
 <link rel="icon" type="image/svg+xml" href="../web/assets/logo.svg">
@@ -194,6 +195,6 @@
 <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 
 <script src="config.js?v=embed-20261107-v1"></script>
-<script src="admin.js?v=series-health-20261108-v3"></script>
+<script src="admin.js?v=admin-data-20261109"></script>
 </body>
 </html>
