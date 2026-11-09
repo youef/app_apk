@@ -50,7 +50,7 @@ public final class ChannelGuideCategory {
         if(title.matches("^mbc(?:(?:\\s|\\+|\\d).*)?$") ||
             title.startsWith("ام بي سي") || category.contains("قنوات mbc"))return "MBC";
         if(title.startsWith("bein")||title.startsWith("بي إن"))return "beIN SPORTS";
-        if(title.startsWith("rotana")||title.startsWith("روتانا"))return "روتانا";
+        if(category.contains("قنوات روتانا")||title.startsWith("rotana")||title.startsWith("روتانا"))return "روتانا";
         if(title.startsWith("osn"))return "OSN";
         if(title.startsWith("al jazeera")||title.startsWith("al-jazeera")||
             title.startsWith("الجزيرة"))return "الجزيرة";
