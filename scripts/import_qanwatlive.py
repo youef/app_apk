@@ -63,6 +63,7 @@ def tags(doc):
 
 def discover():
     posts={}
+    feed_complete=False
     for start in range(1,752,150):
         try:
             raw,_=fetch(SITE+"/feeds/posts/default?alt=json&max-results=150&start-index="+str(start),10000000,25)
@@ -72,9 +73,16 @@ def discover():
                 u=canonical(link)
                 if u:posts[u]={"url":u,"name":e.get("title",{}).get("$t",""),
                               "labels":[x.get("term","") for x in e.get("category",[])],
-                              "image":(e.get("media$thumbnail") or {}).get("url","")}
-            if len(entries)<150 or len(posts)>=MAX:break
+                              "image":(e.get("media$thumbnail") or {}).get("url",""),
+                              "body":e.get("content",{}).get("$t","")}
+            if len(entries)<150:
+                feed_complete=True
+                break
+            if len(posts)>=MAX:break
         except Exception as e:LOG["errors"].append("Feed: "+str(e)[:130]);break
+    if feed_complete and posts:
+        LOG["discovered"]=len(posts)
+        return list(posts.values())[:MAX]
     for sitemap in ("/sitemap.xml","/sitemap-posts.xml"):
         try:
             b,_=fetch(SITE+sitemap,4000000,20)
@@ -152,7 +160,8 @@ def hls(url):
 
 def inspect(info):
     try:
-        doc=read(info["url"]);p=tags(doc)
+        doc=info.get("body") or read(info["url"])
+        p=tags(doc)
         name=clean(p.meta.get("og:title") or info.get("name",""))
         if not name:
             m=re.search(r"<title[^>]*>(.*?)</title>",doc,re.S|re.I)
