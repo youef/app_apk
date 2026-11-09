@@ -42,11 +42,17 @@ public final class CatalogApi {
             if("aseel_channels".equals(table)){
                 String mode=item.optString("playback_mode","stream");
                 String external=item.optString("official_url","");
+                // Official outbound navigation is not a video redistribution license.
+                // Pending-rights channels may still open their broadcaster's own page.
                 boolean approvedLink="official_link".equals(mode)
-                    && "approved".equals(item.optString("rights_status",""))
+                    && ("approved".equals(item.optString("rights_status",""))
+                        || "pending".equals(item.optString("rights_status","")))
+                    && item.optString("stream_url","").isEmpty()
                     && (external.startsWith("https://www.qanwatlive.com/")
                         || external.startsWith("https://qanwatlive.com/")
-                        || external.startsWith("https://roya.tv/"));
+                        || external.startsWith("https://roya.tv/")
+                        || external.startsWith("https://www.alarabiya.net/live-stream")
+                        || external.startsWith("https://www.alhadath.net/live-stream"));
                 if(approvedLink){
                     // Catalogue-only external navigation; never send web pages to video players.
                 }else{
