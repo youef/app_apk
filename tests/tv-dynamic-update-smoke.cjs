@@ -28,6 +28,10 @@ assert.ok(home.includes('("official_link".equals(mode))')||home.includes('if("of
     "official outbound channels no longer discarded");
 assert.ok(nativeCategory.includes('category.contains("قنوات روتانا")'),"Rotana entries grouped by network");
 assert.ok(home.includes("appUpdater.check(true)"),"settings update button wired");
+assert.ok(home.includes('all.setTag("live:all")'),"live categories have View All");
+assert.ok(home.includes("appUpdater.check(false)"),"signed update checks repeat while app remains open");
+assert.ok(updater.includes("30L*60L*1000L"),"background version checks every 30 minutes");
+assert.ok(updater.includes("snoozed_version"),"Later button suppresses repeated popups");
 assert.ok(updater.includes("MessageDigest.getInstance(\"SHA-256\")"),"APK digest verification");
 assert.ok(updater.includes("PackageManager.GET_SIGNATURES"),"existing signature validated");
 assert.ok(updater.includes("getPackageArchiveInfo"),"download package identity checked");
