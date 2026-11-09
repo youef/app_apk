@@ -152,7 +152,10 @@ public final class TvCategoryDirectory {
             String explicit=categoryName(item);
             if(explicit.length()>0){
                 String key=categoryKey(explicit,kind);
-                if(!key.isEmpty())add(groups,key,labelFor(key,explicit));
+                String display=withoutPrefix(explicit);
+                if(!display.equalsIgnoreCase(network) && !display.equalsIgnoreCase(type) &&
+                    !key.isEmpty() && !display.equals("الكل"))
+                    add(groups,key,labelFor(key,explicit));
             }
             return groups;
         }
@@ -161,6 +164,8 @@ public final class TvCategoryDirectory {
             if(list==null)continue;
             for(int i=0;i<list.length();i++){
                 String raw=list.optString(i,"").trim();
+                if(raw.startsWith("network:")||raw.startsWith("country:")||
+                    raw.equalsIgnoreCase("other")||raw.equalsIgnoreCase("general"))continue;
                 String genre=normalizedGenre(raw);
                 if(genre.length()>0){
                     String key="genre:"+genre;
