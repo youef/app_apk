@@ -26,7 +26,7 @@ jobs:
           node --check admin/series-quick.js
           grep -q "TRUSTED_ORIGINS" supabase/functions/aseel-link-health/index.ts
           grep -q "app-apk-oquy.onrender.com" supabase/functions/aseel-link-health/index.ts
-          grep -q "per_table: 6" admin/admin.js
+          grep -q "per_table: 12" admin/admin.js
       - name: Verify real Edge Function CORS preflight without auth
         shell: bash
         run: |
