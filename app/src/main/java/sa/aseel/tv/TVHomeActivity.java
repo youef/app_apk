@@ -964,6 +964,7 @@ public final class TVHomeActivity extends Activity {
             showContinueWatching(false);
             shelf("أفلام مختارة","استكشف مكتبة السينما",movies,16);
             shelf("المسلسلات","المواسم والحلقات",series,16);
+            classifiedLiveShelves();
         }else if("browse".equals(section)){
             grid(browseTitle,filteredBrowseItems());
         }else if("movies".equals(section)){
@@ -1335,7 +1336,44 @@ public final class TVHomeActivity extends Activity {
             "channel".equals(browseKind)?channels:movies;
         if("country".equals(browseMode))return originItems(source,browseKey);
         if("genre".equals(browseMode))return genreItems(source,browseKey);
+        if("channelGenre".equals(browseMode)||"channelNetwork".equals(browseMode)){
+            ArrayList<JSONObject> result=new ArrayList<JSONObject>();
+            for(JSONObject channel:channels){
+                String actual="channelGenre".equals(browseMode)?
+                    channelCategory(channel):channelCompany(channel);
+                if(browseKey.equals(actual))result.add(channel);
+            }
+            return result;
+        }
         return new ArrayList<JSONObject>(source);
+    }
+    /** Live channel rows are computed from the feed; new networks and types need no new APK. */
+    private void classifiedLiveShelves(){
+        if(channels.isEmpty())return;
+        shelf("كل القنوات المباشرة","تحديث تلقائي من قائمة القنوات",channels,12);
+        java.util.LinkedHashMap<String,ArrayList<JSONObject>> genres=
+            new java.util.LinkedHashMap<String,ArrayList<JSONObject>>();
+        java.util.LinkedHashMap<String,ArrayList<JSONObject>> networks=
+            new java.util.LinkedHashMap<String,ArrayList<JSONObject>>();
+        for(JSONObject channel:channels){
+            String genre=channelCategory(channel),network=channelCompany(channel);
+            if(!genres.containsKey(genre))genres.put(genre,new ArrayList<JSONObject>());
+            if(!networks.containsKey(network))networks.put(network,new ArrayList<JSONObject>());
+            genres.get(genre).add(channel);
+            networks.get(network).add(channel);
+        }
+        int count=0;
+        for(java.util.Map.Entry<String,ArrayList<JSONObject>> entry:genres.entrySet()){
+            if(count++>=6)break;
+            shelf("قنوات "+entry.getKey(),"تصفح جميع قنوات التصنيف",entry.getValue(),12,
+                "channelGenre",entry.getKey());
+        }
+        count=0;
+        for(java.util.Map.Entry<String,ArrayList<JSONObject>> entry:networks.entrySet()){
+            if(count++>=6)break;
+            shelf("شبكة "+entry.getKey(),"تصفح جميع قنوات الشركة",entry.getValue(),12,
+                "channelNetwork",entry.getKey());
+        }
     }
     private void shelf(String name,String note,ArrayList<JSONObject> list,int limit){
         shelf(name,note,list,limit,"all","");
