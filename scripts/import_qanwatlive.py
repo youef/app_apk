@@ -174,6 +174,19 @@ def inspect(info):
                 v=parse.urljoin(SITE,u)
                 if alt and ("قناة" in alt or name in alt) and okurl(v):image=v;break
         links,embeds=sources(doc,p)
+        # One public embed page deep: no login, DRM bypass, or signed-URL renewal.
+        # A third-party iframe URL alone is not a playable HLS stream.
+        for parent in embeds[:1]:
+            host=parse.urlsplit(parent).hostname or ""
+            if host not in ("tv.qanwatlive.com","pl.qanwatlive.com"):continue
+            try:
+                inner=read(parent)
+                p2=tags(inner)
+                extra, nested=sources(inner,p2)
+                links.extend([u for u in extra if u not in links])
+                embeds.extend([u for u in nested if u not in embeds])
+            except Exception:
+                pass
         verified=[x for x in links[:4] if parse.urlsplit(x).path.lower().endswith(".m3u8") and hls(x)]
         network,genre=tags_for(name+" "+" ".join(info.get("labels",[])))
         return {"url":info["url"],"name":name,"poster":image,"labels":info.get("labels",[]),
