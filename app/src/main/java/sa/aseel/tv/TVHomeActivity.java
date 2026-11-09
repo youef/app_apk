@@ -1844,7 +1844,9 @@ public final class TVHomeActivity extends Activity {
                 || external.startsWith("https://qanwatlive.com/")
                 || external.startsWith("https://roya.tv/")
                 || external.startsWith("https://rotana.net/")
-                || external.startsWith("https://www.rotana.net/"))){
+                || external.startsWith("https://www.rotana.net/")
+                || external.startsWith("https://www.alarabiya.net/live-stream")
+                || external.startsWith("https://www.alhadath.net/live-stream"))){
                 heading("صفحة المصدر غير متاحة","هذه القناة لا تملك رابط صفحة مشاهدة خارجيًا صالحًا.");
                 return;
             }
