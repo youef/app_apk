@@ -1,0 +1,50 @@
+name: Al Ezz TV — QanwatLive Channel Discovery
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/import_qanwatlive.py'
+      - '.github/workflows/qanwatlive-import.yml'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Inspect channels without importing
+        type: boolean
+        default: false
+  schedule:
+    - cron: '19 4 * * 1'
+permissions:
+  contents: read
+concurrency:
+  group: al-ezz-qanwatlive-discovery
+  cancel-in-progress: false
+jobs:
+  inspect-and-stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      SUPABASE_URL: https://qyzmlwtvzzgooccqxglq.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || secrets.ALEZZ_SUPABASE_SERVICE_ROLE_KEY }}
+      MAX_POSTS: '400'
+      DRY_RUN: ${{ inputs.dry_run || 'false' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check importer syntax
+        run: python3 -m py_compile scripts/import_qanwatlive.py
+      - name: Discover categories, logos, public players and verify direct HLS
+        run: python3 scripts/import_qanwatlive.py
+      - name: Save all inspected channel metadata
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qanwatlive-catalog-report
+          path: qanwatlive-catalog-report.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Report progress
+        if: always()
+        shell: bash
+        run: |
+          if [ -f qanwatlive-catalog-report.json ]; then
+            python3 -c 'import json; x=json.load(open("qanwatlive-catalog-report.json")); print("Discovered",x["discovered"],"Inspected",x["inspected"],"Verified HLS",x["hls_verified"],"Drafts",x["inserted_drafts"],"Existing",x["existing"])'
+          fi
