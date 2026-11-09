@@ -21,7 +21,7 @@ jobs:
   scan:
     name: Sweep channels, films, episodes and series
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - name: Probe November playlist drafts (unpublished only)
         continue-on-error: true
@@ -125,3 +125,18 @@ jobs:
           echo "### Al Ezz TV — six-hour playback health report" >> "$GITHUB_STEP_SUMMARY"
           echo "Checked: $total_scanned; newly hidden: $newly_hidden; recovered: $recovered" >> "$GITHUB_STEP_SUMMARY"
           echo "Broken media stays editable in admin, but RLS hides it from public viewers." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Checkout verified live maintenance utility
+        uses: actions/checkout@v4
+
+      - name: Repair live channels using verified broadcaster IDs
+        run: python3 scripts/live_channel_refresh_oidc.py
+
+      - name: Archive live channel maintenance results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: al-ezz-live-source-renewal
+          path: live-channel-maintenance-report.json
+          if-no-files-found: warn
+          retention-days: 14
