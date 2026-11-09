@@ -137,13 +137,18 @@ public final class CinemaPlayerActivity extends Activity {
         handler.removeCallbacks(hideLiveHud);
         handler.postDelayed(hideLiveHud,3800L);
     }
-    private String profile="family",seriesId="",activeGroup="الكل";
+    private String profile="family",seriesId="",activeGroup="الكل",activeCompany="الكل";
     private Button guideSelectedButton,guideFirstButton;
     private long lastRapidZap=0L;
+    private String companyFor(JSONObject channel){
+        String network=channel.optString("company","");
+        return network.isEmpty()?ChannelGuideCategory.broadcaster(channel):network;
+    }
     private boolean matchesGroup(JSONObject channel){
-        return "الكل".equals(activeGroup) ||
+        return ("الكل".equals(activeCompany)||activeCompany.equals(companyFor(channel))) &&
+            ("الكل".equals(activeGroup) ||
             ("المفضلة".equals(activeGroup) && channel.optBoolean("favorite",false)) ||
-            activeGroup.equals(groupFor(channel));
+            activeGroup.equals(groupFor(channel)));
     }
     private void stepChannel(int direction){
         if(tvChannels.isEmpty())return;
@@ -445,6 +450,8 @@ public final class CinemaPlayerActivity extends Activity {
         if(live){
             String chosen=intent.getStringExtra("channel_group");
             if(chosen!=null&&!chosen.trim().isEmpty())activeGroup=chosen;
+            String selectedCompany=intent.getStringExtra("channel_company");
+            if(selectedCompany!=null&&!selectedCompany.trim().isEmpty())activeCompany=selectedCompany;
             try{
                 JSONArray list=new JSONArray(intent.getStringExtra("channel_playlist")==null
                     ? "[]" : intent.getStringExtra("channel_playlist"));
@@ -965,12 +972,38 @@ public final class CinemaPlayerActivity extends Activity {
         TextView title=txt("☷  دليل قنوات العز TV",19,WHITE,true);
         title.setGravity(Gravity.CENTER);
         leftRail.addView(title,new LinearLayout.LayoutParams(-1,dp(46)));
+        final java.util.LinkedHashMap<String,Integer> companies=new java.util.LinkedHashMap<String,Integer>();
+        companies.put("الكل",tvChannels.size());
+        for(JSONObject channel:tvChannels){
+            String network=companyFor(channel);
+            companies.put(network,companies.containsKey(network)?companies.get(network)+1:1);
+        }
+        if(!companies.containsKey(activeCompany))activeCompany="الكل";
+        HorizontalScrollView networkScroll=new HorizontalScrollView(this);
+        networkScroll.setHorizontalScrollBarEnabled(false);
+        leftRail.addView(networkScroll,new LinearLayout.LayoutParams(-1,dp(53)));
+        LinearLayout networkRow=new LinearLayout(this);
+        networkRow.setOrientation(LinearLayout.HORIZONTAL);networkScroll.addView(networkRow);
+        for(final String network:companies.keySet()){
+            Button selected=button((network.equals(activeCompany)?"● ":"")+network+"  "+companies.get(network));
+            selected.setTag("network:"+network);
+            selected.setTextSize(12);
+            selected.setContentDescription("الشركة "+network);
+            networkRow.addView(selected,new LinearLayout.LayoutParams(dp(139),dp(46)));
+            selected.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                activeCompany=network;updateChannelRail();
+                View focus=leftRail.findViewWithTag("network:"+network);
+                if(focus!=null)focus.requestFocus();
+                else focusGuideChannel();
+            }});
+        }
         final java.util.LinkedHashMap<String,Integer> counts=new java.util.LinkedHashMap<String,Integer>();
         for(String name:new String[]{"أخبار","رياضة","أفلام","مسلسلات","أطفال",
                 "وثائقيات","دينية","موسيقى","تعليمية","طبخ","منوعات","عامة"})
             counts.put(name,0);
         int favorites=0;
         for(JSONObject c:tvChannels){
+            if(!"الكل".equals(activeCompany)&&!activeCompany.equals(companyFor(c)))continue;
             String group=groupFor(c);
             counts.put(group,counts.containsKey(group)?counts.get(group)+1:1);
             if(c.optBoolean("favorite",false))favorites++;
@@ -987,7 +1020,7 @@ public final class CinemaPlayerActivity extends Activity {
         LinearLayout horizontal=new LinearLayout(this);
         horizontal.setOrientation(LinearLayout.HORIZONTAL);types.addView(horizontal);
         for(final String group:groups){
-            int groupSize="الكل".equals(group)?tvChannels.size():
+            int groupSize="الكل".equals(group)?companies.get(activeCompany):
                 "المفضلة".equals(group)?favorites:counts.get(group);
             Button filter=button((group.equals(activeGroup)?"● ":"")+group+"  "+groupSize);
             filter.setTag("filter:"+group);
@@ -1005,7 +1038,7 @@ public final class CinemaPlayerActivity extends Activity {
         }
         int shown=0;
         for(JSONObject row:tvChannels)if(matchesGroup(row))shown++;
-        TextView subtitle=txt(activeGroup+"  •  "+shown+" قناة    |    ↑↓ اختيار    OK مشاهدة",12,MUTED,false);
+        TextView subtitle=txt(activeCompany+" / "+activeGroup+"  •  "+shown+" قناة    |    ↑↓ اختيار    OK مشاهدة",12,MUTED,false);
         subtitle.setPadding(dp(9),dp(5),dp(9),dp(9));
         leftRail.addView(subtitle,new LinearLayout.LayoutParams(-1,dp(39)));
         channelsScroll=new ScrollView(this);
