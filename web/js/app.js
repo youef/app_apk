@@ -444,18 +444,7 @@
     var list = catalog.series;
     var shown = list.filter(function(x) { return itemMatches(x, filterCat); });
     var resume = shown.filter(function(s) { return !!seriesResume(s); }).slice(0, 12);
-    // Licensed distribution is not implied by a public catalogue entry.
-    // This feature links to the rights holder's official viewing page rather than
-    // bypassing the Supabase rights gate or rebroadcasting the videos.
-    var royaOfficial = !filterCat ?
-      '<section aria-label="مسلسل حارتنا ضيقة على رؤيا" style="margin:16px 0 24px;padding:22px;border:1px solid rgba(226,64,83,.35);border-radius:20px;background:linear-gradient(120deg,rgba(96,14,30,.32),rgba(18,19,28,.98));display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap">' +
-      '<div><p style="margin:0 0 6px;font-size:12px;color:#f4a8b2">منصة رؤيا الرسمية · مسلسل أردني كوميدي</p>' +
-      '<h2 style="margin:0 0 5px;font-size:23px;color:#fff">حارتنا ضيقة</h2>' +
-      '<p style="margin:0;color:#d7c9ce;font-size:14px">الموسم الأول · 15 حلقة · مشاهدة من المصدر الرسمي</p></div>' +
-      '<a href="https://roya.tv/program/1703/episodes" target="_blank" rel="noopener noreferrer" class="btn btn--gold" aria-label="فتح حلقات حارتنا ضيقة على منصة رؤيا الرسمية">مشاهدة الحلقات على رؤيا ↗</a>' +
-      '</section>' : "";
     return pageHead("المسلسلات", "", shown.length) +
-      royaOfficial +
       (resume.length && !filterCat ? railHTML("أكمل مسلسلاتك", resume) : "") +
       classifiedFilterBar(list, filterCat, "series") +
       (shown.length ? gridHTML(shown) : emptyHTML("لا توجد مسلسلات في هذا القسم."));
@@ -691,6 +680,7 @@
   function sourceLabel(item) {
     if (item.kind === "channel" && item.playback === "official_link") return "صفحة مشاهدة خارجية";
     if (item.youtubeId) return "فيديو رسمي";
+    if (item.kind === "series" && item.episodeCount) return "حلقات عبر مصادر رسمية";
     if (item.live) return "بث مباشر";
     if (item.stream && /\\.mp4/i.test(item.stream)) return "MP4";
     if (item.stream && /\\.m3u8/i.test(item.stream)) return "HLS";
@@ -750,6 +740,8 @@
       '<div class="detail__chips">' + chips.join("") + "</div>" +
       '<div class="detail__actions">' +
       (isOfficial ? '<a class="btn btn--gold" href="' + esc(item.official) + '" target="_blank" rel="noopener noreferrer">↗ فتح صفحة المشاهدة الخارجية</a>' : "") +
+      (item.kind === "series" && item.id === "42025cef-c611-4866-821f-7aceb1081ebf" ?
+        '<a class="btn btn--ghost" href="https://roya.tv/program/1703/episodes" target="_blank" rel="noopener noreferrer">↗ المشاهدة على رؤيا</a>' : "") +
       (canPlay ? '<button class="btn btn--gold" data-play="' + esc(item.key) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6L20 12z" fill="currentColor" stroke="none"/></svg>' +
         (progressOf(item) > 1 ? "متابعة المشاهدة" : item.live ? "مشاهدة مباشرة" : "تشغيل") + "</button>" : "") +
       '<button class="btn btn--ghost" data-fav="' + esc(item.key) + '"><svg viewBox="0 0 24 24" aria-hidden="true">' +
@@ -763,7 +755,9 @@
       epsHTML +
       (item.rights && (item.rights.holder || item.rights.reference) ?
         '<div class="detail__rights">حقوق المحتوى: ' + esc(item.rights.holder || "مصدر خارجي") +
-        (item.rights.reference ? ' — <a href="' + esc(item.rights.reference) + '" target="_blank" rel="noopener">مرجع الترخيص</a>' : "") +
+        (item.rights.reference ? (/^https:\/\//i.test(item.rights.reference)
+          ? ' — <a href="' + esc(item.rights.reference) + '" target="_blank" rel="noopener">مرجع الترخيص</a>'
+          : ' · الاعتماد وفق إقرار إدارة العز TV') : "") +
         " · يعرض العز TV الروابط كما وردت من المصدر ولا يعيد استضافتها.</div>" : "") +
       "</div>";
   }
@@ -772,7 +766,12 @@
     if (!season || !season.episodes.length) return '<p class="search__hint">لا حلقات منشورة في هذا الموسم.</p>';
     return season.episodes.map(function (e) {
       var pct = progressOf(e), started = pct > 1 && pct < 97;
-      return '<button class="ep' + (started ? ' is-playing' : '') + '" data-ep="' + esc(e.key) + '" aria-label="تشغيل ' + esc(e.title) + '">' +
+      var externalOnly = !e.stream && !e.youtubeId && /^https:\/\/roya\.tv\/program\/1703\/episodes/.test(e.officialPage || "");
+      var tag = externalOnly ? "a" : "button";
+      var attrs = externalOnly ?
+        ' href="' + esc(e.officialPage) + '" target="_blank" rel="noopener noreferrer" aria-label="فتح الحلقة عبر رؤيا الرسمية: ' + esc(e.title) + '"' :
+        ' data-ep="' + esc(e.key) + '" aria-label="تشغيل ' + esc(e.title) + '"';
+      return '<' + tag + ' class="ep' + (started ? ' is-playing' : '') + '"' + attrs + '>' +
         '<span class="ep__thumb">' +
         (e.poster ? '<img src="' + esc(e.poster) + '" alt="" loading="lazy" onerror="this.remove()">' : '<span class="ep__thumb-placeholder">▶</span>') +
         '<span class="ep__number">الحلقة ' + esc(e.number || "—") + '</span></span>' +
@@ -782,7 +781,7 @@
         (started ? '<span class="ep__progress"><i style="width:' + pct.toFixed(1) + '%"></i></span>' : '') +
         '</span><span class="ep__trailing">' +
         (e.duration ? '<span class="ep__dur">' + esc(fmtDuration(e.duration)) + '</span>' : '') +
-        '<span class="ep__play">▶</span></span></button>';
+        '<span class="ep__play">' + (externalOnly ? '↗' : '▶') + '</span></span></' + tag + '>';
     }).join("");
   }
 
@@ -903,12 +902,21 @@
       if (series === s) list = seriesEpisodes(s);
     });
     if (!episode) return;
+    if (!episode.youtubeId && !episode.stream) {
+      if (/^https:\/\/roya\.tv\/program\/1703\/episodes/.test(episode.officialPage || "")) {
+        window.open(episode.officialPage, "_blank", "noopener,noreferrer");
+      } else {
+        toast("لا يوجد مشغل متاح لهذه الحلقة", "err");
+      }
+      return;
+    }
     if (parseHash().name !== "watch" || parseHash().arg !== epKey) {
       location.hash = watchLink(epKey);
       return;
     }
     var idx = list.indexOf(episode);
     var next = list[idx + 1] || null;
+    if (next && !next.stream && !next.youtubeId) next = null;
     var payload = {
       key: episode.key, kind: "episode", title: series.title + " — " + episode.title,
       subtitle: series.title, poster: series.poster, art: artStyle(series),
