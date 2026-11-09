@@ -14,7 +14,7 @@
   <title>العز TV | استوديو الاستيراد الذكي</title>
   <link rel="stylesheet" href="/static/style.css?v=studio-auto-media1">
   <link rel="stylesheet" href="/static/studio-pro.css?v=studio8">
-  <script src="/static/app.js?v=studio-auto-media1" defer></script>
+  <script src="/static/app.js?v=studio-auto-episodes1" defer></script>
   <script src="/static/studio-pro.js?v=studio-capture2" defer></script>
   <link rel="stylesheet" href="/static/autosync.css?v=autosync2">
   <script src="/static/autosync.js?v=autosync-progress1" defer></script>
@@ -168,7 +168,7 @@ https://example.org/movie/film-one"></textarea></label>
           <div class="section-title-row"><div><span class="overline">PUBLISH & SYNC</span><h2>المراجعة <span class="muted-title">والحفظ</span></h2></div><span class="soft-tag">SUPABASE SYNC</span></div>
           <div class="publish-grid"><section class="section-panel publish-panel"><div class="publish-head"><div class="publish-icon">⇧</div><div><h3>إرسال إلى مكتبة العز TV</h3><p>الحفظ متصل بقاعدة البيانات نفسها التي تستخدمها لوحة الإدارة.</p></div></div>
           <div class="mode-switch" role="group" aria-label="طريقة الحفظ"><label><input type="radio" name="publishMode" value="draft" checked><span>◷ حفظ كمسودة</span></label><label><input type="radio" name="publishMode" value="publish"><span>✓ نشر عام للمصرّح به</span></label></div>
-          <div id="rightsFields" class="rights-fields" hidden><p class="disclosure">اختر النشر العام فقط للمحتوى الذي تملك حق عرضه وتوزيع صوره. حفظ المسودة لا يتطلب هذه البيانات.</p><label class="field"><span class="field-label">صاحب الحقوق (اختياري للتوثيق)</span><input id="rightsHolder" placeholder="الجهة المالكة"></label><label class="field"><span class="field-label">مرجع تصريح العرض (اختياري للتوثيق)</span><input id="licenseRef" placeholder="رقم العقد / رابط الترخيص"></label><label class="rights-check"><input id="rightsAuthorized" type="checkbox"><span>أؤكد أن لدي تصريحًا صالحًا لعرض المحتوى والصور للجمهور.</span></label></div>
+          <div id="rightsFields" class="rights-fields" hidden><p class="disclosure">اختر النشر العام فقط للمحتوى الذي تملك حق عرضه وتوزيع صوره. حفظ المسودة لا يتطلب هذه البيانات.</p><label class="field"><span class="field-label">صاحب الحقوق (اختياري للتوثيق)</span><input id="rightsHolder" placeholder="الجهة المالكة"></label><label class="field"><span class="field-label">مرجع تصريح العرض (اختياري للتوثيق)</span><input id="licenseRef" placeholder="رقم العقد / رابط الترخيص"></label><label class="rights-check"><input id="rightsAuthorized" type="checkbox"><span>أؤكد أن لدي تصريحًا صالحًا لعرض المحتوى والصور للجمهور.</span></label><label class="rights-check"><input id="autoPublishEpisodes" type="checkbox" checked><span>انشر الحلقات الجديدة تلقائيًا بعد فحص رابط التشغيل، إذا كان تصريح العرض يشملها.</span></label></div>
           <div class="publish-note"><span>ⓘ</span><p>وجود رابط لا يضمن تشغيله دائمًا. الحلقات بلا فيديو محفوظة ضمن البيانات ولا يتم اختلاق روابط لها.</p></div>
           <button class="primary-btn save-btn" id="saveBtn">⇧ حفظ العمل الحالي في Supabase <span class="btn-arrow">←</span></button>
           <button class="secondary-btn save-btn" type="button" id="saveBatchBtn" hidden>⇧ حفظ جميع الأعمال المكتشفة دفعة واحدة</button><div id="saveResult" class="save-result" hidden></div>

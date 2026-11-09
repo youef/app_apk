@@ -308,6 +308,37 @@ class AutoSyncTests(unittest.TestCase):
         self.assertEqual(database.req.call_args.args[3]['status'],'published')
         self.assertIsNone(self.worker.queue.get_setting('discovered-episode:'+identifier))
 
+    def test_authorized_series_save_queues_draft_and_publishes_after_verification(self):
+        from alezz_fetchv_importer import store
+
+        episode_page = SERIES + '/episode-1'
+        catalogue = Catalogue('series', 'Licensed series', SERIES, episodes=[
+            Episode(1, 1, 'First episode', episode_page, media_url=NEW),
+            Episode(1, 2, 'Metadata only', SERIES),
+        ])
+        result = store(catalogue, self.db, publish=True, rights=True,
+                       license_reference='fixture-permission', defer_unverified_episodes=True)
+        self.worker.remember_saved(catalogue, result, auto_publish=True)
+        first, second = result['bindings']
+        episode = self.db.rows['aseel_episodes'][first['id']]
+        self.assertEqual(episode['status'], 'draft')
+        self.assertNotIn('source_page_url', self.db.rows['aseel_episodes'][second['id']])
+        self.assertFalse(self.worker.queue.sources('aseel_episodes', second['id']))
+        self.assertEqual(self.job(episode, 'aseel_episodes')['next_check'], 0)
+
+        def publish_if_still_valid(method, table, filters, payload):
+            self.assertEqual(method, 'PATCH')
+            rows = self.db.query(table, filters)
+            return [self.db.patch(table, row['id'], payload) for row in rows if row.get('stream_url')]
+
+        with patch.object(self.db, 'req', create=True, side_effect=publish_if_still_valid):
+            self.worker.check_target(self.job(episode, 'aseel_episodes'))
+            self.assertEqual(episode['status'], 'draft')
+            self.resolver.healthy.add(NEW)
+            self.worker.check_target(self.job(episode, 'aseel_episodes'))
+        self.assertEqual(episode['status'], 'published')
+        self.assertEqual(episode['license_reference'], 'fixture-permission')
+
     def test_healthy_primary_is_retained_even_if_backup_has_higher_confidence(self):
         row = self.row(stream_variants=[dict(url=NEW,label='backup')])
         self.resolver = FakeResolver(healthy=[OLD,NEW])

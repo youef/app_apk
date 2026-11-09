@@ -7,6 +7,7 @@ extension is local-only; server can ingest URLs copied from it.
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
 from ipaddress import ip_address
 from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
@@ -108,6 +109,7 @@ class UserState:
     scan_catalogue: Catalogue | None = None
     last_used: float = field(default_factory=time.monotonic)
     lock: Any = field(default_factory=threading.RLock)
+    save_lock: Any = field(default_factory=threading.Lock)
 
 
 _states: dict[str, UserState] = {}
@@ -441,7 +443,7 @@ def scan_catalogue(state: UserState, cat: Catalogue, progress: dict):
         return
 
     # Keep the pool bounded so multiple administrators cannot exhaust Render.
-    workers = min(3, len(targets))
+    workers = min(5, len(targets))
     progress['workers'] = workers
     try:
         with ThreadPoolExecutor(max_workers=workers, thread_name_prefix='studio-media') as executor:
@@ -625,7 +627,7 @@ async def discover_batch(request: Request, data: DiscoverBatchForm):
         raise HTTPException(400,'يُقبل رابط HTTPS عام لكل عمل: '+clean(exc,120)) from None
     def work():
         found,failed=[],[]
-        with ThreadPoolExecutor(max_workers=min(3,len(urls))) as pool:
+        with ThreadPoolExecutor(max_workers=min(5,len(urls))) as pool:
             futures={pool.submit(discover_full,url,data.kind,data.deep,data.metadata):url for url in urls}
             for future in as_completed(futures):
                 url=futures[future]
@@ -1063,6 +1065,17 @@ class SaveForm(BaseModel):
     rights_holder: str = Field(default='', max_length=250)
     license_reference: str = Field(default='', max_length=1000)
     category_id: str = Field(default='', max_length=80)
+    auto_publish_episodes: bool | None = None
+
+
+def save_catalogue(cat, db, body: SaveForm, category_id):
+    auto_publish = body.auto_publish_episodes if body.publish and body.rights_authorized and cat.kind=='series' else None
+    result=store(cat,db,publish=body.publish,rights=body.rights_authorized,
+                 license_holder=clean(body.rights_holder,250),
+                 license_reference=clean(body.license_reference,1000),category_id=category_id,
+                 defer_unverified_episodes=bool(auto_publish))
+    AUTOSYNC.remember_saved(cat,result,auto_publish=auto_publish)
+    return result
 
 
 @app.post('/api/save')
@@ -1076,23 +1089,21 @@ async def save(request: Request, body: SaveForm):
         raise HTTPException(400, 'يلزم تأكيد تصريح العرض قبل النشر العام')
     with state.lock:
         cat = current_catalogue(state)
-        if (scan_status(state) or {}).get('running'):
-            raise HTTPException(409, 'انتظر انتهاء فحص هذا العمل قبل حفظه.')
+        if (scan_status(state) or {}).get('running') and body.publish and not (
+                cat.kind == 'series' and body.auto_publish_episodes):
+            raise HTTPException(409, 'انتظر انتهاء الفحص أو فعّل النشر التلقائي للحلقات بعد التحقق.')
+        cat = deepcopy(cat)
+        db = state.db
     def task():
-        with state.lock:
-            db = state.db
-            category_id = body.category_id
-            if not category_id and cat.genres:
-                try:
-                    cats = db.query('aseel_categories', {'select':'id,name_ar','published':'eq.true','limit':'250'})
-                    category_id = category_for_genres(cats, cat.genres)
-                except Exception:
-                    pass
-            result=store(cat, db, publish=body.publish, rights=body.rights_authorized,
-                         license_holder=clean(body.rights_holder,250),
-                         license_reference=clean(body.license_reference,1000), category_id=category_id)
-            AUTOSYNC.remember_saved(cat,result)
-            return result
+        category_id = body.category_id
+        if not category_id and cat.genres:
+            try:
+                cats = db.query('aseel_categories', {'select':'id,name_ar','published':'eq.true','limit':'250'})
+                category_id = category_for_genres(cats, cat.genres)
+            except Exception:
+                pass
+        with state.save_lock:
+            return save_catalogue(cat,db,body,category_id)
     try:
         result = await run_in_threadpool(task)
     except Exception as exc:
@@ -1108,7 +1119,7 @@ async def save_batch(request:Request,body:SaveForm):
     if body.publish and not body.rights_authorized:
         raise HTTPException(400,'يلزم توثيق إذن العرض قبل النشر العام')
     def task():
-        with state.lock:
+        with state.save_lock, state.lock:
             works=list(state.catalogues)
             db=state.db
             if not works:raise ValueError('لا توجد أعمال جاهزة للحفظ')
@@ -1120,10 +1131,7 @@ async def save_batch(request:Request,body:SaveForm):
             for index,cat in enumerate(works):
                 try:
                     category=body.category_id or category_for_genres(categories,cat.genres)
-                    result=store(cat,db,publish=body.publish,rights=body.rights_authorized,
-                                 license_holder=clean(body.rights_holder,250),
-                                 license_reference=clean(body.license_reference,1000),category_id=category)
-                    AUTOSYNC.remember_saved(cat,result)
+                    result=save_catalogue(cat,db,body,category)
                     details.append({'index':index,'title':cat.title,'ok':True,'result':result})
                     for key in totals:totals[key]+=int(result.get(key,0))
                 except Exception as exc:
@@ -1141,11 +1149,11 @@ async def library_save(request:Request,body:SaveForm):
     if body.publish and not body.rights_authorized:
         raise HTTPException(400,'النشر العام يحتاج إذن عرض؛ يمكن حفظ البيانات مسودات')
     def save_chunk():
-        with state.lock:
+        with state.save_lock, state.lock:
             db=state.db
             try:categories=db.query('aseel_categories',{'select':'id,name_ar','published':'eq.true','limit':'250'})
             except Exception:categories=[]
-            rows=LIBRARY.unsaved(limit=8)
+            rows=LIBRARY.unsaved(limit=5)
             details=[]
             for row in rows:
                 try:
@@ -1153,10 +1161,7 @@ async def library_save(request:Request,body:SaveForm):
                     eps=[Episode(**e) for e in raw.pop('episodes',[])]
                     cat=Catalogue(**raw,episodes=eps)
                     category=body.category_id or category_for_genres(categories,cat.genres)
-                    result=store(cat,db,publish=body.publish,rights=body.rights_authorized,
-                                 license_holder=clean(body.rights_holder,250),
-                                 license_reference=clean(body.license_reference,1000),category_id=category)
-                    AUTOSYNC.remember_saved(cat,result)
+                    result=save_catalogue(cat,db,body,category)
                     LIBRARY.mark_saved(row['url'])
                     details.append({'url':row['url'],'ok':True,'result':result})
                 except Exception as exc:

@@ -327,7 +327,7 @@ class AutoSync:
         self.interval=max(0.25,min(0.5,float(os.getenv('ALEZZ_AUTOSYNC_INTERVAL_HOURS','0.5'))))*3600
         self.check_interval=min(self.interval,max(1,min(5,float(os.getenv('ALEZZ_AUTOSYNC_CHECK_MINUTES','5'))))*60)
         self.mode=os.getenv('ALEZZ_AUTOSYNC_MODE','auto')
-        self.concurrency=max(1,min(4,int(os.getenv('ALEZZ_AUTOSYNC_CONCURRENCY','2'))))
+        self.concurrency=max(1,min(5,int(os.getenv('ALEZZ_AUTOSYNC_CONCURRENCY','5'))))
         self.db_factory=db_factory or self._environment_db
         self.resolver_factory=resolver_factory or (lambda:MediaResolver(self.mode))
         self.stop_event=threading.Event();self.wake_event=threading.Event()
@@ -353,13 +353,16 @@ class AutoSync:
                          (now,int(self.check_interval),now,int(self.interval)))
         self.queue.setting('maintenance_policy',revision)
 
-    def remember_saved(self,cat,result,*,capture=False):
+    def remember_saved(self,cat,result,*,capture=False,auto_publish=None):
         """Preserve all local discoveries, including sources beyond eight variants."""
         by_number={(ep.season,ep.number):ep for ep in cat.episodes}
         if cat.kind=='series' and result.get('work_id'):
             try:
                 self.queue.ingest('aseel_series',dict(id=result['work_id'],title_ar=cat.title,source_page_url=cat.url))
                 for page in cat.source_pages:self.queue.remember('aseel_series',result['work_id'],dict(url=page,kind='original'))
+                if auto_publish is not None:
+                    self.queue.setting('publish-series:'+result['work_id'],bool(auto_publish))
+                if not capture:self.queue.queue('aseel_series',result['work_id'],refresh=True)
             except ValueError:pass
         for binding in result.get('bindings',[]):
             entry=cat if cat.kind=='movie' else by_number.get((binding['season'],binding['number']))
@@ -367,11 +370,16 @@ class AutoSync:
             try:
                 table,identifier=target_key(binding['table'],binding['id'])
                 page=cat.url if cat.kind=='movie' else entry.page_url
+                if cat.kind=='series' and page.rstrip('/')==cat.url.rstrip('/'):page=''
                 self.queue.ingest(table,dict(id=identifier,title_ar=entry.title,source_page_url=page,
                                              stream_url=binding.get('stream_url',entry.media_url),stream_variants=[]))
                 for source in entry.sources:self.queue.remember(table,identifier,source)
-                for page in entry.source_pages:self.queue.remember(table,identifier,dict(url=page,kind='original'))
-                if capture:self.queue.queue(table,identifier)
+                for original in entry.source_pages:
+                    if cat.kind=='movie' or original.rstrip('/')!=cat.url.rstrip('/'):
+                        self.queue.remember(table,identifier,dict(url=original,kind='original'))
+                if auto_publish and binding.get('awaiting_playback'):
+                    self.queue.setting('discovered-episode:'+identifier,result['work_id'])
+                self.queue.queue(table,identifier,refresh=not capture)
             except ValueError:pass
         if not capture:self.force_import=True
         self.wake_event.set()
@@ -627,7 +635,7 @@ class AutoSync:
             variants.extend(item for item in existing_variants if item['url'] not in retired and item['url'] not in known)
             payload['stream_variants']=variants[:8]
             active_links=[selected,*[variant['url'] for variant in payload['stream_variants']
-                                     if variant['kind']=='direct']]
+                                     if (variant.get('kind') or supported_source_kind(variant['url']))=='direct']]
             expiries=[expiry for url in active_links if (expiry:=expires_at(url))>now]
             if expiries:
                 deadline=max(now+60,min(expiries)-300)
@@ -705,12 +713,14 @@ class AutoSync:
         parent=self.queue.get_setting('discovered-episode:'+identifier)
         if not parent or not self.queue.get_setting('publish-series:'+parent,False):
             return
-        series=db.single('aseel_series',{'id':'eq.'+parent,'select':'id,status,rights_status'})
+        series=db.single('aseel_series',{'id':'eq.'+parent,'select':'id,status,rights_status,license_reference'})
         if not series or series.get('status')!='published' or series.get('rights_status')!='approved':
             return
         changed=db.req('PATCH','aseel_episodes',{'id':'eq.'+identifier,
-                       'status':'eq.draft','rights_status':'eq.pending','link_health_status':'eq.healthy'},
-                       {'status':'published','rights_status':'approved'})
+                       'status':'eq.draft','rights_status':'eq.pending','link_health_status':'eq.healthy',
+                       'stream_url':'not.is.null'},
+                       {'status':'published','rights_status':'approved',
+                        'license_reference':series.get('license_reference') or ''})
         if changed:
             self.queue.setting('discovered-episode:'+identifier,None)
             self.queue.event('episode_published','نُشرت الحلقة الجديدة بعد التحقق من رابطها.', 'aseel_episodes',identifier)
@@ -764,6 +774,14 @@ class AutoSync:
                     old['source_page_url']=episode.page_url
                 self.queue.ingest('aseel_episodes',old)
                 if episode.page_url!=cat.url:self.queue.remember('aseel_episodes',old['id'],dict(url=episode.page_url,kind='original'))
+                for source in episode.sources:
+                    self.queue.remember('aseel_episodes',old['id'],source)
+                if episode.media_url and supported_source_kind(episode.media_url)=='direct':
+                    self.queue.remember('aseel_episodes',old['id'],
+                                        dict(url=episode.media_url,kind='direct',page_url=episode.page_url))
+                for source_page in episode.source_pages:
+                    if source_page.rstrip('/') != cat.url.rstrip('/'):
+                        self.queue.remember('aseel_episodes',old['id'],dict(url=source_page,kind='original'))
             for warning in cat.discovery_warnings:
                 self.queue.event('episode_gap',warning,table,identifier)
             metadata.update(self.metadata_patch(job,pages,cat))
