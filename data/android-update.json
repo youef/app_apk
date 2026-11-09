@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "channel": "stable",
+  "package_name": "sa.alezz.tv",
+  "version_code": 0,
+  "version_name": "unreleased",
+  "download_url": "",
+  "sha256": "",
+  "notes": "Stable version metadata is only populated after verified, permanently signed GitHub Actions release."
+}
