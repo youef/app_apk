@@ -123,7 +123,7 @@
       /(?:1080|FHD)/i.test(item.quality || "") ? "FHD" :
       /(?:720|HD)/i.test(item.quality || "") ? "HD" : "";
     var tag = "";
-    if (item.kind === "channel" && item.playback === "official_link") tag = '<span class="card__tag">↗ موقع رسمي</span>';
+    if (item.kind === "channel" && item.playback === "official_link") tag = '<span class="card__tag">↗ مشاهدة خارجية</span>';
     else if (item.live) tag = '<span class="card__tag card__tag--live"><i></i>مباشر</span>';
     else if (item.featured) tag = '<span class="card__tag card__tag--gold">مختار</span>';
     else if (item.kind === "youtube") tag = '<span class="card__tag">يوتيوب</span>';
@@ -139,7 +139,7 @@
     if (item.duration) metaBits.push(esc(fmtDuration(item.duration)));
     if (item.kind === "series" && item.episodeCount) metaBits.push(item.episodeCount + " حلقة");
     if (item.category && !wide) metaBits.push(esc(item.category));
-    if (item.playback === "official_link") metaBits.push("رابط رسمي");
+    if (item.playback === "official_link") metaBits.push("صفحة مشاهدة خارجية");
     else if (item.live && !item.category) metaBits.push("بث حي");
 
     return '<article class="card' + (wide ? " card--wide" : "") + '" tabindex="0" role="button" data-key="' +
@@ -678,7 +678,7 @@
   }
 
   function sourceLabel(item) {
-    if (item.kind === "channel" && item.playback === "official_link") return "الموقع الرسمي";
+    if (item.kind === "channel" && item.playback === "official_link") return "صفحة مشاهدة خارجية";
     if (item.youtubeId) return "فيديو رسمي";
     if (item.live) return "بث مباشر";
     if (item.stream && /\\.mp4/i.test(item.stream)) return "MP4";
@@ -693,7 +693,7 @@
     var isOfficial = item.kind === "channel" && item.playback === "official_link" &&
       /^https:\/\//i.test(item.official || "") && !item.stream;
     var chips = [];
-    if (isOfficial) chips.push('<span class="chip">↗ مصدر رسمي</span>');
+    if (isOfficial) chips.push('<span class="chip">↗ صفحة خارجية</span>');
     else if (item.live) chips.push('<span class="chip chip--live"><i></i>مباشر</span>');
     if (item.year) chips.push('<span class="chip">' + esc(item.year) + "</span>");
     if (item.quality) chips.push('<span class="chip chip--hd">' + esc(item.quality) + "</span>");
@@ -709,7 +709,7 @@
     if (item.language) meta.push(["اللغة", item.language]);
     meta.push(["المصدر", sourceLabel(item)]);
     if (item.rights && item.rights.holder) meta.push(["صاحب الحقوق", item.rights.holder]);
-    if (item.live) meta.push(["النوع", isOfficial ? "رابط للموقع الرسمي" : "قناة مباشرة"]);
+    if (item.live) meta.push(["النوع", isOfficial ? "رابط لصفحة مشاهدة خارجية" : "قناة مباشرة"]);
 
     var epsHTML = "";
     if (item.kind === "series" && item.seasons && item.seasons.length) {
@@ -738,7 +738,7 @@
       (item.original && item.original !== item.title ? '<p class="detail__orig">' + esc(item.original) + "</p>" : "") +
       '<div class="detail__chips">' + chips.join("") + "</div>" +
       '<div class="detail__actions">' +
-      (isOfficial ? '<a class="btn btn--gold" href="' + esc(item.official) + '" target="_blank" rel="noopener noreferrer">↗ فتح الموقع الرسمي</a>' : "") +
+      (isOfficial ? '<a class="btn btn--gold" href="' + esc(item.official) + '" target="_blank" rel="noopener noreferrer">↗ فتح صفحة المشاهدة الخارجية</a>' : "") +
       (canPlay ? '<button class="btn btn--gold" data-play="' + esc(item.key) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6L20 12z" fill="currentColor" stroke="none"/></svg>' +
         (progressOf(item) > 1 ? "متابعة المشاهدة" : item.live ? "مشاهدة مباشرة" : "تشغيل") + "</button>" : "") +
       '<button class="btn btn--ghost" data-fav="' + esc(item.key) + '"><svg viewBox="0 0 24 24" aria-hidden="true">' +
