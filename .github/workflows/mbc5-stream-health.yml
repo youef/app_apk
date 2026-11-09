@@ -1,0 +1,37 @@
+name: Al Ezz TV — MBC 5 Real-Segment Monitoring
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/check_mbc5_stream.py'
+      - 'scripts/check_hls_segments.py'
+      - '.github/workflows/mbc5-stream-health.yml'
+  schedule:
+    - cron: '27 */2 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: al-ezz-tv-mbc5-stream-health
+  cancel-in-progress: false
+
+jobs:
+  verify-mbc5:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Python source
+        run: python3 -m py_compile scripts/check_hls_segments.py scripts/check_mbc5_stream.py
+      - name: Check MBC 5 manifest and actual media segment
+        run: python3 scripts/check_mbc5_stream.py
+      - name: Archive monitoring report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mbc5-real-segment-health
+          path: mbc5-stream-health-report.json
+          if-no-files-found: warn
+          retention-days: 14
