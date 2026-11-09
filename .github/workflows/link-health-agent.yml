@@ -6,6 +6,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/link-health-agent.yml'
+      - 'scripts/live_channel_refresh_oidc.py'
+      - 'supabase/functions/aseel-link-health/index.ts'
   workflow_dispatch:
 
 # Short-lived GitHub OIDC verified by Supabase, never expose long-lived service keys.
