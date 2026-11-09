@@ -39,16 +39,23 @@ public final class CatalogApi {
             if(item==null)continue;
             boolean youtube=YouTubeLink.usable(item.optString("youtube_url",""));
             boolean direct=StreamQuality.isDirectUrl(item.optString("stream_url",""));
-            // Legacy official-site placeholders are never offered as TV channels.
-            if("aseel_channels".equals(table) &&
-               "official_link".equals(item.optString("playback_mode","")))continue;
-            if(!youtube&&!direct)continue;
             if("aseel_channels".equals(table)){
                 String mode=item.optString("playback_mode","stream");
-                if("youtube_embed".equals(mode) && !youtube)continue;
-                if("stream".equals(mode) && !direct && !youtube)continue;
-                if(!"stream".equals(mode)&&!"youtube_embed".equals(mode))continue;
-            }
+                String external=item.optString("official_url","");
+                boolean approvedLink="official_link".equals(mode)
+                    && "approved".equals(item.optString("rights_status",""))
+                    && (external.startsWith("https://www.qanwatlive.com/")
+                        || external.startsWith("https://qanwatlive.com/"));
+                if(approvedLink){
+                    // Catalogue-only external navigation; never send web pages to video players.
+                }else{
+                    if(!youtube&&!direct)continue;
+                    if("youtube_embed".equals(mode) && !youtube)continue;
+                    if("stream".equals(mode) &&
+                        (!direct || !"healthy".equals(item.optString("link_health_status",""))))continue;
+                    if(!"stream".equals(mode)&&!"youtube_embed".equals(mode))continue;
+                }
+            } else if(!youtube&&!direct)continue;
             // Channel rights metadata is optional: published, compatible HTTPS
             // streams can be listed without mislabeling an unverified licence.
             // Films and episodes retain their separate approval requirement.
