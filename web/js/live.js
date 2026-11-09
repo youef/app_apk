@@ -87,6 +87,7 @@
     var title=String(channel.title||"").trim().toLowerCase();
     var category=String(channel.category||"").trim().toLowerCase();
     if (category.indexOf("قنوات رؤيا")>=0) return "رؤيا";
+    if (category.indexOf("قنوات روتانا")>=0) return "روتانا";
     if (/^mbc(?=\s|\+|\d|$)/i.test(title) || /^ام\s*بي\s*سي/.test(title) || category.indexOf("قنوات mbc")>=0) return "MBC";
     if (/^bein\b|^بي\s*إن/.test(title)) return "beIN SPORTS";
     if (/^rotana\b|^روتانا/.test(title)) return "روتانا";
