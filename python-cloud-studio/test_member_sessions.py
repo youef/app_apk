@@ -3,6 +3,7 @@ import hashlib
 import sqlite3
 import time
 import unittest
+from contextlib import closing
 from tempfile import TemporaryDirectory
 from pathlib import Path
 from member_sessions import MemberSessions, CUSTOMER_SESSION_SECONDS
@@ -42,14 +43,14 @@ class MemberSessionTests(unittest.TestCase):
     def test_sliding_expiry_renews_after_activity(self):
         self.registry.create(self.token, 'member-one', 'csrf-three')
         digest = hashlib.sha256(self.token.encode()).hexdigest()
-        with sqlite3.connect(str(self.registry.path)) as db:
+        with closing(sqlite3.connect(str(self.registry.path))) as db, db:
             db.execute('UPDATE member_sessions SET expires_at=? WHERE token_hash=?',
                        (int(time.time()) + 3600, digest))
         restored, renewed = self.registry.get(self.token)
         self.assertTrue(renewed)
         self.assertEqual(restored[0], 'member-one')
         self.assertGreater(restored[2], time.monotonic() + CUSTOMER_SESSION_SECONDS - 10)
-        with sqlite3.connect(str(self.registry.path)) as db:
+        with closing(sqlite3.connect(str(self.registry.path))) as db:
             expiry = db.execute('SELECT expires_at FROM member_sessions WHERE token_hash=?', (digest,)).fetchone()[0]
         self.assertGreater(expiry, int(time.time()) + CUSTOMER_SESSION_SECONDS - 10)
 
@@ -67,7 +68,7 @@ class MemberSessionTests(unittest.TestCase):
 
     def test_expiration_migration_keeps_existing_sessions(self):
         self.registry.create(self.token,'member-one','csrf-one')
-        with sqlite3.connect(str(self.registry.path)) as connection:
+        with closing(sqlite3.connect(str(self.registry.path))) as connection:
             self.assertIn('account_expires_at',
                           [x[1] for x in connection.execute('PRAGMA table_info(member_sessions)')])
         self.assertIsNotNone(self.registry.get(self.token))

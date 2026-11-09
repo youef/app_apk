@@ -44,7 +44,8 @@ public final class AppUpdater {
     private final SharedPreferences preferences;
     private final Handler handler=new Handler();
     private final java.util.concurrent.ExecutorService worker=java.util.concurrent.Executors.newSingleThreadExecutor();
-    private boolean checking=false,downloading=false,installAfterPermission=false;
+    private boolean checking,downloading,verifying,installAfterPermission;
+    private boolean active,stopped,verified,installerOpened,prompting;
     private long downloadId=-1;
     private JSONObject selected;
     private final Runnable progress=new Runnable(){public void run(){pollDownload();}};
@@ -75,7 +76,11 @@ public final class AppUpdater {
     }
     /** Automatic checks are throttled. The settings action always checks afresh. */
     public void check(final boolean manual){
-        if(checking||downloading)return;
+        if(!active||stopped||checking||downloading||verifying||prompting||installAfterPermission)return;
+        if(downloadId>0){
+            if(manual&&verified){installerOpened=false;showInstallPrompt();}
+            return;
+        }
         if(!PACKAGE.equals(activity.getPackageName())){
             if(manual)say("هذه نسخة تجريبية بمعرّف مختلف؛ التحديث المباشر يتطلب النسخة الثابتة.");
             return;
@@ -88,6 +93,7 @@ public final class AppUpdater {
             try{
                 URL url=new URL(FEED+"?v="+System.currentTimeMillis());
                 HttpsURLConnection con=(HttpsURLConnection)url.openConnection();
+                con.setInstanceFollowRedirects(false);
                 con.setSSLSocketFactory(LegacyTls.factory(activity.getApplicationContext()));
                 con.setConnectTimeout(10000);con.setReadTimeout(12000);
                 con.setUseCaches(false);
@@ -119,7 +125,7 @@ public final class AppUpdater {
             final JSONObject release=feed;final String problem=error;
             handler.post(new Runnable(){public void run(){
                 checking=false;
-                if(activity.isFinishing())return;
+                if(stopped||!active||activity.isFinishing())return;
                 if(!problem.isEmpty()){
                     if(manual)say("تعذر فحص التحديث: "+problem);
                     return;
@@ -141,9 +147,13 @@ public final class AppUpdater {
         if(!manual && preferences.getInt("snoozed_version",-1)==versionCode &&
             System.currentTimeMillis()<preferences.getLong("snoozed_until",0L))return;
         final String version=selected.optString("version_name","جديد");
-        new AlertDialog.Builder(activity)
+        String notes=selected.optString("notes","").trim();
+        if(notes.length()>1600)notes=notes.substring(0,1600);
+        prompting=true;
+        AlertDialog dialog=new AlertDialog.Builder(activity)
             .setTitle("تحديث جديد للعز TV")
-            .setMessage("الإصدار "+version+" متاح. سيتم تنزيل حزمة APK الموقّعة والتحقق من سلامتها، ثم سيطلب Android موافقتك على تثبيتها. لا تحتاج إلى حذف النسخة الحالية.")
+            .setMessage("الإصدار "+version+" متاح."+(notes.isEmpty()?"":"\n\n"+notes)+
+                "\n\nسيتم التحقق من الحزمة قبل فتح مثبت Android.")
             .setPositiveButton("تنزيل وتحديث",new android.content.DialogInterface.OnClickListener(){
                 public void onClick(android.content.DialogInterface d,int w){beginDownload();}
             })
@@ -152,7 +162,9 @@ public final class AppUpdater {
                     preferences.edit().putInt("snoozed_version",versionCode)
                         .putLong("snoozed_until",System.currentTimeMillis()+6L*60L*60L*1000L).apply();
                 }
-            }).show();
+            }).create();
+        dialog.setOnDismissListener(d->prompting=false);
+        dialog.show();
     }
     /** DownloadManager survives process restarts; recover an approved pending release. */
     private void rememberDownload(){
@@ -161,6 +173,9 @@ public final class AppUpdater {
                 .putString("release_json",selected.toString()).apply();
     }
     private void forgetDownload(){
+        downloadId=-1;
+        verified=false;
+        installerOpened=false;
         preferences.edit().remove("download_id").remove("release_json").apply();
     }
     private void restoreDownload(){
@@ -210,7 +225,7 @@ public final class AppUpdater {
         }catch(Exception e){downloadId=-1;downloading=false;forgetDownload();say("فشل بدء التنزيل: "+e.getMessage());}
     }
     private void pollDownload(){
-        if(!downloading||downloadId<0||activity.isFinishing())return;
+        if(!active||!downloading||downloadId<0||activity.isFinishing())return;
         DownloadManager manager=(DownloadManager)activity.getSystemService(Context.DOWNLOAD_SERVICE);
         Cursor cursor=null;
         try{
@@ -229,6 +244,7 @@ public final class AppUpdater {
     }
     private void verifyAndInstall(){
         final JSONObject release=selected;
+        verifying=true;
         worker.execute(new Runnable(){public void run(){
             boolean valid=false;String error="";
             try{
@@ -242,7 +258,7 @@ public final class AppUpdater {
                 }finally{in.close();}
                 StringBuilder hex=new StringBuilder();
                 for(byte b:digest.digest())hex.append(String.format(java.util.Locale.US,"%02x",b&255));
-                if(!hex.toString().equals(release.optString("sha256","")))
+                if(!hex.toString().equalsIgnoreCase(release.optString("sha256","")))
                     throw new SecurityException("بصمة الملف لا تطابق الإصدار الرسمي");
                 PackageManager pm=activity.getPackageManager();
                 PackageInfo candidate=pm.getPackageArchiveInfo(apk.getAbsolutePath(),PackageManager.GET_SIGNATURES);
@@ -259,26 +275,42 @@ public final class AppUpdater {
             }catch(Exception e){error=e.getMessage()==null?"تعذر التحقق من APK":e.getMessage();Log.e(TAG,"APK verification rejected",e);}
             final boolean ok=valid;final String problem=error;
             handler.post(new Runnable(){public void run(){
-                if(activity.isFinishing())return;
-                if(ok)requestInstall(); else {forgetDownload();say("تم رفض التحديث للحماية: "+problem);}
+                verifying=false;
+                if(stopped||activity.isFinishing())return;
+                verified=ok;
+                if(ok)showInstallPrompt();
+                else {forgetDownload();say("تم رفض التحديث للحماية: "+problem);}
             }});
         }});
     }
+    private void showInstallPrompt(){
+        if(!active||!verified||prompting||installerOpened||installAfterPermission)return;
+        prompting=true;
+        AlertDialog dialog=new AlertDialog.Builder(activity)
+            .setTitle("اكتمل تنزيل التحديث")
+            .setMessage("تم التحقق من الملف. افتح مثبت Android لإكمال التحديث.")
+            .setPositiveButton("فتح المثبت",(d,w)->requestInstall())
+            .setNegativeButton("لاحقًا",(d,w)->installerOpened=true)
+            .create();
+        dialog.setOnCancelListener(d->installerOpened=true);
+        dialog.setOnDismissListener(d->prompting=false);
+        dialog.show();
+    }
     private void requestInstall(){
         if(Build.VERSION.SDK_INT>=26&&!activity.getPackageManager().canRequestPackageInstalls()){
-            installAfterPermission=true;
             new AlertDialog.Builder(activity)
                 .setTitle("السماح بتثبيت تحديثات العز TV")
                 .setMessage("فعّل «السماح من هذا المصدر» في إعدادات Android، ثم عد للتطبيق. يتطلب التثبيت موافقتك النهائية.")
                 .setPositiveButton("فتح الإعدادات",new android.content.DialogInterface.OnClickListener(){
                     public void onClick(android.content.DialogInterface d,int w){
                         try{
+                            installAfterPermission=true;
                             Intent intent=new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                                 Uri.parse("package:"+activity.getPackageName()));
                             activity.startActivity(intent);
-                        }catch(Exception e){say("افتح إعدادات الجهاز واسمح بتثبيت التطبيقات من هذا المصدر.");}
+                        }catch(Exception e){installAfterPermission=false;say("افتح إعدادات الجهاز واسمح بتثبيت التطبيقات من هذا المصدر.");}
                     }
-                }).setNegativeButton("إلغاء",null).show();
+                }).setNegativeButton("إلغاء",(d,w)->installerOpened=true).show();
             return;
         }
         installAfterPermission=false;
@@ -293,14 +325,21 @@ public final class AppUpdater {
             installer.setDataAndType(uri,"application/vnd.android.package-archive");
             installer.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_ACTIVITY_NEW_TASK);
             activity.startActivity(installer);
-            forgetDownload();
+            installerOpened=true;
         }catch(Exception e){say("لا يوجد مثبت APK متوافق على الجهاز: "+e.getMessage());}
     }
     public void onResume(){
+        active=true;
         restoreDownload();
-        if(installAfterPermission && (Build.VERSION.SDK_INT<26||
-            activity.getPackageManager().canRequestPackageInstalls()))requestInstall();
+        if(installAfterPermission){
+            installAfterPermission=false;
+            if(Build.VERSION.SDK_INT<26||activity.getPackageManager().canRequestPackageInstalls())requestInstall();
+            else installerOpened=true;
+        }
+        handler.removeCallbacks(progress);
         if(downloading)handler.postDelayed(progress,500L);
+        else showInstallPrompt();
     }
-    public void stop(){handler.removeCallbacks(progress);worker.shutdownNow();}
+    public void onPause(){active=false;handler.removeCallbacks(progress);}
+    public void stop(){stopped=true;handler.removeCallbacksAndMessages(null);worker.shutdownNow();}
 }

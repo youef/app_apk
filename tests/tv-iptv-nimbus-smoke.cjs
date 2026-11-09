@@ -43,7 +43,7 @@ ok("Local IPTV persists after refresh from Supabase",
   home.includes('getString("iptv_m3u"') &&
   home.includes('"_local_iptv"'));
 ok("Device memory protects channel list UI and Binder",
-  home.includes("displayed>350") && home.includes("selectedGlobal-75") &&
+  home.includes("Math.min(liveGuideLimit,list.size())") && home.includes("selectedGlobal-75") &&
   home.includes("channelIndex<to"));
 ok("Smart live-freeze watchdog with bounded recovery",
   player.includes("liveHealth") && player.includes("frozenTicks>=4") &&

@@ -64,7 +64,7 @@ ok("Native accepts precise ISO-8601 subscription dates and administrator renewal
  auth.includes("parseBackendTimestamp(raw)")&&
  auth.includes("SSSXXX")&&
  auth.includes("if(isExpiredLocally(context))resume(context);")&&
- auth.includes("if(isExpiredLocally(context)){\n            resume(context);")&&
+   /if\(isExpiredLocally\(context\)\)\{\s+resume\(context\);/.test(auth)&&
  home.includes("final boolean cachedExpired=MemberAuth.isExpiredLocally(TVHomeActivity.this)")&&
  home.includes("cachedExpired || lastEntitlementCheckAt")&&
  player.includes("the home screen can verify an admin renewal"));

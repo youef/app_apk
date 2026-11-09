@@ -69,7 +69,7 @@ for(const name of ["movies","series","live","kids","favorites","settings"]){
     "Native red home icon missing: "+name);
 }
 assert(tv.includes("new CinemaGlyph(target,0xFFFF7A8D)")&&
-  tv.includes('shelf("أفلام مختارة"')&&
+  tv.includes('homeShelf("أحدث الإضافات"')&&
   tv.includes("showContinueWatching(false)"),
   "TV launcher needs stroke icons, cinema shelves and resume history");
 assert(player.includes("focused?0xFF77233E")&&

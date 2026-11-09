@@ -51,6 +51,8 @@ android {
     }
 }
 dependencies {
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
     implementation "org.conscrypt:conscrypt-android:2.5.3"
     // Legacy ExoPlayer is retained solely because Android 4.4 requires API19.
     // Modern Media3 requires a newer OS; do not silently raise minSdk.

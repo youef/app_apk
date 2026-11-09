@@ -19,6 +19,11 @@ on:
       - 'tests/**'
       - '.github/workflows/android.yml'
   workflow_dispatch:
+    inputs:
+      publish_legacy_preview:
+        description: 'Publish the legacy playback test build and direct download'
+        type: boolean
+        default: false
 concurrency:
   group: al-ezz-redclassic-fresh-v1-${{ github.ref }}
   cancel-in-progress: false
@@ -185,7 +190,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Publish independent playback test APK
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && inputs.publish_legacy_preview
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -207,7 +212,7 @@ jobs:
       # The initial upload creates an app when no public key exists.
       - name: Determine Appetize app identifier
         id: appetize_app_key
-        if: env.APPETIZE_API_TOKEN != ''
+        if: inputs.publish_legacy_preview && env.APPETIZE_API_TOKEN != ''
         shell: bash
         env:
           INITIAL_PUBLIC_KEY: ${{ secrets.APPETIZE_ANDROID_PUBLIC_KEY }}
@@ -225,7 +230,7 @@ jobs:
 
       - name: Upload to Appetize
         id: appetize_upload
-        if: env.APPETIZE_API_TOKEN != ''
+        if: inputs.publish_legacy_preview && env.APPETIZE_API_TOKEN != ''
         continue-on-error: true
         uses: appetizeio/github-action-appetize@v1.1.0
         with:
@@ -265,7 +270,7 @@ jobs:
           echo "Appetize: awaiting GitHub Actions secret APPETIZE_API_TOKEN" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish APK for direct download after verified build
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && inputs.publish_legacy_preview
         shell: bash
         run: |
           set -euo pipefail

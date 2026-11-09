@@ -13,7 +13,8 @@ const docs = load("docs/ROYA_CHANNELS_2026-11-09.md");
 // publisher pages. HLS replay is *not* unlocked by these checks.
 assert.ok(catalog.includes('external.startsWith("https://roya.tv/")'),
   "The native catalogue must accept official Roya external-link entries");
-assert.ok(tv.includes('external.startsWith("https://roya.tv/")'),
+assert.ok(tv.includes("CatalogApi.officialChannelLink(external)") &&
+  fs.readFileSync("app/src/main/java/sa/aseel/tv/CatalogApi.java","utf8").includes('external.startsWith("https://roya.tv/")'),
   "The TV remote must open official Roya pages in an external browser");
 assert.ok(categories.includes('category.contains("قنوات رؤيا")'),
   "Android TV channel companies must group Roya separately");

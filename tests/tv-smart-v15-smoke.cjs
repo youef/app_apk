@@ -11,7 +11,7 @@ function check(name,ok){assert.ok(ok,name);console.log("PASS | "+name);}
 check("Independent local profiles without viewer login",state.includes('new String')===false&&state.includes('"family"')&&state.includes('"kids"')&&state.includes('"guest"')&&!home.includes("PinGate."));
 check("Save playback time, duration, title, quality and episode identity",state.includes('row.put("position"')&&state.includes('row.put("quality"')&&state.includes('row.put("series_id"')&&player.includes("saveProgress()"));
 check("Watch-history deletion is per item",home.includes('PlaybackMemory.remove(TVHomeActivity.this,profile,id)')&&state.includes('public static void remove('));
-check("Continue watching resolves source from approved catalog",home.includes("showContinueWatching(true)")&&home.includes("findCatalogItem(")&&home.includes("pendingResumeEpisodeId"));
+check("Continue watching resolves source from approved catalog",home.includes("showContinueWatching(false)")&&home.includes("findCatalogItem(seriesId,true)")&&home.includes("pendingResumeEpisodeId"));
 check("Episode next action on right",player.includes('button("⏭ الحلقة التالية")')&&player.includes("switchMedia(mediaIndex+1)"));
 check("Live left channel group/filter rail",player.includes("Gravity.LEFT")&&player.includes("activeGroup")&&player.includes("updateChannelRail()"));
 check("Playback right controls and fullscreen",player.includes("Gravity.RIGHT")&&player.includes('button("⛶ عرض كامل")')&&player.includes("hideControls()"));

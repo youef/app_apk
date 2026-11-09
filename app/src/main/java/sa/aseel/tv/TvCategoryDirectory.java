@@ -6,10 +6,9 @@ import java.text.Collator;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 /**
  * Dynamic category-directory for native TV. A category is shown only when an
@@ -36,7 +35,9 @@ public final class TvCategoryDirectory {
         {"animation","كرتون"},{"anime","أنمي"},{"kids","أطفال"},
         {"family","عائلي"},{"ramadan","رمضان"},{"adventure","مغامرات"},
         {"biography","سيرة ذاتية"},{"short","قصيرة"},{"classic","كلاسيكية"},
-        {"music","موسيقى"},{"sports","رياضة"},{"news","أخبار"}
+        {"music","موسيقى"},{"sports","رياضة"},{"news","أخبار"},
+        {"religion","دينية"},{"variety","منوعات"},{"food","طبخ"},
+        {"education","تعليمية"},{"series","مسلسلات"},{"movies","أفلام"}
     };
     private static final String[][] COUNTRIES={
         {"TR","تركية"},{"SA","سعودية"},{"EG","مصرية"},{"SY","سورية"},
@@ -45,46 +46,44 @@ public final class TvCategoryDirectory {
         {"MA","مغربية"},{"US","أمريكية"},{"IN","هندية"},{"KR","كورية"},
         {"CN","صينية"},{"JP","يابانية"},{"GB","بريطانية"}
     };
+    private static final Pattern ARABIC_MARKS=Pattern.compile("[\\u0640\\u064b-\\u065f]");
+    private static final Pattern LABEL_SPACING=Pattern.compile("[\\s_-]+");
+    private static final String ARAB_COUNTRIES=" SA EG AE KW BH QA OM YE IQ JO LB SY PS MA DZ TN LY SD SO MR DJ KM ";
+    private static final String GULF_COUNTRIES=" SA AE KW BH QA OM ";
 
     private static String string(JSONObject item,String key){
-        return item==null?"":item.optString(key,"").trim();
+        return item==null||item.isNull(key)?"":item.optString(key,"").trim();
     }
-    private static boolean contains(String text,String... words){
-        for(String word:words)if(text.contains(word))return true;
-        return false;
+    private static String normalizedLabel(String value){
+        String label=value.trim().toLowerCase(Locale.ROOT)
+            .replace('أ','ا').replace('إ','ا').replace('آ','ا').replace('ى','ي');
+        return LABEL_SPACING.matcher(ARABIC_MARKS.matcher(label).replaceAll("")).replaceAll(" ").trim();
     }
-    private static String normalizedGenre(String input){
-        String t=input.trim().toLowerCase(Locale.US).replace('_','-');
-        if(t.length()==0)return "";
-        if(contains(t,"romance","romantic","رومان","حب وعشق"))return "romance";
-        if(contains(t,"comedy","comic","كوميد","ضحك"))return "comedy";
-        if(contains(t,"drama","درام"))return "drama";
-        if(contains(t,"action","أكشن","اكشن"))return "action";
-        if(contains(t,"thriller","تشويق","إثار","اثار"))return "thriller";
-        if(contains(t,"crime","جريم"))return "crime";
-        if(contains(t,"horror","رعب"))return "horror";
-        if(contains(t,"mystery","غموض"))return "mystery";
-        if(contains(t,"war","حرب","حروب"))return "war";
-        if(contains(t,"historical","تاريخي"))return "history";
-        if(contains(t,"history","تاريخ"))return "history";
-        if(contains(t,"fantasy","فانتاز"))return "fantasy";
-        if(contains(t,"scifi","sci-fi","خيال علمي"))return "scifi";
-        if(contains(t,"science","علوم"))return "science";
-        if(contains(t,"documentary","وثائق"))return "documentary";
-        if(contains(t,"animation","cartoon","كرتون","رسوم متحركة"))return "animation";
-        if(contains(t,"anime","أنمي","انمي","أنيمي"))return "anime";
-        if(contains(t,"kids","children","أطفال","اطفال"))return "kids";
-        if(contains(t,"family","عائل","أسري"))return "family";
-        if(contains(t,"ramadan","رمضان"))return "ramadan";
-        if(contains(t,"adventure","مغامر"))return "adventure";
-        if(contains(t,"biography","سيرة ذاتية"))return "biography";
-        if(contains(t,"short","قصير"))return "short";
-        if(contains(t,"classic","كلاسيك","قديم"))return "classic";
-        if(contains(t,"music","موسيقى","أغان"))return "music";
-        if(contains(t,"sport","رياضة","رياضي"))return "sports";
-        if(contains(t,"news","أخبار","اخبار"))return "news";
-        // Unknown labels remain data-driven. Avoid long or suspicious label strings.
-        return t.length()>42?"":t;
+    private static final String[][] GENRE_ALIASES={
+        {"romance","romantic","رومانسية","حب وعشق"},
+        {"comedy","comic","كوميدي","كوميدية"},{"drama","درامي","درامية"},
+        {"action","حركة"},{"history","historical","تاريخية","تاريخ"},
+        {"thriller","تشويق","اثارة"},{"scifi","sci fi"},{"crime","بوليسية"},
+        {"documentary","documentaries","وثائقية","وثائقيات"},
+        {"animation","cartoon","رسوم متحركة"},{"kids","children","الاطفال"},
+        {"family","عائلية","اسري"},{"sports","sport","رياضية","الرياضية"},
+        {"news","الاخبار","اخبارية"},{"religion","religious","quran","ديني"},
+        {"variety","entertainment","ترفيه"},{"movies","film","movie","cinema"},
+        {"series","مسلسل"}
+    };
+    private static final LinkedHashMap<String,String> GENRE_KEYS=new LinkedHashMap<String,String>();
+    static{
+        for(String[] entry:GENRES){
+            GENRE_KEYS.put(entry[0],entry[0]);
+            GENRE_KEYS.put(normalizedLabel(entry[1]),entry[0]);
+        }
+        for(String[] entry:GENRE_ALIASES)
+            for(int i=1;i<entry.length;i++)GENRE_KEYS.put(normalizedLabel(entry[i]),entry[0]);
+    }
+    private static boolean placeholder(String key){
+        return key.isEmpty()||key.equals("all")||key.equals("الكل")||key.equals("عام")||
+            key.equals("عامة")||key.equals("غير مصنف")||key.equals("general")||
+            key.equals("uncategorized")||key.equals("misc")||key.equals("other");
     }
     private static String genreTitle(String canonical){
         if("history".equals(canonical))return "تاريخي";
@@ -103,29 +102,51 @@ public final class TvCategoryDirectory {
     private static String withoutPrefix(String text){
         return text.replaceFirst("^(أفلام|افلام|مسلسلات|قنوات|فئة|تصنيف)\\s+", "").trim();
     }
-    private static String categoryKey(String name,String mediaKind){
-        String title=withoutPrefix(name);
-        // Production-country groups are shared by manual categories and country_code.
-        for(String[] country:COUNTRIES)
-            if(title.equals(country[1])||title.equals(country[1].replace("ة","")) ||
-                title.equals(country[1].replace("ية","ي")))
-                return "country:"+country[0];
-        // Do not confuse channel network labels (e.g. Rotana) with genres.
-        if("channel".equals(mediaKind))return "source:"+title;
-        String genre=normalizedGenre(title);
-        if(genre.isEmpty())return "";
-        // Use a raw source category only when it was actually tagged with a unique
-        // descriptive title, not for "all", a generic site grouping or placeholder.
-        if(contains(genre,"غير مصنف","general","uncategorized","misc","other","الكل"))return "";
-        return "genre:"+genre;
+    private static String countryCode(String name){
+        String key=normalizedLabel(name);
+        for(String[] country:COUNTRIES){
+            String label=normalizedLabel(country[1]);
+            if(key.equals(country[0].toLowerCase(Locale.ROOT))||key.equals(label)||
+                key.equals(label.substring(0,label.length()-1)))return country[0];
+        }
+        return "";
     }
-    private static String labelFor(String key,String original){
-        if(key.startsWith("genre:"))return genreTitle(key.substring(6));
-        if(key.startsWith("country:"))return countryName(key.substring(8));
-        if(key.startsWith("network:"))return key.substring(8);
-        if(key.startsWith("type:"))return key.substring(5);
-        if(key.startsWith("source:"))return key.substring(7);
-        return original;
+    private static void addLabel(LinkedHashMap<String,String> tags,String title,boolean channel){
+        String normalized=normalizedLabel(title);
+        if(placeholder(normalized))return;
+        String genre=GENRE_KEYS.get(normalized);
+        if(genre!=null){
+            String label=genreTitle(genre);
+            if(channel&&"documentary".equals(genre))label="وثائقيات";
+            add(tags,(channel?"type:":"genre:")+genre,label);
+        }else if(!channel&&("خليجي".equals(normalized)||"خليجية".equals(normalized))){
+            add(tags,"region:gulf","خليجية");
+        }else if(!channel&&("عربي".equals(normalized)||"عربية".equals(normalized))){
+            add(tags,"region:arab","عربية");
+        }else if(!channel&&("اجنبي".equals(normalized)||"اجنبية".equals(normalized))){
+            add(tags,"region:foreign","أجنبية");
+        }else{
+            String country=countryCode(title);
+            if(!country.isEmpty())add(tags,"country:"+country,countryName(country));
+            else add(tags,"label:"+normalized,title);
+        }
+    }
+    private static void addCountry(LinkedHashMap<String,String> tags,String code,boolean channel){
+        if(!code.matches("[A-Z]{2}"))return;
+        add(tags,"country:"+code,countryName(code));
+        if(channel)return;
+        String token=" "+code+" ";
+        if(GULF_COUNTRIES.contains(token))add(tags,"region:gulf","خليجية");
+        if(ARAB_COUNTRIES.contains(token))add(tags,"region:arab","عربية");
+        else add(tags,"region:foreign","أجنبية");
+    }
+    private static void addNetwork(LinkedHashMap<String,String> tags,String name){
+        String key=normalizedLabel(name);
+        if(placeholder(key)||"اخري".equals(key))return;
+        if("rotana".equals(key)||"شبكة روتانا".equals(key))name="روتانا";
+        if("mbc".equals(key)||"ام بي سي".equals(key))name="MBC";
+        if("السعودية".equals(key)||"القنوات السعودية".equals(key))name="القنوات السعودية";
+        add(tags,"network:"+normalizedLabel(name),name);
     }
     private static String iconFor(String key,String mediaKind){
         if("all".equals(key))return "guide";
@@ -144,43 +165,34 @@ public final class TvCategoryDirectory {
     private static LinkedHashMap<String,String> tagsFor(JSONObject item,String kind){
         LinkedHashMap<String,String> groups=new LinkedHashMap<String,String>();
         if(item==null)return groups;
-        if("channel".equals(kind)){
-            String type=ChannelGuideCategory.from(item);
-            add(groups,"type:"+type,type);
-            String network=ChannelGuideCategory.broadcaster(item);
-            add(groups,"network:"+network,network);
-            String explicit=categoryName(item);
-            if(explicit.length()>0){
-                String key=categoryKey(explicit,kind);
-                String display=withoutPrefix(explicit);
-                if(!display.equalsIgnoreCase(network) && !display.equalsIgnoreCase(type) &&
-                    !key.isEmpty() && !display.equals("الكل"))
-                    add(groups,key,labelFor(key,explicit));
-            }
-            return groups;
-        }
+        boolean channel="channel".equals(kind);
+        String network=channel?ChannelGuideCategory.broadcaster(item):"";
+        if(channel)addNetwork(groups,network);
         for(String field:new String[]{"genre_tags","auto_tags"}){
             JSONArray list=item.optJSONArray(field);
             if(list==null)continue;
             for(int i=0;i<list.length();i++){
                 String raw=list.optString(i,"").trim();
-                if(raw.startsWith("network:")||raw.startsWith("country:")||
-                    raw.equalsIgnoreCase("other")||raw.equalsIgnoreCase("general"))continue;
-                String genre=normalizedGenre(raw);
-                if(genre.length()>0){
-                    String key="genre:"+genre;
-                    add(groups,key,genreTitle(genre));
+                String prefix=raw.toLowerCase(Locale.ROOT);
+                if(prefix.startsWith("network:")){
+                    if(channel)addNetwork(groups,withoutPrefix(raw.substring(8).trim()));
+                }else if(prefix.startsWith("country:")){
+                    String code=raw.substring(8).trim().toUpperCase(Locale.ROOT);
+                    addCountry(groups,code,channel);
+                }else if(!list.isNull(i)){
+                    addLabel(groups,withoutPrefix(raw),channel);
                 }
             }
         }
         String name=categoryName(item);
-        if(name.length()>0){
-            String key=categoryKey(name,kind);
-            if(!key.isEmpty())add(groups,key,labelFor(key,name));
-        }
+        String title=withoutPrefix(name);
+        String normalized=normalizedLabel(title);
+        if(!channel||(!normalized.equals(normalizedLabel(network))&&
+            !normalized.equals(normalizedLabel(withoutPrefix(network)))))
+            addLabel(groups,title,channel);
+        if(item.optBoolean("is_kids",false))addLabel(groups,"أطفال",channel);
         String country=string(item,"country_code").toUpperCase(Locale.US);
-        if(country.matches("[A-Z]{2}"))
-            add(groups,"country:"+country,countryName(country));
+        addCountry(groups,country,channel);
         return groups;
     }
     /** All first; other nonempty categories alphabetically for predictable remote navigation. */

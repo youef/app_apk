@@ -89,8 +89,13 @@ public final class MemberAuth {
             return new JSONObject(readLimited(connection.getInputStream()));
         }finally{connection.disconnect();}
     }
-    public static final class AuthenticationException extends Exception{
+    public static class AuthenticationException extends Exception{
         AuthenticationException(String message){super(message);}
+    }
+    private static final class SubscriptionExpiredException extends AuthenticationException{
+        SubscriptionExpiredException(){
+            super("انتهت صلاحية حسابك. تواصل مع الإدارة لتجديد الاشتراك.");
+        }
     }
     /**
      * Parse server-owned ISO-8601 timestamps without assuming a single fractional
@@ -139,7 +144,7 @@ public final class MemberAuth {
         }
         long deadline=subscriptionDeadline(user);
         if(deadline>0L && deadline<=System.currentTimeMillis())
-            throw new AuthenticationException("انتهت صلاحية حسابك. تواصل مع الإدارة لتجديد الاشتراك.");
+            throw new SubscriptionExpiredException();
         if(user.optString("id","").isEmpty())throw new AuthenticationException("تعذّر تأكيد هوية الحساب.");
         return user;
     }
@@ -165,6 +170,8 @@ public final class MemberAuth {
                 .putLong("subscription_expires_ms",subscriptionDeadline(user))
                 .putString("subscription_plan_name",plan).commit();
             registerDevice(context);
+        }catch(SubscriptionExpiredException expired){
+            throw expired;
         }catch(AuthenticationException denied){
             logoutLocal(context);
             throw denied;
@@ -268,9 +275,15 @@ public final class MemberAuth {
         JSONObject body=new JSONObject();body.put("refresh_token",refresh);
         try{
             JSONObject reply=request(context,"token?grant_type=refresh_token",body,null);
+            String rotated=reply.optString("refresh_token","");
+            if(rotated.length()>=12&&!rotated.equals(refresh)&&!preferences(context).edit()
+                .putString("refresh_token",rotated).commit())
+                throw new java.io.IOException("تعذّر حفظ جلسة الدخول المحدّثة.");
             save(context,reply,username(context),
                 preferences(context).getLong("session_started_ms",0L));
             registerDevice(context);
+        }catch(SubscriptionExpiredException expired){
+            throw expired;
         }catch(AuthenticationException invalid){
             logoutLocal(context);
             throw invalid;

@@ -36,10 +36,10 @@ assert.ok(home.includes('browseMode="directory"')&&
     "category click navigates to linked filtered titles");
 assert.ok(home.includes('if("channel".equals(browseKind))channelBrowse('),
     "channels open the native playable channel list");
-assert.ok(home.includes('goTo("browse".equals(section)?browseOrigin:"home")'),
+assert.ok(home.includes("goTo(browseOrigin)")&&home.includes("restorePosition(browseOriginFocus,browseOriginScroll)"),
     "back button returns to category directory");
 assert.ok(home.includes('cardGridLimit+72'),"large lists progressively render");
-assert.ok(home.includes('("official_link".equals(mode))')||home.includes('if("official_link".equals(mode))'),
+assert.ok(home.includes("CatalogApi.officialChannelLink(external)")&&api.includes("officialChannelLink(external)"),
     "official outbound channels no longer discarded");
 assert.ok(nativeCategory.includes('category.contains("قنوات روتانا")'),"Rotana entries grouped by network");
 assert.ok(home.includes("appUpdater.check(true)"),"settings update button wired");

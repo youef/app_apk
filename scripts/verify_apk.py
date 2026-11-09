@@ -57,7 +57,9 @@ def main():
     check(True,"ZIP alignment")
     badging=command([aapt,"dump","badging",str(apk)])
     check(f"package: name='{EXPECTED_PACKAGE}'" in badging,
-          "Fresh package ID to bypass legacy signature conflicts")
+          "Expected package ID")
+    if EXPECTED_PACKAGE=="sa.alezz.tv":
+        check("application-debuggable" not in badging,"Stable APK is not debuggable")
     check(f"sdkVersion:'{MIN_SDK}'" in badging,"minSdkVersion API 19")
     check("targetSdkVersion:'28'" in badging,"Target SDK as declared")
     version=re.search(r"versionCode='(\d+)'",badging)
@@ -82,6 +84,7 @@ def main():
     print("CERTIFICATE_SHA256="+digest.group(1))
     print("APK_SHA256="+hashlib.sha256(apk.read_bytes()).hexdigest())
     print("PACKAGE="+EXPECTED_PACKAGE)
+    print("VERSION_CODE="+version.group(1))
     print("SUPPORTED_ABIS="+",".join(REQUIRED_ABIS))
     print("UNIVERSAL_APK=true")
     print("RESULT: STATIC INSTALL CHECKS PASSED — real-device installation not proven")

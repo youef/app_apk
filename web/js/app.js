@@ -1267,24 +1267,40 @@
 
   /* ---------------------------------------------------------------- boot */
 
+  var catalogRequest = null, lastCatalogCheck = 0, catalogNeedsRender = false;
+  var CATALOG_REFRESH_MS = 2 * 60 * 1000;
   function bootCatalog() {
-    Api.load().then(function (state) {
+    if (catalogRequest) return catalogRequest;
+    lastCatalogCheck = Date.now();
+    catalogRequest = Api.load().then(function (state) {
+      var alreadyLoaded = Boolean(catalog);
       catalog = state;
       source = Api.source;
       document.body.setAttribute("data-boot", "ready");
-      render();
-      if (source === "snapshot") toast("تعذّر الاتصال — تم فتح النسخة المحفوظة");
+      if (Player.isOpen()) catalogNeedsRender = true;
+      else { catalogNeedsRender = false; render(alreadyLoaded); }
+      if (!alreadyLoaded && source === "snapshot") toast("تعذّر الاتصال — تم فتح النسخة المحفوظة");
     }).catch(function () {
+      if (catalog) return;
       view.innerHTML = '<div class="empty" style="padding-top:22vh"><strong>تعذّر تحميل المكتبة</strong>' +
         "<p>تحقّق من الاتصال ثم أعد تحميل الصفحة.</p>" +
         '<button class="btn btn--gold" onclick="location.reload()">إعادة المحاولة</button></div>';
-    });
+    }).then(function () { catalogRequest = null; });
+    return catalogRequest;
+  }
+  function refreshVisibleCatalog() {
+    if (document.hidden || !Store.isActivated()) return;
+    if (catalogNeedsRender && !Player.isOpen()) { catalogNeedsRender = false; render(true); }
+    if (Date.now() - lastCatalogCheck >= CATALOG_REFRESH_MS) bootCatalog();
   }
 
   function boot() {
     initTvMode();
     wireGate();
     wireGlobal();
+    document.addEventListener("visibilitychange", refreshVisibleCatalog);
+    window.addEventListener("online", refreshVisibleCatalog);
+    setInterval(refreshVisibleCatalog, 30000);
 
     if (!Store.isActivated()) {
       gateShow();

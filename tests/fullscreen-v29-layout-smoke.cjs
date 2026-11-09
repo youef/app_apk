@@ -18,7 +18,7 @@ assert(method.includes("android.os.Build.VERSION.SDK_INT>=28") &&
 assert(screen.includes("if(hasFocus)applyCinemaImmersiveLayout()") &&
     screen.includes("super.onWindowFocusChanged(hasFocus)"),
     "Reapply immersive mode when resuming from system UI, settings or keyboard");
-assert(screen.includes("applyCinemaImmersiveLayout();\n        catalog=new CatalogApi(this);"),
+assert(/applyCinemaImmersiveLayout\(\);\s+catalog=new CatalogApi\(this\);/.test(screen),
     "Apply fullscreen before creating the video app shell");
 assert(screen.includes("root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL)") &&
     screen.includes("root.setBackgroundDrawable(new CinemaBackdropDrawable())") &&

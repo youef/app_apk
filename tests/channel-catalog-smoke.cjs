@@ -6,13 +6,16 @@ const path = require("node:path");
 
 const source = fs.readFileSync(path.join(__dirname, "../web/js/api.js"), "utf8");
 const native = fs.readFileSync(path.join(__dirname, "../app/src/main/java/sa/aseel/tv/TVHomeActivity.java"), "utf8");
-assert.ok(native.includes("status=eq.published&rights_status=eq.approved&order=display_order.asc,created_at.desc&limit=500"),
-  "Android TV must fetch the full channel catalogue and prioritize approved entries.");
+assert.ok(native.includes('catalog.listPaged("aseel_channels"') &&
+  native.includes("rights_status.eq.approved,and(rights_status.eq.pending,playback_mode.eq.official_link)") &&
+  native.includes("order=display_order.asc,created_at.desc,id.asc"),
+  "Android TV pages approved channels and separately permits external links.");
 
 async function run(failChannels) {
   const channels = Array.from({ length: 216 }, (_, i) => ({
     id: String(i + 1), title_ar: "قناة " + (i + 1),
-    status: "published", link_health_status: "healthy", rights_status: i < 44 ? "approved" : "pending",
+    status: i === 215 ? "draft" : "published", link_health_status: "healthy",
+    rights_status: i === 214 ? "pending" : "approved",
     playback_mode: "stream", stream_url: "https://example.org/live/" + i + ".m3u8"
   }));
   const requests = [];
@@ -34,7 +37,8 @@ async function run(failChannels) {
     view, fakeFetch, setTimeout, clearTimeout
   );
   const catalog = await view.AlezzApi.load();
-  assert.equal(catalog.channels.length, failChannels ? 32 : 216);
+  assert.equal(catalog.channels.length, failChannels ? 32 : 214);
+  assert.ok(catalog.channels.every(channel => channel.rights.status === "approved"));
   assert.equal(requests.filter(x => x.includes("aseel_channels")).length, 1,
     "under 800 channels must require only one remote API call");
   assert.equal(requests.some(x => x.includes("snapshot")), failChannels,
@@ -44,7 +48,7 @@ async function run(failChannels) {
 (async () => {
   await run(false);
   await run(true);
-  console.log("PASS: 216 live channels remain visible; failover retains 32 curated channels.");
+  console.log("PASS: only published and approved live channels are visible; fallback retains curated channels.");
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;

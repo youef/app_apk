@@ -1,10 +1,6 @@
 name: Al Ezz TV v16 — Stable Android Release (API19+)
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/release-stable.yml'
   workflow_dispatch:
 
 permissions:
@@ -120,12 +116,10 @@ jobs:
           sha256sum "$apk" | tee -a dist/build-report.txt
           cert="$(sed -n 's/^CERTIFICATE_SHA256=//p' dist/build-report.txt | head -1)"
           test -n "$cert"
-          if [[ -n "$AL_EZZ_CERT_SHA256" ]]; then
-            [[ "${cert,,}" == "${AL_EZZ_CERT_SHA256,,}" ]] || {
-              echo "::error::Stable signing certificate changed. Release blocked."
-              exit 1
-            }
-          fi
+          [[ "$AL_EZZ_CERT_SHA256" =~ ^[a-fA-F0-9]{64}$ && "${cert,,}" == "${AL_EZZ_CERT_SHA256,,}" ]] || {
+            echo "::error::Original stable signing certificate missing or different. Release blocked."
+            exit 1
+          }
           ! unzip -p "$apk" AndroidManifest.xml | strings | grep -q 'android:debuggable="true"' \
             || { echo "::error::Debuggable package blocked."; exit 1; }
           {

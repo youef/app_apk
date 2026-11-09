@@ -18,8 +18,8 @@ check("Kids, favorites and settings render as compact shortcuts",portal.includes
   portal.includes('new LinearLayout.LayoutParams(dp(30),dp(30))') &&
   portal.includes('new LinearLayout.LayoutParams(0,dp(91),1)'));
 check("Catalog refresh keeps the focused semantic content item",home.includes("focusedItemTag()") &&
-  home.includes("findTagged(content,focusTag)")&&
-  home.includes("scroller.scrollTo(0,previousScroll)"));
+  home.includes("restorePosition(focusTag,previousScroll)")&&
+  home.includes("findTagged(content,tag)")&&home.includes("scroller.scrollTo(0,scroll)"));
 check("Remote MENU cannot teleport to live from other sections",home.includes('if("live".equals(section))return super.onKeyDown(code,event)') &&
   !home.includes('section="live";render();scroller.scrollTo(0,0);return true;'));
 check("Remote numeric channel jumping is live-only",home.includes('if("live".equals(section) && !(getCurrentFocus() instanceof EditText)'));

@@ -78,17 +78,15 @@
   };
   var failedTables = [];
 
-  // Preserve the known-good single request while supporting future catalogues
-  // larger than the Supabase page size. Published rows remain subject to RLS.
-  function loadPublishedChannels() {
+  function loadPaged(table) {
     var all = [];
-    var settings = publishedFilters("channels");
-    settings.limit = 800;
+    var settings = publishedFilters(table);
+    settings.order += ",id.asc";
     function fetchPage(offset) {
-      if (offset >= 10000) return Promise.reject(new Error("Channel catalogue exceeds the safe page limit"));
+      if (offset >= 10000) return Promise.reject(new Error("Catalogue exceeds the safe page limit"));
       var params = Object.assign({}, settings);
       if (offset) params.offset = offset;
-      return rest(TABLE_PATHS.channels, params).then(function (rows) {
+      return rest(TABLE_PATHS[table], params).then(function (rows) {
         rows = Array.isArray(rows) ? rows : [];
         all = all.concat(rows);
         return rows.length === settings.limit ? fetchPage(offset + settings.limit) : all;
@@ -101,7 +99,7 @@
     var tables = ["categories", "movies", "series", "seasons", "episodes", "channels", "youtube", "collections", "collection_items"];
     failedTables = [];
     return Promise.all(tables.map(function (t) {
-      var request = t === "channels" ? loadPublishedChannels() : rest(TABLE_PATHS[t], publishedFilters(t));
+      var request = loadPaged(t);
       return request.then(function (rows) {
         return Array.isArray(rows) ? rows : [];
       }, function () { failedTables.push(t); return []; });
@@ -115,7 +113,7 @@
           return out;
         }, function () { return out; });
       }
-      if (!out.movies.length && !out.channels.length) throw new Error("empty catalogue");
+      if (failedTables.length === tables.length) throw new Error("catalogue unavailable");
       return out;
     });
   }
@@ -250,7 +248,7 @@
       if (r.playback_mode === "official_link")
         return r.rights_status === "approved" &&
           /^https:\/\/(?:[^\s/]+\.)?qanwatlive\.com\//i.test(r.official_url || "");
-      return r.playback_mode === "stream" &&
+      return r.playback_mode === "stream" && r.rights_status === "approved" &&
         r.link_health_status === "healthy" &&
         !!(r.stream_url && /^https:\/\/[^\s]+\.(m3u8|mp4)(\?[^\s]*)?$/i.test(r.stream_url));
     }).map(function (r) {

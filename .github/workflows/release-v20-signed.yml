@@ -1,11 +1,15 @@
-name: Al Ezz TV v20 — Signed Universal APK and In-App Updates
+name: Al Ezz TV v20.2 — Signed Ultimate Release
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/release-v20-signed.yml'
   workflow_dispatch:
+    inputs:
+      tv_upgrade_verified:
+        description: 'The exact signed candidate was tested on Android TV over the previous stable APK'
+        type: boolean
+        default: false
+      tested_apk_sha256:
+        description: 'SHA-256 of the exact signed APK verified on Android TV'
+        type: string
 
 permissions:
   contents: write
@@ -18,6 +22,7 @@ jobs:
   release:
     name: Build, test, sign, verify and release stable APK
     runs-on: ubuntu-22.04
+    if: github.ref == 'refs/heads/main'
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -49,14 +54,24 @@ jobs:
           AL_EZZ_STORE_PASSWORD: ${{ secrets.AL_EZZ_STORE_PASSWORD }}
           AL_EZZ_KEY_ALIAS: ${{ secrets.AL_EZZ_KEY_ALIAS }}
           AL_EZZ_KEY_PASSWORD: ${{ secrets.AL_EZZ_KEY_PASSWORD }}
+          AL_EZZ_CERT_SHA256: ${{ secrets.AL_EZZ_CERT_SHA256 }}
+          AL_EZZ_PREVIOUS_VERSION_CODE: ${{ vars.AL_EZZ_PREVIOUS_VERSION_CODE }}
         run: |
           set -euo pipefail
-          for key in AL_EZZ_KEYSTORE_BASE64 AL_EZZ_STORE_PASSWORD AL_EZZ_KEY_ALIAS AL_EZZ_KEY_PASSWORD; do
+          for key in AL_EZZ_KEYSTORE_BASE64 AL_EZZ_STORE_PASSWORD AL_EZZ_KEY_ALIAS AL_EZZ_KEY_PASSWORD AL_EZZ_CERT_SHA256; do
             if [[ -z "${!key}" ]]; then
               echo "::error::Missing permanent signing secret $key. No debug APK will be published."
               exit 1
             fi
           done
+          [[ "$AL_EZZ_CERT_SHA256" =~ ^[A-Fa-f0-9]{64}$ ]]
+          [[ "$AL_EZZ_PREVIOUS_VERSION_CODE" =~ ^[0-9]{1,9}$ ]]
+          version=200200
+          previous="$(python3 -c 'import json; print(int(json.load(open("data/android-update.json"))["version_code"]))')"
+          if (( version <= previous || version <= 10#$AL_EZZ_PREVIOUS_VERSION_CODE )); then
+            echo "::error::The candidate versionCode must exceed the deployed version and the stable feed."
+            exit 1
+          fi
           umask 077
           printf '%s' "$AL_EZZ_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/al-ezz-permanent.jks"
           keytool -list -keystore "$RUNNER_TEMP/al-ezz-permanent.jks" \
@@ -67,25 +82,18 @@ jobs:
             echo "ORG_GRADLE_PROJECT_ezzKeyAlias=$AL_EZZ_KEY_ALIAS"
             echo "ORG_GRADLE_PROJECT_ezzKeyPassword=$AL_EZZ_KEY_PASSWORD"
             echo "ORG_GRADLE_PROJECT_ezzApplicationId=sa.alezz.tv"
-            echo "ORG_GRADLE_PROJECT_ezzVersionCode=$((200000 + GITHUB_RUN_NUMBER))"
-            echo "ORG_GRADLE_PROJECT_ezzVersionName=20.0.0"
+            echo "ORG_GRADLE_PROJECT_ezzVersionCode=$version"
+            echo "ORG_GRADLE_PROJECT_ezzVersionName=20.2.0"
             echo "AL_EZZ_EXPECTED_PACKAGE=sa.alezz.tv"
-            echo "AL_EZZ_MIN_VERSION=$((200000 + GITHUB_RUN_NUMBER))"
+            echo "AL_EZZ_MIN_VERSION=$version"
           } >> "$GITHUB_ENV"
 
       - name: Run catalog, player and remote compatibility checks
         shell: bash
         run: |
           set -euo pipefail
-          node tests/tv-dynamic-update-smoke.cjs
-          node tests/tv-kids-playback-smoke.cjs
-          node tests/tv-remote-guide-smoke.cjs
-          node tests/live-tv-v16-smoke.cjs
-          node tests/live-tv-v17-genre-smoke.cjs
-          node tests/live-tv-v18-balanced-smoke.cjs
-          node tests/member-account-login-smoke.cjs
-          node tests/member-cloud-sync-smoke.cjs
-          node tests/quality-picker-smoke.cjs
+          for test in tests/*.cjs; do node "$test"; done
+          python3 -m unittest discover -s tests
 
       - name: Prepare release artwork
         run: |
@@ -98,12 +106,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gradle clean assembleRelease --no-daemon > dist/gradle-build.log 2>&1 || {
+          gradle clean testDebugUnitTest assembleRelease --no-daemon > dist/gradle-build.log 2>&1 || {
             tail -150 dist/gradle-build.log
             exit 1
           }
           test -s app/build/outputs/apk/release/app-release.apk
-          cp app/build/outputs/apk/release/app-release.apk dist/al-ezz-tv-v20.0.0-universal-api19.apk
+          cp app/build/outputs/apk/release/app-release.apk dist/al-ezz-tv-v20.2.0-universal-api19.apk
 
       - name: Verify package, signature and universal Android compatibility
         env:
@@ -111,19 +119,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/verify_apk.py dist/al-ezz-tv-v20.0.0-universal-api19.apk | tee dist/build-report.txt
+          python3 scripts/verify_apk.py dist/al-ezz-tv-v20.2.0-universal-api19.apk | tee dist/build-report.txt
           actual="$(sed -n 's/^CERTIFICATE_SHA256=//p' dist/build-report.txt | head -1)"
           test -n "$actual"
-          if [[ -n "$AL_EZZ_CERT_SHA256" ]]; then
-            [[ "${actual,,}" == "${AL_EZZ_CERT_SHA256,,}" ]] || {
-              echo "::error::Existing stable signing certificate mismatch, release stopped."
-              exit 1
-            }
-          fi
-          sha256sum dist/al-ezz-tv-v20.0.0-universal-api19.apk | tee dist/al-ezz-tv-v20.0.0.sha256
+          [[ "${actual,,}" == "${AL_EZZ_CERT_SHA256,,}" ]] || {
+            echo "::error::Existing stable signing certificate mismatch, release stopped."
+            exit 1
+          }
+          (cd dist && sha256sum al-ezz-tv-v20.2.0-universal-api19.apk > al-ezz-tv-v20.2.0.sha256)
           {
             echo "CHANNEL=stable"
-            echo "VERSION=20.0.0"
+            echo "VERSION=20.2.0"
             echo "VERSION_CODE=$ORG_GRADLE_PROJECT_ezzVersionCode"
             echo "PACKAGE=sa.alezz.tv"
             echo "CERTIFICATE_SHA256=$actual"
@@ -135,10 +141,10 @@ jobs:
       - name: Upload signed APK and verification reports
         uses: actions/upload-artifact@v4
         with:
-          name: al-ezz-tv-v20.0.0-signed-universal
+          name: al-ezz-tv-v20.2.0-signed-universal
           path: |
-            dist/al-ezz-tv-v20.0.0-universal-api19.apk
-            dist/al-ezz-tv-v20.0.0.sha256
+            dist/al-ezz-tv-v20.2.0-universal-api19.apk
+            dist/al-ezz-tv-v20.2.0.sha256
             dist/install-metadata.txt
             dist/build-report.txt
             dist/gradle-build.log
@@ -146,53 +152,69 @@ jobs:
           if-no-files-found: error
 
       - name: Publish immutable signed stable release
+        if: inputs.tv_upgrade_verified
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          TESTED_APK_SHA256: ${{ inputs.tested_apk_sha256 }}
         run: |
           set -euo pipefail
-          tag=al-ezz-tv-v20.0.0
+          built_sha="$(cut -d ' ' -f1 dist/al-ezz-tv-v20.2.0.sha256)"
+          if [[ "${TESTED_APK_SHA256,,}" != "$built_sha" ]]; then
+            echo "::error::The APK differs from the exact candidate verified on Android TV."
+            exit 1
+          fi
+          tag=al-ezz-tv-v20.2.0
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "::error::Stable tag already published; refuse to overwrite signed release."
             exit 1
           fi
           cat > dist/RELEASE-NOTES.md <<'NOTES'
-          # العز TV v20.0.0 — المكتبة المباشرة والتحديث دون حذف التطبيق
-          - كافة الأفلام والمسلسلات والقنوات المنشورة تُجلب مباشرة من قاعدة Supabase بصفحات.
-          - تحديث المكتبة تلقائي كل دقيقتين أثناء تشغيل التطبيق؛ لا تحتاج لإصدار APK عند إضافة محتوى.
-          - تصنيفات الأفلام والمسلسلات ديناميكية مع زر «عرض الكل» وصفوف مخصصة لكل نوع.
-          - فحص إصدار التطبيق من الإعدادات، ثم تنزيل وفحص وتثبيت عبر Android بموافقة المستخدم.
-          - رابط تحديث موثوق لحزمة sa.alezz.tv فقط، مع SHA-256 وفحص هوية وتوقيع الحزمة.
-          - APK واحد لـ Android 4.4+ (API19)، ARMv7 / ARM64 / x86 / x86_64.
-          **تنبيه:** التحديث فوق النسخة السابقة يحتاج نفس اسم الحزمة ونفس شهادة التوقيع. لا يمكن تثبيت نسخ اختبار مختلفة الهوية كتحديث موضعي.
+          # العز TV v20.2.0
+          - شبكات فئات للأفلام والمسلسلات والقنوات مع حفظ موضع الريموت.
+          - مكتبة تتحدث من Supabase مع حفظ آخر لقطة كاملة عند انقطاع الشبكة.
+          - معاينة ملاحظات الإصدار وفحص SHA-256 والحزمة والشهادة قبل فتح المثبت الرسمي.
+          - APK واحد لـ Android 4.4+ (API19) على ARMv7 وARM64 وx86 وx86_64.
           NOTES
           gh release create "$tag" \
-            dist/al-ezz-tv-v20.0.0-universal-api19.apk \
-            dist/al-ezz-tv-v20.0.0.sha256 \
+            dist/al-ezz-tv-v20.2.0-universal-api19.apk \
+            dist/al-ezz-tv-v20.2.0.sha256 \
             dist/install-metadata.txt \
             dist/build-report.txt \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "العز TV v20.0.0 — تحديث المكتبة والفئات تلقائيًا" \
+            --title "العز TV v20.2.0 Ultimate" \
             --notes-file dist/RELEASE-NOTES.md \
             --latest
 
       - name: Publish stable update manifest only after signed release
+        if: inputs.tv_upgrade_verified
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
+          gh release download al-ezz-tv-v20.2.0 --repo "$GITHUB_REPOSITORY" \
+            --pattern 'al-ezz-tv-v20.2.0-universal-api19.apk' --dir "$RUNNER_TEMP"
+          cmp dist/al-ezz-tv-v20.2.0-universal-api19.apk "$RUNNER_TEMP/al-ezz-tv-v20.2.0-universal-api19.apk"
+          git fetch origin main
+          git checkout -B publish-update origin/main
           python3 - <<'PY'
           import datetime,hashlib,json,os,pathlib
-          path=pathlib.Path('dist/al-ezz-tv-v20.0.0-universal-api19.apk')
+          path=pathlib.Path('dist/al-ezz-tv-v20.2.0-universal-api19.apk')
           version=int(os.environ['ORG_GRADLE_PROJECT_ezzVersionCode'])
+          current=pathlib.Path('data/android-update.json')
+          if version <= json.loads(current.read_text(encoding='utf-8'))['version_code']:
+              raise SystemExit('Stable update feed already points to this version or a newer version.')
           manifest={
             'schema':1,
             'channel':'stable',
             'package_name':'sa.alezz.tv',
             'version_code':version,
-            'version_name':'20.0.0',
-            'download_url':'https://github.com/youef/app_apk/releases/download/al-ezz-tv-v20.0.0/al-ezz-tv-v20.0.0-universal-api19.apk',
+            'version_name':'20.2.0',
+            'download_url':'https://github.com/youef/app_apk/releases/download/al-ezz-tv-v20.2.0/al-ezz-tv-v20.2.0-universal-api19.apk',
             'sha256':hashlib.sha256(path.read_bytes()).hexdigest(),
+            'notes':'شبكات فئات للأفلام والمسلسلات والقنوات، استعادة موضع الريموت وتحديث المكتبة من Supabase.',
             'published_at':datetime.datetime.now(datetime.timezone.utc).isoformat()
           }
           pathlib.Path('data/android-update.json').write_text(
@@ -201,6 +223,5 @@ jobs:
           git config user.name "al-ezz-tv-release-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/android-update.json
-          git commit -m "chore(release): publish signed v20 APK update feed [skip ci]"
-          git pull --rebase origin main
+          git commit -m "chore(release): publish signed v20.2 APK update feed [skip ci]"
           git push origin HEAD:main

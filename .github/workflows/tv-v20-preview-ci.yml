@@ -1,18 +1,15 @@
-name: Al Ezz TV v20.1 — Square Category Directory Preview
+name: Al Ezz TV v20.2 — Ultimate Preview
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'codex/ultimate-preview']
     paths:
       - '.github/workflows/tv-v20-preview-ci.yml'
-      - 'app/src/main/java/sa/aseel/tv/**'
-      - 'app/src/main/AndroidManifest.xml'
-      - 'app/build.gradle'
-      - 'tests/tv-dynamic-update-smoke.cjs'
-      - 'app/src/main/java/sa/aseel/tv/**'
-      - 'app/src/main/AndroidManifest.xml'
-      - 'app/build.gradle'
-      - 'tests/tv-dynamic-update-smoke.cjs'
+      - 'app/**'
+      - 'tests/**'
+      - 'web/**'
+      - 'python-cloud-studio/**'
+      - 'scripts/verify_apk.py'
   workflow_dispatch:
 
 permissions:
@@ -45,15 +42,8 @@ jobs:
       - name: Dynamic content and TV UI smoke tests
         run: |
           set -euo pipefail
-          node tests/tv-dynamic-update-smoke.cjs
-          node tests/tv-kids-playback-smoke.cjs
-          node tests/tv-remote-guide-smoke.cjs
-          node tests/live-tv-v16-smoke.cjs
-          node tests/live-tv-v17-genre-smoke.cjs
-          node tests/live-tv-v18-balanced-smoke.cjs
-          node tests/member-account-login-smoke.cjs
-          node tests/member-cloud-sync-smoke.cjs
-          node tests/quality-picker-smoke.cjs
+          for test in tests/*.cjs; do node "$test"; done
+          python3 -m unittest discover -s tests
 
       - name: Include complete brand assets
         run: |
@@ -66,20 +56,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gradle clean assembleDebug --no-daemon \
-            -PezzApplicationId=sa.alezz.tv.preview \
-            -PezzVersionCode=200100 \
-            -PezzVersionName=20.1.0-preview
-          test -s app/build/outputs/apk/debug/app-debug.apk
           mkdir -p dist
-          "$ANDROID_HOME/build-tools/33.0.2/aapt" dump badging app/build/outputs/apk/debug/app-debug.apk > dist/badging.txt
-          head -10 dist/badging.txt
-          cp app/build/outputs/apk/debug/app-debug.apk dist/al-ezz-tv-v20.1.0-categories-preview.apk
+          gradle clean testDebugUnitTest assembleDebug --no-daemon \
+            -PezzApplicationId=sa.alezz.tv.preview \
+            -PezzVersionCode=200200 \
+            -PezzVersionName=20.2.0-preview 2>&1 | tee dist/gradle-build.log
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk dist/al-ezz-tv-v20.2.0-ultimate-preview.apk
+          export AL_EZZ_EXPECTED_PACKAGE=sa.alezz.tv.preview AL_EZZ_MIN_VERSION=200200
+          python3 scripts/verify_apk.py dist/al-ezz-tv-v20.2.0-ultimate-preview.apk | tee dist/build-report.txt
+          (cd dist && sha256sum al-ezz-tv-v20.2.0-ultimate-preview.apk > al-ezz-tv-v20.2.0-ultimate-preview.sha256)
 
       - name: Upload test APK artifact (not compatible with in-place update)
         uses: actions/upload-artifact@v4
         with:
-          name: al-ezz-tv-v20.1.0-categories-preview
-          path: dist/al-ezz-tv-v20.1.0-categories-preview.apk
+          name: al-ezz-tv-v20.2.0-ultimate-preview
+          path: |
+            dist/
+            app/build/test-results/testDebugUnitTest/
           retention-days: 30
           if-no-files-found: error
