@@ -346,7 +346,7 @@ class PortalTests(unittest.TestCase):
         screen=self.client.get('/account/login?expired=1')
         self.assertIn('انتهت جلستك السابقة',screen.text)
         self.assertNotIn('انتهت صلاحية اشتراكك',screen.text)
-        self.assertIn('تسجيل الدخول بعد التجديد',screen.text)
+        self.assertIn('action="/account/login"',screen.text)
 
     def test_device_reset_updates_authoritative_cutoff(self):
         self.login('customer')

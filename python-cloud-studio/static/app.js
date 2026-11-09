@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
-  const app = {csrf:'', catalogue:null, batch:[],currentIndex:0, authenticated:false, demo:false, busy:false, season:1, selected:new Set(), categoryList:[]};
+  const app = {csrf:'', catalogue:null, batch:[],currentIndex:0, authenticated:false, demo:false, busy:false, scanning:false, season:1, selected:new Set(), categoryList:[]};
   const API = async (route, data) => {
     const request = data === undefined ? {method:'GET'} : {method:'POST',body:JSON.stringify(data)};
     const response = await fetch('/api/' + route, {credentials:'same-origin',cache:'no-store',...request,
@@ -25,7 +25,7 @@
     else $('activity').querySelector('.activity-ico').classList.remove('spin');
   }
   function busy(value){app.busy=value; for(const id of ['discoverBtn','discoverBatchBtn','scanListingBtn','saveBatchBtn','demoBtn','applyLinksBtn','updateBtn','verifyAllBtn','verifySelectedBtn','verifyMovieBtn','edgeCaptureBtn','saveBtn','addEpisodeBtn']){
-    if($(id))$(id).disabled=value || (id==='saveBtn' && app.demo);
+    if($(id))$(id).disabled=value || (id==='saveBtn' && app.demo) || (app.scanning && !['discoverBtn','discoverBatchBtn','scanListingBtn','demoBtn','updateBtn'].includes(id));
   }}
   function text(el, value){el.textContent = value==null?'':String(value);return el;}
   function make(tag, cls='', content){const el=document.createElement(tag);if(cls)el.className=cls;if(content!=null)text(el,content);return el;}
@@ -251,13 +251,38 @@
     });
   }
 
-  let discoveryTimer, discoveryId, lastScanDone=-1;
+  let discoveryTimer, discoveryId, discoveryDone=-1;
+  function updateDiscoveryMedia(payload){
+    if(!payload?.catalogue || payload.catalogue.url!==app.catalogue?.url)return;
+    const fresh=payload.catalogue;
+    const fields=['media_url','sources','source_pages','verified','error'];
+    const copy=(to,from)=>fields.forEach(key=>{to[key]=from[key];});
+    if(fresh.kind==='series'){
+      const rows=new Map(fresh.episodes.map(ep=>[ep.season+':'+ep.number,ep]));
+      for(const ep of app.catalogue.episodes){const row=rows.get(ep.season+':'+ep.number);if(row)copy(ep,row);}
+      renderSeasons();
+    }else{
+      copy(app.catalogue,fresh);
+      rowField('movieMediaUrl',fresh.media_url);
+      $('movieMediaStatus').textContent=mediaBadge(fresh)[0];
+      $('movieSources').replaceChildren(mediaSources(fresh));
+    }
+    const good=fresh.kind==='series'?fresh.episodes.filter(ep=>ep.verified).length:Number(fresh.verified);
+    $('statGood').textContent=good;
+    $('statPending').textContent=payload.count-good;
+  }
   function showDiscoveryProgress(scan){
     clearTimeout(discoveryTimer);
-    if(discoveryId!==scan?.id)lastScanDone=-1;
+    if(discoveryId!==scan?.id)discoveryDone=-1;
     discoveryId=scan?.id;
-    $('workspace').inert=!!scan?.running;
-    $('toolsLinksBtn').disabled=!app.catalogue||$('workspace').inert;
+    app.scanning=!!scan?.running;
+    $('workspace').inert=false;
+    // Metadata can be reviewed while media is checked. Avoid racing link edits
+    // and publishing with an unfinished probe.
+    for(const control of document.querySelectorAll('#episodeList input,#episodeList textarea,#movieMediaUrl'))control.disabled=!!scan?.running;
+    for(const id of ['toolsLinksBtn','verifyAllBtn','verifySelectedBtn','verifyMovieBtn','edgeCaptureBtn','saveBtn','saveBatchBtn','applyLinksBtn','addEpisodeBtn']){
+      if($(id))$(id).disabled=app.busy||!!scan?.running||!app.catalogue||(id==='saveBtn'&&app.demo);
+    }
     document.dispatchEvent(new Event('studio:catalogue'));
     $('discoveryProgress').hidden=!scan;
     if(!scan)return;
@@ -265,7 +290,7 @@
     bar.max=Math.max(1,scan.total);bar.value=scan.done;
     $('discoveryProgressLabel').textContent=scan.running?'فحص متوازٍ وتلقائي للمصادر':'اكتمل فحص المصادر المتاحة';
     $('discoveryProgressCount').textContent=scan.done+' / '+scan.total+' مفحوصة · '+scan.verified+' فيديو متحقق · '+(scan.sources_found||0)+' مصدر محتمل';
-    $('discoveryReview').hidden=scan.running;
+    $('discoveryReview').hidden=false;
     const list=$('liveMediaLinks');
     if(list && app.catalogue){
       const entries=app.catalogue.kind==='series'?app.catalogue.episodes:[app.catalogue];
@@ -288,17 +313,16 @@
     try {
       const result=await API('discovery-scan');
       if(discoveryId!==id)return;
-      if(result.summary && result.scan && result.scan.done!==lastScanDone){
-        lastScanDone=result.scan.done;
-        updateStatus(result.summary);
+      if(result.scan?.id!==id)return;
+      if(result.summary && (result.scan.done!==discoveryDone || !result.scan.running)){
+        updateDiscoveryMedia(result.summary);
+        discoveryDone=result.scan.done;
       }
       showDiscoveryProgress(result.scan);
-      if(result.scan?.running){
-        activity('فحص مباشر: '+result.scan.done+' من '+result.scan.total+
-          ' حلقة · '+result.scan.verified+' فيديو مباشر تم التحقق منه.','loading');
-      }else if(result.summary&&result.scan){
-        activity(result.scan.verified?'اكتمل الفحص؛ راجع النتائج ثم احفظ.':
-          'اكتمل الفحص ولم يُعثر على رابط مباشر مؤكد. يمكنك حفظ البيانات كمسودة.',
+      if(result.summary && !result.scan.running){
+        if(result.scan.error){activity(result.scan.error,'error');return;}
+        activity(result.scan.verified?'اكتمل الفحص. راجع بيانات العمل والمشغلات ثم احفظه للمزامنة.':
+          'اكتمل الفحص. لم يُعثر على رابط تشغيل صالح. يمكنك مراجعة المصادر وحفظ البيانات كمسودة.',
           result.scan.verified?'success':'info');
       }
     } catch(error) {
@@ -312,6 +336,7 @@
     const result=await API('discover',{url,kind,scan_media:true,
       deep:$('deepScan').checked,metadata:$('autoMetadata').checked});
     app.selected.clear();app.season=1;$('episodeSearch').value='';
+    discoveryDone=-1;
     updateStatus(result);
     showDiscoveryProgress(result.scan);
     activity(result.scan?.running?'بدأ فحص المشغلات. يمكنك متابعة التقدم هنا.':'تم تحميل بيانات العمل، ولم تظهر حلقات قابلة للفحص.','info');

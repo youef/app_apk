@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 import json
 import unittest
+import threading
 from unittest.mock import Mock, patch
 
 import requests
@@ -34,6 +35,30 @@ class FakeSite:
 
 
 class ResolverTests(unittest.TestCase):
+    def test_media_probes_run_concurrently_with_separate_clients(self):
+        gate=threading.Barrier(4)
+        clients=[]
+        class Probe:
+            def media_verified(self,url):
+                gate.wait(timeout=3)
+                return True,'OK'
+        def factory(timeout):
+            client=Probe()
+            clients.append(client)
+            return client
+        rows=MediaResolver(client_factory=factory).check([
+            {'url':f'https://cdn.example.org/{number}.mp4','kind':'direct'} for number in range(4)])
+        self.assertEqual(len(clients),4)
+        self.assertTrue(all(row['verified'] for row in rows))
+
+    def test_expired_deadline_skips_network_without_recording_a_failed_probe(self):
+        site=FakeSite()
+        rows=self.resolver(site).check([{'url':NEW,'kind':'direct','successes':3}],deadline=1)
+        self.assertFalse(site.checked)
+        self.assertFalse(rows[0]['verified'])
+        self.assertNotIn('checked_at',rows[0])
+        self.assertNotIn('failures',rows[0])
+
     def test_1vid_embed_format_and_nonvideo_probe(self):
         url = 'https://1vid.xyz/embed-cnpn8jvjzx9p.html'
         self.assertEqual(supported_source_kind(url), 'embed')

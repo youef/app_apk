@@ -198,7 +198,7 @@ async function loadExisting(preserveDraft){
   activeSeason=groupBySeason(previousSeason)?previousSeason:groups[0].season;
   render();
   message("تم اختيار المسلسل الموجود مع الاحتفاظ بـ "+shifted.reduce(function(n,g){return n+g.episodes.length;},0)+
-   " رابط حلقة وإعادة ترقيمها بعد آخر حلقة محفوظة. راجع الأرقام ثم اضغط «حفظ ونشر الكل».");
+   " رابط حلقة وإعادة ترقيمها بعد آخر حلقة محفوظة. راجع الأرقام ثم اضغط «حفظ ونشر الحلقات الجديدة».");
  }else startGroup(activeSeason);
  $("seriesTitleWrap").classList.toggle("hidden",!!id);
  $("seriesTitle").disabled=!!id;
@@ -680,7 +680,10 @@ function wire(){
 }
 async function saveAll(){
  if(saving)return;
- if(hasSavedEdits()&&!confirm("هناك تعديلات على حلقات محفوظة لم تعتمد بعد. متابعة إضافة حلقات جديدة وإهمال تلك التعديلات؟"))return;
+ if(hasSavedEdits()){
+  message("لحفظ تعديل حلقة موجودة، اضغط زر الحفظ داخل بطاقتها في قسم إدارة الحلقات المحفوظة.",true);
+  return;
+ }
  var selected=$("seriesSelect").value, title=$("seriesTitle").value.trim();
  if(!selected && title.length<2){message("اكتب اسم المسلسل (حرفان على الأقل).",true);return;}
  if(!selected && duplicateSuggestion()){
@@ -692,6 +695,7 @@ async function saveAll(){
   var g=groups[i];
   for(var j=0;j<g.episodes.length;j++){
    var e=g.episodes[j],url=String(e.url||"").trim();
+   if(!url)continue;
    if(!urlPattern.test(url)){message("أدخل رابط HTTPS بصيغة MP4 أو HLS للموسم "+g.season+" الحلقة "+e.number+".",true);return;}
    if(e.number<1||e.number>300||g.season<1||g.season>50){
     message("رقم الحلقة أو الموسم خارج المجال المسموح. الحد 300 حلقة لكل موسم.",true);return;
@@ -701,7 +705,8 @@ async function saveAll(){
    data.push({season:g.season,number:e.number,url:url,quality:e.quality});
   }
  }
- if(!data.length||data.length>150){message("أضف بين 1 و150 حلقة في الدفعة.",true);return;}
+ if(!data.length){message("أضف رابطًا لحلقة جديدة، أو عدّل الحلقة من قسم إدارة الحلقات المحفوظة.",true);return;}
+ if(data.length>150){message("الحد الأقصى 150 حلقة في الدفعة.",true);return;}
  saving=true;$("save").disabled=true;$("save").textContent="جارٍ حفظ الكل…";
  $("result").textContent="";
  try{
@@ -721,7 +726,7 @@ async function saveAll(){
    message("اسم المسلسل موجود مسبقًا. اختر «استخدام المسلسل الموجود» في أعلى الصفحة، ثم راجع الحلقات الجديدة واحفظها دون فقدان روابطك.",true);
   }else message(e.message||"تعذر الحفظ، لم تُعتمد الدفعة.",true);
  }
- finally{saving=false;$("save").disabled=false;$("save").textContent="حفظ ونشر الكل";}
+ finally{saving=false;$("save").disabled=false;$("save").textContent="حفظ ونشر الحلقات الجديدة";}
 }
 async function boot(){
  session=readSession();
