@@ -87,6 +87,7 @@ public final class TVHomeActivity extends Activity {
     private final java.util.HashMap<String,JSONObject> watchedMedia=new java.util.HashMap<String,JSONObject>();
     private final ArrayList<JSONObject> channels=new ArrayList<JSONObject>();
     private final ArrayList<JSONObject> localChannels=new ArrayList<JSONObject>();
+    private final java.util.HashMap<String,String> categoryNames=new java.util.HashMap<String,String>();
     private int localPlaylistGeneration=0;
     private long lastLocalPlaylistRefreshAt=0L;
     private final ArrayList<JSONObject> youtubeVideos=new ArrayList<JSONObject>();
@@ -592,8 +593,11 @@ public final class TVHomeActivity extends Activity {
         navBar.removeAllViews();
         navBar.setVisibility("home".equals(section)?View.GONE:View.VISIBLE);
         if("home".equals(section))return;
-        Button back=button("⌂  القائمة الرئيسية");
-        back.setOnClickListener(new View.OnClickListener(){public void onClick(View v){goTo("home");}});
+        Button back=button("browse".equals(section)?"❮  رجوع للفئات":"⌂  القائمة الرئيسية");
+        back.setTag("nav:back");
+        back.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            goTo("browse".equals(section)?browseOrigin:"home");
+        }});
         navBar.addView(back,space(dp(210),dp(48),2));
         TextView breadcrumb=text("العز TV   /   "+sectionName(section),19,GOLD,true);
         navBar.addView(breadcrumb,new LinearLayout.LayoutParams(0,-1,1));
@@ -846,26 +850,22 @@ public final class TVHomeActivity extends Activity {
             JSONArray data=null;String error="";
             try{data=catalog.listPaged("aseel_channels","?select=*&status=eq.published&rights_status=eq.approved&order=display_order.asc,created_at.desc");}
             catch(Exception e){error="قنوات: "+CatalogApi.describe(e);}
-            if(data!=null){
-                // The channels API exposes category_id, not category_name: attach the
-                // published labels so native TV uses the same genres as the web UI.
-                try{
-                    JSONArray categories=catalog.listQuery("aseel_categories",
-                        "?select=id,name_ar&published=eq.true&limit=400");
-                    java.util.HashMap<String,String> labels=new java.util.HashMap<String,String>();
-                    for(int i=0;i<categories.length();i++){
-                        JSONObject category=categories.optJSONObject(i);
-                        if(category!=null)labels.put(value(category,"id"),value(category,"name_ar"));
+            // Resolve category IDs for ALL three libraries, not only channels.
+            final java.util.HashMap<String,String> labels=new java.util.HashMap<String,String>();
+            try{
+                JSONArray categories=catalog.listQuery("aseel_categories",
+                    "?select=id,name_ar&published=eq.true&limit=400");
+                for(int i=0;i<categories.length();i++){
+                    JSONObject category=categories.optJSONObject(i);
+                    if(category!=null){
+                        String id=value(category,"id"),name=value(category,"name_ar");
+                        if(!id.isEmpty()&&!name.isEmpty())labels.put(id,name);
                     }
-                    for(int i=0;i<data.length();i++){
-                        JSONObject item=data.optJSONObject(i);
-                        if(item!=null&&labels.containsKey(value(item,"category_id")))
-                            item.put("category_name",labels.get(value(item,"category_id")));
-                    }
-                }catch(Exception ignored){ /* Existing title and tag inference remain available offline. */ }
-            }
+                }
+            }catch(Exception ignored){ /* Genre tags and countries remain usable offline. */ }
             final JSONArray rows=data;final String issue=error;
             ui.post(new Runnable(){public void run(){if(token!=generation||!unlocked)return;
+                if(!labels.isEmpty()){categoryNames.clear();categoryNames.putAll(labels);}
                 if(rows!=null){putAll(channels,rows,"channel");channels.addAll(localChannels);sortChannels();}
                 completeCatalog(token,issue);
             }});
@@ -893,6 +893,12 @@ public final class TVHomeActivity extends Activity {
             }});
         }});
     }
+    private void applyCategoryNames(ArrayList<JSONObject> entries){
+        for(JSONObject item:entries){
+            String name=categoryNames.get(value(item,"category_id"));
+            if(name!=null)try{item.put("category_name",name);}catch(Exception ignored){}
+        }
+    }
     private void completeCatalog(int token,String issue){
         if(token!=generation||!unlocked)return;
         if(issue!=null && issue.length()>0){
@@ -900,6 +906,11 @@ public final class TVHomeActivity extends Activity {
         }
         pendingRequests=Math.max(0,pendingRequests-1);
         loading=pendingRequests>0;
+        if(!loading){
+            applyCategoryNames(movies);
+            applyCategoryNames(series);
+            applyCategoryNames(channels);
+        }
         status.setText(loading?"◌ تحميل المكتبة...":lastLoadError.length()>0
             ?"⚠ بعض الأقسام غير متاحة":"● المكتبة متصلة");
         // Keep customer forms stable when asynchronous library updates arrive.
@@ -968,36 +979,18 @@ public final class TVHomeActivity extends Activity {
             shelf("المسلسلات","المواسم والحلقات",series,16);
             classifiedLiveShelves();
         }else if("browse".equals(section)){
-            grid(browseTitle,filteredBrowseItems());
+            ArrayList<JSONObject> matches=filteredBrowseItems();
+            if("channel".equals(browseKind))channelBrowse(browseTitle,matches);
+            else grid(browseTitle,matches);
         }else if("movies".equals(section)){
-            heading("الأفلام بحسب التصنيف","تظهر قوائم الأعمال المتوفرة تلقائيًا، مع إمكانية التنقل بالريموت.");
-            shelf("أفلام تركية","بلد الإنتاج: تركيا",originItems(movies,"TR"),30,"country","TR");
-            shelf("أفلام أجنبية","بلد إنتاج غير عربي",originItems(movies,"FOREIGN"),30,"country","FOREIGN");
-            shelf("أفلام عربية","بلد إنتاج عربي",originItems(movies,"ARAB"),30,"country","ARAB");
-            shelf("أفلام خليجية","إنتاج دول الخليج",originItems(movies,"GULF"),30,"country","GULF");
-            shelf("أفلام سعودية","إنتاج سعودي",originItems(movies,"SA"),30,"country","SA");
-            shelf("أفلام مصرية","إنتاج مصري",originItems(movies,"EG"),30,"country","EG");
-            shelf("أفلام أمريكية","إنتاج أمريكي",originItems(movies,"US"),30,"country","US");
-            shelf("أفلام هندية","إنتاج هندي",originItems(movies,"IN"),30,"country","IN");
-            classifiedGenreShelves(movies,"أفلام",20);
-            grid("كل الأفلام",movies);
+            categoryDirectory("movie");
         }
         else if("series".equals(section)){
-            showContinueWatching(true);
-            heading("المسلسلات بحسب التصنيف","تُحدّث التصنيفات تلقائيًا عند إضافة حلقات ومسلسلات.");
-            shelf("مسلسلات تركية","بلد الإنتاج: تركيا",originItems(series,"TR"),30,"country","TR");
-            shelf("مسلسلات أجنبية","بلد إنتاج غير عربي",originItems(series,"FOREIGN"),30,"country","FOREIGN");
-            shelf("مسلسلات عربية","بلد إنتاج عربي",originItems(series,"ARAB"),30,"country","ARAB");
-            shelf("مسلسلات سورية","إنتاج سوري",originItems(series,"SY"),30,"country","SY");
-            shelf("مسلسلات خليجية","إنتاج دول الخليج",originItems(series,"GULF"),30,"country","GULF");
-            shelf("مسلسلات سعودية","إنتاج سعودي",originItems(series,"SA"),30,"country","SA");
-            shelf("مسلسلات كويتية","إنتاج كويتي",originItems(series,"KW"),30,"country","KW");
-            shelf("مسلسلات مصرية","إنتاج مصري",originItems(series,"EG"),30,"country","EG");
-            shelf("مسلسلات رمضان","أعمال موسومة برمضان",genreItems(series,"ramadan"),30,"genre","ramadan");
-            classifiedGenreShelves(series,"مسلسلات",20);
-            grid("كل المسلسلات",series);
+            categoryDirectory("series");
         }
-        else if("live".equals(section))liveGuide();
+        else if("live".equals(section)){
+            categoryDirectory("channel");
+        }
         else if("youtube".equals(section))grid("مقاطع يوتيوب للأطفال",youtubeVideos);
         else if("kids".equals(section)){
             heading("عالم الأطفال المستقل","قنوات وأفلام بروابط MP4/HLS مباشرة، بدون مشغل يوتيوب.");
@@ -1336,6 +1329,8 @@ public final class TVHomeActivity extends Activity {
     private ArrayList<JSONObject> filteredBrowseItems(){
         ArrayList<JSONObject> source="series".equals(browseKind)?series:
             "channel".equals(browseKind)?channels:movies;
+        if("directory".equals(browseMode))
+            return TvCategoryDirectory.filter(source,browseKind,browseKey);
         if("country".equals(browseMode))return originItems(source,browseKey);
         if("genre".equals(browseMode))return genreItems(source,browseKey);
         if("channelGenre".equals(browseMode)||"channelNetwork".equals(browseMode)){
@@ -1402,6 +1397,109 @@ public final class TVHomeActivity extends Activity {
         LinearLayout cards=row();cards.setGravity(Gravity.TOP);scroll.addView(cards);
         for(int i=0;i<list.size()&&i<limit;i++)cards.addView(card(list.get(i),true));
         content.addView(scroll,space(-1,dp(251),4));
+    }
+
+    /**
+     * Category-directory is the entry point for films, series and live TV.
+     * No long horizontal shelves here: only square category tiles, with ALL first.
+     */
+    private void categoryDirectory(final String mediaKind){
+        final ArrayList<JSONObject> source="series".equals(mediaKind)?series:
+            "channel".equals(mediaKind)?channels:movies;
+        final String mediaTitle="series".equals(mediaKind)?"المسلسلات":
+            "channel".equals(mediaKind)?"القنوات المباشرة":"الأفلام";
+        heading("تصنيفات "+mediaTitle,
+            "اختر مربع الفئة لعرض الأعمال المرتبطة بها • تُحدَّث التصنيفات تلقائيًا");
+        ArrayList<TvCategoryDirectory.Tile> tiles=TvCategoryDirectory.tiles(source,mediaKind);
+        final int screen=screenWidthDp();
+        final int columns=screen>=1250?6:screen>=950?5:screen>=670?4:3;
+        final int cardHeight=screen>=950?dp(175):dp(159);
+        for(int base=0;base<tiles.size();base+=columns){
+            LinearLayout line=row();
+            line.setGravity(Gravity.TOP);
+            line.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+            for(int col=0;col<columns;col++){
+                int index=base+col;
+                if(index<tiles.size()){
+                    final TvCategoryDirectory.Tile tile=tiles.get(index);
+                    final LinearLayout square=column();
+                    square.setFocusable(true);square.setClickable(true);
+                    square.setTag("directory:"+mediaKind+":"+tile.key);
+                    square.setContentDescription(tile.title+"، "+tile.count+
+                        ("channel".equals(mediaKind)?" قناة":"series".equals(mediaKind)?" مسلسل":" فيلم"));
+                    square.setGravity(Gravity.CENTER);
+                    square.setPadding(dp(8),dp(10),dp(8),dp(8));
+                    final int baseColor=index==0?0xFF431C30:0xFF1C1C2A;
+                    square.setBackgroundDrawable(new CinemaNeonDrawable(baseColor,dp(18),false));
+                    ImageView art=new ImageView(this);
+                    art.setImageDrawable(new CinemaGlyph(tile.icon,0xFFFF9DB0));
+                    art.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                    square.addView(art,space(dp(42),dp(42),2));
+                    TextView name=text(tile.title,18,WHITE,true);
+                    name.setMaxLines(2);name.setGravity(Gravity.CENTER);
+                    name.setEllipsize(TextUtils.TruncateAt.END);
+                    square.addView(name,space(-1,dp(47),2));
+                    TextView count=text(tile.count+("channel".equals(mediaKind)?" قناة":
+                        "series".equals(mediaKind)?" مسلسل":" فيلم"),13,0xFFDAC0CA,false);
+                    count.setGravity(Gravity.CENTER);
+                    square.addView(count,space(-1,dp(26),1));
+                    square.setOnFocusChangeListener(new View.OnFocusChangeListener(){
+                        public void onFocusChange(View v,boolean focused){
+                            square.setBackgroundDrawable(new CinemaNeonDrawable(
+                                focused?0xFF8E2340:baseColor,dp(18),focused));
+                            square.setScaleX(focused?1.025f:1f);
+                            square.setScaleY(focused?1.025f:1f);
+                        }
+                    });
+                    square.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                        browseOrigin=section;
+                        browseKind=mediaKind;
+                        browseMode="directory";
+                        browseKey=tile.key;
+                        browseTitle=mediaTitle+" • "+tile.title;
+                        cardGridLimit=72;
+                        liveGuideLimit=48;
+                        section="browse";
+                        render();
+                        if(scroller!=null)scroller.scrollTo(0,0);
+                    }});
+                    line.addView(square,new LinearLayout.LayoutParams(0,cardHeight,1));
+                }else line.addView(new View(this),new LinearLayout.LayoutParams(0,cardHeight,1));
+            }
+            content.addView(line,space(-1,cardHeight+dp(7),3));
+        }
+        if(source.isEmpty())
+            heading(loading?"تُحمّل الفئات الآن":"المكتبة فارغة حاليًا",
+                loading?"ستظهر التصنيفات تلقائيًا عند اكتمال تحميلها.":
+                "تظهر الفئات الجديدة بمجرد إضافة أعمال منشورة إلى لوحة الإدارة.");
+    }
+    private void channelBrowse(String title,ArrayList<JSONObject> list){
+        heading(title,list.size()+" قناة في هذا التصنيف • اضغط OK للمشاهدة");
+        if(list.isEmpty()){
+            heading("لا توجد قنوات في هذا التصنيف","يمكن تغيير الفئة أو تحديث المكتبة.");
+            return;
+        }
+        int displayed=Math.min(liveGuideLimit,list.size());
+        boolean paired=screenWidthDp()>=1000;
+        LinearLayout pair=null;
+        for(int i=0;i<displayed;i++){
+            LinearLayout line=channelLine(list.get(i),channels.indexOf(list.get(i)));
+            if(paired){
+                if(i%2==0){
+                    pair=row();content.addView(pair,space(-1,dp(92),3));
+                }
+                pair.addView(line,new LinearLayout.LayoutParams(0,dp(84),1));
+            }else content.addView(line);
+        }
+        if(displayed<list.size()){
+            Button more=primaryButton("＋ عرض المزيد من القنوات ("+(list.size()-displayed)+")");
+            more.setTag("directory:more:channels");
+            content.addView(more,space(-1,dp(58),6));
+            more.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                liveGuideLimit=Math.min(list.size(),liveGuideLimit+48);
+                render();
+            }});
+        }
     }
 
     private JSONObject findCatalogItem(String id,boolean isSeries){
