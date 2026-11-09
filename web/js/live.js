@@ -121,9 +121,10 @@
     var category=String(channel.category||"").toLowerCase();
     var extra=Array.isArray(channel.genreTags)?channel.genreTags.join(" ").toLowerCase():"";
     var title=String(channel.title||"").toLowerCase();
-    var text=extra && !hasAny(extra,["general","other","misc"]) ? extra : (category+" "+extra).trim();
-    if (!text || hasAny(category,["قنوات mbc","غير مصنف","uncategorized","general","عام","other","misc"]) ||
-        hasAny(text,["general","other","misc"])) text=title;
+    var explicit=extra && !hasAny(extra,["general","other","misc"]);
+    var text=explicit ? extra : (category+" "+extra).trim();
+    if (!explicit && (!text || hasAny(category,["قنوات mbc","غير مصنف","uncategorized","general","عام","other","misc"]) ||
+        hasAny(text,["general","other","misc"]))) text=title;
     if(hasAny(text,["أخبار","الاخبار","اخبار","news","الحدث","سياسة","politic"]))return "أخبار";
     if(hasAny(text,["رياض","sport","football","soccer","bein","كورة","كرة","ملاعب"]))return "رياضة";
     if(hasAny(text,["أطفال","اطفال","kids","cartoon","كرتون","spacetoon","baby","junior"]))return "أطفال";
