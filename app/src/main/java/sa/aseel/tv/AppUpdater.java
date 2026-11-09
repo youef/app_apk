@@ -124,7 +124,9 @@ public final class AppUpdater {
                     if(manual)say("تعذر فحص التحديث: "+problem);
                     return;
                 }
-                if(release.optInt("version_code",0)>installedVersionCode()){
+                if(release.optInt("version_code",0)==0){
+                    if(manual)say("لم يصدر تحديث ثابت جديد بعد. سيظهر هنا بعد اكتمال بناء النسخة وتوقيعها.");
+                }else if(release.optInt("version_code",0)>installedVersionCode()){
                     selected=release;
                     showAvailable();
                 }else if(manual){
