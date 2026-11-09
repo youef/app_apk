@@ -154,6 +154,33 @@ public final class AppUpdater {
                 }
             }).show();
     }
+    /** DownloadManager survives process restarts; recover an approved pending release. */
+    private void rememberDownload(){
+        if(selected!=null && downloadId>0)
+            preferences.edit().putLong("download_id",downloadId)
+                .putString("release_json",selected.toString()).apply();
+    }
+    private void forgetDownload(){
+        preferences.edit().remove("download_id").remove("release_json").apply();
+    }
+    private void restoreDownload(){
+        if(downloadId>0 || downloading || installAfterPermission)return;
+        long id=preferences.getLong("download_id",-1L);
+        if(id<=0)return;
+        try{
+            JSONObject saved=new JSONObject(preferences.getString("release_json","{}"));
+            if(!PACKAGE.equals(saved.optString("package_name","")) ||
+                !"stable".equals(saved.optString("channel","")) ||
+                saved.optInt("version_code",0)<=installedVersionCode() ||
+                !trustedUrl(saved.optString("download_url","")) ||
+                !saved.optString("sha256","").matches("[0-9a-fA-F]{64}"))
+                throw new SecurityException("Stored update manifest is no longer valid");
+            selected=saved;
+            downloadId=id;downloading=true;
+            handler.removeCallbacks(progress);
+            handler.postDelayed(progress,500L);
+        }catch(Exception invalid){forgetDownload();}
+    }
     private File outputFile(){
         File dir=activity.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
         return dir==null?null:new File(dir,FILENAME);
@@ -175,11 +202,12 @@ public final class AppUpdater {
             request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
             request.setDestinationInExternalFilesDir(activity,Environment.DIRECTORY_DOWNLOADS,FILENAME);
             downloadId=manager.enqueue(request);
+            rememberDownload();
             downloading=true;
             handler.removeCallbacks(progress);
             handler.postDelayed(progress,1300L);
             say("بدأ تنزيل التحديث. ستبقى بياناتك محفوظة عند تثبيته على النسخة نفسها.");
-        }catch(Exception e){downloadId=-1;downloading=false;say("فشل بدء التنزيل: "+e.getMessage());}
+        }catch(Exception e){downloadId=-1;downloading=false;forgetDownload();say("فشل بدء التنزيل: "+e.getMessage());}
     }
     private void pollDownload(){
         if(!downloading||downloadId<0||activity.isFinishing())return;
@@ -195,7 +223,7 @@ public final class AppUpdater {
                 return;
             }
             if(state==DownloadManager.STATUS_FAILED)throw new java.io.IOException("رفض مدير التنزيل الملف");
-        }catch(Exception e){downloading=false;say("تعذر تنزيل التحديث: "+e.getMessage());return;}
+        }catch(Exception e){downloading=false;forgetDownload();say("تعذر تنزيل التحديث: "+e.getMessage());return;}
         finally{if(cursor!=null)cursor.close();}
         handler.postDelayed(progress,2500L);
     }
@@ -232,7 +260,7 @@ public final class AppUpdater {
             final boolean ok=valid;final String problem=error;
             handler.post(new Runnable(){public void run(){
                 if(activity.isFinishing())return;
-                if(ok)requestInstall(); else say("تم رفض التحديث للحماية: "+problem);
+                if(ok)requestInstall(); else {forgetDownload();say("تم رفض التحديث للحماية: "+problem);}
             }});
         }});
     }
@@ -265,9 +293,11 @@ public final class AppUpdater {
             installer.setDataAndType(uri,"application/vnd.android.package-archive");
             installer.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_ACTIVITY_NEW_TASK);
             activity.startActivity(installer);
+            forgetDownload();
         }catch(Exception e){say("لا يوجد مثبت APK متوافق على الجهاز: "+e.getMessage());}
     }
     public void onResume(){
+        restoreDownload();
         if(installAfterPermission && (Build.VERSION.SDK_INT<26||
             activity.getPackageManager().canRequestPackageInstalls()))requestInstall();
         if(downloading)handler.postDelayed(progress,500L);
