@@ -1411,14 +1411,14 @@ public final class TVHomeActivity extends Activity {
         types.add("الكل");
         if(favoriteCount>0)types.add("المفضلة");
         for(java.util.Map.Entry<String,Integer> entry:counts.entrySet())
-            if(entry.getValue()>0)types.add(entry.getKey());
+            types.add(entry.getKey());
         if(!types.contains(activeChannelCategory))activeChannelCategory="الكل";
         HorizontalScrollView scroll=new HorizontalScrollView(this);
         scroll.setHorizontalScrollBarEnabled(false);
         content.addView(scroll,space(-1,dp(60),3));
         LinearLayout filters=row();scroll.addView(filters);
         for(final String type:types){
-            int count="الكل".equals(type)?channels.size():
+            int count="الكل".equals(type)?companies.get(activeChannelCompany):
                 "المفضلة".equals(type)?favoriteCount:counts.get(type);
             Button b=button((type.equals(activeChannelCategory)?"✓ ":"")+type+"  "+count);
             b.setContentDescription("تصنيف "+type+"، "+count+" قناة");
@@ -1455,6 +1455,7 @@ public final class TVHomeActivity extends Activity {
             }else content.addView(card);
             displayed++;
         }
+        if(matching==0)heading("لا توجد قنوات متاحة حاليًا لهذا الاختيار","غيّر الشركة أو النوع، أو حدّث المصادر من لوحة الإدارة.");
         if(matching>displayed){
             final int remaining=matching-displayed;
             Button more=button("＋ عرض المزيد من القنوات  ("+remaining+" متبقية)");
