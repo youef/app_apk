@@ -422,3 +422,15 @@
 @media(prefers-reduced-motion:reduce){
  .live-toolbar .live-icon-action{transition:none}
 }
+
+/* Broadcaster selection is independent of genre; compact and remote-focusable. */
+.live-company-tabs{padding-bottom:8px;margin-bottom:7px;border-bottom:1px solid rgba(255,255,255,.07)}
+.live-company-tabs .live-type-tab{border-color:rgba(228,67,88,.29);background:rgba(148,28,44,.12)}
+.live-company-tabs .live-type-tab:hover{background:rgba(148,28,44,.25)}
+.live-company-tabs .live-type-tab.is-on{background:linear-gradient(135deg,#e44a62,#af243b);color:#fff;border-color:#ff8aa1}
+.live-company-tabs .live-type-tab.is-on b{color:#ffe1e6}
+.live-guide__category-head{white-space:normal}
+@media(max-width:650px){
+  .live-company-tabs{padding-bottom:7px;margin-bottom:5px}
+  .live-company-tabs .live-type-tab{min-height:40px}
+}
