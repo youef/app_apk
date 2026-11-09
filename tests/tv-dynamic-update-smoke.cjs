@@ -22,7 +22,22 @@ assert.ok(home.includes("2L*60L*1000L"),"refresh interval 2 minutes");
 assert.ok(home.includes('shelf(label+" "+genre[1]'),"genre shelves");
 assert.ok(home.includes('shelf(label+" "+genreLabel(tag)'),"new genres automatically get their own shelves");
 assert.ok(home.includes('all.setTag("shelf:all:"+name)'),"every non-empty shelf has View All");
-assert.ok(home.includes('grid(browseTitle,filteredBrowseItems())'),"View All opens scoped list");
+assert.ok(home.includes('ArrayList<JSONObject> matches=filteredBrowseItems()'),"View All opens scoped list");
+assert.ok(home.includes('categoryDirectory("movie")'),"movie entry is a square category directory");
+assert.ok(home.includes('categoryDirectory("series")'),"series entry is a square category directory");
+assert.ok(home.includes('categoryDirectory("channel")'),"channel entry is a square category directory");
+const directory=read("app/src/main/java/sa/aseel/tv/TvCategoryDirectory.java");
+assert.ok(directory.includes('new Tile("all","الكل","guide")'),"All is the first tile");
+assert.ok(directory.includes('categoryName(item)'),"database-linked category names contribute");
+assert.ok(directory.includes('for(String field:new String[]{"genre_tags","auto_tags"})'),"new genre tags contribute");
+assert.ok(directory.includes('ChannelGuideCategory.broadcaster(item)'),"network tiles for channels");
+assert.ok(home.includes('browseMode="directory"')&&
+    home.includes('TvCategoryDirectory.filter(source,browseKind,browseKey)'),
+    "category click navigates to linked filtered titles");
+assert.ok(home.includes('if("channel".equals(browseKind))channelBrowse('),
+    "channels open the native playable channel list");
+assert.ok(home.includes('goTo("browse".equals(section)?browseOrigin:"home")'),
+    "back button returns to category directory");
 assert.ok(home.includes('cardGridLimit+72'),"large lists progressively render");
 assert.ok(home.includes('("official_link".equals(mode))')||home.includes('if("official_link".equals(mode))'),
     "official outbound channels no longer discarded");
