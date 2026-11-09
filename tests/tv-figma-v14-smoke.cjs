@@ -13,7 +13,11 @@ check("Android 4.4 guard avoids unsupported View.setElevation",home.includes("SD
 check("Catalog refresh avoids re-rendering portal during four concurrent requests",home.includes("!detailVisible && !loading"));
 check("Native catalog from Supabase",home.includes("catalog.listQuery(")&&home.includes("aseel_seasons")&&home.includes("aseel_episodes"));
 check("Native player",home.includes("CinemaPlayerActivity.class")&&player.includes("ExoPlayer.Builder"));
-check("No external browser for official-link-only channels",home.includes("المحتوى غير قابل للتشغيل داخل التطبيق")&&!home.includes("Intent.ACTION_VIEW"));
+check("Approved external viewing pages are opened only after explicit channel selection and host verification",
+  home.includes('if("channel".equals(kind(item)) && "official_link".equals(value(item,"playback_mode")))') &&
+  home.includes('external.startsWith("https://www.qanwatlive.com/")') &&
+  home.includes("android.content.Intent.ACTION_VIEW") &&
+  home.includes('heading("صفحة المصدر غير متاحة"'));
 check("Settings are persisted and honored by player",home.includes('prefs.edit().putBoolean("auto_next"')&&player.includes('getBoolean("auto_next",true)'));
 check("V14+ APK and API19",/VERSION_NAME="(?:14|15)\.0\.0-native-/.test(workflow)&&workflow.includes("api19.apk"));
 console.log("Figma v14 UI acceptance static checks passed; real TV installation still requires hardware verification.");
