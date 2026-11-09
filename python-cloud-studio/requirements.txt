@@ -2,5 +2,6 @@ fastapi==0.115.14
 uvicorn==0.54.0
 requests==2.34.2
 beautifulsoup4==4.15.0
+tzdata==2025.2; sys_platform == "win32"
 # For cloud Chromium capture and optional desktop Edge inspection.
 playwright==1.64.1

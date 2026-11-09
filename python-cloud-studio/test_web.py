@@ -35,6 +35,29 @@ class DummyDB:
 
 
 class DemoTest(unittest.TestCase):
+    def test_discovery_extracts_direct_media_from_existing_embed(self):
+        source = 'https://source.example.org/movies/example'
+        embed = 'https://source.example.org/embed/abc'
+        direct = {'url':'https://cdn.example.org/movie.m3u8','kind':'direct','verified':True}
+        cat = Catalogue('movie','Example',source,media_url=embed,
+                        sources=[{'url':embed,'kind':'embed'}])
+        with patch.object(server.MediaResolver,'resolve',return_value=([direct],[])) as resolve:
+            _, _, original_pages, playable, error = server._scan_media_entry(cat,cat)
+        self.assertEqual(resolve.call_args.args[0],[source,embed])
+        self.assertEqual(original_pages,[source])
+        self.assertEqual(playable,direct)
+        self.assertFalse(error)
+
+    def test_title_search_uses_browser_when_source_disconnects(self):
+        final = 'https://v3.qrmzi.buzz/?s=Example'
+        body = '<a href="/movies/example/">Example</a>'
+        with patch.object(server.SourceClient,'get',side_effect=server.SourceConnectionError), \
+             patch.object(server.AUTOSYNC,'mode','auto'), \
+             patch.object(server,'read_public_html',return_value=(final,'text/html',body)) as browser:
+            result = server.search_titles('Example','movie')
+        self.assertEqual(result[0]['url'],'https://v3.qrmzi.buzz/movies/example/')
+        browser.assert_called_once()
+
     def setUp(self):
         self.client = TestClient(server.app)
         init = self.client.get('/api/init')

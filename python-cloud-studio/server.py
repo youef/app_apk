@@ -347,7 +347,7 @@ def search_titles(query: str, kind: str) -> list[dict]:
     root = public_url(os.getenv('ALEZZ_TITLE_SEARCH_URL', 'https://v3.qrmzi.buzz/'))
     parts = urlsplit(root)
     address = urlunsplit((parts.scheme, parts.netloc, parts.path or '/', urlencode({'s': query}), ''))
-    client = SourceClient(timeout=10)
+    client = DiscoverySourceClient(address)
     try:
         final, typ, html = client.get(address)
     finally:
@@ -415,11 +415,8 @@ def _scan_media_entry(cat: Catalogue, entry):
         # HTTP checks run concurrently. Browser extraction is a controlled
         # fallback and can take longer on source sites that throttle access.
         resolver = MediaResolver(mode=AUTOSYNC.mode, timeout=9, max_pages=5)
-        if entry.media_url and supported_source_kind(entry.media_url) == 'embed':
-            checked = resolver.check(candidates)
-            errors = []
-        else:
-            checked, errors = resolver.resolve(pages, existing=candidates)
+        embed_pages = [item['url'] for item in candidates if item.get('kind') == 'embed' and item.get('url')]
+        checked, errors = resolver.resolve([*pages, *embed_pages], existing=candidates)
         playable = next((item for item in checked
                          if item.get('verified') and item.get('kind') == 'direct'), None)
         embedded = any(item.get('kind') == 'embed' and item.get('reachable')
