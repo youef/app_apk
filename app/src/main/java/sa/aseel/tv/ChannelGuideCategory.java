@@ -39,6 +39,14 @@ public final class ChannelGuideCategory {
         String title=channel.optString("title_ar",channel.optString("title",""))
             .trim().toLowerCase(Locale.US);
         String category=channel.optString("category_name","").toLowerCase(Locale.US);
+        if(category.contains("قنوات رؤيا") || title.contains("رؤيا") ||
+            title.startsWith("rfc —") || title.startsWith("كرفان") ||
+            title.startsWith("الشرقية نيوز — ضمن منصة") || title.startsWith("قناة الشرقية — ضمن منصة") ||
+            title.startsWith("فنطهي") || title.startsWith("ست النكهات") ||
+            title.startsWith("شيف مان") || title.startsWith("ساعة محبة") ||
+            title.startsWith("جلطة") || title.startsWith("وطن ع وتر") ||
+            title.startsWith("أنا بحكيلك") || title.startsWith("حكي منوع") ||
+            title.startsWith("مجتمعي"))return "رؤيا";
         if(title.matches("^mbc(?:(?:\\s|\\+|\\d).*)?$") ||
             title.startsWith("ام بي سي") || category.contains("قنوات mbc"))return "MBC";
         if(title.startsWith("bein")||title.startsWith("بي إن"))return "beIN SPORTS";
@@ -78,6 +86,12 @@ public final class ChannelGuideCategory {
         if(tags!=null){
             for(int i=0;i<tags.length();i++){
                 String tag=tags.optString(i,"").toLowerCase(Locale.US);
+                if(has(tag,"رياضة","رياض","sport","football","soccer"))return "رياضة";
+                if(has(tag,"أخبار","اخبار"))return "أخبار";
+                if(has(tag,"أطفال","اطفال"))return "أطفال";
+                if(has(tag,"وثائقيات","وثائقي"))return "وثائقيات";
+                if(has(tag,"طبخ","مطبخ"))return "طبخ";
+                if(has(tag,"منوعات","كوميديا","ترفيه"))return "منوعات";
                 if(has(tag,"sport","football","soccer"))return "رياضة";
                 if(has(tag,"news","politic"))return "أخبار";
                 if(has(tag,"series","drama"))return "مسلسلات";
