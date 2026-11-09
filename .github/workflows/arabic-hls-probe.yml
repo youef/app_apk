@@ -20,6 +20,13 @@ jobs:
           node-version: '22'
       - name: Check eight streams without rebroadcasting or claiming rights
         run: node scripts/audit-arabic-hls.mjs
+      - name: Ensure ffprobe is available for codec inspection
+        run: |
+          if ! command -v ffprobe >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq ffmpeg
+          fi
+          ffprobe -version | head -n 1
       - name: Probe codecs with a bounded ffprobe read (no media stored)
         run: node scripts/ffprobe-arabic-hls.mjs
       - name: Archive diagnostic report
