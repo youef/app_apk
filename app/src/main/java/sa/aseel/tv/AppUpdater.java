@@ -112,7 +112,7 @@ public final class AppUpdater {
                 final int version=feed.optInt("version_code",0);
                 final String apk=feed.optString("download_url","");
                 final String hash=feed.optString("sha256","").toLowerCase(java.util.Locale.US);
-                if(version<1 || !trustedUrl(apk) || !hash.matches("[0-9a-f]{64}"))
+                if(version<0 || (version>0 && (!trustedUrl(apk) || !hash.matches("[0-9a-f]{64}"))))
                     throw new SecurityException("Invalid signed release manifest");
                 preferences.edit().putLong("last_check",System.currentTimeMillis()).apply();
             }catch(Exception e){error=e.getMessage()==null?"تعذر الاتصال بخادم الإصدارات":e.getMessage();Log.w(TAG,"Update check failed",e);}
