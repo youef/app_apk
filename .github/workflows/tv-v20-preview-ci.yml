@@ -1,0 +1,76 @@
+name: Al Ezz TV v20 — Verify Android Source and Preview APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tv-v20-preview-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Build separate test APK (not the stable release)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Java 17 for Android SDK manager
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - name: Install Android API 33
+        run: sdkmanager "platforms;android-33" "build-tools;33.0.2" "platform-tools"
+      - name: Java 11 for legacy Gradle project
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '7.6'
+
+      - name: Dynamic content and TV UI smoke tests
+        run: |
+          set -euo pipefail
+          node tests/tv-dynamic-update-smoke.cjs
+          node tests/tv-kids-playback-smoke.cjs
+          node tests/tv-remote-guide-smoke.cjs
+          node tests/live-tv-v16-smoke.cjs
+          node tests/live-tv-v17-genre-smoke.cjs
+          node tests/live-tv-v18-balanced-smoke.cjs
+          node tests/member-account-login-smoke.cjs
+          node tests/member-cloud-sync-smoke.cjs
+          node tests/quality-picker-smoke.cjs
+
+      - name: Include complete brand assets
+        run: |
+          set -euo pipefail
+          mkdir -p app/src/main/res/drawable-nodpi
+          test -s web/alizz-tv-transparent.png
+          cp web/alizz-tv-transparent.png app/src/main/res/drawable-nodpi/alizz_brand.png
+
+      - name: Compile Android TV application (debug validation only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle clean assembleDebug --no-daemon \
+            -PezzApplicationId=sa.alezz.tv.preview \
+            -PezzVersionCode=200000 \
+            -PezzVersionName=20.0.0-preview
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          aapt dump badging app/build/outputs/apk/debug/app-debug.apk | head -10
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk dist/al-ezz-tv-v20.0.0-preview-debug.apk
+
+      - name: Upload test APK artifact (not compatible with in-place update)
+        uses: actions/upload-artifact@v4
+        with:
+          name: al-ezz-tv-v20.0.0-preview-debug
+          path: dist/al-ezz-tv-v20.0.0-preview-debug.apk
+          retention-days: 30
+          if-no-files-found: error
