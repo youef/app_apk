@@ -1,0 +1,201 @@
+name: Al Ezz TV v20 — Signed Universal APK and In-App Updates
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-v20-signed.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: al-ezz-tv-v20-signed
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build, test, sign, verify and release stable APK
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Java and Android SDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+      - uses: android-actions/setup-android@v4
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-33" "build-tools;33.0.2" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '7.6'
+
+      - name: Require permanent release signing secrets
+        shell: bash
+        env:
+          AL_EZZ_KEYSTORE_BASE64: ${{ secrets.AL_EZZ_KEYSTORE_BASE64 }}
+          AL_EZZ_STORE_PASSWORD: ${{ secrets.AL_EZZ_STORE_PASSWORD }}
+          AL_EZZ_KEY_ALIAS: ${{ secrets.AL_EZZ_KEY_ALIAS }}
+          AL_EZZ_KEY_PASSWORD: ${{ secrets.AL_EZZ_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for key in AL_EZZ_KEYSTORE_BASE64 AL_EZZ_STORE_PASSWORD AL_EZZ_KEY_ALIAS AL_EZZ_KEY_PASSWORD; do
+            if [[ -z "${!key}" ]]; then
+              echo "::error::Missing permanent signing secret $key. No debug APK will be published."
+              exit 1
+            fi
+          done
+          umask 077
+          printf '%s' "$AL_EZZ_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/al-ezz-permanent.jks"
+          keytool -list -keystore "$RUNNER_TEMP/al-ezz-permanent.jks" \
+            -storepass "$AL_EZZ_STORE_PASSWORD" -alias "$AL_EZZ_KEY_ALIAS" >/dev/null
+          {
+            echo "ORG_GRADLE_PROJECT_ezzStoreFile=$RUNNER_TEMP/al-ezz-permanent.jks"
+            echo "ORG_GRADLE_PROJECT_ezzStorePassword=$AL_EZZ_STORE_PASSWORD"
+            echo "ORG_GRADLE_PROJECT_ezzKeyAlias=$AL_EZZ_KEY_ALIAS"
+            echo "ORG_GRADLE_PROJECT_ezzKeyPassword=$AL_EZZ_KEY_PASSWORD"
+            echo "ORG_GRADLE_PROJECT_ezzApplicationId=sa.alezz.tv"
+            echo "ORG_GRADLE_PROJECT_ezzVersionCode=$((200000 + GITHUB_RUN_NUMBER))"
+            echo "ORG_GRADLE_PROJECT_ezzVersionName=20.0.0"
+            echo "AL_EZZ_EXPECTED_PACKAGE=sa.alezz.tv"
+            echo "AL_EZZ_MIN_VERSION=$((200000 + GITHUB_RUN_NUMBER))"
+          } >> "$GITHUB_ENV"
+
+      - name: Run catalog, player and remote compatibility checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/tv-dynamic-update-smoke.cjs
+          node tests/tv-kids-playback-smoke.cjs
+          node tests/tv-remote-guide-smoke.cjs
+          node tests/live-tv-v16-smoke.cjs
+          node tests/live-tv-v17-genre-smoke.cjs
+          node tests/live-tv-v18-balanced-smoke.cjs
+          node tests/member-account-login-smoke.cjs
+          node tests/member-cloud-sync-smoke.cjs
+          node tests/quality-picker-smoke.cjs
+
+      - name: Prepare release artwork
+        run: |
+          set -euo pipefail
+          mkdir -p app/src/main/res/drawable-nodpi dist
+          test -s web/alizz-tv-transparent.png
+          cp web/alizz-tv-transparent.png app/src/main/res/drawable-nodpi/alizz_brand.png
+
+      - name: Build universal Android TV release APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle clean assembleRelease --no-daemon > dist/gradle-build.log 2>&1 || {
+            tail -150 dist/gradle-build.log
+            exit 1
+          }
+          test -s app/build/outputs/apk/release/app-release.apk
+          cp app/build/outputs/apk/release/app-release.apk dist/al-ezz-tv-v20.0.0-universal-api19.apk
+
+      - name: Verify package, signature and universal Android compatibility
+        env:
+          AL_EZZ_CERT_SHA256: ${{ secrets.AL_EZZ_CERT_SHA256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/verify_apk.py dist/al-ezz-tv-v20.0.0-universal-api19.apk | tee dist/build-report.txt
+          actual="$(sed -n 's/^CERTIFICATE_SHA256=//p' dist/build-report.txt | head -1)"
+          test -n "$actual"
+          if [[ -n "$AL_EZZ_CERT_SHA256" ]]; then
+            [[ "${actual,,}" == "${AL_EZZ_CERT_SHA256,,}" ]] || {
+              echo "::error::Existing stable signing certificate mismatch, release stopped."
+              exit 1
+            }
+          fi
+          sha256sum dist/al-ezz-tv-v20.0.0-universal-api19.apk | tee dist/al-ezz-tv-v20.0.0.sha256
+          {
+            echo "CHANNEL=stable"
+            echo "VERSION=20.0.0"
+            echo "VERSION_CODE=$ORG_GRADLE_PROJECT_ezzVersionCode"
+            echo "PACKAGE=sa.alezz.tv"
+            echo "CERTIFICATE_SHA256=$actual"
+            echo "MIN_SDK=19"
+            echo "COMMIT=$GITHUB_SHA"
+            echo "NOTE=In-place upgrade only if previous APK used the exact same package ID and signing certificate."
+          } > dist/install-metadata.txt
+
+      - name: Upload signed APK and verification reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: al-ezz-tv-v20.0.0-signed-universal
+          path: |
+            dist/al-ezz-tv-v20.0.0-universal-api19.apk
+            dist/al-ezz-tv-v20.0.0.sha256
+            dist/install-metadata.txt
+            dist/build-report.txt
+            dist/gradle-build.log
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Publish immutable signed stable release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=al-ezz-tv-v20.0.0
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Stable tag already published; refuse to overwrite signed release."
+            exit 1
+          fi
+          cat > dist/RELEASE-NOTES.md <<'NOTES'
+          # العز TV v20.0.0 — المكتبة المباشرة والتحديث دون حذف التطبيق
+          - كافة الأفلام والمسلسلات والقنوات المنشورة تُجلب مباشرة من قاعدة Supabase بصفحات.
+          - تحديث المكتبة تلقائي كل دقيقتين أثناء تشغيل التطبيق؛ لا تحتاج لإصدار APK عند إضافة محتوى.
+          - تصنيفات الأفلام والمسلسلات ديناميكية مع زر «عرض الكل» وصفوف مخصصة لكل نوع.
+          - فحص إصدار التطبيق من الإعدادات، ثم تنزيل وفحص وتثبيت عبر Android بموافقة المستخدم.
+          - رابط تحديث موثوق لحزمة sa.alezz.tv فقط، مع SHA-256 وفحص هوية وتوقيع الحزمة.
+          - APK واحد لـ Android 4.4+ (API19)، ARMv7 / ARM64 / x86 / x86_64.
+          **تنبيه:** التحديث فوق النسخة السابقة يحتاج نفس اسم الحزمة ونفس شهادة التوقيع. لا يمكن تثبيت نسخ اختبار مختلفة الهوية كتحديث موضعي.
+          NOTES
+          gh release create "$tag" \
+            dist/al-ezz-tv-v20.0.0-universal-api19.apk \
+            dist/al-ezz-tv-v20.0.0.sha256 \
+            dist/install-metadata.txt \
+            dist/build-report.txt \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "العز TV v20.0.0 — تحديث المكتبة والفئات تلقائيًا" \
+            --notes-file dist/RELEASE-NOTES.md \
+            --latest
+
+      - name: Publish stable update manifest only after signed release
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import datetime,hashlib,json,os,pathlib
+          path=pathlib.Path('dist/al-ezz-tv-v20.0.0-universal-api19.apk')
+          version=int(os.environ['ORG_GRADLE_PROJECT_ezzVersionCode'])
+          manifest={
+            'schema':1,
+            'channel':'stable',
+            'package_name':'sa.alezz.tv',
+            'version_code':version,
+            'version_name':'20.0.0',
+            'download_url':'https://github.com/youef/app_apk/releases/download/al-ezz-tv-v20.0.0/al-ezz-tv-v20.0.0-universal-api19.apk',
+            'sha256':hashlib.sha256(path.read_bytes()).hexdigest(),
+            'published_at':datetime.datetime.now(datetime.timezone.utc).isoformat()
+          }
+          pathlib.Path('data/android-update.json').write_text(
+            json.dumps(manifest,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          PY
+          git config user.name "al-ezz-tv-release-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/android-update.json
+          git commit -m "chore(release): publish signed v20 APK update feed [skip ci]"
+          git pull --rebase origin main
+          git push origin HEAD:main
