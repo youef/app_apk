@@ -1921,6 +1921,7 @@ public final class TVHomeActivity extends Activity {
         }
         if("channel".equals(kind(item))){
             intent.putExtra("channel_group","live".equals(section)?activeChannelCategory:"الكل");
+            intent.putExtra("channel_company","live".equals(section)?activeChannelCompany:"الكل");
             JSONArray playlist=new JSONArray();
             int selected=0;
             // Keep Android Binder intents below the transaction limit for large local IPTV lists.
