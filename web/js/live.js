@@ -81,11 +81,12 @@
       (cover ? '<img class="live-channel-art__cover" src="' + esc(cover) + '" alt="" loading="lazy" onerror="this.remove()">' : "") +
       '</span>';
   }
-  var companyOrder=["MBC","beIN SPORTS","روتانا","OSN","الجزيرة","العربية","الشرق",
+  var companyOrder=["رؤيا","MBC","beIN SPORTS","روتانا","OSN","الجزيرة","العربية","الشرق",
     "القنوات السعودية","قنوات دبي","قنوات أبوظبي","الكأس","BBC","TRT","France 24","Sky"];
   function channelCompany(channel) {
     var title=String(channel.title||"").trim().toLowerCase();
     var category=String(channel.category||"").trim().toLowerCase();
+    if (category.indexOf("قنوات رؤيا")>=0) return "رؤيا";
     if (/^mbc(?=\s|\+|\d|$)/i.test(title) || /^ام\s*بي\s*سي/.test(title) || category.indexOf("قنوات mbc")>=0) return "MBC";
     if (/^bein\b|^بي\s*إن/.test(title)) return "beIN SPORTS";
     if (/^rotana\b|^روتانا/.test(title)) return "روتانا";
