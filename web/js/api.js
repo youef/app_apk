@@ -14,7 +14,7 @@
     movies: "id,title_ar,title_original,description,poster_url,backdrop_url,release_year,category_id,duration_minutes,quality,stream_url,stream_variants,subtitle_url,subtitle_language_code,is_kids,age_rating,featured,display_order,status,rights_status,rights_holder,license_reference,youtube_url,country_code,language_code,genre_tags,auto_tags",
     series: "id,title_ar,title_original,description,poster_url,backdrop_url,release_year,category_id,quality,is_kids,age_rating,featured,display_order,status,rights_status,rights_holder,license_reference,country_code,language_code,genre_tags,auto_tags",
     seasons: "id,series_id,number,title_ar",
-    episodes: "id,season_id,number,title_ar,description,poster_url,duration_minutes,stream_url,stream_variants,youtube_url,status,rights_status,genre_tags,auto_tags",
+    episodes: "id,season_id,number,title_ar,description,poster_url,duration_minutes,stream_url,stream_variants,youtube_url,status,rights_status,genre_tags,auto_tags,source_page_url",
     channels: "id,title_ar,description,poster_url,stream_url,official_url,category_id,is_kids,country_code,language_code,youtube_url,playback_mode,status,rights_status,link_health_status,age_rating,display_order,genre_tags,auto_tags",
     youtube: "id,youtube_url,title_ar,channel_name,language_code,topic,age_rating,is_kids,sort_order,status",
     collections: "id,title_ar,slug,description,display_order,is_active",
@@ -230,7 +230,8 @@
         stream: e.stream_url || "",
         variants: Array.isArray(e.stream_variants) ? e.stream_variants : [],
         youtubeId: e.youtube_url ? youtubeId(e.youtube_url) : "",
-        rightsStatus: e.rights_status || "pending"
+        rightsStatus: e.rights_status || "pending",
+        officialPage: /^https:\/\/roya\.tv\/program\/1703\/episodes(?:[?#]|$)/.test(e.source_page_url || "") ? e.source_page_url : ""
       });
     });
 
