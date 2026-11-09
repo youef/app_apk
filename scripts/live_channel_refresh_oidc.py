@@ -95,7 +95,7 @@ def main():
                 REPORT["errors"].append(str(row.get("title_ar"))[:65] + ": " + str(exc)[:120])
     REPORT["replacements_sent"] = len([a for a in pending if a.get("new_url")])
     for i in range(0, len(pending), 12):
-        result = edge(token, {"mode": "channel_repair", "actions": pending[i:i+12]})
+        result = edge(get_oidc(), {"mode": "channel_repair", "actions": pending[i:i+12]})
         REPORT["renewed"] += int(result.get("renewed", 0))
         REPORT["deleted"] += int(result.get("deleted", 0))
         REPORT["changes"].extend(result.get("changes", []))
