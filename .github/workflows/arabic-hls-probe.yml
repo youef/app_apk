@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/audit-arabic-hls.mjs'
+      - 'scripts/ffprobe-arabic-hls.mjs'
       - '.github/workflows/arabic-hls-probe.yml'
 permissions:
   contents: read
@@ -19,6 +20,8 @@ jobs:
           node-version: '22'
       - name: Check eight streams without rebroadcasting or claiming rights
         run: node scripts/audit-arabic-hls.mjs
+      - name: Probe codecs with a bounded ffprobe read (no media stored)
+        run: node scripts/ffprobe-arabic-hls.mjs
       - name: Archive diagnostic report
         if: always()
         uses: actions/upload-artifact@v4
