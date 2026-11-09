@@ -6,7 +6,7 @@ const path = require("node:path");
 
 const source = fs.readFileSync(path.join(__dirname, "../web/js/api.js"), "utf8");
 const native = fs.readFileSync(path.join(__dirname, "../app/src/main/java/sa/aseel/tv/TVHomeActivity.java"), "utf8");
-assert.ok(native.includes("status=eq.published&rights_status=eq.approved&playback_mode=eq.stream&link_health_status=eq.healthy&order=display_order.asc,created_at.desc&limit=500"),
+assert.ok(native.includes("status=eq.published&rights_status=eq.approved&order=display_order.asc,created_at.desc&limit=500"),
   "Android TV must fetch the full channel catalogue and prioritize approved entries.");
 
 async function run(failChannels) {
