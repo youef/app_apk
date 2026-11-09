@@ -16,7 +16,7 @@ const fakeRows=Array.from({length:620},(_,i)=>({
 const requests=[];
 const context={
   window:{ALEZZ_ADMIN_CONFIG:{storagePrefix:"test.",supabaseUrl:"https://fake.supabase.co",publishableKey:"publishable-test",requestTimeout:15000}},
-  document:{readyState:"loading",addEventListener:()=>{}},
+  document:{readyState:"loading",addEventListener:()=>{},querySelector:()=>null},
   URL,Promise,AbortController,setTimeout,clearTimeout,Date,console,
   fetch:async (uri,init={})=>{
     const url=new URL(uri);
