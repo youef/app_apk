@@ -774,7 +774,7 @@ public final class CinemaPlayerActivity extends Activity {
                     explanation="تعذر الوصول للمصدر أو انتهت صلاحية الرابط. "+lastSourceHint;
                 else explanation="تعذر قراءة المصدر ("+reason+"). "+lastSourceHint;
                 if((reason.contains("NETWORK")||reason.contains("HTTP")||reason.contains("IO"))
-                    &&tries==0){
+                    &&tries==0 && !SignedStreamExpiry.expired(currentUrl)){
                     tries=1;
                     status.setText("فقد الاتصال بالمصدر. محاولة ثانية ثم خفض الجودة إن لزم...");
                     final int oldIndex=index;
@@ -795,9 +795,17 @@ public final class CinemaPlayerActivity extends Activity {
         }
         for(int offset=1;offset<=sources.size();offset++){
             int next=(index+offset)%sources.size();
-            if(!attempted.contains(next)){
+            if(!attempted.contains(next) && !SignedStreamExpiry.expired(sources.get(next).url)){
                 status.setText("تجربة رابط أو جودة بديلة معتمدة...");
                 tries=0;playSource(next);return;
+            }
+        }
+        if(!live && !kidsPlayback){
+            PlaybackSources.Source backup=PlaybackSources.alternateEmbed(this);
+            if(backup!=null){
+                status.setText("انتهت المصادر المباشرة؛ الانتقال إلى مشغل احتياطي...");
+                PlaybackSources.open(this,backup);
+                return;
             }
         }
         status.setText("رمز العطل: "+explanation+" — انتهت المحاولات والجودات المتاحة. راجع الرابط من لوحة الإدارة.");
@@ -815,6 +823,11 @@ public final class CinemaPlayerActivity extends Activity {
         lastChromeInteraction=android.os.SystemClock.uptimeMillis();
         final int token=++requestToken;
         final String stream=currentUrl;
+        if(SignedStreamExpiry.expired(stream)){
+            lastSourceHint="انتهت صلاحية الرابط الموقّع. يجري اختيار مصدر آخر معتمد.";
+            tryNextOrExplain(lastSourceHint);
+            return;
+        }
         if(live){
             qualityButton.setText("⚙");
             qualityButton.setContentDescription("جودة البث: "+sources.get(which).label);
