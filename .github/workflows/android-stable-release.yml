@@ -52,8 +52,17 @@ jobs:
             fi
           done
           umask 077
-          printf '%s' "$AL_EZZ_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/al-ezz-stable.jks"
-          test -s "$RUNNER_TEMP/al-ezz-stable.jks"
+          # Mobile copy/paste may insert whitespace or line breaks in Base64.
+          # Do not print any part of the secret to logs.
+          if ! printf '%s' "$AL_EZZ_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 --decode > "$RUNNER_TEMP/al-ezz-stable.jks"; then
+            rm -f "$RUNNER_TEMP/al-ezz-stable.jks"
+            echo "::error::Invalid AL_EZZ_KEYSTORE_BASE64. Recreate the secret from the original .jks file; do not paste a partial or altered Base64 value."
+            exit 1
+          fi
+          if [[ ! -s "$RUNNER_TEMP/al-ezz-stable.jks" ]]; then
+            echo "::error::Decoded keystore is empty. Recreate AL_EZZ_KEYSTORE_BASE64 from the original .jks file."
+            exit 1
+          fi
           echo "ORG_GRADLE_PROJECT_ezzStoreFile=$RUNNER_TEMP/al-ezz-stable.jks" >> "$GITHUB_ENV"
           echo "ORG_GRADLE_PROJECT_ezzStorePassword=$AL_EZZ_STORE_PASSWORD" >> "$GITHUB_ENV"
           echo "ORG_GRADLE_PROJECT_ezzKeyAlias=$AL_EZZ_KEY_ALIAS" >> "$GITHUB_ENV"
