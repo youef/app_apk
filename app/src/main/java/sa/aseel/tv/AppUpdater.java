@@ -28,20 +28,22 @@ import java.security.MessageDigest;
 import javax.net.ssl.HttpsURLConnection;
 
 /**
- * Consent-based, in-place updater for the permanently signed Al Ezz TV package.
+ * Consent-based, in-place updater for the separately signed release channels.
  *
  * The manifest is published only after a signed release has passed verification.
- * Never install an experimental or differently signed APK. Android's package
+ * Never install an APK from another channel or signer. Android's package
  * installer is always shown; the app cannot silently bypass user consent.
  */
 public final class AppUpdater {
     private static final String TAG="AlezzUpdater";
-    private static final String FEED="https://raw.githubusercontent.com/youef/app_apk/main/data/android-update.json";
-    private static final String PACKAGE="sa.alezz.tv";
+    private static final String FEED_ROOT="https://raw.githubusercontent.com/youef/app_apk/main/data/";
+    private static final String STABLE_PACKAGE="sa.alezz.tv";
+    private static final String PREVIEW_PACKAGE="sa.alezz.tv.preview.update";
     private static final long CHECK_EVERY_MS=30L*60L*1000L;
     private static final String FILENAME="al-ezz-tv-stable-update.apk";
     private final Activity activity;
     private final SharedPreferences preferences;
+    private final String packageName,channel,feedUrl;
     private final Handler handler=new Handler();
     private final java.util.concurrent.ExecutorService worker=java.util.concurrent.Executors.newSingleThreadExecutor();
     private boolean checking,downloading,verifying,installAfterPermission;
@@ -53,7 +55,12 @@ public final class AppUpdater {
     public AppUpdater(Activity activity){
         this.activity=activity;
         this.preferences=activity.getSharedPreferences("alezz_stable_updates_v1",Context.MODE_PRIVATE);
+        this.packageName=activity.getPackageName();
+        boolean preview=PREVIEW_PACKAGE.equals(packageName);
+        this.channel=preview?"preview":"stable";
+        this.feedUrl=FEED_ROOT+(preview?"android-preview-update.json":"android-update.json");
     }
+    boolean supported(){return STABLE_PACKAGE.equals(packageName)||PREVIEW_PACKAGE.equals(packageName);}
     private void say(final String message){
         if(activity.isFinishing())return;
         Toast.makeText(activity,message,Toast.LENGTH_LONG).show();
@@ -81,8 +88,8 @@ public final class AppUpdater {
             if(manual&&verified){installerOpened=false;showInstallPrompt();}
             return;
         }
-        if(!PACKAGE.equals(activity.getPackageName())){
-            if(manual)say("هذه نسخة تجريبية بمعرّف مختلف؛ التحديث المباشر يتطلب النسخة الثابتة.");
+        if(!supported()){
+            if(manual)say("هذه الحزمة لا تتصل بقناة تحديث داخل التطبيق.");
             return;
         }
         if(!manual && System.currentTimeMillis()-preferences.getLong("last_check",0L)<CHECK_EVERY_MS)return;
@@ -91,7 +98,7 @@ public final class AppUpdater {
         worker.execute(new Runnable(){public void run(){
             JSONObject feed=null;String error="";
             try{
-                URL url=new URL(FEED+"?v="+System.currentTimeMillis());
+                URL url=new URL(feedUrl+"?v="+System.currentTimeMillis());
                 HttpsURLConnection con=(HttpsURLConnection)url.openConnection();
                 con.setInstanceFollowRedirects(false);
                 con.setSSLSocketFactory(LegacyTls.factory(activity.getApplicationContext()));
@@ -113,8 +120,8 @@ public final class AppUpdater {
                         feed=new JSONObject(out.toString("UTF-8"));
                     }finally{in.close();}
                 }finally{con.disconnect();}
-                if(!"stable".equals(feed.optString("channel")) ||
-                    !PACKAGE.equals(feed.optString("package_name")))throw new SecurityException("Wrong update channel/package");
+                if(feed.optInt("schema")!=1 || !channel.equals(feed.optString("channel")) ||
+                    !packageName.equals(feed.optString("package_name")))throw new SecurityException("Wrong update channel/package");
                 final int version=feed.optInt("version_code",0);
                 final String apk=feed.optString("download_url","");
                 final String hash=feed.optString("sha256","").toLowerCase(java.util.Locale.US);
@@ -131,7 +138,7 @@ public final class AppUpdater {
                     return;
                 }
                 if(release.optInt("version_code",0)==0){
-                    if(manual)say("لم يصدر تحديث ثابت جديد بعد. سيظهر هنا بعد اكتمال بناء النسخة وتوقيعها.");
+                    if(manual)say("لا يوجد إصدار أحدث في قناة التحديث الحالية.");
                 }else if(release.optInt("version_code",0)>installedVersionCode()){
                     selected=release;
                     showAvailable(manual);
@@ -151,7 +158,7 @@ public final class AppUpdater {
         if(notes.length()>1600)notes=notes.substring(0,1600);
         prompting=true;
         AlertDialog dialog=new AlertDialog.Builder(activity)
-            .setTitle("تحديث جديد للعز TV")
+            .setTitle("preview".equals(channel)?"تحديث معاينة العز TV":"تحديث جديد للعز TV")
             .setMessage("الإصدار "+version+" متاح."+(notes.isEmpty()?"":"\n\n"+notes)+
                 "\n\nسيتم التحقق من الحزمة قبل فتح مثبت Android.")
             .setPositiveButton("تنزيل وتحديث",new android.content.DialogInterface.OnClickListener(){
@@ -184,8 +191,8 @@ public final class AppUpdater {
         if(id<=0)return;
         try{
             JSONObject saved=new JSONObject(preferences.getString("release_json","{}"));
-            if(!PACKAGE.equals(saved.optString("package_name","")) ||
-                !"stable".equals(saved.optString("channel","")) ||
+            if(!supported() || !packageName.equals(saved.optString("package_name","")) ||
+                !channel.equals(saved.optString("channel","")) ||
                 saved.optInt("version_code",0)<=installedVersionCode() ||
                 !trustedUrl(saved.optString("download_url","")) ||
                 !saved.optString("sha256","").matches("[0-9a-fA-F]{64}"))
@@ -263,7 +270,7 @@ public final class AppUpdater {
                 PackageManager pm=activity.getPackageManager();
                 PackageInfo candidate=pm.getPackageArchiveInfo(apk.getAbsolutePath(),PackageManager.GET_SIGNATURES);
                 PackageInfo installed=pm.getPackageInfo(activity.getPackageName(),PackageManager.GET_SIGNATURES);
-                if(candidate==null||!PACKAGE.equals(candidate.packageName)||
+                if(candidate==null||!packageName.equals(candidate.packageName)||
                     candidate.versionCode!=release.optInt("version_code")||
                     candidate.versionCode<=installed.versionCode)
                     throw new SecurityException("حزمة التحديث أو رقم إصدارها غير مطابق");

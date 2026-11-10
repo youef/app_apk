@@ -29,6 +29,8 @@ android {
             def keyFile = project.findProperty("ezzStoreFile")
             if (keyFile) {
                 storeFile file(keyFile)
+                def keyType = project.findProperty("ezzStoreType")
+                if (keyType) storeType keyType.toString()
                 storePassword project.findProperty("ezzStorePassword").toString()
                 keyAlias project.findProperty("ezzKeyAlias").toString()
                 keyPassword project.findProperty("ezzKeyPassword").toString()

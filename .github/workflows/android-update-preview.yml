@@ -1,0 +1,210 @@
+name: Al Ezz TV signed in-app update preview
+
+on:
+  push:
+    branches: [main, 'codex/preview-update']
+    paths:
+      - '.github/workflows/android-update-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: alezz-update-preview-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PREVIEW_PACKAGE: sa.alezz.tv.preview.update
+  PREVIEW_CERT_SHA256: 2c77bee0e003885da71321768468c4a100a71b2c1058d509529f7eaa7398c72d
+  BASE_CODE: '203000'
+  UPDATE_CODE: '203001'
+  BASE_APK: al-ezz-tv-v20.3.0-update-preview.apk
+  UPDATE_APK: al-ezz-tv-v20.3.1-update-preview.apk
+  UPDATE_TAG: al-ezz-tv-v20.3.1-update-preview
+
+jobs:
+  build:
+    name: Build and verify both signed preview APKs
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - run: sdkmanager "platforms;android-33" "build-tools;33.0.2"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '7.6'
+      - name: Run the regression suite
+        run: |
+          set -euo pipefail
+          for test in tests/*.cjs; do node "$test"; done
+          python3 -m unittest discover -s tests
+      - name: Build both APKs with the dedicated preview key
+        shell: bash
+        env:
+          PREVIEW_SIGNING: ${{ secrets.ALEZZ_UPDATE_PREVIEW_SIGNING }}
+          ORG_GRADLE_PROJECT_ezzApplicationId: ${{ env.PREVIEW_PACKAGE }}
+          ORG_GRADLE_PROJECT_ezzStoreType: PKCS12
+          ORG_GRADLE_PROJECT_ezzKeyAlias: alezz-update-preview
+        run: |
+          set -euo pipefail
+          umask 077
+          export ORG_GRADLE_PROJECT_ezzStoreFile="$RUNNER_TEMP/alezz-update-preview.p12"
+          trap 'rm -f "$ORG_GRADLE_PROJECT_ezzStoreFile"' EXIT
+          export ORG_GRADLE_PROJECT_ezzStorePassword="$(jq -er '.password | select(length > 0)' <<<"$PREVIEW_SIGNING")"
+          echo "::add-mask::$ORG_GRADLE_PROJECT_ezzStorePassword"
+          export ORG_GRADLE_PROJECT_ezzKeyPassword="$ORG_GRADLE_PROJECT_ezzStorePassword"
+          jq -er '.keystore | select(length > 0)' <<<"$PREVIEW_SIGNING" | base64 --decode > "$ORG_GRADLE_PROJECT_ezzStoreFile"
+          unset PREVIEW_SIGNING
+          mkdir -p app/src/main/res/drawable-nodpi dist
+          cp web/alizz-tv-transparent.png app/src/main/res/drawable-nodpi/alizz_brand.png
+          gradle testDebugUnitTest assembleRelease --no-daemon -PezzVersionCode="$BASE_CODE" -PezzVersionName=20.3.0-preview
+          cp app/build/outputs/apk/release/app-release.apk "dist/$BASE_APK"
+          gradle assembleRelease --no-daemon -PezzVersionCode="$UPDATE_CODE" -PezzVersionName=20.3.1-preview
+          cp app/build/outputs/apk/release/app-release.apk "dist/$UPDATE_APK"
+      - name: Verify package IDs, signatures, versions and checksums
+        shell: bash
+        env:
+          AL_EZZ_EXPECTED_PACKAGE: ${{ env.PREVIEW_PACKAGE }}
+        run: |
+          set -euo pipefail
+          AL_EZZ_MIN_VERSION="$BASE_CODE" python3 scripts/verify_apk.py "dist/$BASE_APK" | tee dist/base-build-report.txt
+          AL_EZZ_MIN_VERSION="$UPDATE_CODE" python3 scripts/verify_apk.py "dist/$UPDATE_APK" | tee dist/update-build-report.txt
+          grep -Fx "VERSION_CODE=$BASE_CODE" dist/base-build-report.txt
+          grep -Fx "VERSION_CODE=$UPDATE_CODE" dist/update-build-report.txt
+          grep -Fx "CERTIFICATE_SHA256=$PREVIEW_CERT_SHA256" dist/base-build-report.txt
+          grep -Fx "CERTIFICATE_SHA256=$PREVIEW_CERT_SHA256" dist/update-build-report.txt
+          (cd dist && sha256sum "$BASE_APK" "$UPDATE_APK" > SHA256SUMS.txt)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: signed-update-preview
+          path: dist/
+          if-no-files-found: error
+
+  activate:
+    name: Publish the preview APK and activate its independent feed
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: signed-update-preview
+          path: dist
+      - name: Verify the release asset before activating the preview feed
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          (cd dist && sha256sum --check SHA256SUMS.txt)
+          gh release create "$UPDATE_TAG" "dist/$UPDATE_APK" dist/update-build-report.txt \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft --prerelease --latest=false \
+            --title "العز TV 20.3.1 — معاينة التحديث داخل التطبيق" \
+            --notes "حزمة معاينة مستقلة بتوقيع خاص. يدعم قسم التحديثات تنزيل الحزمة وفتح مثبت Android الرسمي."
+          gh release download "$UPDATE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$UPDATE_APK" --dir "$RUNNER_TEMP"
+          cmp "dist/$UPDATE_APK" "$RUNNER_TEMP/$UPDATE_APK"
+          gh release edit "$UPDATE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false
+          git fetch origin main
+          git checkout -B preview-feed origin/main
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib
+          file = pathlib.Path('data/android-preview-update.json')
+          version = int(os.environ['UPDATE_CODE'])
+          if json.loads(file.read_text(encoding='utf-8'))['version_code'] >= version:
+              raise SystemExit('Preview feed already points to this or a later version')
+          apk, tag = os.environ['UPDATE_APK'], os.environ['UPDATE_TAG']
+          feed = {
+              'schema': 1,
+              'channel': 'preview',
+              'package_name': os.environ['PREVIEW_PACKAGE'],
+              'version_code': version,
+              'version_name': '20.3.1-preview',
+              'download_url': f'https://github.com/{os.environ["GITHUB_REPOSITORY"]}/releases/download/{tag}/{apk}',
+              'sha256': hashlib.sha256(pathlib.Path('dist', apk).read_bytes()).hexdigest(),
+              'notes': 'تحديث موقّع لحزمة المعاينة. اضغط تنزيل وتحديث ثم وافق في مثبت Android.'
+          }
+          file.write_text(json.dumps(feed, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/android-preview-update.json
+          git commit -m 'Activate the signed 20.3.1 preview update feed'
+          git push origin HEAD:main
+
+  install:
+    name: Upgrade from the application through the official Android installer
+    needs: activate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: signed-update-preview
+          path: dist
+      - name: Wait until the public preview feed is available
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in {1..30}; do
+            if curl -fLsS --max-time 15 "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/data/android-preview-update.json?qa=$(date +%s)" |
+                jq -e --argjson code "$UPDATE_CODE" '.channel == "preview" and .version_code == $code' >/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Test the real preview download, permission and installation
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: android-tv
+          arch: x86
+          profile: tv_1080p
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          disable-animations: true
+          script: python3 scripts/smoke_tv_update.py "dist/$BASE_APK" qa
+      - name: Save the update test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: in-app-preview-update-verification
+          path: qa/
+          if-no-files-found: warn
+      - name: Attach the verified starting APK and update report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$UPDATE_TAG" "dist/$BASE_APK" dist/SHA256SUMS.txt dist/base-build-report.txt qa/in-app-update.txt \
+            --repo "$GITHUB_REPOSITORY"

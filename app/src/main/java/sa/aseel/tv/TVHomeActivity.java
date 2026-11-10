@@ -457,7 +457,15 @@ public final class TVHomeActivity extends Activity {
         feedback.setGravity(Gravity.CENTER);
         panel.addView(feedback,space(-1,dp(43),3));
         final Button signIn=button("دخول حسابي  ❯");
-        panel.addView(signIn,space(dp(300),dp(62),7));
+        if(appUpdater!=null&&appUpdater.supported()){
+            LinearLayout actions=row();
+            actions.setGravity(Gravity.CENTER);
+            panel.addView(actions,space(-1,-2,4));
+            actions.addView(signIn,space(dp(183),dp(56),4));
+            Button updates=button("↻ تحديثات التطبيق");
+            actions.addView(updates,space(dp(172),dp(56),4));
+            updates.setOnClickListener(v->appUpdater.check(true));
+        }else panel.addView(signIn,space(dp(300),dp(62),7));
         username.setId(View.generateViewId());
         password.setId(View.generateViewId());
         signIn.setId(View.generateViewId());
