@@ -267,7 +267,8 @@
     }
     // On recent iOS releases Hls.js may work if native Safari rejected a HLS playlist.
     // Try it once only, and only for a genuine HLS source.
-    if (iosSafari && /\.m3u8([?#]|$)/i.test(failed) && !attemptedJsHls[failed] && !usingJsHls) {
+    if (iosSafari && /\.m3u8([?#]|$)/i.test(failed) && isPlayableUrl(failed) &&
+        !attemptedJsHls[failed] && !usingJsHls) {
       attemptedJsHls[failed] = true;
       toast("نجرب طريقة تشغيل ثانية لبث HLS على الآيفون.");
       playSelectedSource(failed, true);
@@ -537,7 +538,7 @@
     if (!url) {
       clearStage();
       if (window.AlezzCast) window.AlezzCast.detach("player");
-      fail("لا يوجد رابط تشغيل مسجّل لهذا العنصر."); return;
+      recoverSource("لا يوجد رابط تشغيل ساري؛ نتحقق من المصادر البديلة."); return;
     }
     if (!isPlayableUrl(url)) {
       clearStage(); fail("نوع الرابط غير مدعوم. استخدم رابط فيديو مباشرًا أو Embed من مصدر معتمد.");
