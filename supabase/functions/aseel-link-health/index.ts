@@ -403,6 +403,112 @@ async function discoverOpenMovies() {
   return summary;
 }
 
+
+const CAMINANDES_EPISODES=[
+  {name:"Llama Drama",number:1,min:2,year:2013,ar:"دراما اللاما"},
+  {name:"Gran Dillama",number:2,min:2,year:2013,ar:"جران ديلاما"},
+  {name:"Llamigos",number:3,min:3,year:2016,ar:"لاميغوس"}
+];
+async function discoverLicensedCaminandes() {
+  const output:any={series:"Caminandes",scanned:0,added:0,refreshed:0,skipped:[],errors:[]};
+  const prepared:any[]=[];
+  // Per-episode license can vary (CC BY / BY-SA); never assume the parent
+  // series' general CC license grants more than the episode's own metadata.
+  for(const episode of CAMINANDES_EPISODES) {
+    output.scanned++;
+    try {
+      const list=await blenderJson("https://video.blender.org/api/v1/search/videos?search="+
+        encodeURIComponent("Caminandes "+episode.name)+"&count=20&isLocal=true");
+      for(const entry of Array.isArray(list.data)?list.data:[]) {
+        const n=normalizedName(entry.name);
+        if(!n.includes("caminandes") || !n.includes(normalizedName(episode.name)) ||
+           /(trailer|teaser|behind|making|production)/i.test(n) ||
+           Number(entry.duration||0)<episode.min*60*0.6)continue;
+        if(!/^[0-9a-f-]{36}$/i.test(String(entry.uuid||"")))continue;
+        const v=await blenderJson("https://video.blender.org/api/v1/videos/"+entry.uuid);
+        const license=licenseAllowed(v);
+        if(!license || v.isLocal===false || Number(v.duration||0)<episode.min*60*0.6)continue;
+        let valid="";
+        for(const opt of mediaCandidates(v)) {
+          const checked=await probe(opt.url,"stream");
+          if(checked.kind==="healthy"){valid=opt.url;break;}
+        }
+        if(!valid)continue;
+        prepared.push({...episode,url:"https://video.blender.org/videos/watch/"+entry.uuid,
+          stream:valid,license,description:String(v.description||"").replace(/<[^>]*>/g," ").slice(0,800),
+          poster:officialBlender("https://video.blender.org"+String(v.thumbnailPath||""))?.href||null});
+        break;
+      }
+      if(!prepared.find(x=>x.number===episode.number))
+        output.skipped.push(episode.name+": no license-verified complete episode");
+    }catch(e){output.errors.push(episode.name+": "+String(e).slice(0,120));}
+  }
+  if(!prepared.length)return output;
+  const seriesRows=await rest("aseel_series",
+    "select=id,license_reference&title_original=ilike.Caminandes&limit=3");
+  let seriesId=String(seriesRows?.[0]?.id||"");
+  if(seriesId&&!String(seriesRows[0].license_reference||"").includes("Blender Foundation official")){
+    output.skipped.push("Caminandes is already owned/edited by an administrator");return output;
+  }
+  if(!seriesId) {
+    const series=await rest("aseel_series","",{
+      method:"POST",headers:{"Prefer":"return=representation"},
+      body:JSON.stringify({title_ar:"كاميناندس",title_original:"Caminandes",
+        description:"سلسلة أفلام رسوم متحركة قصيرة من Blender Studio عن مغامرات اللاما. كل حلقة تحت ترخيصها المسجل مع شارة الناشر الأصلي.",
+        release_year:2013,category_id:"632885b8-3a5f-4f5f-b756-c23655b3d1b8",
+        poster_url:prepared[0].poster,backdrop_url:prepared[0].poster,
+        status:"published",rights_status:"approved",rights_holder:"Blender Foundation / Blender Studio",
+        license_reference:"Blender Foundation official; episode-specific Creative Commons Attribution licenses; https://studio.blender.org/remixing/",
+        country_code:"NL",language_code:"en",is_kids:false,age_rating:"all",
+        genre_tags:["رسوم متحركة","كوميديا","مغامرة"],source_page_url:"https://studio.blender.org/films/"})
+    });
+    seriesId=String(series?.[0]?.id||"");
+  }
+  if(!seriesId)throw Error("Could not create verified Caminandes series");
+  let seasons=await rest("aseel_seasons","select=id&series_id=eq."+seriesId+"&number=eq.1&limit=1");
+  let seasonId=String(seasons?.[0]?.id||"");
+  if(!seasonId) {
+    seasons=await rest("aseel_seasons","",{
+      method:"POST",headers:{"Prefer":"return=representation"},
+      body:JSON.stringify({series_id:seriesId,number:1,title_ar:"الموسم الأول"})
+    });
+    seasonId=String(seasons?.[0]?.id||"");
+  }
+  if(!seasonId)throw Error("Could not create verified episode season");
+  for(const ep of prepared) {
+    const existing=await rest("aseel_episodes","select=id,source_page_url,stream_url,license_reference,status"+
+      "&season_id=eq."+seasonId+"&number=eq."+ep.number+"&limit=1");
+    if(existing?.length) {
+      if(existing[0].source_page_url!==ep.url ||
+        !String(existing[0].license_reference||"").includes("Blender Foundation official")) {
+        output.skipped.push(ep.name+": manually controlled entry remains unchanged");continue;
+      }
+      if(existing[0].stream_url!==ep.stream){
+        await rest("aseel_episodes","id=eq."+existing[0].id,{
+          method:"PATCH",body:JSON.stringify({stream_url:ep.stream,
+            link_health_status:"healthy",link_health_failures:0,
+            link_health_reason:"Verified updated official publisher video",link_health_checked_at:new Date().toISOString()})
+        });
+        output.refreshed++;
+      }
+      continue;
+    }
+    await rest("aseel_episodes","",{
+      method:"POST",headers:{"Prefer":"return=representation"},
+      body:JSON.stringify({season_id:seasonId,number:ep.number,title_ar:ep.ar,
+        description:ep.description+"\nBlender Foundation / Blender Studio — "+ep.license,
+        poster_url:ep.poster,duration_minutes:ep.min,stream_url:ep.stream,
+        stream_variants:[],rights_status:"approved",status:"published",
+        license_reference:"Blender Foundation official; "+ep.license+"; "+ep.url,
+        source_page_url:ep.url,genre_tags:["رسوم متحركة","كوميديا"],
+        link_health_status:"healthy",link_health_reason:"Verified CC-licensed official publisher episode",
+        link_health_checked_at:new Date().toISOString()})
+    });
+    output.added++;
+  }
+  return output;
+}
+
 Deno.serve(async(req:Request)=>{
   const cors = corsFor(req);
   const reply = (data: unknown, status=200) => new Response(JSON.stringify(data),
@@ -419,8 +525,14 @@ Deno.serve(async(req:Request)=>{
   // matching. This never exposes the catalogue or write operations publicly.
   if(body.mode==="licensed_discovery") {
     try{
-      const result=await discoverOpenMovies();
-      return reply({mode:"licensed_discovery",...result},result.errors.length?207:200);
+      const movies=await discoverOpenMovies();
+      const series=await discoverLicensedCaminandes().catch(e=>({errors:[String(e)],added:0,refreshed:0,scanned:0}));
+      const errors=[...(movies.errors||[]),...(series.errors||[])];
+      return reply({mode:"licensed_discovery",provider:"Blender Foundation official open media",movies,series,
+        scanned:Number(movies.scanned||0)+Number(series.scanned||0),
+        published:Number(movies.published||0)+Number(series.added||0),
+        refreshed:Number(movies.refreshed||0)+Number(series.refreshed||0),errors},
+        errors.length?207:200);
     }catch(e){return reply({error:"Licensed discovery failed: "+String(e).slice(0,160)},500);}
   }
   if(body.mode==="channel_inventory"){
