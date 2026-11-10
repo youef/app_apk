@@ -90,15 +90,36 @@ public final class PlaybackSources {
     }
     public static int preferred(ArrayList<Source> sources) {
         if(sources.isEmpty())return -1;
+        int fallback=-1;
+        // The original signed HLS source may have expired since the catalogue
+        // was loaded. Prefer the first still-valid source, including Embed.
+        for(int i=0;i<sources.size();i++)
+            if(!SignedStreamExpiry.expired(sources.get(i).url)) {
+                fallback=i;break;
+            }
+        if(fallback<0)return -1; // All explicitly dated sources have expired.
         if(Build.VERSION.SDK_INT<=19)
             for(int i=0;i<sources.size();i++)
-                if("mp4".equals(sources.get(i).kind) &&
+                if(!SignedStreamExpiry.expired(sources.get(i).url) &&
+                    "mp4".equals(sources.get(i).kind) &&
                     sources.get(i).url.toLowerCase(Locale.US).split("[?#]",2)[0].endsWith(".mp4"))
                     return i;
         for(int i=0;i<sources.size();i++)
-            if("hls".equals(sources.get(i).kind) || "mp4".equals(sources.get(i).kind))
+            if(!SignedStreamExpiry.expired(sources.get(i).url) &&
+                ("hls".equals(sources.get(i).kind) || "mp4".equals(sources.get(i).kind)))
                 return i;
-        return 0;
+        return fallback;
+    }
+
+    /** Offer a rights-approved embed as a last resort after direct media fails. */
+    public static Source alternateEmbed(Activity activity) {
+        if(activity==null || activity.getIntent().getBooleanExtra("kids_mode",false))return null;
+        String failed=activity.getIntent().getStringExtra("stream_url");
+        for(Source source:decode(activity.getIntent().getStringExtra("available_sources"))) {
+            if(source.url.equals(failed) || SignedStreamExpiry.expired(source.url))continue;
+            if("embed".equals(source.kind) || "youtube".equals(source.kind))return source;
+        }
+        return null;
     }
     public static String encode(ArrayList<Source> sources) {
         JSONArray result=new JSONArray();
