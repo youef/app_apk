@@ -426,10 +426,26 @@ public final class TVHomeActivity extends Activity {
         sub.setGravity(Gravity.CENTER);
         panel.addView(sub,space(-1,dp(42),3));
         final EditText username=new EditText(this),password=new EditText(this);
+        boolean tvKeyboard=getPackageManager().hasSystemFeature("android.software.leanback")
+            ||(getResources().getConfiguration().uiMode&android.content.res.Configuration.UI_MODE_TYPE_MASK)
+                ==android.content.res.Configuration.UI_MODE_TYPE_TELEVISION;
+        if(tvKeyboard)getWindow().setSoftInputMode(
+            android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN
+            |android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         for(EditText input:new EditText[]{username,password}){
             input.setSingleLine(true);input.setTextColor(WHITE);input.setHintTextColor(MUTED);
             input.setTextSize(18);input.setPadding(dp(17),dp(3),dp(17),dp(3));
             input.setBackgroundDrawable(bg(PANEL,0xFFB45165,13));
+            if(tvKeyboard){
+                if(android.os.Build.VERSION.SDK_INT>=21)input.setShowSoftInputOnFocus(false);
+                input.setOnClickListener(view->{
+                    view.requestFocus();
+                    android.view.inputmethod.InputMethodManager keyboard=
+                        (android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE);
+                    if(keyboard!=null)keyboard.showSoftInput(view,
+                        android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+                });
+            }
             panel.addView(input,space(dp(430),dp(57),5));
         }
         username.setHint("اسم المستخدم");username.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
@@ -449,8 +465,8 @@ public final class TVHomeActivity extends Activity {
         password.setNextFocusUpId(username.getId());
         password.setNextFocusDownId(signIn.getId());
         signIn.setNextFocusUpId(password.getId());
-        moveLoginFocus(username,null,password);
-        moveLoginFocus(password,username,signIn);
+        moveLoginFocus(username,null,password,tvKeyboard);
+        moveLoginFocus(password,username,signIn,tvKeyboard);
         signIn.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
             final String name=username.getText().toString().trim();
             final char[] secret=password.getText().toString().toCharArray();
@@ -491,8 +507,12 @@ public final class TVHomeActivity extends Activity {
         }
         username.requestFocus();
     }
-    private void moveLoginFocus(EditText field,View above,View below){
+    private void moveLoginFocus(EditText field,View above,View below,boolean tvKeyboard){
         field.setOnKeyListener((view,key,event)->{
+            if(tvKeyboard&&key==KeyEvent.KEYCODE_DPAD_CENTER){
+                if(event.getAction()==KeyEvent.ACTION_UP)field.performClick();
+                return true;
+            }
             View target=key==KeyEvent.KEYCODE_DPAD_DOWN?below:
                 key==KeyEvent.KEYCODE_DPAD_UP?above:null;
             if(target==null||!target.isEnabled())return false;
@@ -535,6 +555,7 @@ public final class TVHomeActivity extends Activity {
         }
         generation++;
         loading=false;
+        getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         unlocked=true;showingWelcome=false;
         section="home";buildShell();render();loadCatalog();
         ui.removeCallbacks(libraryHeartbeat);
