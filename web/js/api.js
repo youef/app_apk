@@ -1,7 +1,7 @@
 /* ============================================================================
    AL EZZ TV — catalogue layer
-   Reads the public Supabase catalogue (RLS: published rows only) and falls back
-   to a bundled snapshot so the app still opens on a TV without connectivity.
+   Reads the public Supabase catalogue. A failed request can reuse a recently
+   fetched table for a limited time.
    ========================================================================== */
 (function () {
   "use strict";
@@ -76,7 +76,8 @@
     collections: "aseel_home_collections",
     collection_items: "aseel_home_collection_items"
   };
-  var failedTables = [];
+  var recentTables = Object.create(null);
+  var MAX_OFFLINE_AGE_MS = 15 * 60 * 1000;
 
   function loadPaged(table) {
     var all = [];
@@ -97,43 +98,29 @@
 
   function loadLive() {
     var tables = ["categories", "movies", "series", "seasons", "episodes", "channels", "youtube", "collections", "collection_items"];
-    failedTables = [];
+    var failedTables = [];
+    var usedCache = false;
     return Promise.all(tables.map(function (t) {
-      var request = loadPaged(t);
-      return request.then(function (rows) {
-        return Array.isArray(rows) ? rows : [];
-      }, function () { failedTables.push(t); return []; });
+      return loadPaged(t).then(function (rows) {
+        recentTables[t] = { rows: rows, savedAt: Date.now() };
+        return rows;
+      }, function () {
+        failedTables.push(t);
+        var saved = recentTables[t];
+        var age = saved ? Date.now() - saved.savedAt : -1;
+        if (age >= 0 && age <= MAX_OFFLINE_AGE_MS) {
+          usedCache = true;
+          return saved.rows;
+        }
+        delete recentTables[t];
+        return [];
+      });
     })).then(function (results) {
       var out = {};
       tables.forEach(function (t, i) { out[t] = results[i]; });
-      // A partial connection failure must not erase the live TV section.
-      if (!out.channels.length && failedTables.indexOf("channels") !== -1) {
-        return loadSnapshot().then(function (saved) {
-          out.channels = saved.channels || [];
-          return out;
-        }, function () { return out; });
-      }
-      if (failedTables.length === tables.length) throw new Error("catalogue unavailable");
-      return out;
+      return { rows: out, failedTables: failedTables,
+        unavailable: failedTables.length === tables.length, usedCache: usedCache };
     });
-  }
-
-  function loadSnapshot() {
-    return fetch(CFG.snapshotUrl, { cache: "force-cache" })
-      .then(function (r) { if (!r.ok) throw new Error("snapshot " + r.status); return r.json(); })
-      .then(function (json) {
-        return {
-          categories: json.categories || [],
-          movies: json.movies || [],
-          series: json.series || [],
-          seasons: json.seasons || [],
-          episodes: json.episodes || [],
-          channels: json.channels || [],
-          youtube: json.youtube || [],
-          collections: json.collections || [],
-          collection_items: json.collection_items || []
-        };
-      });
   }
 
   /* ------------------------------------------------------------------ */
@@ -340,20 +327,14 @@
 
     /* returns {catalog, source} */
     load: function () {
-      return loadLive().then(function (raw) {
-        Catalog.source = "live";
-        Catalog.failedTables = failedTables.slice();
+      return loadLive().then(function (result) {
+        if (result.unavailable && !result.usedCache && !Catalog.state)
+          throw new Error("catalogue unavailable");
+        Catalog.source = result.usedCache ? "snapshot" : result.unavailable ? "offline" : "live";
+        Catalog.failedTables = result.failedTables;
         Catalog.loadedAt = Date.now();
-        Catalog.state = normalise(raw);
+        Catalog.state = normalise(result.rows);
         return Catalog.state;
-      }).catch(function () {
-        return loadSnapshot().then(function (raw) {
-          Catalog.source = "snapshot";
-        Catalog.failedTables = [];
-          Catalog.loadedAt = Date.now();
-          Catalog.state = normalise(raw);
-          return Catalog.state;
-        });
       });
     },
 

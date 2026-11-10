@@ -1280,6 +1280,7 @@
       if (Player.isOpen()) catalogNeedsRender = true;
       else { catalogNeedsRender = false; render(alreadyLoaded); }
       if (!alreadyLoaded && source === "snapshot") toast("تعذّر الاتصال — تم فتح النسخة المحفوظة");
+      if (source === "offline") toast("تعذّر تحديث المكتبة. تحقق من الاتصال لإعادة تحميل المحتوى.");
     }).catch(function () {
       if (catalog) return;
       view.innerHTML = '<div class="empty" style="padding-top:22vh"><strong>تعذّر تحميل المكتبة</strong>' +

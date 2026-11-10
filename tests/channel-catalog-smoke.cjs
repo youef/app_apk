@@ -11,7 +11,7 @@ assert.ok(native.includes('catalog.listPaged("aseel_channels"') &&
   native.includes("order=display_order.asc,created_at.desc,id.asc"),
   "Android TV pages approved channels and separately permits external links.");
 
-async function run(failChannels) {
+async function run() {
   const channels = Array.from({ length: 216 }, (_, i) => ({
     id: String(i + 1), title_ar: "قناة " + (i + 1),
     status: i === 215 ? "draft" : "published", link_health_status: "healthy",
@@ -19,36 +19,42 @@ async function run(failChannels) {
     playback_mode: "stream", stream_url: "https://example.org/live/" + i + ".m3u8"
   }));
   const requests = [];
+  let response = "full", now = 1000000;
   const view = { ALEZZ_CONFIG: {
     supabaseUrl: "https://mock.supabase.test", publishableKey: "publishable-test",
-    requestTimeout: 6000, snapshotUrl: "data/snapshot.json"
+    requestTimeout: 6000
   } };
   const fakeFetch = async url => {
     requests.push(String(url));
-    if (String(url).includes("data/snapshot.json")) return {
-      ok: true, json: async () => ({ channels: channels.slice(0, 32), movies: [] })
-    };
+    assert.ok(!String(url).includes("snapshot.json"), "bundled media must not be restored after unpublishing");
     const table = String(url).split("?")[0].split("/").pop();
-    if (table === "aseel_channels" && failChannels)
+    if (table === "aseel_channels" && response === "failed")
       return { ok: false, status: 503, json: async () => [] };
-    return { ok: true, json: async () => table === "aseel_channels" ? channels : [] };
+    return { ok: true, json: async () => table === "aseel_channels" && response === "full" ? channels : [] };
   };
-  new Function("window", "fetch", "setTimeout", "clearTimeout", source)(
-    view, fakeFetch, setTimeout, clearTimeout
+  new Function("window", "fetch", "setTimeout", "clearTimeout", "Date", source)(
+    view, fakeFetch, setTimeout, clearTimeout, { now: () => now }
   );
   const catalog = await view.AlezzApi.load();
-  assert.equal(catalog.channels.length, failChannels ? 32 : 214);
+  assert.equal(catalog.channels.length, 214);
   assert.ok(catalog.channels.every(channel => channel.rights.status === "approved"));
   assert.equal(requests.filter(x => x.includes("aseel_channels")).length, 1,
     "under 800 channels must require only one remote API call");
-  assert.equal(requests.some(x => x.includes("snapshot")), failChannels,
-    "the snapshot is only used when the channel API fails");
+  response = "failed";
+  assert.equal((await view.AlezzApi.load()).channels.length, 214, "recent successful catalogue survives a failed request");
+  now += 15 * 60 * 1000 + 1;
+  assert.equal((await view.AlezzApi.load()).channels.length, 0, "expired media is dropped after sustained connection loss");
+  response = "full";
+  await view.AlezzApi.load();
+  response = "empty";
+  assert.equal((await view.AlezzApi.load()).channels.length, 0, "successful empty results remove unpublished channels");
+  response = "failed";
+  assert.equal((await view.AlezzApi.load()).channels.length, 0, "fallback cannot resurrect removed channels");
 }
 
 (async () => {
-  await run(false);
-  await run(true);
-  console.log("PASS: only published and approved live channels are visible; fallback retains curated channels.");
+  await run();
+  console.log("PASS: published channels, bounded fallback, and no resurrection of removed rows.");
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;
