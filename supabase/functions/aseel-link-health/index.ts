@@ -353,7 +353,7 @@ async function discoverOpenMovies() {
         const poster=officialBlender("https://video.blender.org"+String(video.thumbnailPath||""));
         const backdrop=officialBlender("https://video.blender.org"+String(video.previewPath||""));
         const existing=await rest("aseel_movies","select=id,source_page_url,stream_url,license_reference,status,rights_status"+
-          "&or=(source_page_url.eq."+encodeURIComponent(url)+",title_original.ilike."+encodeURIComponent(spec.title)+")&limit=4");
+          "&title_original=ilike."+encodeURIComponent(spec.title)+"&limit=4");
         if(Array.isArray(existing)&&existing.length) {
           const owned=existing.find((x:any)=>x.source_page_url===url && String(x.license_reference||"").includes("Blender Foundation official"));
           if(!owned){summary.skipped.push(spec.title+": existing title is managed manually");matched=true;break;}
