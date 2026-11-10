@@ -10,6 +10,7 @@ on:
       - 'gradle/**'
       - 'gradle.properties'
       - 'web/alizz-tv-transparent.png'
+      - '.github/workflows/android-stable-release.yml'
   workflow_dispatch:
     inputs:
       version_name:
@@ -86,6 +87,14 @@ jobs:
           echo "AL_EZZ_MIN_VERSION=$VERSION_CODE" >> "$GITHUB_ENV"
           echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
           echo "RELEASE_TAG=al-ezz-stable-v$REQUESTED_VERSION" >> "$GITHUB_ENV"
+      - name: Validate keystore credentials before building
+        shell: bash
+        run: |
+          set -euo pipefail
+          keytool -list -keystore "$ORG_GRADLE_PROJECT_ezzStoreFile" \
+            -storepass "$ORG_GRADLE_PROJECT_ezzStorePassword" \
+            -alias "$ORG_GRADLE_PROJECT_ezzKeyAlias" >/dev/null
+          echo 'Signing keystore and alias validated (no sensitive data printed).'
       - name: Package original brand resources
         run: |
           mkdir -p app/src/main/res/drawable-nodpi
