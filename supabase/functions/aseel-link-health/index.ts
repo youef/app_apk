@@ -269,6 +269,130 @@ async function updateSeries(){
     });
   }
 }
+
+// Curated official-publisher discovery. Creative Commons is not inferred from a
+// free-to-watch page. Only the official Blender Foundation PeerTube instance,
+// exact known open-movie titles, and explicit redistributable licenses qualify.
+const BLENDER_OPEN_MOVIES=[
+  {title:"Big Buck Bunny",ar:"الأرنب الكبير باك",year:2008,min:10,genre:["رسوم متحركة","كوميديا"],rating:"all"},
+  {title:"Sintel",ar:"سينتل",year:2010,min:15,genre:["رسوم متحركة","مغامرة","فانتازيا"],rating:"13+"},
+  {title:"Tears of Steel",ar:"دموع من فولاذ",year:2012,min:12,genre:["خيال علمي","دراما"],rating:"13+"},
+  {title:"Spring",ar:"الربيع",year:2019,min:8,genre:["رسوم متحركة","فانتازيا"],rating:"all"},
+  {title:"Sprite Fright",ar:"رعب الغابة",year:2021,min:10,genre:["رعب","كوميديا","رسوم متحركة"],rating:"13+"},
+  {title:"Charge",ar:"الشحنة",year:2022,min:4,genre:["خيال علمي","أكشن"],rating:"13+"},
+  {title:"Wing It!",ar:"حلّق بها",year:2023,min:4,genre:["رسوم متحركة","كوميديا"],rating:"all"},
+  {title:"Singularity",ar:"التفرّد",year:2026,min:7,genre:["خيال علمي","رسوم متحركة"],rating:"all"}
+];
+function normalizedName(s:string) {
+  return String(s||"").toLocaleLowerCase("en").replace(/[^a-z0-9]+/g," ").trim();
+}
+function officialBlender(url:unknown) {
+  const u=safeUrl(url);
+  return u && (u.hostname==="video.blender.org" || u.hostname==="download.blender.org")?u:null;
+}
+async function blenderJson(url:string) {
+  const u=officialBlender(url);
+  if(!u||u.hostname!=="video.blender.org")throw Error("Publisher endpoint rejected");
+  const response=await fetch(u.href,{headers:{"Accept":"application/json"},signal:AbortSignal.timeout(10000)});
+  if(!response.ok)throw Error("Blender publisher API: "+response.status);
+  return response.json();
+}
+function licenseAllowed(video:any):string {
+  const label=String(video.licence?.label||video.license?.label||"").trim();
+  if(!label||/(non.?commercial|no.?derivatives|all rights reserved|standard|copyright)/i.test(label))return "";
+  if(/(?:CC[\s-]*BY|attribution)/i.test(label))return label.slice(0,100);
+  return "";
+}
+function mediaCandidates(video:any) {
+  const result:{url:string,label:string,rank:number}[]=[];
+  for(const f of Array.isArray(video.files)?video.files:[]) {
+    const url=String(f.fileUrl||"");
+    if(!officialBlender(url)||!/\.(?:mp4|m4v)(?:[?#]|$)/i.test(url))continue;
+    const height=Number(f.resolution?.id||0);
+    result.push({url,label:height>0?height+"p":"MP4",rank:height||400});
+  }
+  for(const f of Array.isArray(video.streamingPlaylists)?video.streamingPlaylists:[]) {
+    const url=String(f.playlistUrl||"");
+    if(officialBlender(url)&&/\.m3u8(?:[?#]|$)/i.test(url))
+      result.push({url,label:"HLS",rank:550});
+  }
+  return result.sort((a,b)=>Math.abs(a.rank-720)-Math.abs(b.rank-720)).slice(0,7);
+}
+async function discoverOpenMovies() {
+  const summary:any={provider:"Blender Foundation official open movies",scanned:0,published:0,refreshed:0,skipped:[],errors:[]};
+  // Bounded daily scan: two titles each run to avoid heavy public-service
+  // requests, and continuously revisit the complete curated catalog.
+  const day=Math.floor(Date.now()/86400000);
+  for(let offset=0;offset<2;offset++){
+    const spec=BLENDER_OPEN_MOVIES[(day*2+offset)%BLENDER_OPEN_MOVIES.length];
+    summary.scanned++;
+    try {
+      const query="https://video.blender.org/api/v1/search/videos?search="+encodeURIComponent(spec.title)+"&count=20&isLocal=true";
+      const list=await blenderJson(query);
+      const rows=Array.isArray(list.data)?list.data:[];
+      let matched=false;
+      for(const entry of rows) {
+        const title=normalizedName(entry.name);
+        const expected=normalizedName(spec.title);
+        if(!(title===expected||title===expected+" the movie"||title===expected+" full movie"||title===expected+" official film"))continue;
+        if(Number(entry.duration||0)<spec.min*60*0.70)continue; // no trailers
+        const id=entry.uuid;
+        if(!/^[0-9a-f-]{36}$/i.test(String(id||"")))continue;
+        const url="https://video.blender.org/videos/watch/"+id;
+        const video=await blenderJson("https://video.blender.org/api/v1/videos/"+id);
+        if(!video || video.isLocal===false || !licenseAllowed(video))continue;
+        if(Number(video.duration||0)<spec.min*60*0.70)continue;
+        const license=licenseAllowed(video);
+        const options=mediaCandidates(video);
+        let main="";
+        for(const candidate of options) {
+          const result=await probe(candidate.url,"stream");
+          if(result.kind==="healthy"){main=candidate.url;break;}
+        }
+        if(!main){summary.skipped.push(spec.title+": no verified playable direct video");continue;}
+        const poster=officialBlender("https://video.blender.org"+String(video.thumbnailPath||""));
+        const backdrop=officialBlender("https://video.blender.org"+String(video.previewPath||""));
+        const existing=await rest("aseel_movies","select=id,source_page_url,stream_url,license_reference,status,rights_status"+
+          "&or=(source_page_url.eq."+encodeURIComponent(url)+",title_original.ilike."+encodeURIComponent(spec.title)+")&limit=4");
+        if(Array.isArray(existing)&&existing.length) {
+          const owned=existing.find((x:any)=>x.source_page_url===url && String(x.license_reference||"").includes("Blender Foundation official"));
+          if(!owned){summary.skipped.push(spec.title+": existing title is managed manually");matched=true;break;}
+          if(owned.stream_url!==main){
+            await rest("aseel_movies","id=eq."+encodeURIComponent(String(owned.id)),{
+              method:"PATCH",body:JSON.stringify({stream_url:main,link_health_status:"healthy",
+                link_health_reason:"Fresh publisher source verified",link_health_failures:0,
+                link_health_checked_at:new Date().toISOString(),updated_at:new Date().toISOString()})
+            });
+            summary.refreshed++;
+          }else summary.skipped.push(spec.title+": already current");
+          matched=true;break;
+        }
+        // Official publisher's explicit CC licence + stream reachability are
+        // required; derived images are from the same publisher host.
+        const record={
+          title_ar:spec.ar,title_original:spec.title,release_year:spec.year,
+          description: String(video.description||spec.title).replace(/<[^>]*>/g," ").slice(0,1000)+
+            "\nالحقوق: Blender Foundation / Blender Studio — "+license+"؛ تُحفظ شارة الناشر وحقوق العمل.",
+          poster_url:poster?.href||null,backdrop_url:backdrop?.href||null,
+          category_id:"5bb35c4b-2757-4f56-9f1e-fa96d88c7314",
+          duration_minutes:Math.max(1,Math.round(Number(video.duration)/60)),language_code:"en",
+          country_code:"NL",quality:"Auto",stream_url:main,source_page_url:url,
+          stream_variants:[],genre_tags:spec.genre,is_kids:false,age_rating:spec.rating,
+          status:"published",rights_status:"approved",rights_holder:"Blender Foundation / Blender Studio",
+          license_reference:"Blender Foundation official; "+license+"; "+url+
+            "; https://studio.blender.org/remixing/",
+          link_health_status:"healthy",link_health_reason:"Verified official publisher media and license",
+          link_health_checked_at:new Date().toISOString(),imported_at:new Date().toISOString()
+        };
+        await rest("aseel_movies","",{method:"POST",headers:{"Prefer":"return=representation"},body:JSON.stringify(record)});
+        summary.published++;matched=true;break;
+      }
+      if(!matched)summary.skipped.push(spec.title+": exact full film and explicit license not found");
+    }catch(e){summary.errors.push(spec.title+": "+String(e).slice(0,150));}
+  }
+  return summary;
+}
+
 Deno.serve(async(req:Request)=>{
   const cors = corsFor(req);
   const reply = (data: unknown, status=200) => new Response(JSON.stringify(data),
@@ -283,6 +407,12 @@ Deno.serve(async(req:Request)=>{
   const body=await req.json().catch(()=>({}));
   // Authenticated GitHub Actions may read live-channel inventory for exact-ID
   // matching. This never exposes the catalogue or write operations publicly.
+  if(body.mode==="licensed_discovery") {
+    try{
+      const result=await discoverOpenMovies();
+      return reply({mode:"licensed_discovery",...result},result.errors.length?207:200);
+    }catch(e){return reply({error:"Licensed discovery failed: "+String(e).slice(0,160)},500);}
+  }
   if(body.mode==="channel_inventory"){
     try{
       const channels=await restAll("aseel_channels",
