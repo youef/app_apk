@@ -123,23 +123,23 @@ async function publicHost(url:URL) {
 // on another approved source. Expiry is metadata, never a signing mechanism.
 function signedExpiry(url:URL):number {
   const start=url.searchParams.get("s")||"", ttl=url.searchParams.get("e")||"";
-  if(/^\\d{10}$/.test(start) && /^\\d{1,6}$/.test(ttl) && url.searchParams.has("t")) {
+  if(/^\d{10}$/.test(start) && /^\d{1,6}$/.test(ttl) && url.searchParams.has("t")) {
     const s=Number(start), e=Number(ttl);
     if(s>=1500000000 && s<4000000000 && e>0 && e<=604800)return s+e;
   }
-  if(/^\\d{10}$/.test(ttl) && Number(ttl)>=1500000000)return Number(ttl);
+  if(/^\d{10}$/.test(ttl) && Number(ttl)>=1500000000)return Number(ttl);
   for(const name of ["expires","exp","expiry"]) {
     const value=url.searchParams.get(name)||"";
-    if(/^\\d{10}$/.test(value) && Number(value)>=1500000000)return Number(value);
+    if(/^\d{10}$/.test(value) && Number(value)>=1500000000)return Number(value);
   }
   return 0;
 }
 function approvedEmbedShape(url:URL):boolean {
   const host=url.hostname.toLowerCase(), path=url.pathname;
-  return (host==="fushaar.world" && /^\\/embed\\/v-[a-z0-9]+\\/?$/i.test(path)) ||
-    (host==="liiivideo.com" && /^\\/embed-[a-z0-9]+\\.html$/i.test(path)) ||
-    (host==="hanerix.com" && /^\\/e\\/[a-z0-9_-]+\\/?$/i.test(path)) ||
-    ((host==="1vid.xyz"||host==="www.1vid.xyz") && /^\\/embed-[a-z0-9_-]+\\.html$/i.test(path));
+  return (host==="fushaar.world" && /^\/embed\/v-[a-z0-9]+\/?$/i.test(path)) ||
+    (host==="liiivideo.com" && /^\/embed-[a-z0-9]+\.html$/i.test(path)) ||
+    (host==="hanerix.com" && /^\/e\/[a-z0-9_-]+\/?$/i.test(path)) ||
+    ((host==="1vid.xyz"||host==="www.1vid.xyz") && /^\/embed-[a-z0-9_-]+\.html$/i.test(path));
 }
 type Probe={kind:"healthy"|"definite"|"unknown",reason:string};
 async function probe(raw:unknown,mode:"stream"|"official"|"youtube"):Promise<Probe> {
