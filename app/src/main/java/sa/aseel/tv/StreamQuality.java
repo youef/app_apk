@@ -46,30 +46,41 @@ public final class StreamQuality {
     }
     public static int choose(ArrayList<Source> items,String preference,int api){
         if(items.isEmpty())return -1;
+        int first=-1;
+        for(int i=0;i<items.size();i++) {
+            if(!SignedStreamExpiry.expired(items.get(i).url)){first=i;break;}
+        }
+        if(first<0)return 0; // Let the player offer the fallback or report expiry.
         if(("auto".equals(preference)||preference==null) && api<=19){
             int mp4=-1;
             for(int i=0;i<items.size();i++){
-                if(items.get(i).url.toLowerCase(Locale.US).split("[?#]",2)[0].endsWith(".mp4")
+                if(!SignedStreamExpiry.expired(items.get(i).url) &&
+                   items.get(i).url.toLowerCase(Locale.US).split("[?#]",2)[0].endsWith(".mp4")
                    && (mp4<0||items.get(i).rank<items.get(mp4).rank))mp4=i;
             }
             if(mp4>=0)return mp4;
         }
-        if("default".equals(preference))return 0;
+        if("default".equals(preference))return first;
         if("highest".equals(preference)||"lowest".equals(preference)||"auto".equals(preference)){
             boolean low="lowest".equals(preference)||("auto".equals(preference)&&api<=19);
-            int best=0;
-            for(int i=1;i<items.size();i++)
+            int best=first;
+            for(int i=0;i<items.size();i++) {
+                if(SignedStreamExpiry.expired(items.get(i).url))continue;
                 if(low?items.get(i).rank<items.get(best).rank:items.get(i).rank>items.get(best).rank)best=i;
+            }
             return best;
         }
-        for(int i=0;i<items.size();i++)if(preference.equals(items.get(i).label))return i;
-        return 0;
+        for(int i=0;i<items.size();i++)
+            if(preference!=null && preference.equals(items.get(i).label) &&
+               !SignedStreamExpiry.expired(items.get(i).url))return i;
+        return first;
     }
     public static int lower(ArrayList<Source> items,int current){
         if(current<0||current>=items.size())return -1;
         int next=-1;
         for(int i=0;i<items.size();i++){
-            if(items.get(i).rank<items.get(current).rank &&
+            if(!SignedStreamExpiry.expired(items.get(i).url) &&
+                items.get(i).rank<items.get(current).rank &&
                 (next<0 || items.get(i).rank>items.get(next).rank))next=i;
         }
         return next;
