@@ -5,24 +5,30 @@ on:
     branches: [main]
     paths:
       - scripts/audit_world_sports.py
+      - scripts/audit_world_kids.py
+      - data/sports-iptv-review-20261110.json
       - .github/workflows/audit-world-sports.yml
+  schedule:
+    - cron: '37 */6 * * *'
 permissions:
   contents: read
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Probe sports manifests and sample reachability
+      - name: Validate Python syntax
+        run: python -m py_compile scripts/audit_world_kids.py scripts/audit_world_sports.py
+      - name: Probe sports manifests and reachable media segments
         run: python scripts/audit_world_sports.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: global-sports-stream-audit
+          name: sports-iptv-health-report
           path: kids-global-audit.json
-          if-no-files-found: ignore
-          retention-days: 7
+          if-no-files-found: warn
+          retention-days: 14
