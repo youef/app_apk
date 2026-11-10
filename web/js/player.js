@@ -33,6 +33,7 @@
   var iosSafari = /iPhone|iPad|iPod/i.test(navigator.userAgent || "") ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   var rejectedSources = [], attemptedJsHls = {}, errorHandledToken = -1, usingJsHls = false;
+  var catalogRecoveryAttempted = false;
   var fitMode = Store.pref("videoFit", "contain") === "cover" ? "cover" : "contain";
 
   function $(id) { return document.getElementById(id); }
@@ -272,8 +273,43 @@
       playSelectedSource(failed, true);
       return;
     }
+    // A permitted provider may have refreshed the catalogue since this player
+    // opened. Retry only once from our own Supabase record (never scrape pages).
+    if (!catalogRecoveryAttempted && !current.live && window.AlezzApi &&
+        typeof window.AlezzApi.freshPlayback === "function") {
+      catalogRecoveryAttempted = true;
+      var priorItem = current;
+      var parts = String(current.key || "").split(":");
+      toast("نتحقق من تحديث مصادر التشغيل...");
+      window.AlezzApi.freshPlayback(current.kind, parts[1] || "").then(function (fresh) {
+        if (current !== priorItem || el.root.hidden) return;
+        if (fresh && Array.isArray(fresh.variants)) {
+          current.stream = fresh.stream;
+          current.variants = fresh.variants;
+          current.youtubeId = fresh.youtubeId || current.youtubeId;
+          configureQualities(current);
+          for (var j = 0; j < qualitySources.length; j++) {
+            var alternative = qualitySources[j];
+            if (isPlayableUrl(alternative.url) && rejectedSources.indexOf(alternative.url) === -1) {
+              activeSourceIndex = j;
+              activeQuality = "source:" + j;
+              toast("وجدنا مصدرًا أحدث؛ جاري استئناف التشغيل...");
+              playSelectedSource(alternative.url, false);
+              renderQualityMenu();
+              return;
+            }
+          }
+        }
+        fail((message || sourceFailureMessage(0)) +
+          " جميع المصادر الحالية غير متاحة. يلزم تحديث رابط البث من مزوّد الخدمة.");
+      }).catch(function () {
+        if (current !== priorItem || el.root.hidden) return;
+        fail((message || sourceFailureMessage(0)) + " تعذر جلب المصادر المحدثة.");
+      });
+      return;
+    }
     fail((message || sourceFailureMessage(0)) +
-      " إذا استمرت المشكلة، يلزم تحديث رابط المصدر بملف متوافق مع Safari من لوحة الإدارة.");
+      " جميع المصادر الحالية غير متاحة. يلزم تحديث رابط البث من مزوّد الخدمة.");
   }
 
   function bindSubtitleTrack(item) {
@@ -410,7 +446,30 @@
       return /^[A-Za-z0-9_-]{11}$/.test(id)?id:"";
     } catch(e){return "";}
   }
+  // Detect only recognised server-issued expiry formats; never alter or
+  // fabricate a URL signature. Unknown formats use regular network fallback.
+  function expiredSignedSource(raw) {
+    try {
+      var u = new URL(String(raw || ""));
+      if(u.protocol !== "https:")return false;
+      var s = u.searchParams.get("s"), e = u.searchParams.get("e");
+      var expire = 0;
+      if(/^\d{10}$/.test(s || "") && /^\d{1,6}$/.test(e || "") &&
+          Number(e) > 0 && Number(e) <= 604800 && u.searchParams.has("t"))
+        expire = Number(s) + Number(e);
+      else if(/^\d{10}$/.test(e || "") && Number(e) >= 1500000000)
+        expire = Number(e);
+      if(!expire) {
+        var other = u.searchParams.get("expires") || u.searchParams.get("exp") ||
+          u.searchParams.get("expiry");
+        if(/^\d{10}$/.test(other || "") && Number(other) >= 1500000000)
+          expire = Number(other);
+      }
+      return expire > 0 && expire <= Date.now() / 1000 + 30;
+    }catch(_e){return false;}
+  }
   function sourceKind(value) {
+    if(expiredSignedSource(value))return "";
     if(youtubeSourceId(value))return "youtube";
     if(isEmbedUrl(value))return "embed";
     try {
@@ -444,7 +503,20 @@
     frame.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
     frame.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms allow-presentation");
     frame.src = url;
-    frame.addEventListener("load", function () { if (embedFrame === frame) show("playerSpinner", false); });
+    var embedLoaded = false;
+    var embedTimeout = setTimeout(function () {
+      if (embedFrame === frame && !embedLoaded)
+        recoverSource("تعذر تحميل مشغل التضمين الاحتياطي.");
+    }, 12000);
+    frame.addEventListener("load", function () {
+      embedLoaded = true;
+      clearTimeout(embedTimeout);
+      if (embedFrame === frame) show("playerSpinner", false);
+    });
+    frame.addEventListener("error", function () {
+      clearTimeout(embedTimeout);
+      if (embedFrame === frame) recoverSource("فشل تحميل مصدر التضمين الاحتياطي.");
+    });
     el.stage.appendChild(frame);
     show("playerSpinner", true);
     $("playerBadges").innerHTML = '<span class="chip chip--gold">Embed</span>';
@@ -460,7 +532,7 @@
     el.root.classList.remove("is-idle");
     configureQualities(item);
 
-    var url = activeStreamUrl || item.stream || (item.youtubeId ?
+    var url = activeStreamUrl || (isPlayableUrl(item.stream) ? item.stream : "") || (item.youtubeId ?
       "https://www.youtube-nocookie.com/embed/"+item.youtubeId : "");
     if (!url) {
       clearStage();
@@ -496,6 +568,7 @@
       rejectedSources = [];
       attemptedJsHls = {};
       errorHandledToken = -1;
+      catalogRecoveryAttempted = false;
       current = Object.assign({}, item);
       el.root.classList.remove("cinema--movie","cinema--series","cinema--live","cinema--kids");
       el.root.classList.add(current.kids?"cinema--kids":
