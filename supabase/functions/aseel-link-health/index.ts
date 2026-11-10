@@ -149,8 +149,18 @@ async function probe(raw:unknown,mode:"stream"|"official"|"youtube"):Promise<Pro
     const exp=signedExpiry(u);
     if(exp && exp<=Math.floor(Date.now()/1000)+30)
       return {kind:"definite",reason:"انتهت صلاحية رابط تشغيل موقّع؛ يلزم تجديد موثّق من مزود الخدمة"};
-    if(approvedEmbedShape(u))
-      return {kind:"unknown",reason:"مشغل Embed: استجابة الصفحة لا تثبت أن الفيديو يعمل. اختبار تشغيل مطلوب"};
+    if(approvedEmbedShape(u)) {
+      // An embed returning HTTP 200 proves only that the page exists.
+      // Only a definitive 404/410 is eligible for the 3-strike hide rule.
+      if(!(await publicHost(u)))
+        return {kind:"unknown",reason:"تعذر التحقق الآمن من مضيف التضمين"};
+      try {
+        const response=await fetch(u.href,{method:"HEAD",redirect:"manual",signal:AbortSignal.timeout(7000)});
+        if(response.status===404||response.status===410)
+          return {kind:"definite",reason:"صفحة التضمين غير موجودة (HTTP "+response.status+")"};
+        return {kind:"unknown",reason:"صفحة التضمين لا تثبت توفر الفيديو؛ يتطلب فحص تشغيل"};
+      }catch{return {kind:"unknown",reason:"تعذر الوصول إلى صفحة التضمين؛ لا يعد إثباتًا لتعطلها"};}
+    }
   }
   if(mode==="youtube"){
     const host=u.hostname.toLowerCase();
@@ -322,9 +332,9 @@ async function discoverOpenMovies() {
   const summary:any={provider:"Blender Foundation official open movies",scanned:0,published:0,refreshed:0,skipped:[],errors:[]};
   // Bounded daily scan: two titles each run to avoid heavy public-service
   // requests, and continuously revisit the complete curated catalog.
-  const day=Math.floor(Date.now()/86400000);
+  const cycle=Math.floor(Date.now()/43200000);
   for(let offset=0;offset<2;offset++){
-    const spec=BLENDER_OPEN_MOVIES[(day*2+offset)%BLENDER_OPEN_MOVIES.length];
+    const spec=BLENDER_OPEN_MOVIES[(cycle*2+offset)%BLENDER_OPEN_MOVIES.length];
     summary.scanned++;
     try {
       const query="https://video.blender.org/api/v1/search/videos?search="+encodeURIComponent(spec.title)+"&count=20&isLocal=true";
