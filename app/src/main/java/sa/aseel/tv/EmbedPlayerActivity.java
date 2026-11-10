@@ -67,7 +67,9 @@ public final class EmbedPlayerActivity extends Activity {
             String path = uri.getPath();
             if (host == null || path == null) return false;
             host = host.toLowerCase(java.util.Locale.US);
-            return (host.equals("hanerix.com") && path.matches("(?i)^/e/[a-z0-9_-]+/?$")) ||
+            return (host.equals("fushaar.world") && path.equals("/embed/v-hk8a7pgjqd/")) ||
+                (host.equals("liiivideo.com") && path.equals("/embed-ie536pnmp7qz.html")) ||
+                (host.equals("hanerix.com") && path.matches("(?i)^/e/[a-z0-9_-]+/?$")) ||
                 ((host.equals("1vid.xyz") || host.equals("www.1vid.xyz")) && path.matches("(?i)^/embed-[a-z0-9_-]+\\.html$")) ||
                 (host.equals("player.vimeo.com") && path.matches("^/video/[0-9]+/?$")) ||
                 (host.equals("www.dailymotion.com") && path.matches("(?i)^/embed/video/[a-z0-9_-]+/?$")) ||
@@ -82,7 +84,9 @@ public final class EmbedPlayerActivity extends Activity {
             if (uri.getUserInfo() != null || (uri.getPort() != -1 && uri.getPort() != 443))
                 return false;
             String host = uri.getHost();
-            return host != null && (host.equalsIgnoreCase("hanerix.com") ||
+            return host != null && ((host.equalsIgnoreCase("fushaar.world") && "/embed/v-hk8a7pgjqd/".equals(uri.getPath())) ||
+                (host.equalsIgnoreCase("liiivideo.com") && "/embed-ie536pnmp7qz.html".equals(uri.getPath())) ||
+                host.equalsIgnoreCase("hanerix.com") ||
                 host.equalsIgnoreCase("1vid.xyz") || host.equalsIgnoreCase("www.1vid.xyz") ||
                 host.equalsIgnoreCase("player.vimeo.com") ||
                 host.equalsIgnoreCase("www.dailymotion.com") ||
