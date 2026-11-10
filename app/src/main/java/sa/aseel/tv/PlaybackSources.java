@@ -97,7 +97,7 @@ public final class PlaybackSources {
             if(!SignedStreamExpiry.expired(sources.get(i).url)) {
                 fallback=i;break;
             }
-        if(fallback<0)return -1; // All explicitly dated sources have expired.
+        if(fallback<0)return 0; // No valid candidate; player reports the problem or retries.
         if(Build.VERSION.SDK_INT<=19)
             for(int i=0;i<sources.size();i++)
                 if(!SignedStreamExpiry.expired(sources.get(i).url) &&
