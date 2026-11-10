@@ -1,7 +1,7 @@
 name: Al Ezz TV — Link Health Agent
 on:
   schedule:
-    - cron: '23 */6 * * *'
+    - cron: '23 * * * *'
   push:
     branches: [main]
     paths:
@@ -124,9 +124,46 @@ jobs:
 
           # Series are hidden only when all published episodes are broken.
           request '{"mode":"series"}' "aseel_series"
-          echo "### Al Ezz TV — six-hour playback health report" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Al Ezz TV — hourly playback health report" >> "$GITHUB_STEP_SUMMARY"
           echo "Checked: $total_scanned; newly hidden: $newly_hidden; recovered: $recovered" >> "$GITHUB_STEP_SUMMARY"
           echo "Broken media stays editable in admin, but RLS hides it from public viewers." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Discover and renew CC-licensed films from official publisher
+        # The provider itself must publish an explicit, redistributable license.
+        # Twice daily, evaluate two titles per run; film credits are retained.
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          hour="$(date -u +%H)"
+          if [[ "${{ github.event_name }}" == "schedule" && "$hour" != "03" && "$hour" != "15" ]]; then
+            echo "Open-film discovery is scheduled at 03:xx and 15:xx UTC." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          endpoint="https://qyzmlwtvzzgooccqxglq.supabase.co/functions/v1/aseel-link-health"
+          oidc_response="$(curl --fail --silent --show-error --max-time 15 \
+            -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=al-ezz-media-link-health")"
+          oidc_token="$(jq -er '.value' <<< "$oidc_response")"
+          echo "::add-mask::$oidc_token"
+          response_file="$(mktemp)"
+          http="$(curl --silent --show-error --max-time 160 \
+            -o "$response_file" -w '%{http_code}' -X POST "$endpoint" \
+            -H "Authorization: Bearer $oidc_token" \
+            -H "Content-Type: application/json" \
+            --data-binary '{"mode":"licensed_discovery"}')"
+          jq -c '{mode,provider,scanned,published,refreshed,skipped,errors}' "$response_file"
+          echo "### Official CC-licensed catalogue discovery" >> "$GITHUB_STEP_SUMMARY"
+          jq -r '"Scanned: \(.scanned // 0); published: \(.published // 0); renewed: \(.refreshed // 0)"' "$response_file" >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$http" != "200" && "$http" != "207" ]]; then
+            echo "::error::Licensed discovery returned HTTP $http"
+            cat "$response_file"
+            exit 1
+          fi
+          if jq -e '(.errors // []) | length > 0' "$response_file" >/dev/null; then
+            echo "::warning::Some official sources are unavailable; no unlicensed content was imported."
+          fi
+          rm -f "$response_file"
 
       - name: Checkout verified live maintenance utility
         uses: actions/checkout@v4
