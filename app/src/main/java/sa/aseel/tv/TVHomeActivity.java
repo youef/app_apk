@@ -442,6 +442,15 @@ public final class TVHomeActivity extends Activity {
         panel.addView(feedback,space(-1,dp(43),3));
         final Button signIn=button("دخول حسابي  ❯");
         panel.addView(signIn,space(dp(300),dp(62),7));
+        username.setId(View.generateViewId());
+        password.setId(View.generateViewId());
+        signIn.setId(View.generateViewId());
+        username.setNextFocusDownId(password.getId());
+        password.setNextFocusUpId(username.getId());
+        password.setNextFocusDownId(signIn.getId());
+        signIn.setNextFocusUpId(password.getId());
+        moveLoginFocus(username,null,password);
+        moveLoginFocus(password,username,signIn);
         signIn.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
             final String name=username.getText().toString().trim();
             final char[] secret=password.getText().toString().toCharArray();
@@ -481,6 +490,15 @@ public final class TVHomeActivity extends Activity {
             retry.setOnClickListener(new View.OnClickListener(){public void onClick(View v){restoreMember();}});
         }
         username.requestFocus();
+    }
+    private void moveLoginFocus(EditText field,View above,View below){
+        field.setOnKeyListener((view,key,event)->{
+            View target=key==KeyEvent.KEYCODE_DPAD_DOWN?below:
+                key==KeyEvent.KEYCODE_DPAD_UP?above:null;
+            if(target==null||!target.isEnabled())return false;
+            if(event.getAction()==KeyEvent.ACTION_DOWN)target.requestFocus();
+            return true;
+        });
     }
     /** Explicit, remote-friendly subscription expiration screen (Android API 19+). */
     private void showExpiredScreen(){

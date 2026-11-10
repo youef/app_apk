@@ -1,10 +1,10 @@
-name: Al Ezz TV v16 — Stable Android Release (API19+)
+name: Al Ezz TV v16 — Legacy signing diagnostic (API19+)
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: al-ezz-tv-v16-production
@@ -146,34 +146,3 @@ jobs:
             dist/gradle-build.log
           retention-days: 90
           if-no-files-found: error
-
-      - name: Publish v16 stable GitHub release
-        if: github.ref == 'refs/heads/main'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          tag=al-ezz-tv-v16.0.0
-          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "::error::Stable v16.0.0 already exists. Refusing to overwrite a published release."
-            exit 1
-          fi
-          cat > dist/RELEASE-NOTES.md <<'NOTES'
-          # العز TV v16.0.0 — الإصدار النهائي
-          APK إنتاجي بتوقيع دائم ومُعرّف ثابت sa.alezz.tv، يدعم Android 4.4.4 (API19) فما فوق.
-          تطبيق مشاهدة للأفلام والمسلسلات والقنوات مع المشغل الأصلي، الريموت، متابعة المشاهدة، الجودة وملفات الأسرة والأطفال.
-          - ملف APK واحد يدعم ARMv7 وARM64 وx86 وx86_64.
-          - اجتاز فحص بنية APK وتوقيع V1 لتوافق Android 4.4 والاختبارات الآلية.
-          - الإصدارات التجريبية السابقة لها معرفات أخرى؛ ليست تحديثًا مباشرًا لها. احتفظ ببياناتها قبل الإزالة.
-          - يتطلب التحقق من التثبيت والتشغيل الفعلي على شاشة Android TV، وتختلف إتاحة المحتوى بحسب المصادر المرخصة.
-          NOTES
-          gh release create "$tag" \
-            dist/al-ezz-tv-v16.0.0-universal-api19.apk \
-            dist/install-metadata.txt \
-            dist/build-report.txt \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
-            --title "العز TV v16.0.0 — الإصدار النهائي (Android 4.4+)" \
-            --notes-file dist/RELEASE-NOTES.md \
-            --latest

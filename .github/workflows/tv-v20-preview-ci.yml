@@ -1,4 +1,4 @@
-name: Al Ezz TV v20.2 — Ultimate Preview
+name: Al Ezz TV v20.2.1 — Ultimate Preview
 
 on:
   push:
@@ -10,10 +10,15 @@ on:
       - 'web/**'
       - 'python-cloud-studio/**'
       - 'scripts/verify_apk.py'
+      - 'scripts/smoke_tv_install.py'
   workflow_dispatch:
 
 permissions:
   contents: read
+
+env:
+  PREVIEW_ARTIFACT: al-ezz-tv-v20.2.1-ultimate-preview
+  PREVIEW_APK: al-ezz-tv-v20.2.1-ultimate-preview.apk
 
 jobs:
   verify:
@@ -59,20 +64,63 @@ jobs:
           mkdir -p dist
           gradle clean testDebugUnitTest assembleDebug --no-daemon \
             -PezzApplicationId=sa.alezz.tv.preview \
-            -PezzVersionCode=200200 \
-            -PezzVersionName=20.2.0-preview 2>&1 | tee dist/gradle-build.log
+            -PezzVersionCode=200201 \
+            -PezzVersionName=20.2.1-preview 2>&1 | tee dist/gradle-build.log
           test -s app/build/outputs/apk/debug/app-debug.apk
-          cp app/build/outputs/apk/debug/app-debug.apk dist/al-ezz-tv-v20.2.0-ultimate-preview.apk
-          export AL_EZZ_EXPECTED_PACKAGE=sa.alezz.tv.preview AL_EZZ_MIN_VERSION=200200
-          python3 scripts/verify_apk.py dist/al-ezz-tv-v20.2.0-ultimate-preview.apk | tee dist/build-report.txt
-          (cd dist && sha256sum al-ezz-tv-v20.2.0-ultimate-preview.apk > al-ezz-tv-v20.2.0-ultimate-preview.sha256)
+          cp app/build/outputs/apk/debug/app-debug.apk "dist/$PREVIEW_APK"
+          export AL_EZZ_EXPECTED_PACKAGE=sa.alezz.tv.preview AL_EZZ_MIN_VERSION=200201
+          python3 scripts/verify_apk.py "dist/$PREVIEW_APK" | tee dist/build-report.txt
+          (cd dist && sha256sum "$PREVIEW_APK" > "$PREVIEW_ARTIFACT.sha256")
 
       - name: Upload test APK artifact (not compatible with in-place update)
         uses: actions/upload-artifact@v4
         with:
-          name: al-ezz-tv-v20.2.0-ultimate-preview
+          name: ${{ env.PREVIEW_ARTIFACT }}
           path: |
             dist/
             app/build/test-results/testDebugUnitTest/
           retention-days: 30
           if-no-files-found: error
+
+  tv-install:
+    name: Install the verified APK on Android TV
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.PREVIEW_ARTIFACT }}
+          path: qa
+      - name: Verify the downloaded APK digest
+        run: cd qa/dist && sha256sum --check "$PREVIEW_ARTIFACT.sha256"
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install, start and check DPAD navigation
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: android-tv
+          arch: x86
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          disable-animations: true
+          script: python3 scripts/smoke_tv_install.py "qa/dist/$PREVIEW_APK" qa
+      - name: Upload the emulator report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-tv-preview-install-verification
+          path: |
+            qa/*.txt
+            qa/*.xml
+            qa/*.png
+          if-no-files-found: warn

@@ -54,16 +54,19 @@ def run(apk, report):
     (report / "login-initial.xml").write_bytes(first)
     adb("shell", "input", "keyevent", "KEYCODE_DPAD_DOWN")
     after, after_fields = wait_for_login()
-    assert after_fields[1].get("focused") == "true", "DPAD down did not focus the password field"
     (report / "login-dpad.xml").write_bytes(after)
     (report / "login-tv.png").write_bytes(adb("exec-out", "screencap", "-p"))
+    assert after_fields[1].get("focused") == "true", "DPAD down did not focus the password field"
+    adb("shell", "input", "keyevent", "KEYCODE_DPAD_UP")
+    _, returned = wait_for_login()
+    assert returned[0].get("focused") == "true", "DPAD up did not return to the username"
 
     adb("shell", "am", "force-stop", PACKAGE)
     assert "Status: ok" in adb("shell", "am", "start", "-W", "-n", COMPONENT).decode()
     wait_for_login()
     summary = (f"PASS | Android TV emulator API {sdk}, fresh APK install\n"
                "PASS | TV launcher resolved and app started\n"
-               "PASS | DPAD moved focus from username to password\n"
+               "PASS | DPAD moved focus in both directions between username and password\n"
                "PASS | Login UI reopened after force-stop\n"
                "Scope: emulator, logged-out UI, fresh install only.\n")
     (report / "android-tv-smoke.txt").write_text(summary, encoding="utf-8")
