@@ -388,7 +388,9 @@
       var u = new URL(String(value || "").trim());
       if (u.protocol !== "https:" || u.username || u.password || (u.port && u.port !== "443")) return false;
       var host = u.hostname.toLowerCase(), path = u.pathname;
-      return (host === "hanerix.com" && /^\/e\/[a-z0-9_-]+\/?$/i.test(path)) ||
+      return (host === "fushaar.world" && path === "/embed/v-hk8a7pgjqd/") ||
+        (host === "liiivideo.com" && path === "/embed-ie536pnmp7qz.html") ||
+        (host === "hanerix.com" && /^\/e\/[a-z0-9_-]+\/?$/i.test(path)) ||
         ((host === "1vid.xyz" || host === "www.1vid.xyz") && /^\/embed-[a-z0-9_-]+\.html$/i.test(path)) ||
         (host === "player.vimeo.com" && /^\/video\/[0-9]+\/?$/.test(path)) ||
         (host === "www.dailymotion.com" && /^\/embed\/video\/[a-z0-9_-]+\/?$/i.test(path)) ||
