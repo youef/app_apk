@@ -62,7 +62,7 @@ ok("Native device registry uses Supabase authenticated RLS and admin can revoke"
  auth.includes('"alezz_devices_revoked_at"')&&portal.includes("DEVICE_REVOKED_KEY"));
 ok("Native accepts precise ISO-8601 subscription dates and administrator renewals",
  auth.includes("parseBackendTimestamp(raw)")&&
- auth.includes("SSSXXX")&&
+   auth.includes("BACKEND_TIMESTAMP")&&auth.includes("ss.SSSZ")&&
  auth.includes("if(isExpiredLocally(context))resume(context);")&&
    /if\(isExpiredLocally\(context\)\)\{\s+resume\(context\);/.test(auth)&&
  home.includes("final boolean cachedExpired=MemberAuth.isExpiredLocally(TVHomeActivity.this)")&&

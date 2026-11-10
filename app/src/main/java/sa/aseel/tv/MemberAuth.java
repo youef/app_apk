@@ -83,7 +83,7 @@ public final class MemberAuth {
             int status=connection.getResponseCode();
             if(status==401||status==400||status==403)
                 throw new AuthenticationException("بيانات الدخول غير صحيحة، أو الحساب غير مفعل.");
-            if(status==429)throw new AuthenticationException("محاولات كثيرة. أعد المحاولة لاحقًا.");
+            if(status==429)throw new java.io.IOException("محاولات كثيرة. أعد المحاولة لاحقًا.");
             if(status<200||status>=300)
                 throw new java.io.IOException("تعذّر الاتصال بخادم الحسابات (HTTP "+status+").");
             return new JSONObject(readLimited(connection.getInputStream()));
@@ -102,24 +102,22 @@ public final class MemberAuth {
      * precision. Android 4.4 does not provide java.time; all accepted formats
      * have explicit UTC or offset information and must match completely.
      */
-    private static java.util.Date parseBackendTimestamp(String raw){
+    private static final java.util.regex.Pattern BACKEND_TIMESTAMP=java.util.regex.Pattern.compile(
+        "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})(?:\\.(\\d{1,9}))?(Z|[+-]\\d{2}:\\d{2})$");
+    static java.util.Date parseBackendTimestamp(String raw){
         if(raw==null || raw.length()<20 || raw.length()>48)return null;
-        String iso=raw.trim().replaceFirst("(\\.\\d{3})\\d+(?=(?:Z|[+-]\\d{2}:\\d{2})$)","$1");
-        String[] patterns={
-            "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
-            "yyyy-MM-dd'T'HH:mm:ss'Z'",
-            "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
-            "yyyy-MM-dd'T'HH:mm:ssXXX"
-        };
-        for(String pattern:patterns){
-            SimpleDateFormat fmt=new SimpleDateFormat(pattern,Locale.US);
-            fmt.setTimeZone(TimeZone.getTimeZone("UTC"));
-            fmt.setLenient(false);
-            ParsePosition at=new ParsePosition(0);
-            java.util.Date value=fmt.parse(iso,at);
-            if(value!=null && at.getIndex()==iso.length())return value;
-        }
-        return null;
+        java.util.regex.Matcher stamp=BACKEND_TIMESTAMP.matcher(raw.trim());
+        if(!stamp.matches())return null;
+        String fraction=stamp.group(2);
+        String millis=((fraction==null?"":fraction)+"000").substring(0,3);
+        String offset=stamp.group(3);
+        String iso=stamp.group(1)+"."+millis+("Z".equals(offset)?"+0000":offset.replace(":",""));
+        SimpleDateFormat format=new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ",Locale.US);
+        format.setTimeZone(TimeZone.getTimeZone("UTC"));
+        format.setLenient(false);
+        ParsePosition at=new ParsePosition(0);
+        java.util.Date value=format.parse(iso,at);
+        return at.getIndex()==iso.length()?value:null;
     }
     private static long subscriptionDeadline(JSONObject user)throws AuthenticationException{
         JSONObject metadata=user.optJSONObject("app_metadata");

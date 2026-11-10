@@ -54,8 +54,9 @@ public final class CatalogApi {
                 boolean approvedLink="official_link".equals(mode)
                     && ("approved".equals(item.optString("rights_status",""))
                         || "pending".equals(item.optString("rights_status","")))
-                    && item.optString("stream_url","").isEmpty()
-                    && item.optString("youtube_url","").isEmpty()
+                    && (item.isNull("stream_url")||item.optString("stream_url","").isEmpty())
+                    && (item.isNull("youtube_url")||item.optString("youtube_url","").isEmpty())
+                    && !"broken".equals(item.optString("link_health_status",""))
                     && officialChannelLink(external);
                 if(!approvedLink){
                     if(!"approved".equals(item.optString("rights_status","")))continue;

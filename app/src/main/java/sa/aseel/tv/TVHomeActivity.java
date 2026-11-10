@@ -99,6 +99,16 @@ public final class TVHomeActivity extends Activity {
     private ImageView featuredArtwork;
     private JSONObject featuredItem;
     private Runnable pendingFeature;
+    private final ArrayList<JSONObject> featuredItems=new ArrayList<JSONObject>();
+    private int featuredIndex;
+    private final Runnable featureRotation=new Runnable(){public void run(){
+        if(!unlocked||detailVisible||!"home".equals(section)||featuredItems.size()<2)return;
+        if(!"featured:watch".equals(focusedItemTag())){
+            featuredIndex=(featuredIndex+1)%featuredItems.size();
+            applyFeatured(featuredItems.get(featuredIndex));
+        }
+        ui.postDelayed(this,10000L);
+    }};
     private int featureSelectionGeneration=0;
     private String section="home",lastRenderedSection="";
     private boolean detailVisible=false, showingWelcome=false;
@@ -111,6 +121,8 @@ public final class TVHomeActivity extends Activity {
     private boolean loading=false,unlocked=false;
     private static final long CATALOG_REFRESH_INTERVAL_MS=2L*60L*1000L;
     private String browseKind="movie",browseMode="all",browseKey="",browseTitle="عرض الكل",browseOrigin="home";
+    private static final int BROWSE_PAGE_SIZE=48;
+    private int browsePage;
     private int cardGridLimit=72;
     private final Runnable libraryHeartbeat=new Runnable(){public void run(){
         if(!unlocked||isFinishing())return;
@@ -503,6 +515,8 @@ public final class TVHomeActivity extends Activity {
         if(!MemberAuth.hasSession(this)){
             showMemberLogin("يرجى تسجيل الدخول بحساب عميل مفعل.");return;
         }
+        generation++;
+        loading=false;
         unlocked=true;showingWelcome=false;
         section="home";buildShell();render();loadCatalog();
         ui.removeCallbacks(libraryHeartbeat);
@@ -678,8 +692,17 @@ public final class TVHomeActivity extends Activity {
         }
     }
     private void featuredBanner(){
-        final JSONObject first=!movies.isEmpty()?movies.get(0):!series.isEmpty()?series.get(0):null;
-        if(first==null)return;
+        ui.removeCallbacks(featureRotation);
+        featuredItems.clear();
+        for(ArrayList<JSONObject> library:java.util.Arrays.asList(movies,series))
+            for(JSONObject item:library)
+                if(item.optBoolean("featured",false)&&featuredItems.size()<6)featuredItems.add(item);
+        if(featuredItems.isEmpty()){
+            featuredItems.addAll(movies.subList(0,Math.min(3,movies.size())));
+            featuredItems.addAll(series.subList(0,Math.min(3,series.size())));
+        }
+        if(featuredItems.isEmpty())return;
+        featuredIndex=Math.min(featuredIndex,featuredItems.size()-1);
         FrameLayout banner=new FrameLayout(this);
         banner.setFocusable(false);
         banner.setBackgroundDrawable(bg(0xFF190D18,0xAA91384D,20));
@@ -711,7 +734,8 @@ public final class TVHomeActivity extends Activity {
             Gravity.RIGHT|Gravity.BOTTOM);
         banner.addView(overlay,pos);
         content.addView(banner,space(-1,dp(Math.max(187,Math.min(235,screenHeightDp()/3))),6));
-        applyFeatured(first);
+        applyFeatured(featuredItems.get(featuredIndex));
+        ui.postDelayed(featureRotation,10000L);
     }
     private void portal(){
         LinearLayout heading=column();heading.setPadding(dp(12),dp(7),dp(12),dp(7));
@@ -1086,7 +1110,7 @@ public final class TVHomeActivity extends Activity {
         browseMode=mode;
         browseKey=key;
         browseTitle=title;
-        liveGuideLimit=48;
+        browsePage=0;
         goTo("browse");
         if("directory".equals(mode)){
             ArrayList<JSONObject> matches=filteredBrowseItems();
@@ -1099,6 +1123,29 @@ public final class TVHomeActivity extends Activity {
     private void closeBrowse(){
         goTo(browseOrigin);
         if(!browseOriginFocus.isEmpty())restorePosition(browseOriginFocus,browseOriginScroll);
+    }
+    private int browseStart(int count){
+        browsePage=Math.min(browsePage,Math.max(0,count-1)/BROWSE_PAGE_SIZE);
+        return browsePage*BROWSE_PAGE_SIZE;
+    }
+    private void browsePageControls(final ArrayList<JSONObject> list){
+        final int lastPage=(list.size()-1)/BROWSE_PAGE_SIZE;
+        if(lastPage==0)return;
+        LinearLayout controls=row();
+        content.addView(controls,space(-1,dp(66),4));
+        for(final int direction:new int[]{-1,1}){
+            Button button=button(direction<0?"الصفحة السابقة":"الصفحة التالية");
+            button.setEnabled(browsePage+direction>=0&&browsePage+direction<=lastPage);
+            controls.addView(button,new LinearLayout.LayoutParams(0,dp(52),1));
+            button.setOnClickListener(v->{
+                browsePage+=direction;
+                JSONObject first=list.get(browsePage*BROWSE_PAGE_SIZE);
+                render();
+                restorePosition(("channel".equals(browseKind)?"channel:":"item:"+browseKind+":")
+                    +value(first,"id"),0);
+            });
+        }
+        heading("صفحة "+(browsePage+1)+" من "+(lastPage+1),"");
     }
     private void rememberDetailOrigin(){
         if(!detailVisible){
@@ -1524,10 +1571,11 @@ public final class TVHomeActivity extends Activity {
             heading("لا توجد قنوات في هذا التصنيف","يمكن تغيير الفئة أو تحديث المكتبة.");
             return;
         }
-        int displayed=Math.min(liveGuideLimit,list.size());
+        int start=browseStart(list.size());
+        int end=Math.min(start+BROWSE_PAGE_SIZE,list.size());
         boolean paired=screenWidthDp()>=1000;
         LinearLayout pair=null;
-        for(int i=0;i<displayed;i++){
+        for(int i=start;i<end;i++){
             LinearLayout line=channelLine(list.get(i),channels.indexOf(list.get(i)));
             if(paired){
                 if(i%2==0){
@@ -1536,15 +1584,7 @@ public final class TVHomeActivity extends Activity {
                 pair.addView(line,new LinearLayout.LayoutParams(0,dp(84),1));
             }else content.addView(line);
         }
-        if(displayed<list.size()){
-            Button more=primaryButton("＋ عرض المزيد من القنوات ("+(list.size()-displayed)+")");
-            more.setTag("directory:more:channels");
-            content.addView(more,space(-1,dp(58),6));
-            more.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-                liveGuideLimit=Math.min(list.size(),liveGuideLimit+48);
-                render();
-            }});
-        }
+        browsePageControls(list);
     }
 
     private JSONObject findCatalogItem(String id,boolean isSeries){
@@ -1812,14 +1852,19 @@ public final class TVHomeActivity extends Activity {
     private void grid(String title,ArrayList<JSONObject> list){
         heading(title,list.size()+" عنوان متاح");
         if(list.isEmpty()){heading("لا يوجد محتوى منشور في هذا القسم","يمكن تحديث المكتبة أو إضافة أعمال من لوحة الإدارة.");return;}
+        final boolean browsing="browse".equals(section);
+        final int start=browsing?browseStart(list.size()):0;
+        final int end=Math.min(list.size(),browsing?start+BROWSE_PAGE_SIZE:cardGridLimit);
         final int columns=screenWidthDp()>=1060?5:screenWidthDp()>=760?4:3;
-        for(int base=0;base<Math.min(list.size(),cardGridLimit);base+=columns){
+        for(int base=start;base<end;base+=columns){
             LinearLayout row=row();row.setGravity(Gravity.TOP);
-            for(int i=base;i<Math.min(Math.min(base+columns,list.size()),cardGridLimit);i++)
-                row.addView(card(list.get(i),false),new LinearLayout.LayoutParams(0,dp(248),1));
+            for(int i=base;i<base+columns;i++)
+                row.addView(i<end?card(list.get(i),false):new View(this),
+                    new LinearLayout.LayoutParams(0,dp(248),1));
             content.addView(row,space(-1,-2,3));
         }
-        if(list.size()>cardGridLimit){
+        if(browsing)browsePageControls(list);
+        else if(list.size()>cardGridLimit){
             Button more=button("عرض المزيد  •  "+(list.size()-cardGridLimit)+" عنوان متبقي");
             more.setTag("grid:more");
             content.addView(more,space(-1,dp(56),5));
@@ -1840,7 +1885,9 @@ public final class TVHomeActivity extends Activity {
         imageSurface.setPadding(dp(4),dp(4),dp(4),dp(4));
         imageSurface.setClipChildren(true);
         outer.addView(imageSurface,new LinearLayout.LayoutParams(-1,dp(159)));
-        CinemaPosterView image=new CinemaPosterView(this);image.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        CinemaPosterView image=new CinemaPosterView(this);
+        image.setScaleType("movie".equals(kind(item))||"series".equals(kind(item))
+            ?ImageView.ScaleType.FIT_CENTER:ImageView.ScaleType.CENTER_CROP);
         image.setBackgroundDrawable(bg(0xFF412335,0,10));
         imageSurface.addView(image,new FrameLayout.LayoutParams(-1,-1));
         String poster=value(item,"poster_url");
@@ -2256,13 +2303,13 @@ public final class TVHomeActivity extends Activity {
             JSONArray playlist=new JSONArray();
             int selected=0;
             // Keep Android Binder intents below the transaction limit for large local IPTV lists.
-            ArrayList<JSONObject> available="browse".equals(section)&&"channel".equals(browseKind)
+            ArrayList<JSONObject> availableChannels="browse".equals(section)&&"channel".equals(browseKind)
                 ?filteredBrowseItems():channels;
-            int selectedGlobal=available.indexOf(item);
+            int selectedGlobal=availableChannels.indexOf(item);
             int from=Math.max(0,selectedGlobal-75);
-            int to=Math.min(available.size(),Math.max(from+150,selectedGlobal+76));
+            int to=Math.min(availableChannels.size(),Math.max(from+150,selectedGlobal+76));
             for(int channelIndex=from;channelIndex<to;channelIndex++){
-                JSONObject candidate=available.get(channelIndex);
+                JSONObject candidate=availableChannels.get(channelIndex);
                 if(kidsMode && !kidsDirect(candidate))continue;
                 if("live".equals(section) && !value(candidate,"id").equals(value(item,"id"))){
                     if(!"الكل".equals(activeChannelCompany) &&
@@ -2420,6 +2467,8 @@ public final class TVHomeActivity extends Activity {
     }
     @Override protected void onResume(){
         super.onResume();
+        ui.removeCallbacks(featureRotation);
+        if("home".equals(section))ui.postDelayed(featureRotation,10000L);
         if(unlocked){
             ui.removeCallbacks(entitlementGuard);
             ui.post(entitlementGuard);
@@ -2440,6 +2489,7 @@ public final class TVHomeActivity extends Activity {
     }
     @Override protected void onPause(){
         if(appUpdater!=null)appUpdater.onPause();
+        ui.removeCallbacks(featureRotation);
         ui.removeCallbacks(entitlementGuard);
         ui.removeCallbacks(libraryHeartbeat);
         super.onPause();
