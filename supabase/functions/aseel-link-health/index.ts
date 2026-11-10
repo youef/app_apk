@@ -119,10 +119,39 @@ async function publicHost(url:URL) {
     return true;
   }catch{return false;}
 }
+// Signed video URLs can become unusable even while the content is available
+// on another approved source. Expiry is metadata, never a signing mechanism.
+function signedExpiry(url:URL):number {
+  const start=url.searchParams.get("s")||"", ttl=url.searchParams.get("e")||"";
+  if(/^\\d{10}$/.test(start) && /^\\d{1,6}$/.test(ttl) && url.searchParams.has("t")) {
+    const s=Number(start), e=Number(ttl);
+    if(s>=1500000000 && s<4000000000 && e>0 && e<=604800)return s+e;
+  }
+  if(/^\\d{10}$/.test(ttl) && Number(ttl)>=1500000000)return Number(ttl);
+  for(const name of ["expires","exp","expiry"]) {
+    const value=url.searchParams.get(name)||"";
+    if(/^\\d{10}$/.test(value) && Number(value)>=1500000000)return Number(value);
+  }
+  return 0;
+}
+function approvedEmbedShape(url:URL):boolean {
+  const host=url.hostname.toLowerCase(), path=url.pathname;
+  return (host==="fushaar.world" && /^\\/embed\\/v-[a-z0-9]+\\/?$/i.test(path)) ||
+    (host==="liiivideo.com" && /^\\/embed-[a-z0-9]+\\.html$/i.test(path)) ||
+    (host==="hanerix.com" && /^\\/e\\/[a-z0-9_-]+\\/?$/i.test(path)) ||
+    ((host==="1vid.xyz"||host==="www.1vid.xyz") && /^\\/embed-[a-z0-9_-]+\\.html$/i.test(path));
+}
 type Probe={kind:"healthy"|"definite"|"unknown",reason:string};
 async function probe(raw:unknown,mode:"stream"|"official"|"youtube"):Promise<Probe> {
   let u=safeUrl(raw);
   if(!u)return {kind:"unknown",reason:"رابط غير آمن أو غير صالح للفحص التلقائي"};
+  if(mode==="stream") {
+    const exp=signedExpiry(u);
+    if(exp && exp<=Math.floor(Date.now()/1000)+30)
+      return {kind:"definite",reason:"انتهت صلاحية رابط تشغيل موقّع؛ يلزم تجديد موثّق من مزود الخدمة"};
+    if(approvedEmbedShape(u))
+      return {kind:"unknown",reason:"مشغل Embed: استجابة الصفحة لا تثبت أن الفيديو يعمل. اختبار تشغيل مطلوب"};
+  }
   if(mode==="youtube"){
     const host=u.hostname.toLowerCase();
     if(!["youtube.com","www.youtube.com","m.youtube.com","youtu.be","www.youtube-nocookie.com"].includes(host))
