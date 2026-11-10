@@ -325,6 +325,23 @@
     loadedAt: null,
     failedTables: [],
 
+    // Read the latest rights-approved playback sources, bypassing stale catalogue
+    // snapshots. The upstream signer must be refreshed by its authorised provider.
+    freshPlayback: function (kind, id) {
+      var name = kind === "movie" ? "movies" : kind === "episode" ? "episodes" : "";
+      if (!name || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(String(id || "")))
+        return Promise.resolve(null);
+      return rest(TABLE_PATHS[name], {
+        select: "id,stream_url,stream_variants,youtube_url,status,rights_status",
+        id: "eq." + id, limit: 1
+      }).then(function (rows) {
+        var row = Array.isArray(rows) && rows[0];
+        if (!row || row.status !== "published" || row.rights_status !== "approved") return null;
+        return { stream: row.stream_url || "", variants: Array.isArray(row.stream_variants) ? row.stream_variants : [],
+          youtubeId: row.youtube_url ? youtubeId(row.youtube_url) : "" };
+      });
+    },
+
     /* returns {catalog, source} */
     load: function () {
       return loadLive().then(function (result) {
