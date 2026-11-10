@@ -1,0 +1,144 @@
+name: Al Ezz TV — Stable signed release and in-app updates
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Stable version, e.g. 21.0.0'
+        required: true
+        type: string
+      release_notes:
+        description: 'What changed'
+        required: false
+        default: 'تحسينات الأداء والثبات والتوافق مع الشاشات.'
+        type: string
+permissions:
+  contents: write
+concurrency:
+  group: al-ezz-stable-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    env:
+      AL_EZZ_EXPECTED_PACKAGE: sa.alezz.tv
+      AL_EZZ_KEYSTORE_BASE64: ${{ secrets.AL_EZZ_KEYSTORE_BASE64 }}
+      AL_EZZ_STORE_PASSWORD: ${{ secrets.AL_EZZ_STORE_PASSWORD }}
+      AL_EZZ_KEY_ALIAS: ${{ secrets.AL_EZZ_KEY_ALIAS }}
+      AL_EZZ_KEY_PASSWORD: ${{ secrets.AL_EZZ_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Require permanent signing identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in AL_EZZ_KEYSTORE_BASE64 AL_EZZ_STORE_PASSWORD AL_EZZ_KEY_ALIAS AL_EZZ_KEY_PASSWORD; do
+            if [[ -z "${!key}" ]]; then
+              echo "::error::Missing signing secret $key. Refusing to publish an unupgradable debug APK."
+              exit 1
+            fi
+          done
+          umask 077
+          printf '%s' "$AL_EZZ_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/al-ezz-stable.jks"
+          test -s "$RUNNER_TEMP/al-ezz-stable.jks"
+          echo "ORG_GRADLE_PROJECT_ezzStoreFile=$RUNNER_TEMP/al-ezz-stable.jks" >> "$GITHUB_ENV"
+          echo "ORG_GRADLE_PROJECT_ezzStorePassword=$AL_EZZ_STORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "ORG_GRADLE_PROJECT_ezzKeyAlias=$AL_EZZ_KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "ORG_GRADLE_PROJECT_ezzKeyPassword=$AL_EZZ_KEY_PASSWORD" >> "$GITHUB_ENV"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-33" "build-tools;33.0.2"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '7.6'
+      - name: Prepare permanent app ID and increasing version
+        shell: bash
+        env:
+          REQUESTED_VERSION: ${{ inputs.version_name }}
+        run: |
+          set -euo pipefail
+          [[ "$REQUESTED_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Invalid version name"; exit 1; }
+          VERSION_CODE=$(( 300000 + GITHUB_RUN_NUMBER ))
+          echo "ORG_GRADLE_PROJECT_ezzApplicationId=sa.alezz.tv" >> "$GITHUB_ENV"
+          echo "ORG_GRADLE_PROJECT_ezzVersionCode=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "ORG_GRADLE_PROJECT_ezzVersionName=$REQUESTED_VERSION" >> "$GITHUB_ENV"
+          echo "AL_EZZ_MIN_VERSION=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=al-ezz-stable-v$REQUESTED_VERSION" >> "$GITHUB_ENV"
+      - name: Package original brand resources
+        run: |
+          mkdir -p app/src/main/res/drawable-nodpi
+          cp web/alizz-tv-transparent.png app/src/main/res/drawable-nodpi/alizz_brand.png
+      - name: Build release only
+        run: gradle assembleRelease --no-daemon --stacktrace
+      - name: Verify universal APK, stable ID, and release signature
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/release/app-release.apk dist/al-ezz-tv-stable.apk
+          python3 scripts/verify_apk.py dist/al-ezz-tv-stable.apk | tee dist/verification.txt
+          sha256sum dist/al-ezz-tv-stable.apk
+      - name: Publish immutable signed release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTES: ${{ inputs.release_notes }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Version tag already exists; releases are immutable."
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" dist/al-ezz-tv-stable.apk dist/verification.txt \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "العز TV $ORG_GRADLE_PROJECT_ezzVersionName — Stable" \
+            --notes "$NOTES" --latest
+      - name: Update signed stable feed after successful release
+        shell: bash
+        env:
+          NOTES: ${{ inputs.release_notes }}
+        run: |
+          set -euo pipefail
+          export APK_SHA256="$(sha256sum dist/al-ezz-tv-stable.apk | cut -d' ' -f1)"
+          export NOTES
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          doc = {
+              "schema": 1,
+              "channel": "stable",
+              "package_name": "sa.alezz.tv",
+              "version_code": int(os.environ["VERSION_CODE"]),
+              "version_name": os.environ["ORG_GRADLE_PROJECT_ezzVersionName"],
+              "download_url": "https://github.com/youef/app_apk/releases/download/"
+                  + os.environ["RELEASE_TAG"] + "/al-ezz-tv-stable.apk",
+              "sha256": os.environ["APK_SHA256"],
+              "notes": os.environ["NOTES"][:1000]
+          }
+          Path("data").mkdir(exist_ok=True)
+          Path("data/android-update.json").write_text(
+              json.dumps(doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/android-update.json
+          git commit -m "release(android): publish stable update manifest for $RELEASE_TAG [skip ci]"
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - name: Save verified APK as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: al-ezz-tv-stable-${{ github.run_number }}
+          path: |
+            dist/al-ezz-tv-stable.apk
+            dist/verification.txt
+          retention-days: 90
