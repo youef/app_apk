@@ -11,7 +11,6 @@ import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
-import android.os.Environment;
 import android.os.Handler;
 import android.provider.Settings;
 import android.util.Log;
@@ -21,7 +20,6 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.InputStream;
 import java.net.URL;
 import java.security.MessageDigest;
@@ -39,7 +37,6 @@ public final class AppUpdater {
     private static final String FEED="https://raw.githubusercontent.com/youef/app_apk/main/data/android-update.json";
     private static final String PACKAGE="sa.alezz.tv";
     private static final long CHECK_EVERY_MS=30L*60L*1000L;
-    private static final String FILENAME="al-ezz-tv-stable-update.apk";
     private final Activity activity;
     private final SharedPreferences preferences;
     private final Handler handler=new Handler();
@@ -196,26 +193,19 @@ public final class AppUpdater {
             handler.postDelayed(progress,500L);
         }catch(Exception invalid){forgetDownload();}
     }
-    private File outputFile(){
-        File dir=activity.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
-        return dir==null?null:new File(dir,FILENAME);
-    }
     private void beginDownload(){
         if(selected==null || downloading)return;
-        File target=outputFile();
-        if(target==null){say("تعذّر الوصول إلى مساحة تنزيل التحديث");return;}
         try{
             DownloadManager manager=(DownloadManager)activity.getSystemService(Context.DOWNLOAD_SERVICE);
             if(manager==null)throw new java.io.IOException("مدير التنزيل غير متاح");
-            // Only app-owned update files, never user media or other downloaded APKs.
-            if(target.exists()&&!target.delete())throw new java.io.IOException("تعذر استبدال ملف التحديث المؤقت");
+            // Let Android DownloadManager manage its own cache directory.
+            // Android TV firmware may prohibit /Android/data even for the owning app.
             DownloadManager.Request request=new DownloadManager.Request(Uri.parse(selected.getString("download_url")));
             request.setTitle("العز TV — تحديث رسمي");
             request.setDescription(selected.optString("version_name","نسخة أحدث"));
             request.setAllowedOverMetered(true);
             request.setAllowedOverRoaming(false);
             request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-            request.setDestinationInExternalFilesDir(activity,Environment.DIRECTORY_DOWNLOADS,FILENAME);
             downloadId=manager.enqueue(request);
             rememberDownload();
             downloading=true;
@@ -248,20 +238,38 @@ public final class AppUpdater {
         worker.execute(new Runnable(){public void run(){
             boolean valid=false;String error="";
             try{
-                File apk=outputFile();
-                if(apk==null||!apk.isFile()||apk.length()<1024)throw new java.io.IOException("APK غير مكتمل");
+                DownloadManager manager=(DownloadManager)activity.getSystemService(Context.DOWNLOAD_SERVICE);
+                if(manager==null||downloadId<=0)throw new java.io.IOException("التنزيل غير متاح");
+                Uri downloaded=manager.getUriForDownloadedFile(downloadId);
+                if(downloaded==null || !"content".equals(downloaded.getScheme()))
+                    throw new java.io.IOException("لم يتم العثور على ملف APK المكتمل");
+                // Copy to private cache solely for Android package signature verification.
+                // Never rely on an /Android/data external directory.
+                File apk=new File(activity.getCacheDir(),"al-ezz-verify-update.apk");
                 MessageDigest digest=MessageDigest.getInstance("SHA-256");
-                InputStream in=new FileInputStream(apk);
+                long length=0;
                 try{
-                    byte[] bytes=new byte[32768];int n;
-                    while((n=in.read(bytes))!=-1)digest.update(bytes,0,n);
-                }finally{in.close();}
-                StringBuilder hex=new StringBuilder();
-                for(byte b:digest.digest())hex.append(String.format(java.util.Locale.US,"%02x",b&255));
-                if(!hex.toString().equalsIgnoreCase(release.optString("sha256","")))
-                    throw new SecurityException("بصمة الملف لا تطابق الإصدار الرسمي");
-                PackageManager pm=activity.getPackageManager();
-                PackageInfo candidate=pm.getPackageArchiveInfo(apk.getAbsolutePath(),PackageManager.GET_SIGNATURES);
+                    InputStream in=activity.getContentResolver().openInputStream(downloaded);
+                    if(in==null)throw new java.io.IOException("تعذر قراءة الملف من مدير التنزيل");
+                    try{
+                        java.io.FileOutputStream out=new java.io.FileOutputStream(apk);
+                        try{
+                            byte[] bytes=new byte[32768];int n;
+                            while((n=in.read(bytes))!=-1){
+                                length+=n;
+                                if(length>500L*1024L*1024L)throw new java.io.IOException("حجم التحديث غير صالح");
+                                digest.update(bytes,0,n);
+                                out.write(bytes,0,n);
+                            }
+                        }finally{out.close();}
+                    }finally{in.close();}
+                    if(length<1024)throw new java.io.IOException("APK غير مكتمل");
+                    StringBuilder hex=new StringBuilder();
+                    for(byte b:digest.digest())hex.append(String.format(java.util.Locale.US,"%02x",b&255));
+                    if(!hex.toString().equalsIgnoreCase(release.optString("sha256","")))
+                        throw new SecurityException("بصمة الملف لا تطابق الإصدار الرسمي");
+                    PackageManager pm=activity.getPackageManager();
+                    PackageInfo candidate=pm.getPackageArchiveInfo(apk.getAbsolutePath(),PackageManager.GET_SIGNATURES);
                 PackageInfo installed=pm.getPackageInfo(activity.getPackageName(),PackageManager.GET_SIGNATURES);
                 if(candidate==null||!PACKAGE.equals(candidate.packageName)||
                     candidate.versionCode!=release.optInt("version_code")||
@@ -271,7 +279,10 @@ public final class AppUpdater {
                     installed.signatures==null||installed.signatures.length!=1||
                     !MessageDigest.isEqual(candidate.signatures[0].toByteArray(),installed.signatures[0].toByteArray()))
                     throw new SecurityException("شهادة توقيع APK مختلفة عن التطبيق المثبت");
-                valid=true;
+                    valid=true;
+                }finally{
+                    if(apk.exists()&&!apk.delete())Log.w(TAG,"Could not delete temporary verification APK");
+                }
             }catch(Exception e){error=e.getMessage()==null?"تعذر التحقق من APK":e.getMessage();Log.e(TAG,"APK verification rejected",e);}
             final boolean ok=valid;final String problem=error;
             handler.post(new Runnable(){public void run(){
