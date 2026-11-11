@@ -20,11 +20,11 @@ jobs:
             arch: x86_64
     steps:
       - uses: actions/checkout@v4
-      - name: Prepare Java for Gradle
+      - name: Java 17 for SDK tools
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '11'
+          java-version: '17'
       - name: Use runner Android SDK
         shell: bash
         run: |
@@ -34,6 +34,11 @@ jobs:
           SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -name sdkmanager -type f -print -quit)"
           test -n "$SDKMANAGER"
           "$SDKMANAGER" "platforms;android-33" "build-tools;33.0.2"
+      - name: Java 11 for legacy Android Gradle build
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
       - name: Build TV debug APK
         uses: gradle/actions/setup-gradle@v4
         with:
