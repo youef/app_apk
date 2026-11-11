@@ -2,9 +2,9 @@
   "schema": 1,
   "channel": "stable",
   "package_name": "sa.alezz.tv",
-  "version_code": 300009,
-  "version_name": "21.0.9",
-  "download_url": "https://github.com/youef/app_apk/releases/download/al-ezz-stable-v21.0.9/al-ezz-tv-stable.apk",
-  "sha256": "6cda0627cbe506ea7e8546b100c9d02ad2985097a1ff9782dfd2f2ae8375b4c4",
-  "notes": "نسخة ثابتة موقعة، تحسين إعداد Android SDK ودعم Android 12 مع الحفاظ على Android 4.4 كحد أدنى."
+  "version_code": 300010,
+  "version_name": "21.0.10",
+  "download_url": "https://github.com/youef/app_apk/releases/download/al-ezz-stable-v21.0.10/al-ezz-tv-stable.apk",
+  "sha256": "f4c8fe7a636995d737667b2147e397a1ccd577e819c9bd2cddccc183b69877b6",
+  "notes": ""
 }
