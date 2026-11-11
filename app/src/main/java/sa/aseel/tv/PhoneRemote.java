@@ -124,10 +124,10 @@ public final class PhoneRemote {
             "<button class='wide' onclick=\"send('play')\">تشغيل / إيقاف مؤقت</button>"+
             "<p id='state'></p><small>يعمل على نفس الشبكة فقط • تنتهي الجلسة تلقائيًا</small>"+
             "<script>const token=new URLSearchParams(location.hash.substring(1)).get('pair')||'';"+
-            "history.replaceState(null,'',location.pathname);"+
+            "if(!token){document.getElementById('state').textContent='رمز الاقتران مفقود. امسح QR من التلفزيون مجددًا';}"+
             "async function send(key){let box=document.getElementById('state');try{let r=await fetch('/command',{method:'POST',"+
             "headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'pair='+encodeURIComponent(token)+'&key='+encodeURIComponent(key)});"+
-            "box.textContent=r.ok?'✓ تم إرسال الأمر':'الجلسة منتهية أو التلفزيون غير متاح';}catch(e){box.textContent='تعذر الاتصال بالتلفزيون';}}</script></html>";
+            "box.textContent=r.ok?'✓ تم إرسال الأمر':'الجلسة منتهية أو التلفزيون غير متاح (HTTP '+r.status+')';}catch(e){box.textContent='تعذر الاتصال بالتلفزيون: تحقق من نفس الشبكة وأن شاشة العز TV مفتوحة';}}</script></html>";
     }
     private static String readBody(java.io.InputStream in,int count)throws Exception{
         if(count<0||count>512)throw new IllegalArgumentException("invalid body");
@@ -173,7 +173,7 @@ public final class PhoneRemote {
         String head="HTTP/1.1 "+status+" "+(status==200?"OK":status==403?"Forbidden":"Not Found")+"\r\n"+
             "Content-Type: "+type+"\r\nContent-Length: "+bytes.length+"\r\n"+
             "Cache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n"+
-            "Content-Security-Policy: default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'\r\n"+
+            "Content-Security-Policy: default-src 'none'; connect-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'\r\n"+
             "Connection: close\r\n\r\n";
         OutputStream out=client.getOutputStream();
         out.write(head.getBytes("UTF-8"));out.write(bytes);out.flush();
