@@ -57,7 +57,7 @@ public final class EpisodeAlerts {
                         String id=season==null?"":season.optString("id","");
                         if(!id.matches("[a-fA-F0-9-]{36}"))continue;
                         JSONArray episodes=api.listPaged("aseel_episodes",
-                            "?select=id&season_id=eq."+id+
+                            "?select=*&season_id=eq."+id+
                             "&status=eq.published&rights_status=eq.approved&order=number.asc");
                         count+=episodes.length();
                     }
