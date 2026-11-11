@@ -2,9 +2,9 @@
   "schema": 1,
   "channel": "stable",
   "package_name": "sa.alezz.tv",
-  "version_code": 0,
-  "version_name": "unreleased",
-  "download_url": "",
-  "sha256": "",
-  "notes": "Stable version metadata is only populated after verified, permanently signed GitHub Actions release."
+  "version_code": 300008,
+  "version_name": "21.0.8",
+  "download_url": "https://github.com/youef/app_apk/releases/download/al-ezz-stable-v21.0.8/al-ezz-tv-stable.apk",
+  "sha256": "efcf1d4a719e33eb4652fc60a1a447e3817512e1df5e7632ab40cc4a4f51973a",
+  "notes": ""
 }
