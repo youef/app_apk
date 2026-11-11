@@ -1368,6 +1368,32 @@ public final class TVHomeActivity extends Activity {
                 if("settings".equals(section))render();
             }});
     }
+    public void remoteHome(){goTo("home");}
+    private void showPhoneRemote(){
+        try{
+            final String url=PhoneRemote.start(this);
+            PhoneRemote.setForeground(this);
+            LinearLayout pane=column();
+            pane.setPadding(dp(18),dp(16),dp(18),dp(14));
+            pane.setGravity(Gravity.CENTER);
+            ImageView image=new ImageView(this);
+            image.setImageBitmap(PhoneRemote.qr(url));
+            image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            pane.addView(image,new LinearLayout.LayoutParams(dp(260),dp(260)));
+            TextView address=text(url.substring(0,url.indexOf("/#"))+"/",14,WHITE,false);
+            address.setGravity(Gravity.CENTER);
+            pane.addView(address,space(-1,dp(42),5));
+            new android.app.AlertDialog.Builder(this)
+                .setTitle("ريموت الجوال • QR")
+                .setMessage("صوّر الرمز من الجوال المتصل بنفس شبكة التلفزيون. التحكم متاح لمدة 20 دقيقة، ويمكن إيقافه من الإعدادات. لا تشارك الرمز.")
+                .setView(pane)
+                .setPositiveButton("إغلاق",null)
+                .show();
+        }catch(Exception e){
+            android.widget.Toast.makeText(this,"تعذر تشغيل ريموت الجوال: "+e.getMessage(),
+                android.widget.Toast.LENGTH_LONG).show();
+        }
+    }
     private void settingsScreen(){
         heading("الإعدادات","تخصيص تجربة العز TV • التفضيلات محفوظة على هذا الجهاز فقط");
         heading("حساب المشاهدة","مسجل الدخول: "+MemberAuth.username(this));
@@ -1443,6 +1469,30 @@ public final class TVHomeActivity extends Activity {
             prefs.edit().putBoolean("auto_refresh",!prefs.getBoolean("auto_refresh",true)).apply();
             render();
         }});
+        heading("إدارة التخزين","تنظيف الصور والملفات المؤقتة فقط — المفضلة والحسابات وتقدم المشاهدة تبقى محفوظة.");
+        final long posters=PosterLoader.cachedBytes(this);
+        Button cleanPosters=button("🧹 تنظيف بوسترات مؤقتة • "+String.format(Locale.US,"%.1f",posters/1048576.0)+" MB");
+        content.addView(cleanPosters,space(-1,dp(58),5));
+        cleanPosters.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            new android.app.AlertDialog.Builder(TVHomeActivity.this)
+                .setTitle("حذف بوسترات التخزين المؤقت")
+                .setMessage("لن تُحذف المفضلة أو سجلات المشاهدة أو بيانات الحساب. ستُحمّل الصور من جديد عند الحاجة.")
+                .setPositiveButton("تنظيف",(d,w)->{
+                    long bytes=PosterLoader.clearPosterCache(TVHomeActivity.this);
+                    android.widget.Toast.makeText(TVHomeActivity.this,
+                        "تم تحرير "+String.format(Locale.US,"%.1f",bytes/1048576.0)+" MB",android.widget.Toast.LENGTH_LONG).show();
+                    render();
+                }).setNegativeButton("إلغاء",null).show();
+        }});
+        heading("الريموت عبر الجوال","امسح رمز QR بكاميرا الجوال المتصل بنفس الشبكة، ثم تحكم بالأسهم وOK والتشغيل.");
+        Button phoneRemote=primaryButton("▦  عرض باركود ريموت الجوال");
+        content.addView(phoneRemote,space(-1,dp(58),5));
+        phoneRemote.setOnClickListener(v->showPhoneRemote());
+        if(PhoneRemote.active()){
+            Button revoke=button("✕ إلغاء اقتران الجوال الآن");
+            content.addView(revoke,space(-1,dp(54),4));
+            revoke.setOnClickListener(v->{PhoneRemote.stop();render();});
+        }
         heading("إصدار التطبيق","تحديثات المحتوى تظهر دون تنزيل APK، أما تحديث التطبيق فيُنزّل ويُثبّت بعد موافقتك.");
         Button updateApp=primaryButton("↻ فحص إصدار APK جديد وتحديث التطبيق");
         updateApp.setTag("settings:app-update");
@@ -2615,6 +2665,7 @@ public final class TVHomeActivity extends Activity {
     }
     @Override protected void onResume(){
         super.onResume();
+        PhoneRemote.setForeground(this);
         ui.removeCallbacks(featureRotation);
         if("home".equals(section))ui.postDelayed(featureRotation,10000L);
         if(unlocked){
@@ -2636,6 +2687,7 @@ public final class TVHomeActivity extends Activity {
         }
     }
     @Override protected void onPause(){
+        PhoneRemote.clearForeground(this);
         if(appUpdater!=null)appUpdater.onPause();
         ui.removeCallbacks(featureRotation);
         ui.removeCallbacks(entitlementGuard);
@@ -2643,6 +2695,7 @@ public final class TVHomeActivity extends Activity {
         super.onPause();
     }
     @Override protected void onDestroy(){
+        PhoneRemote.stop();
         ui.removeCallbacks(entitlementGuard);
         if(appUpdater!=null)appUpdater.stop();
         generation++;episodeGeneration++;localPlaylistGeneration++;unlocked=false;background.shutdownNow();ui.removeCallbacks(remoteChannelCommit);ui.removeCallbacksAndMessages(null);
