@@ -628,6 +628,7 @@ public final class TVHomeActivity extends Activity {
         if("kids".equals(s))return "عالم الأطفال";
         if("favorites".equals(s))return "قائمتي";
         if("settings".equals(s))return "الإعدادات";
+        if("watching".equals(s))return "مشاهداتي";
         if("account".equals(s))return "حسابي واشتراكي";
         if("profiles".equals(s))return "بروفايلات المشاهدة";
         if("search".equals(s))return "البحث";
@@ -783,7 +784,6 @@ public final class TVHomeActivity extends Activity {
         heading.addView(text("اختر عالمك",33,WHITE,true));
         heading.addView(text("اختر ما تريد مشاهدته — أقسام واضحة بالريموت",15,MUTED,false));
         featuredBanner();
-        showContinueWatching(false);
         final String[][] main={
             {"المسلسلات","المواسم والحلقات","series"},
             {"الأفلام","مكتبة السينما","movies"},
@@ -803,7 +803,7 @@ public final class TVHomeActivity extends Activity {
         TextView secondaryTitle=text("المزيد",16,MUTED,true);
         content.addView(secondaryTitle,space(-1,dp(29),7));
         final String[][] small={
-            {"الأطفال","kids"},{"قائمتي","favorites"},{"البحث","search"},{"الإعدادات","settings"}
+            {"الأطفال","kids"},{"قائمتي","favorites"},{"البحث","search"},{"مشاهداتي","watching"},{"الإعدادات","settings"}
         };
         LinearLayout secondary=row();
         secondary.setFocusable(false);
@@ -1052,6 +1052,7 @@ public final class TVHomeActivity extends Activity {
             showHomeLibrary();
         }else if("browse".equals(section)){
             ArrayList<JSONObject> matches=filteredBrowseItems();
+            sectionSearchBar("ابحث داخل "+browseTitle,matches);
             if("channel".equals(browseKind))channelBrowse(browseTitle,matches);
             else grid(browseTitle,matches);
         }else if("movies".equals(section)){
@@ -1063,7 +1064,10 @@ public final class TVHomeActivity extends Activity {
         else if("live".equals(section)){
             categoryDirectory("channel");
         }
-        else if("youtube".equals(section))grid("مقاطع يوتيوب للأطفال",youtubeVideos);
+        else if("youtube".equals(section)){
+            sectionSearchBar("ابحث في يوتيوب الأطفال",youtubeVideos);
+            grid("مقاطع يوتيوب للأطفال",youtubeVideos);
+        }
         else if("kids".equals(section)){
             heading("عالم الأطفال المستقل","قنوات وأفلام بروابط MP4/HLS مباشرة، بدون مشغل يوتيوب.");
             LinearLayout ages=row();content.addView(ages,space(-1,-2,7));
@@ -1087,6 +1091,7 @@ public final class TVHomeActivity extends Activity {
             for(JSONObject x:series)if(x.optBoolean("is_kids",false) &&
                 "approved".equals(value(x,"rights_status")) && kidsAgeAllowed(value(x,"age_rating")))kids.add(x);
             for(JSONObject x:channels)if(kidsDirect(x))kids.add(x);
+            sectionSearchBar("ابحث في عالم الأطفال",kids);
             grid("محتوى أطفال ملائم للشاشة",kids);
         }else if("favorites".equals(section)){
             showContinueWatching(false);
@@ -1095,7 +1100,19 @@ public final class TVHomeActivity extends Activity {
             for(JSONObject x:series)if(isFavorite(x))list.add(x);
             for(JSONObject x:channels)if(isFavorite(x))list.add(x);
             for(JSONObject x:youtubeVideos)if(isFavorite(x))list.add(x);
+            sectionSearchBar("ابحث في قائمتي",list);
             grid("قائمتي",list);
+        }else if("watching".equals(section)){
+            heading("مشاهداتي","أكمل الأفلام والحلقات من الموضع الذي توقفت عنده");
+            ArrayList<JSONObject> recentItems=new ArrayList<JSONObject>();
+            for(JSONObject progress:PlaybackMemory.recent(this,PlaybackMemory.activeProfile(this))){
+                String seriesId=progress.optString("series_id","");
+                JSONObject item=findCatalogItem(seriesId.isEmpty()?progress.optString("id",""):seriesId,!seriesId.isEmpty());
+                if(item!=null&&!recentItems.contains(item))recentItems.add(item);
+            }
+            sectionSearchBar("ابحث في سجل المشاهدة",recentItems);
+            showContinueWatching(false);
+            if(recentItems.isEmpty())heading("لا توجد مشاهدات بعد","ابدأ مشاهدة فيلم أو مسلسل ليظهر هنا.");
         }else if("search".equals(section))searchScreen();
         else if("settings".equals(section))settingsScreen();
         else if("account".equals(section))accountScreen();
@@ -1546,6 +1563,7 @@ public final class TVHomeActivity extends Activity {
             "channel".equals(mediaKind)?"القنوات المباشرة":"الأفلام";
         heading("تصنيفات "+mediaTitle,
             "اختر مربع الفئة لعرض الأعمال المرتبطة بها • تُحدَّث التصنيفات تلقائيًا");
+        sectionSearchBar("ابحث في "+mediaTitle,source);
         ArrayList<TvCategoryDirectory.Tile> tiles=TvCategoryDirectory.tiles(source,mediaKind);
         final int screen=screenWidthDp();
         final int columns=screen>=1250?6:screen>=950?5:screen>=670?4:screen>=460?3:2;
@@ -2423,6 +2441,49 @@ public final class TVHomeActivity extends Activity {
         player.putExtra("title",label(selected));
         player.putExtra("playlist_json",queue.toString());
         startActivity(player);
+    }
+    /** Search is restricted to the current screen's catalog, never other sections. */
+    private void sectionSearchBar(String hint,final ArrayList<JSONObject> source){
+        LinearLayout controls=row();
+        controls.setGravity(Gravity.CENTER_VERTICAL);
+        content.addView(controls,space(-1,dp(65),5));
+        final EditText input=new EditText(this);
+        input.setSingleLine(true);
+        input.setTextSize(17);
+        input.setTextColor(WHITE);
+        input.setHintTextColor(MUTED);
+        input.setHint(hint);
+        input.setBackgroundDrawable(bg(PANEL,RED,12));
+        input.setPadding(dp(16),0,dp(16),0);
+        controls.addView(input,new LinearLayout.LayoutParams(0,dp(55),1));
+        final LinearLayout results=column();
+        Button find=button("⌕ بحث");
+        controls.addView(find,space(dp(132),dp(54),5));
+        content.addView(results,space(-1,-2,4));
+        final Runnable perform=new Runnable(){public void run(){
+            results.removeAllViews();
+            String query=input.getText().toString().trim().toLowerCase(Locale.ROOT);
+            if(query.isEmpty())return;
+            int count=0;
+            for(final JSONObject item:source){
+                if(!label(item).toLowerCase(Locale.ROOT).contains(query))continue;
+                final Button match=button(label(item));
+                results.addView(match,space(-1,dp(51),3));
+                match.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                    ((InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE))
+                        .hideSoftInputFromWindow(input.getWindowToken(),0);
+                    detail(item);
+                }});
+                if(++count>=40)break;
+            }
+            if(count==0)results.addView(text("لا توجد نتائج في هذا القسم",15,MUTED,false));
+        }};
+        find.setOnClickListener(new View.OnClickListener(){public void onClick(View v){perform.run();}});
+        input.setOnEditorActionListener(new TextView.OnEditorActionListener(){
+            public boolean onEditorAction(TextView v,int actionId,KeyEvent event){
+                perform.run();return true;
+            }
+        });
     }
     private void searchScreen(){
         heading("البحث","ابحث في جميع العناوين المنشورة");
