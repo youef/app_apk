@@ -15,6 +15,9 @@ import android.os.Handler;
 import android.provider.Settings;
 import android.util.Log;
 import android.widget.Toast;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+import android.widget.LinearLayout;
 
 import org.json.JSONObject;
 
@@ -45,6 +48,9 @@ public final class AppUpdater {
     private boolean active,stopped,verified,installerOpened,prompting;
     private long downloadId=-1;
     private JSONObject selected;
+    private AlertDialog progressDialog;
+    private ProgressBar progressBar;
+    private TextView progressText;
     private final Runnable progress=new Runnable(){public void run(){pollDownload();}};
 
     public AppUpdater(Activity activity){
@@ -193,6 +199,42 @@ public final class AppUpdater {
             handler.postDelayed(progress,500L);
         }catch(Exception invalid){forgetDownload();}
     }
+    private void showProgress(String message,int percent){
+        if(activity.isFinishing()||!active)return;
+        if(progressDialog==null){
+            LinearLayout body=new LinearLayout(activity);
+            body.setOrientation(LinearLayout.VERTICAL);
+            int pad=(int)(20*activity.getResources().getDisplayMetrics().density);
+            body.setPadding(pad,pad,pad,pad);
+            progressText=new TextView(activity);
+            progressText.setTextSize(16);
+            body.addView(progressText);
+            progressBar=new ProgressBar(activity,null,android.R.attr.progressBarStyleHorizontal);
+            progressBar.setMax(100);
+            body.addView(progressBar,new LinearLayout.LayoutParams(-1,-2));
+            progressDialog=new AlertDialog.Builder(activity)
+                .setTitle("تحديث العز TV")
+                .setView(body)
+                .setNegativeButton("إخفاء",null).create();
+            progressDialog.setOnDismissListener(d->{progressDialog=null;progressBar=null;progressText=null;});
+            progressDialog.show();
+        }
+        progressText.setText(message);
+        progressBar.setIndeterminate(percent<0);
+        if(percent>=0)progressBar.setProgress(Math.max(0,Math.min(100,percent)));
+    }
+    private static String downloadError(int reason){
+        switch(reason){
+            case DownloadManager.ERROR_INSUFFICIENT_SPACE:return "مساحة التخزين غير كافية";
+            case DownloadManager.ERROR_DEVICE_NOT_FOUND:return "مساحة التنزيل غير متاحة على هذا التلفزيون";
+            case DownloadManager.ERROR_CANNOT_RESUME:return "تعذر استكمال التنزيل؛ أعد المحاولة";
+            case DownloadManager.ERROR_HTTP_DATA_ERROR:return "تعذر قراءة بيانات الخادم";
+            case DownloadManager.ERROR_TOO_MANY_REDIRECTS:return "تحويلات تنزيل كثيرة";
+            case DownloadManager.ERROR_UNHANDLED_HTTP_CODE:return "رفض خادم الإصدارات التنزيل";
+            case DownloadManager.ERROR_FILE_ERROR:return "خطأ في حفظ ملف التحديث";
+            default:return "رمز خطأ التنزيل: "+reason;
+        }
+    }
     private void beginDownload(){
         if(selected==null || downloading)return;
         try{
@@ -211,6 +253,7 @@ public final class AppUpdater {
             downloading=true;
             handler.removeCallbacks(progress);
             handler.postDelayed(progress,1300L);
+            showProgress("بدء تنزيل تحديث العز TV...",-1);
             say("بدأ تنزيل التحديث. ستبقى بياناتك محفوظة عند تثبيته على النسخة نفسها.");
         }catch(Exception e){downloadId=-1;downloading=false;forgetDownload();say("فشل بدء التنزيل: "+e.getMessage());}
     }
@@ -222,13 +265,22 @@ public final class AppUpdater {
             cursor=manager.query(new DownloadManager.Query().setFilterById(downloadId));
             if(cursor==null||!cursor.moveToFirst())throw new java.io.IOException("لم يعد التنزيل موجودًا");
             int state=cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS));
+            long total=cursor.getLong(cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
+            long done=cursor.getLong(cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
+            int percent=total>0?(int)Math.min(100,done*100/total):-1;
             if(state==DownloadManager.STATUS_SUCCESSFUL){
                 downloading=false;
+                showProgress("اكتمل التنزيل • جارٍ التحقق من سلامة APK والتوقيع...",100);
                 verifyAndInstall();
                 return;
             }
-            if(state==DownloadManager.STATUS_FAILED)throw new java.io.IOException("رفض مدير التنزيل الملف");
-        }catch(Exception e){downloading=false;forgetDownload();say("تعذر تنزيل التحديث: "+e.getMessage());return;}
+            if(state==DownloadManager.STATUS_FAILED){
+                int reason=cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_REASON));
+                throw new java.io.IOException(downloadError(reason));
+            }
+            showProgress((state==DownloadManager.STATUS_PAUSED?"التنزيل متوقف مؤقتًا":"جارٍ تنزيل APK")+
+                (percent<0?"...":" • "+percent+"٪"),percent);
+        }catch(Exception e){downloading=false;forgetDownload();showProgress("فشل التنزيل: "+e.getMessage(),0);say("تعذر تنزيل التحديث: "+e.getMessage());return;}
         finally{if(cursor!=null)cursor.close();}
         handler.postDelayed(progress,2500L);
     }
@@ -289,8 +341,8 @@ public final class AppUpdater {
                 verifying=false;
                 if(stopped||activity.isFinishing())return;
                 verified=ok;
-                if(ok)showInstallPrompt();
-                else {forgetDownload();say("تم رفض التحديث للحماية: "+problem);}
+                if(ok){showProgress("✓ التحقق من بصمة الملف وشهادة التوقيع اكتمل",100);showInstallPrompt();}
+                else {forgetDownload();showProgress("فشل التحقق: "+problem,0);say("تم رفض التحديث للحماية: "+problem);}
             }});
         }});
     }
@@ -352,5 +404,8 @@ public final class AppUpdater {
         else showInstallPrompt();
     }
     public void onPause(){active=false;handler.removeCallbacks(progress);}
-    public void stop(){stopped=true;handler.removeCallbacksAndMessages(null);worker.shutdownNow();}
+    public void stop(){
+        stopped=true;handler.removeCallbacksAndMessages(null);worker.shutdownNow();
+        if(progressDialog!=null){progressDialog.dismiss();progressDialog=null;}
+    }
 }
