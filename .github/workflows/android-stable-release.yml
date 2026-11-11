@@ -71,7 +71,19 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - name: Use preinstalled Android SDK on GitHub runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          [[ -d "$SDK_ROOT" ]] || { echo "::error::Android SDK not found"; exit 1; }
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          echo "$SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          if ! command -v sdkmanager >/dev/null 2>&1; then
+            find "$SDK_ROOT/cmdline-tools" -name sdkmanager -type f -print -quit | grep -q sdkmanager || { echo "::error::sdkmanager missing"; exit 1; }
+          fi
       - name: Install Android SDK
         run: sdkmanager "platforms;android-33" "build-tools;33.0.2"
       - uses: actions/setup-java@v4
