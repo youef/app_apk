@@ -128,6 +128,14 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk dist/al-ezz-tv-stable.apk
           python3 scripts/verify_apk.py dist/al-ezz-tv-stable.apk | tee dist/verification.txt
           sha256sum dist/al-ezz-tv-stable.apk
+      - name: Preserve signed APK even if GitHub Release publishing is denied
+        uses: actions/upload-artifact@v4
+        with:
+          name: al-ezz-tv-signed-${{ github.run_number }}
+          path: |
+            dist/al-ezz-tv-stable.apk
+            dist/verification.txt
+          retention-days: 90
       - name: Publish immutable signed release
         shell: bash
         env:
@@ -175,11 +183,3 @@ jobs:
           git commit -m "release(android): publish stable update manifest for $RELEASE_TAG [skip ci]"
           git pull --rebase origin main
           git push origin HEAD:main
-      - name: Save verified APK as workflow artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: al-ezz-tv-stable-${{ github.run_number }}
-          path: |
-            dist/al-ezz-tv-stable.apk
-            dist/verification.txt
-          retention-days: 90
