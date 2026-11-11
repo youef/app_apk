@@ -185,6 +185,45 @@ public final class AppUpdater {
         });
         dialog.show();
     }
+    /**
+     * DownloadManager queries here only return downloads made by our package.
+     * Restrict deletion further to signed Al Ezz APK release URLs. Never touch
+     * other apps' Downloads, unrelated URLs, installed apps, or user preferences.
+     */
+    private void cleanupManagedDownloads(long keepId){
+        DownloadManager manager=(DownloadManager)activity.getSystemService(Context.DOWNLOAD_SERVICE);
+        if(manager==null)return;
+        Cursor cursor=null;
+        try{
+            cursor=manager.query(new DownloadManager.Query());
+            if(cursor==null)return;
+            int idColumn=cursor.getColumnIndex(DownloadManager.COLUMN_ID);
+            int urlColumn=cursor.getColumnIndex(DownloadManager.COLUMN_URI);
+            if(idColumn<0||urlColumn<0)return;
+            java.util.ArrayList<Long> removed=new java.util.ArrayList<Long>();
+            while(cursor.moveToNext()){
+                long id=cursor.getLong(idColumn);
+                if(id==keepId)continue;
+                String url=cursor.getString(urlColumn);
+                if(trustedUrl(url))removed.add(id);
+            }
+            for(Long id:removed){
+                try{manager.remove(id.longValue());}
+                catch(Exception issue){Log.w(TAG,"Could not purge old update download "+id,issue);}
+            }
+        }catch(Exception issue){Log.w(TAG,"Could not inspect app-owned updates",issue);}
+        finally{if(cursor!=null)cursor.close();}
+    }
+    /** Remove only the exact temporary files used by previous updater versions. */
+    private void cleanupTemporaryApks(){
+        File privateCopy=new File(activity.getCacheDir(),"al-ezz-verify-update.apk");
+        if(privateCopy.isFile()&&!privateCopy.delete())Log.w(TAG,"Unable to remove cached verification APK");
+        File external=activity.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS);
+        if(external!=null){
+            File old=new File(external,"al-ezz-tv-stable-update.apk");
+            if(old.isFile()&&!old.delete())Log.w(TAG,"Unable to remove legacy updater APK");
+        }
+    }
     /** DownloadManager survives process restarts; recover an approved pending release. */
     private void rememberDownload(){
         if(selected!=null && downloadId>0)
@@ -214,7 +253,13 @@ public final class AppUpdater {
             downloadId=id;downloading=true;
             handler.removeCallbacks(progress);
             handler.postDelayed(progress,500L);
-        }catch(Exception invalid){forgetDownload();}
+        }catch(Exception invalid){
+            // The saved APK cannot update the installed build. Safely purge only
+            // app-created update downloads; do not keep obsolete installers.
+            cleanupManagedDownloads(-1L);
+            cleanupTemporaryApks();
+            forgetDownload();
+        }
     }
     private void showProgress(String message,int percent){
         if(activity.isFinishing()||!active)return;
@@ -257,6 +302,9 @@ public final class AppUpdater {
         try{
             DownloadManager manager=(DownloadManager)activity.getSystemService(Context.DOWNLOAD_SERVICE);
             if(manager==null)throw new java.io.IOException("مدير التنزيل غير متاح");
+            // Free storage before fetching a new release; keep no stale installers.
+            cleanupManagedDownloads(-1L);
+            cleanupTemporaryApks();
             // Let Android DownloadManager manage its own cache directory.
             // Android TV firmware may prohibit /Android/data even for the owning app.
             DownloadManager.Request request=new DownloadManager.Request(Uri.parse(selected.getString("download_url")));
@@ -301,7 +349,14 @@ public final class AppUpdater {
             }
             showProgress((state==DownloadManager.STATUS_PAUSED?"التنزيل متوقف مؤقتًا":"جارٍ تنزيل APK")+
                 (percent<0?"...":" • "+percent+"٪"),percent);
-        }catch(Exception e){downloading=false;forgetDownload();showProgress("فشل التنزيل: "+e.getMessage(),0);say("تعذر تنزيل التحديث: "+e.getMessage());return;}
+        }catch(Exception e){
+            downloading=false;
+            cleanupManagedDownloads(-1L);
+            forgetDownload();
+            showProgress("فشل التنزيل: "+e.getMessage(),0);
+            say("تعذر تنزيل التحديث: "+e.getMessage());
+            return;
+        }
         finally{if(cursor!=null)cursor.close();}
         handler.postDelayed(progress,2500L);
     }
@@ -369,7 +424,13 @@ public final class AppUpdater {
                     // Android must present its own installation confirmation; do not claim silent installation.
                     requestInstall();
                 }
-                else {forgetDownload();showProgress("فشل التحقق: "+problem,0);say("تم رفض التحديث للحماية: "+problem);}
+                else {
+                    cleanupManagedDownloads(-1L);
+                    cleanupTemporaryApks();
+                    forgetDownload();
+                    showProgress("فشل التحقق: "+problem,0);
+                    say("تم رفض التحديث للحماية: "+problem);
+                }
             }});
         }});
     }
@@ -441,6 +502,26 @@ public final class AppUpdater {
     }
     public void onResume(){
         active=true;
+        // When the user returns from the Android installer, only a successfully
+        // installed version change permits deletion of the active APK.
+        long savedId=preferences.getLong("download_id",-1L);
+        if(savedId>0){
+            try{
+                JSONObject pending=new JSONObject(preferences.getString("release_json","{}"));
+                if(installedVersionCode()>=pending.optInt("version_code",Integer.MAX_VALUE)){
+                    cleanupManagedDownloads(-1L);
+                    cleanupTemporaryApks();
+                    forgetDownload();
+                    downloading=false;verifying=false;
+                    selected=null;requiredUpdate=false;launchedInstaller=false;
+                    if(progressDialog!=null){progressDialog.dismiss();progressDialog=null;}
+                    say("تم تحديث العز TV وحذف ملفات التحديث القديمة تلقائيًا");
+                }
+            }catch(Exception ignored){}
+        }else{
+            cleanupManagedDownloads(-1L);
+            cleanupTemporaryApks();
+        }
         restoreDownload();
         if(installAfterPermission){
             installAfterPermission=false;
