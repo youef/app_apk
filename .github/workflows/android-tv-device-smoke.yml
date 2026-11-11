@@ -61,7 +61,7 @@ jobs:
           profile: Nexus 5
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -eu
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb shell am start -n sa.alezz.tv.redclassic.local/sa.aseel.tv.TVHomeActivity
             sleep 5
