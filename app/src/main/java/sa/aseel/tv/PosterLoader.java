@@ -33,6 +33,24 @@ public final class PosterLoader {
     };
     private PosterLoader(){}
     public static void releaseMemory(){bitmaps.evictAll();}
+    /** Delete poster images only; never touch user profiles, favourites or playback history. */
+    public static long cachedBytes(Context ctx){
+        long size=0;
+        File[] files=cacheDirectory(ctx).listFiles();
+        if(files!=null)for(File file:files)if(file.isFile())size+=file.length();
+        return size;
+    }
+    public static long clearPosterCache(Context ctx){
+        long freed=0;
+        File[] files=cacheDirectory(ctx).listFiles();
+        if(files!=null)for(File file:files){
+            if(!file.isFile())continue;
+            long bytes=file.length();
+            if(file.delete())freed+=bytes;
+        }
+        bitmaps.evictAll();
+        return freed;
+    }
     private static String digest(String source){
         try{
             byte[] data=MessageDigest.getInstance("SHA-256").digest(source.getBytes("UTF-8"));
