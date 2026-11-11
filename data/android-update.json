@@ -2,11 +2,11 @@
   "schema": 1,
   "channel": "stable",
   "package_name": "sa.alezz.tv",
-  "version_code": 300027,
-  "version_name": "21.0.27",
-  "download_url": "https://github.com/youef/app_apk/releases/download/al-ezz-stable-v21.0.27/al-ezz-tv-stable.apk",
-  "sha256": "aa62f34360c85f9e8f583210a7c907c60b5e1123a64beae295a652f71747b0f4",
+  "version_code": 300028,
+  "version_name": "21.0.28",
+  "download_url": "https://github.com/youef/app_apk/releases/download/al-ezz-stable-v21.0.28/al-ezz-tv-stable.apk",
+  "sha256": "ef05a82732af90b16ef8fda362f128116fade1206d791e9958a65632516b283e",
   "required": true,
-  "min_supported_version_code": 300027,
+  "min_supported_version_code": 300028,
   "notes": ""
 }
