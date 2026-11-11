@@ -2,9 +2,9 @@
   "schema": 1,
   "channel": "stable",
   "package_name": "sa.alezz.tv",
-  "version_code": 300022,
-  "version_name": "21.0.22",
-  "download_url": "https://github.com/youef/app_apk/releases/download/al-ezz-stable-v21.0.22/al-ezz-tv-stable.apk",
-  "sha256": "194aac3866f5e9da2553e34a8d397f24805bda77493dd4cfa0fb826c49635cdb",
-  "notes": ""
+  "version_code": 300023,
+  "version_name": "21.0.23",
+  "download_url": "https://github.com/youef/app_apk/releases/download/al-ezz-stable-v21.0.23/al-ezz-tv-stable.apk",
+  "sha256": "ed771191d95c020976fc8612e5a7db3ec807ccbc2a91c729c8fde9c9ffb78d9c",
+  "notes": "ريموت الجوال عبر QR للشبكة المحلية، عرض تقدم تنزيل التحديث، تنظيف بوسترات التخزين المؤقت وتحسينات الاستقرار."
 }
