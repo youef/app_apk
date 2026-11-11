@@ -25,10 +25,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '11'
-      - name: Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'platform-tools platforms;android-33 build-tools;33.0.2'
+      - name: Use runner Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d "${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          sdkmanager "platforms;android-33" "build-tools;33.0.2"
       - name: Build TV debug APK
         uses: gradle/actions/setup-gradle@v4
         with:
