@@ -2,9 +2,9 @@
   "schema": 1,
   "channel": "stable",
   "package_name": "sa.alezz.tv",
-  "version_code": 300017,
-  "version_name": "21.0.17",
-  "download_url": "https://github.com/youef/app_apk/releases/download/al-ezz-stable-v21.0.17/al-ezz-tv-stable.apk",
-  "sha256": "47be2e51db0e22aa35590374fd52d78012bca27881286618b7bcaf7b21dd685e",
-  "notes": "إضافة فحص المصادر المتعطلة وإعادة المحاولة، تنبيهات حلقات المسلسلات المتابعة، وإعداد اللغة العربية والإنجليزية."
+  "version_code": 300018,
+  "version_name": "21.0.18",
+  "download_url": "https://github.com/youef/app_apk/releases/download/al-ezz-stable-v21.0.18/al-ezz-tv-stable.apk",
+  "sha256": "500ab0a91251cc35cd943b5f81f04d0d2513b13c5b454af5bb214a764878ec0b",
+  "notes": ""
 }
