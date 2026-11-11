@@ -1484,6 +1484,21 @@ public final class TVHomeActivity extends Activity {
                     render();
                 }).setNegativeButton("إلغاء",null).show();
         }});
+        Button clearTemporary=button("🗑 تنظيف بيانات المكتبة المؤقتة");
+        content.addView(clearTemporary,space(-1,dp(55),4));
+        clearTemporary.setOnClickListener(v->{
+            new android.app.AlertDialog.Builder(TVHomeActivity.this)
+                .setTitle("تنظيف بيانات المكتبة المؤقتة")
+                .setMessage("سيتم تفريغ نسخة المكتبة المؤقتة وتنزيلها مجددًا. لن تتأثر المفضلة أو الحسابات أو سجل المشاهدة؛ يلزم اتصال بالإنترنت.")
+                .setPositiveButton("تنظيف",(d,w)->{
+                    getSharedPreferences("aseel_catalog_cache_v1",MODE_PRIVATE).edit().clear().apply();
+                    java.io.File scratch=new java.io.File(getCacheDir(),"al-ezz-verify-update.apk");
+                    if(scratch.isFile())scratch.delete();
+                    android.widget.Toast.makeText(TVHomeActivity.this,
+                        "تم تنظيف بيانات المكتبة المؤقتة",android.widget.Toast.LENGTH_LONG).show();
+                    loadCatalog();
+                }).setNegativeButton("إلغاء",null).show();
+        });
         heading("الريموت عبر الجوال","امسح رمز QR بكاميرا الجوال المتصل بنفس الشبكة، ثم تحكم بالأسهم وOK والتشغيل.");
         Button phoneRemote=primaryButton("▦  عرض باركود ريموت الجوال");
         content.addView(phoneRemote,space(-1,dp(58),5));
