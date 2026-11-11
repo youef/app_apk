@@ -673,6 +673,10 @@ public final class CinemaPlayerActivity extends Activity {
                 getSharedPreferences("alezz_v11_player",MODE_PRIVATE).getString("quality_"+itemId,"auto"):"auto")
             :previous.optString("quality","auto");
         index=StreamQuality.choose(sources,preferred,Build.VERSION.SDK_INT);
+        for(int i=0;i<sources.size();i++){
+            if(!SourceHealth.blocked(this,sources.get(index).url))break;
+            index=(index+1)%sources.size();
+        }
         if(index<0)index=0;
         initPlayer();playSource(index);
         showControls(false);
@@ -714,6 +718,7 @@ public final class CinemaPlayerActivity extends Activity {
                     showControls(false);
                 }else if(state==Player.STATE_READY){
                     handler.removeCallbacks(watchdog);started=true;tries=0;
+                    if(currentUrl!=null)SourceHealth.recovered(CinemaPlayerActivity.this,currentUrl);
                     if(live)PlaybackMemory.lastChannel(CinemaPlayerActivity.this,profile,itemId);
                     updateSkipButton();
                     status.setText(live?"● البث المباشر يعمل":"▶ الفيديو جاهز • OK أو اللمس لعرض القوائم");
@@ -788,6 +793,7 @@ public final class CinemaPlayerActivity extends Activity {
     }
     private void tryNextOrExplain(String explanation){
         handler.removeCallbacks(watchdog);
+        if(currentUrl!=null)SourceHealth.failed(this,currentUrl);
         int lower=StreamQuality.lower(sources,index);
         if(lower>=0&&!attempted.contains(lower)){
             status.setText("تعذر تشغيل الجودة الحالية؛ تجربة جودة أقل...");
@@ -795,7 +801,8 @@ public final class CinemaPlayerActivity extends Activity {
         }
         for(int offset=1;offset<=sources.size();offset++){
             int next=(index+offset)%sources.size();
-            if(!attempted.contains(next) && !SignedStreamExpiry.expired(sources.get(next).url)){
+            if(!attempted.contains(next) && !SignedStreamExpiry.expired(sources.get(next).url)
+                && !SourceHealth.blocked(this,sources.get(next).url)){
                 status.setText("تجربة رابط أو جودة بديلة معتمدة...");
                 tries=0;playSource(next);return;
             }
