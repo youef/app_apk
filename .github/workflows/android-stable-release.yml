@@ -171,6 +171,8 @@ jobs:
               "download_url": "https://github.com/youef/app_apk/releases/download/"
                   + os.environ["RELEASE_TAG"] + "/al-ezz-tv-stable.apk",
               "sha256": os.environ["APK_SHA256"],
+              "required": True,
+              "min_supported_version_code": int(os.environ["VERSION_CODE"]),
               "notes": os.environ["NOTES"][:1000]
           }
           Path("data").mkdir(exist_ok=True)
