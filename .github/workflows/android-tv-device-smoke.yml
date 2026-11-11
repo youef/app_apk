@@ -1,0 +1,71 @@
+name: Al Ezz TV — Android old/new emulator and remote keys
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/android-tv-device-smoke.yml'
+permissions:
+  contents: read
+jobs:
+  emulator-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - api: 19
+            arch: x86
+          - api: 33
+            arch: x86_64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare Java for Gradle
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-33 build-tools;33.0.2'
+      - name: Build TV debug APK
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '7.6'
+      - run: |
+          mkdir -p app/src/main/res/drawable-nodpi
+          cp web/alizz-tv-transparent.png app/src/main/res/drawable-nodpi/alizz_brand.png
+          gradle assembleDebug --no-daemon
+      - name: Boot Android ${{ matrix.api }}, install, launch and exercise D-pad
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          arch: ${{ matrix.arch }}
+          target: default
+          profile: Nexus 5
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            adb shell am start -n sa.alezz.tv.redclassic.local/sa.aseel.tv.TVHomeActivity
+            sleep 5
+            for key in 19 20 21 22 23 4; do adb shell input keyevent "$key"; done
+            sleep 2
+            adb shell dumpsys activity activities > activity-state.txt
+            if ! grep -q 'sa.alezz.tv.redclassic.local' activity-state.txt; then
+              echo 'App is not in activity stack'; exit 1
+            fi
+            if adb logcat -d -t 5000 | grep -E 'FATAL EXCEPTION.*sa.alezz|Process: sa.alezz.tv.redclassic.local'; then
+              echo 'Android crash detected'; exit 1
+            fi
+            adb shell screencap -p /sdcard/smoke.png
+            adb pull /sdcard/smoke.png "android-${{ matrix.api }}-smoke.png"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tv-emulator-api-${{ matrix.api }}
+          path: |
+            android-${{ matrix.api }}-smoke.png
+            activity-state.txt
+          if-no-files-found: ignore
