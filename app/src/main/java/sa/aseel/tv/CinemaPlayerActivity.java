@@ -1496,11 +1496,13 @@ public final class CinemaPlayerActivity extends Activity {
     }
     @Override protected void onResume(){
         super.onResume();
+        PhoneRemote.setForeground(this);
         handler.removeCallbacks(subscriptionGuard);
         handler.post(subscriptionGuard);
         if(kidsPlayback){handler.removeCallbacks(kidsClock);handler.postDelayed(kidsClock,1000L);}
     }
     @Override protected void onPause(){
+        PhoneRemote.clearForeground(this);
         handler.removeCallbacks(subscriptionGuard);
         handler.removeCallbacks(kidsClock);
         handler.removeCallbacks(autoHide);
