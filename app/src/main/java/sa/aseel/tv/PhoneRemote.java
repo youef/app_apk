@@ -38,7 +38,7 @@ public final class PhoneRemote {
     private static final SecureRandom random=new SecureRandom();
     private static final Handler main=new Handler(Looper.getMainLooper());
     private static volatile ServerSocket server;
-    private static long sessionGeneration=0;
+    private static volatile long sessionGeneration=0;
     private static volatile boolean enabled;
     private static volatile long expires;
     private static volatile String secret="";
