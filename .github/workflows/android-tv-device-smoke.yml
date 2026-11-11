@@ -47,6 +47,11 @@ jobs:
           mkdir -p app/src/main/res/drawable-nodpi
           cp web/alizz-tv-transparent.png app/src/main/res/drawable-nodpi/alizz_brand.png
           gradle assembleDebug --no-daemon
+      - name: Restore Java 17 for emulator runner
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
       - name: Boot Android ${{ matrix.api }}, install, launch and exercise D-pad
         uses: reactivecircus/android-emulator-runner@v2
         with:
