@@ -38,6 +38,7 @@ public final class PhoneRemote {
     private static final SecureRandom random=new SecureRandom();
     private static final Handler main=new Handler(Looper.getMainLooper());
     private static volatile ServerSocket server;
+    private static long sessionGeneration=0;
     private static volatile boolean enabled;
     private static volatile long expires;
     private static volatile String secret="";
@@ -59,13 +60,17 @@ public final class PhoneRemote {
         secret=hex.toString();
         expires=System.currentTimeMillis()+SESSION_MS;
         address="http://"+host+":"+PORT+"/#pair="+secret;
-        server=new ServerSocket(PORT,8);
-        server.setSoTimeout(1500);
+        final ServerSocket listener=new ServerSocket(PORT,8);
+        listener.setSoTimeout(1500);
+        server=listener;
         enabled=true;
-        new Thread(new Runnable(){public void run(){serve();}},"alezz-local-phone-remote").start();
+        final long generation=++sessionGeneration;
+        new Thread(new Runnable(){public void run(){serve(listener,generation);}},
+            "alezz-local-phone-remote-"+generation).start();
         return address;
     }
     public static synchronized void stop(){
+        ++sessionGeneration;
         enabled=false;secret="";address="";expires=0;
         try{if(server!=null)server.close();}catch(Exception ignored){}
         server=null;
@@ -92,12 +97,10 @@ public final class PhoneRemote {
             image.setPixel(x,y,bits.get(x,y)?0xFF17121C:0xFFFFFFFF);
         return image;
     }
-    private static void serve(){
-        while(active()){
+    private static void serve(final ServerSocket listener,final long generation){
+        while(active() && server==listener && sessionGeneration==generation){
             Socket client=null;
             try{
-                ServerSocket listener=server;
-                if(listener==null)break;
                 client=listener.accept();
                 client.setSoTimeout(2500);
                 // Reject non-LAN clients, and keep the listener explicitly opt-in.
@@ -108,7 +111,10 @@ public final class PhoneRemote {
             catch(Exception ignored){}
             finally{if(client!=null)try{client.close();}catch(Exception ignored){}}
         }
-        stop();
+        // The previous listener must never clear a newer QR pairing session.
+        synchronized(PhoneRemote.class){
+            if(server==listener && sessionGeneration==generation)stop();
+        }
     }
     private static String page(){
         return "<!doctype html><html lang='ar' dir='rtl'><meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>"+
@@ -122,12 +128,17 @@ public final class PhoneRemote {
             "<button class='wide' onclick=\"send('back')\">رجوع</button>"+
             "<button class='wide' onclick=\"send('home')\">الرئيسية</button>"+
             "<button class='wide' onclick=\"send('play')\">تشغيل / إيقاف مؤقت</button>"+
-            "<p id='state'></p><small>يعمل على نفس الشبكة فقط • تنتهي الجلسة تلقائيًا</small>"+
+            "<p id='state'>جارٍ فحص اتصال التلفزيون...</p><button class='wide' onclick=\"ping()\">⟳ فحص الاتصال</button>"+ 
+            "<small>يعمل على نفس شبكة Wi-Fi فقط • جلسة مؤقتة • افتح من Safari أو Chrome</small>"+
             "<script>const token=new URLSearchParams(location.hash.substring(1)).get('pair')||'';"+
-            "if(!token){document.getElementById('state').textContent='رمز الاقتران مفقود. امسح QR من التلفزيون مجددًا';}"+
+            "const box=document.getElementById('state');"+
+            "async function ping(){if(!token){box.textContent='رمز الاقتران مفقود؛ امسح QR من التلفزيون مجددًا';return;}"+
+            "try{const r=await fetch('/health',{cache:'no-store'});box.textContent=r.ok?'● التلفزيون متصل • الريموت جاهز':'تعذر الاتصال (HTTP '+r.status+')';}"+
+            "catch(e){box.textContent='لا يمكن الوصول للتلفزيون؛ تحقق من Wi-Fi وأعد إنشاء QR';}}"+
+            "ping();"+
             "async function send(key){let box=document.getElementById('state');try{let r=await fetch('/command',{method:'POST',"+
             "headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'pair='+encodeURIComponent(token)+'&key='+encodeURIComponent(key)});"+
-            "box.textContent=r.ok?'✓ تم إرسال الأمر':'الجلسة منتهية أو التلفزيون غير متاح (HTTP '+r.status+')';}catch(e){box.textContent='تعذر الاتصال بالتلفزيون: تحقق من نفس الشبكة وأن شاشة العز TV مفتوحة';}}</script></html>";
+            "box.textContent=r.ok?'✓ تم إرسال الأمر':'تعذر إرسال الأمر (HTTP '+r.status+') • أعد اقتران QR';}catch(e){box.textContent='انقطع الاتصال؛ اضغط فحص الاتصال، وتحقق من شبكة الجوال';}}</script></html>";
     }
     private static String readBody(java.io.InputStream in,int count)throws Exception{
         if(count<0||count>512)throw new IllegalArgumentException("invalid body");
@@ -159,6 +170,8 @@ public final class PhoneRemote {
         int status=404;String result="Not found";String type="text/plain; charset=UTF-8";
         if(request.startsWith("GET / ")){
             status=200;result=page();type="text/html; charset=UTF-8";
+        }else if(request.startsWith("GET /health ")){
+            status=active()?200:403;result=active()?"OK":"Expired";
         }else if(request.startsWith("POST /command ")){
             if(length<0||length>512)return;
             char[] buffer=new char[length];int done=0;
@@ -173,6 +186,7 @@ public final class PhoneRemote {
         String head="HTTP/1.1 "+status+" "+(status==200?"OK":status==403?"Forbidden":"Not Found")+"\r\n"+
             "Content-Type: "+type+"\r\nContent-Length: "+bytes.length+"\r\n"+
             "Cache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n"+
+            "Referrer-Policy: no-referrer\r\n"+
             "Content-Security-Policy: default-src 'none'; connect-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'\r\n"+
             "Connection: close\r\n\r\n";
         OutputStream out=client.getOutputStream();
