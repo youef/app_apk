@@ -93,6 +93,8 @@ public final class TVHomeActivity extends Activity {
     private final ArrayList<JSONObject> youtubeVideos=new ArrayList<JSONObject>();
     private CatalogApi catalog;
     private AppUpdater appUpdater;
+    private EpisodeAlerts episodeAlerts;
+    private String latestEpisodeAlert="";
     private ScrollView scroller;
     private LinearLayout content,navBar;
     private TextView status,featuredTitle,featuredMeta,topProfileLabel;
@@ -156,12 +158,13 @@ public final class TVHomeActivity extends Activity {
         return GlassSurface.panel(color,border,dp(radius));
     }
     private TextView text(String label,int size,int color,boolean bold){
-        TextView t=new TextView(this);t.setText(label);t.setTextColor(color);t.setTextSize(size);
-        t.setTextDirection(View.TEXT_DIRECTION_RTL);t.setGravity(Gravity.CENTER_VERTICAL);
+        TextView t=new TextView(this);t.setText(UiLanguage.label(this,label));t.setTextColor(color);t.setTextSize(size);
+        t.setTextDirection(UiLanguage.english(this)?View.TEXT_DIRECTION_LTR:View.TEXT_DIRECTION_RTL);t.setGravity(Gravity.CENTER_VERTICAL);
         if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return t;
     }
     private Button button(String name){
-        final Button b=new Button(this);b.setText(name);b.setAllCaps(false);
+        final Button b=new Button(this);b.setText(UiLanguage.label(this,name));b.setAllCaps(false);
+        b.setTextDirection(UiLanguage.english(this)?View.TEXT_DIRECTION_LTR:View.TEXT_DIRECTION_RTL);
         b.setTextColor(CinemaGlassButtonDrawable.labelColors());
         b.setTextSize(15);b.setFocusable(true);
         b.setBackgroundDrawable(new CinemaGlassButtonDrawable(false,false,0xFF29232F));
@@ -346,6 +349,7 @@ public final class TVHomeActivity extends Activity {
         applyCinemaImmersiveLayout();
         catalog=new CatalogApi(this);
         appUpdater=new AppUpdater(this);
+        episodeAlerts=new EpisodeAlerts(this);
         kidsAge=getSharedPreferences("alezz_kids",MODE_PRIVATE).getInt("age",6);
         kidsDailyMinutes=getSharedPreferences("alezz_kids",MODE_PRIVATE).getInt("minutes",60);
         PlaybackMemory.prune(this);
@@ -571,7 +575,7 @@ public final class TVHomeActivity extends Activity {
     private void buildShell(){
         LinearLayout root=column();
         root.setBackgroundDrawable(new CinemaBackdropDrawable());
-        root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+        root.setLayoutDirection(UiLanguage.direction(this));
         setContentView(root);
         LinearLayout top=row();top.setPadding(dp(16),dp(6),dp(16),dp(6));
         top.setBackgroundDrawable(GlassSurface.transparentHeader(0));
@@ -621,17 +625,17 @@ public final class TVHomeActivity extends Activity {
         updateNav();
     }
     private String sectionName(String s){
-        if("movies".equals(s))return "الأفلام";
+        if("movies".equals(s))return UiLanguage.label(this,"الأفلام");
         if("browse".equals(s))return browseTitle;
-        if("series".equals(s))return "المسلسلات";
-        if("live".equals(s))return "البث المباشر";
-        if("kids".equals(s))return "عالم الأطفال";
-        if("favorites".equals(s))return "قائمتي";
-        if("settings".equals(s))return "الإعدادات";
-        if("watching".equals(s))return "مشاهداتي";
+        if("series".equals(s))return UiLanguage.label(this,"المسلسلات");
+        if("live".equals(s))return UiLanguage.label(this,"البث المباشر");
+        if("kids".equals(s))return UiLanguage.label(this,"عالم الأطفال");
+        if("favorites".equals(s))return UiLanguage.label(this,"قائمتي");
+        if("settings".equals(s))return UiLanguage.label(this,"الإعدادات");
+        if("watching".equals(s))return UiLanguage.label(this,"مشاهداتي");
         if("account".equals(s))return "حسابي واشتراكي";
         if("profiles".equals(s))return "بروفايلات المشاهدة";
-        if("search".equals(s))return "البحث";
+        if("search".equals(s))return UiLanguage.label(this,"البحث");
         if("youtube".equals(s))return "يوتيوب الأطفال";
         return "اختر عالمك";
     }
@@ -982,6 +986,7 @@ public final class TVHomeActivity extends Activity {
         pendingRequests=Math.max(0,pendingRequests-1);
         loading=pendingRequests>0;
         if(!loading){
+            if(episodeAlerts!=null)checkFollowedEpisodes(false);
             applyCategoryNames(movies);
             applyCategoryNames(series);
             applyCategoryNames(channels);
@@ -1351,6 +1356,18 @@ public final class TVHomeActivity extends Activity {
             }});
         }
     }
+    private void checkFollowedEpisodes(final boolean manual){
+        if(episodeAlerts==null || !unlocked)return;
+        ArrayList<JSONObject> followed=new ArrayList<JSONObject>();
+        for(JSONObject x:series)if(isFavorite(x))followed.add(x);
+        episodeAlerts.check(followed,PlaybackMemory.activeProfile(this),manual,
+            new EpisodeAlerts.Listener(){public void onResult(String message){
+                latestEpisodeAlert=message;
+                if(manual)android.widget.Toast.makeText(TVHomeActivity.this,message,
+                    android.widget.Toast.LENGTH_LONG).show();
+                if("settings".equals(section))render();
+            }});
+    }
     private void settingsScreen(){
         heading("الإعدادات","تخصيص تجربة العز TV • التفضيلات محفوظة على هذا الجهاز فقط");
         heading("حساب المشاهدة","مسجل الدخول: "+MemberAuth.username(this));
@@ -1365,6 +1382,37 @@ public final class TVHomeActivity extends Activity {
             confirmLogout();
         }});
         final SharedPreferences prefs=getSharedPreferences(SETTINGS,MODE_PRIVATE);
+        heading("اللغة  •  Language",UiLanguage.english(this)?"English interface • Left to right":"الواجهة العربية • من اليمين إلى اليسار");
+        LinearLayout languages=row();content.addView(languages,space(-1,dp(59),4));
+        for(final boolean english:new boolean[]{false,true}){
+            Button choice=button((UiLanguage.english(this)==english?"✓  ":"")+(english?"English":"العربية"));
+            languages.addView(choice,new LinearLayout.LayoutParams(0,dp(54),1));
+            choice.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                if(UiLanguage.english(TVHomeActivity.this)==english)return;
+                UiLanguage.set(TVHomeActivity.this,english);
+                buildShell();render();
+            }});
+        }
+        heading("تنبيهات الحلقات الجديدة",latestEpisodeAlert.isEmpty()?
+            "تصل تنبيهات الأعمال المضافة إلى قائمتي عند فتح التطبيق أو تحديث المكتبة":latestEpisodeAlert);
+        Button alertToggle=button((episodeAlerts.enabled()?"✓  ":"")+"تنبيهات الحلقات الجديدة");
+        content.addView(alertToggle,space(-1,dp(57),4));
+        alertToggle.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            episodeAlerts.setEnabled(!episodeAlerts.enabled());render();
+        }});
+        Button alertCheck=button("↻ فحص الحلقات الآن");
+        content.addView(alertCheck,space(-1,dp(54),4));
+        alertCheck.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            checkFollowedEpisodes(true);
+        }});
+        Button retrySources=button("↻ إعادة فحص المصادر المتعطلة");
+        content.addView(retrySources,space(-1,dp(54),4));
+        retrySources.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            SourceHealth.reset(TVHomeActivity.this);
+            android.widget.Toast.makeText(TVHomeActivity.this,
+                UiLanguage.english(TVHomeActivity.this)?"All sources available for retry":"تمت إعادة إتاحة المصادر للفحص عند تشغيلها",
+                android.widget.Toast.LENGTH_LONG).show();
+        }});
         final String active=PlaybackMemory.activeProfile(this);
         heading("ملفات المشاهدة","ملفات مستقلة للعائلة والأطفال والضيف داخل حسابك");
         Button manageProfiles=primaryButton("◉ إدارة البروفايلات");
@@ -1573,7 +1621,7 @@ public final class TVHomeActivity extends Activity {
         for(int base=0;base<tiles.size();base+=columns){
             LinearLayout line=row();
             line.setGravity(Gravity.TOP);
-            line.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+            line.setLayoutDirection(UiLanguage.direction(this));
             for(int col=0;col<columns;col++){
                 int index=base+col;
                 if(index<tiles.size()){
@@ -2598,6 +2646,7 @@ public final class TVHomeActivity extends Activity {
         ui.removeCallbacks(entitlementGuard);
         if(appUpdater!=null)appUpdater.stop();
         generation++;episodeGeneration++;localPlaylistGeneration++;unlocked=false;background.shutdownNow();ui.removeCallbacks(remoteChannelCommit);ui.removeCallbacksAndMessages(null);
+        if(episodeAlerts!=null)episodeAlerts.shutdown();
         super.onDestroy();
     }
 }
