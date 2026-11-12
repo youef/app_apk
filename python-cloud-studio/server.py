@@ -98,6 +98,9 @@ app.include_router(deep_discovery_router)
 from site_security import router as security_center_router, register as register_security_center
 register_security_center(portal)
 app.include_router(security_center_router)
+from security_tools import router as security_import_router, register as register_security_tools
+register_security_tools(portal)
+app.include_router(security_import_router)
 @app.api_route('/login',methods=['GET','POST'],include_in_schema=False)
 async def legacy_login():
     return RedirectResponse('/account/admin',status_code=303)
