@@ -766,11 +766,8 @@
     if (!season || !season.episodes.length) return '<p class="search__hint">لا حلقات منشورة في هذا الموسم.</p>';
     return season.episodes.map(function (e) {
       var pct = progressOf(e), started = pct > 1 && pct < 97;
-      var externalOnly = !e.stream && !e.youtubeId && /^https:\/\/roya\.tv\/program\/1703\/episodes/.test(e.officialPage || "");
-      var tag = externalOnly ? "a" : "button";
-      var attrs = externalOnly ?
-        ' href="' + esc(e.officialPage) + '" target="_blank" rel="noopener noreferrer" aria-label="فتح الحلقة عبر رؤيا الرسمية: ' + esc(e.title) + '"' :
-        ' data-ep="' + esc(e.key) + '" aria-label="تشغيل ' + esc(e.title) + '"';
+      var tag = "button";
+      var attrs = ' type="button" data-ep="' + esc(e.key) + '" aria-label="تشغيل ' + esc(e.title) + ' داخل العز TV"';
       return '<' + tag + ' class="ep' + (started ? ' is-playing' : '') + '"' + attrs + '>' +
         '<span class="ep__thumb">' +
         (e.poster ? '<img src="' + esc(e.poster) + '" alt="" loading="lazy" onerror="this.remove()">' : '<span class="ep__thumb-placeholder">▶</span>') +
@@ -781,7 +778,7 @@
         (started ? '<span class="ep__progress"><i style="width:' + pct.toFixed(1) + '%"></i></span>' : '') +
         '</span><span class="ep__trailing">' +
         (e.duration ? '<span class="ep__dur">' + esc(fmtDuration(e.duration)) + '</span>' : '') +
-        '<span class="ep__play">' + (externalOnly ? '↗' : '▶') + '</span></span></' + tag + '>';
+        '<span class="ep__play">▶</span></span></' + tag + '>';
     }).join("");
   }
 
