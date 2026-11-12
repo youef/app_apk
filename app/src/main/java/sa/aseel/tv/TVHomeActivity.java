@@ -1508,13 +1508,34 @@ public final class TVHomeActivity extends Activity {
             content.addView(revoke,space(-1,dp(54),4));
             revoke.setOnClickListener(v->{PhoneRemote.stop();render();});
         }
-        heading("إصدار التطبيق","تحديثات المحتوى تظهر دون تنزيل APK، أما تحديث التطبيق فيُنزّل ويُثبّت بعد موافقتك.");
-        Button updateApp=primaryButton("↻ فحص إصدار APK جديد وتحديث التطبيق");
+        final boolean automaticApkChecks=appUpdater!=null && appUpdater.automaticChecksEnabled();
+        heading("تحديثات نسخة APK",automaticApkChecks?
+            "التنبيه عن نسخ التطبيق الجديدة مفعل • لا يتم تثبيت أي إصدار دون موافقتك":
+            "الوضع اليدوي مفعل • لن تظهر نوافذ تحديث APK تلقائيًا. المحتوى يتجدد دون إصدار جديد.");
+        Button toggleApkUpdates=button((automaticApkChecks?"✓  ":"○  ")+
+            "تنبيهات تحديثات APK التلقائية: "+(automaticApkChecks?"مفعّلة":"متوقفة"));
+        toggleApkUpdates.setTag("settings:apk-auto-checks");
+        content.addView(toggleApkUpdates,space(-1,dp(60),5));
+        toggleApkUpdates.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            if(appUpdater==null)return;
+            appUpdater.setAutomaticChecksEnabled(!appUpdater.automaticChecksEnabled());
+            render();
+        }});
+        Button updateApp=primaryButton("↻ البحث عن تحديث APK وتثبيته يدويًا");
         updateApp.setTag("settings:app-update");
         content.addView(updateApp,space(-1,dp(60),5));
         updateApp.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
             if(appUpdater!=null)appUpdater.check(true);
         }});
+        if(appUpdater!=null && appUpdater.hasPendingDownload()){
+            Button cancelApk=button("✕ إلغاء تنزيل التحديث المعلق");
+            cancelApk.setTag("settings:apk-cancel");
+            content.addView(cancelApk,space(-1,dp(57),4));
+            cancelApk.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                appUpdater.cancelPendingDownload();
+                render();
+            }});
+        }
         heading("عالم الأطفال","تعديل العمر المسموح ووقت المشاهدة اليومي");
         Button kids=button("♧  إعدادات الأطفال  •  "+kidsAge+" سنوات  /  "+kidsDailyMinutes+" دقيقة");
         content.addView(kids,space(-1,dp(62),6));
