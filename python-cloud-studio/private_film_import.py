@@ -61,6 +61,49 @@ def safe_source(value):
         raise ValueError("رابط غير صالح") from exc
 
 
+
+def source_preflight(url):
+    """Classify upstream authorization errors before launching a long FFmpeg job."""
+    safe_source(url)
+    try:
+        with requests.Session() as session:
+            session.trust_env=False
+            with session.get(url,headers={"Accept":"application/vnd.apple.mpegurl,application/x-mpegURL,video/mp4,*/*"},
+                             timeout=(12,25),allow_redirects=False,stream=True) as response:
+                status=response.status_code
+                if status in (401,403):
+                    raise ValueError(
+                        "رفض خادم الفيديو الوصول (HTTP "+str(status)+"). "
+                        "هذا ليس حظر نطاق من العز TV. احصل على رابط مباشر صالح "
+                        "ومصرح للخادم بتنزيله، أو فعّل صلاحية Render من مزود المصدر."
+                    )
+                if status in (301,302,303,307,308):
+                    raise ValueError(
+                        "رابط المصدر يحوّل إلى عنوان آخر. لا يتم اتباع التحويل تلقائيًا "
+                        "لمنع الوصول إلى خوادم غير مصرح بها."
+                    )
+                if status in (404,410):
+                    raise ValueError("الفيديو غير موجود أو انتهت صلاحية رابط المصدر (HTTP "+str(status)+").")
+                if status in (429,500,502,503,504):
+                    raise ValueError("خادم المصدر غير متاح مؤقتًا (HTTP "+str(status)+").")
+                if status not in (200,206):
+                    raise ValueError("خادم الفيديو أعاد HTTP "+str(status)+".")
+                sample=b""
+                for chunk in response.iter_content(chunk_size=32768):
+                    sample+=chunk
+                    if len(sample)>=65536: break
+                if not sample:
+                    raise ValueError("المصدر لم يرجع بيانات فيديو")
+                if sample.lstrip().lower().startswith((b"<!doctype",b"<html")):
+                    raise ValueError("المصدر أعاد صفحة HTML بدل رابط فيديو مباشر")
+                if urlsplit(url).path.lower().endswith(".m3u8"):
+                    if not sample.lstrip().startswith(b"#EXTM3U"):
+                        raise ValueError("المصدر لم يرجع ملف M3U8 صحيحًا")
+                return {"status":status,"content_type":response.headers.get("Content-Type","")}
+    except requests.RequestException as exc:
+        raise ValueError("تعذر الاتصال بخادم الفيديو من Render. تحقق من DNS وتوفر المصدر.") from exc
+
+
 def owner(request, portal):
     token=request.cookies.get("alezz_member","")
     if not token:
@@ -140,6 +183,8 @@ def ingest(job_id:str, payload:FilmInput, uid:str):
     media_id=str(uuid.uuid4())
     try:
         url=safe_source(payload.source_url)
+        set_job(job_id,status="checking_source")
+        source_preflight(url)
         set_job(job_id,status="downloading")
         with tempfile.TemporaryDirectory(prefix="alezz-film-") as d:
             output=Path(d)/"movie.mp4"
