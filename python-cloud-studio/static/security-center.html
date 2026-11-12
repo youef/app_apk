@@ -4,8 +4,8 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#0b1018">
 <title>مركز أمان المواقع | العز TV</title>
-<link rel="stylesheet" href="/static/security-center.css?v=3">
-<script defer src="/static/security-center.js?v=5"></script>
+<link rel="stylesheet" href="/static/security-center.css?v=4">
+<script defer src="/static/security-center.js?v=6"></script>
 </head>
 <body>
 <div class="shell">
@@ -34,7 +34,7 @@
 <div class="stats"><div><small>المواقع</small><strong id="totalSites">—</strong></div><div><small>جاهزة للفحص</small><strong id="verifiedSites">—</strong></div><div><small>التقارير</small><strong id="scannedSites">—</strong></div></div>
 <section class="panel"><div class="section-head"><div><span class="eyebrow">02 / قائمة المواقع</span><h2>مواقعك المسجلة</h2><p>بدون إثبات ملكية؛ ابدأ الفحص مباشرة، وتابع النتائج والجدولة.</p></div><button class="secondary" id="refreshButton" type="button">↻ تحديث</button></div><div id="sites" class="sites" aria-live="polite">جارٍ تحميل البيانات…</div></section>
 <section class="panel" id="reportSection" hidden><div class="section-head"><div><span class="eyebrow">03 / التقرير</span><h2>تفاصيل الفحص</h2><p id="reportMeta"></p></div><button type="button" class="secondary" id="exportButton">↓ JSON</button></div>
-<div id="reportOverview"></div><section id="technologySection" hidden><h3>التقنيات والإصدارات المعلنة وبيانات TLS</h3><p class="note">لا نخمن إصدار PHP أو قاعدة البيانات عندما لا يعلنه الموقع. تختلف الدلالة بين «معلن» و«مستنتج».</p><div class="route-list" id="technologyDetails"></div></section><h3>الثغرات والمؤشرات</h3><div id="findings"></div><div id="discoverySection" hidden><h3>مسارات الإدارة وتسجيل الدخول وواجهات API</h3><p class="note" id="discoveryNote"></p><div class="report-summary" id="discoverySummary"></div><div class="route-list" id="discoveryPaths"></div><h3>سجل الطلبات من Chromium DevTools / Network</h3><p class="note" id="browserStatus"></p><div class="route-list" id="discoveryNetwork"></div></div><h3>الفحوصات اليدوية المطلوبة</h3><div id="manualList"></div></section>
+<div id="accessWarning" class="access-warning" hidden role="status"></div><div id="reportOverview"></div><section id="technologySection" hidden><h3>التقنيات والإصدارات المعلنة وبيانات TLS</h3><p class="note">لا نخمن إصدار PHP أو قاعدة البيانات عندما لا يعلنه الموقع. تختلف الدلالة بين «معلن» و«مستنتج».</p><div class="route-list" id="technologyDetails"></div></section><h3>الثغرات والمؤشرات</h3><div id="findings"></div><div id="discoverySection" hidden><h3>مسارات الإدارة وتسجيل الدخول وواجهات API</h3><p class="note" id="discoveryNote"></p><div class="report-summary" id="discoverySummary"></div><div class="route-list" id="discoveryPaths"></div><h3>سجل الطلبات من Chromium DevTools / Network</h3><p class="note" id="browserStatus"></p><div class="route-list" id="discoveryNetwork"></div></div><h3>الفحوصات اليدوية المطلوبة</h3><div id="manualList"></div></section>
 <section class="panel"><div class="section-head"><div><span class="eyebrow">04 / الأدوات الخارجية</span><h2>استيراد نتائج ماسحات الأمان</h2><p>حلّل تقرير JSON سبق أن شغّلته على بيئتك المصرح بها، وادمج نتائجه في تقارير موقعك.</p></div></div>
 <form id="importForm" class="form">
 <label><span>الموقع المسجل</span><select required id="importSite"><option value="">اختر موقعًا</option></select></label>
