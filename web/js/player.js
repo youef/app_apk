@@ -592,8 +592,8 @@
     el.root.classList.remove("is-idle");
     configureQualities(item);
 
-    var url = activeStreamUrl || (isPlayableUrl(item.stream) ? item.stream : "") || (item.youtubeId ?
-      "https://www.youtube-nocookie.com/embed/"+item.youtubeId : "");
+    // Only first-party direct MP4, HLS or DASH media may enter this player.
+    var url = activeStreamUrl || (isPlayableUrl(item.stream) ? item.stream : "");
     if (!url) {
       clearStage();
       if (window.AlezzCast) window.AlezzCast.detach("player");
