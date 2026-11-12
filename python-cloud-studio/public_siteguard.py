@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from site_security import finish, public_addresses, public_host, safe_get, iso, record
 from siteguard_tech import analyze
+from siteguard_network import inspect_network
 
 router = APIRouter()
 HERE = Path(__file__).resolve().parent
@@ -69,6 +70,19 @@ def quick_audit(host, extended=False):
         "http_status": None
     }
     items = []
+    # Public DNS resolution and TLS evidence are useful even when HTTP is blocked.
+    result.update(inspect_network(host, extended=extended))
+    result["checks"].extend(["Public nslookup / DNS", "TLS certificate and negotiated protocol"])
+    tls = result.get("tls") or {}
+    if tls.get("verified") and tls.get("days_remaining") is not None:
+        if tls["days_remaining"] < 0:
+            items.append(record("high", "انتهت شهادة HTTPS",
+                "تاريخ انتهاء الشهادة المعروضة قد مضى.",
+                "جدّد شهادة TLS فورًا وتحقق من سلسلة الثقة."))
+        elif tls["days_remaining"] < 14:
+            items.append(record("medium", "شهادة TLS تقترب من الانتهاء",
+                "تبقى على انتهاء الشهادة أقل من 14 يومًا.",
+                "راجع التجديد الآلي لشهادة HTTPS."))
     try:
         status, headers, content = safe_get(host, "/", max_bytes=60000)
     except Exception as exc:
@@ -84,6 +98,14 @@ def quick_audit(host, extended=False):
                             "استجابة الصفحة الرئيسية: " + str(status),
                             "راجع إمكانية الوصول إلى الموقع.", "HTTP " + str(status)))
     h = {key.lower(): val for key, val in headers.items()}
+    dns = result.get("dns") or {}
+    if h.get("cf-ray") or "cloudflare" in h.get("server", "").lower():
+        dns["cdn_hint"] = "Cloudflare (من ترويسات HTTP)"
+    elif h.get("x-vercel-id"):
+        dns["cdn_hint"] = "Vercel Edge (من ترويسة X-Vercel-ID)"
+    elif h.get("x-amz-cf-id"):
+        dns["cdn_hint"] = "AWS CloudFront (من ترويسة X-Amz-Cf-Id)"
+
     checks = (
         ("strict-transport-security", "medium", "غياب HSTS", "فعّل HSTS بعد التحقق من تغطية HTTPS."),
         ("content-security-policy", "medium", "غياب سياسة CSP", "أضف سياسة Content-Security-Policy مناسبة."),
