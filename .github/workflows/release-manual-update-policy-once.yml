@@ -1,0 +1,28 @@
+name: Al Ezz TV — One-time manual-updates release request
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-manual-update-policy-once.yml'
+permissions:
+  contents: read
+  actions: write
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate optional updates and TV settings
+        run: |
+          node tests/tv-manual-update-policy-smoke.cjs
+          node tests/tv-dynamic-update-smoke.cjs
+      - name: Request one signed stable release (subsequent releases remain manual)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run android-stable-release.yml --repo "$GITHUB_REPOSITORY" --ref main \
+            -f version_name=21.0.54 \
+            -f release_notes='التحكم اليدوي بتحديثات APK، إلغاء التنزيل العالق، ومعالجة توقف مدير التنزيل. التحديثات المستقبلية اختيارية.'
+          echo 'The one-off workflow cannot automatically rerun: only editing its own workflow file triggers it.'
