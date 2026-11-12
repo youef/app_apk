@@ -1,0 +1,29 @@
+name: STV long-form media audit (strict 25+ minutes)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - scripts/audit_stv_longform.py
+      - .github/workflows/stv-longform-audit.yml
+permissions:
+  contents: read
+jobs:
+  audit:
+    name: Verify 750 STV entries without altering live catalog
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ffprobe
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Verify HTTPS media, follow redirects, and measure full duration
+        run: python3 scripts/audit_stv_longform.py --out stv-audit
+      - name: Publish verification report as an artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stv-longform-audit
+          path: stv-audit/
+          if-no-files-found: warn
+          retention-days: 30
