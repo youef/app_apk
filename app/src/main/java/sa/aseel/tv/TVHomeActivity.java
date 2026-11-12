@@ -2373,18 +2373,7 @@ public final class TVHomeActivity extends Activity {
             }
         }
         if("channel".equals(kind(item)) && "official_link".equals(value(item,"playback_mode"))){
-            String external=value(item,"official_url");
-            if(!CatalogApi.officialChannelLink(external)){
-                heading("صفحة المصدر غير متاحة","هذه القناة لا تملك رابط صفحة مشاهدة خارجيًا صالحًا.");
-                return;
-            }
-            try {
-                startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,
-                    android.net.Uri.parse(external)));
-            } catch(android.content.ActivityNotFoundException e){
-                heading("تعذّر فتح المصدر الخارجي","ثبّت متصفحًا متوافقًا على جهاز Android TV.");
-            }
-            return;
+            UnavailableVideoActivity.show(this,"live",label(item));return;
         }
         // A title can have an MP4/HLS stream, several approved alternatives, and/or
         // an official YouTube or Embed player. Prefer a compatible native source.
@@ -2394,32 +2383,11 @@ public final class TVHomeActivity extends Activity {
         ArrayList<PlaybackSources.Source> available=PlaybackSources.collect(
             value(item,"stream_url"),value(item,"quality"),variantsJson,youtube,kidsMode);
         if(available.isEmpty()){
-            heading("لا يوجد مصدر صالح للتشغيل",
-                "أضف مصدر MP4/HLS أو Embed/YouTube معتمدًا من لوحة الإدارة.");return;
+            UnavailableVideoActivity.show(this,kind(item),label(item));return;
         }
         PlaybackSources.Source chosenSource=available.get(PlaybackSources.preferred(available));
         String url=chosenSource.url;
         String sourceList=PlaybackSources.encode(available);
-        if("youtube".equals(chosenSource.kind) && available.size()==1 && !kidsMode){
-            openYouTube(item);return;
-        }
-        if("embed".equals(chosenSource.kind)||"youtube".equals(chosenSource.kind)){
-            if(kidsMode || !"approved".equals(value(item,"rights_status"))){
-                heading("المصدر غير معتمد",
-                    "مشغلات Embed وYouTube تتطلب اعتماد الحقوق ولا تعمل في وضع الأطفال.");return;
-            }
-            Intent embedded=new Intent(this,EmbedPlayerActivity.class);
-            embedded.putExtra("stream_url",url);
-            embedded.putExtra("available_sources",sourceList);
-            embedded.putExtra("stream_variants",variantsJson);
-            embedded.putExtra("youtube_url",youtube);
-            embedded.putExtra("item_id",value(item,"id"));
-            embedded.putExtra("title",label(item));
-            embedded.putExtra("profile",PlaybackMemory.activeProfile(this));
-            embedded.putExtra("kids_mode",false);
-            startActivity(embedded);
-            return;
-        }
         Intent intent=new Intent(this,CinemaPlayerActivity.class);
         intent.putExtra("item_id",value(item,"id"));
         intent.putExtra("title",label(item));
@@ -2532,28 +2500,8 @@ public final class TVHomeActivity extends Activity {
             startActivity(nativePlayer);
             return;
         }
-        String id=YouTubeLink.videoId(value(selected,"youtube_url"));
-        if(id==null)return;
-        JSONArray queue=new JSONArray();
-        HashSet<String> seen=new HashSet<String>();
-        for(JSONObject clip:youtubeVideos){
-            String clipId=YouTubeLink.videoId(value(clip,"youtube_url"));
-            if(clipId==null||!seen.add(clipId))continue;
-            try{
-                JSONObject entry=new JSONObject();
-                entry.put("video_id",clipId);
-                entry.put("title",label(clip));
-                entry.put("channel",value(clip,"channel_name"));
-                entry.put("topic",value(clip,"topic"));
-                queue.put(entry);
-            }catch(Exception ignored){}
-        }
-        Intent player=new Intent(this,YouTubeActivity.class);
-        player.putExtra("youtube_url",value(selected,"youtube_url"));
-        player.putExtra("start_video_id",id);
-        player.putExtra("title",label(selected));
-        player.putExtra("playlist_json",queue.toString());
-        startActivity(player);
+        // No iframe/web browser playback: licensed direct streams are handled above.
+        UnavailableVideoActivity.show(this,"movie",label(selected));
     }
     /** Search is restricted to the current screen's catalog, never other sections. */
     private void sectionSearchBar(String hint,final ArrayList<JSONObject> source){
