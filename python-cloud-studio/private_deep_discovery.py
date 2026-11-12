@@ -37,8 +37,18 @@ class DeepScanInput(BaseModel):
 
 def snapshot(job_id,**fields):
     with LOCK:
-        if job_id in JOBS:
-            JOBS[job_id].update(fields)
+        if job_id not in JOBS:
+            return
+        JOBS[job_id].update(fields)
+        snapshot_data=dict(JOBS[job_id])
+    uid=snapshot_data.get("owner_id")
+    if uid:
+        try:
+            from studio_jobs import save as save_studio_job
+            save_studio_job(job_id,uid,"deep_scan",snapshot_data,
+                            force=snapshot_data.get("status") in ("complete","failed"))
+        except Exception:
+            pass
 
 def admissible(url):
     try:
@@ -229,14 +239,22 @@ def register(portal):
             JOBS[job_id]={"status":"queued","stage":"queued","created_at":int(time.time()),
                          "owner_id":uid,"progress":{"episodes_checked":0,"episodes_total":0,
                                                    "media_found":0}}
+        from studio_jobs import save as save_studio_job
+        durable=save_studio_job(job_id,uid,"deep_scan",dict(JOBS[job_id]),force=True)
         threading.Thread(target=run_scan,args=(job_id,url,data.max_episodes),daemon=True).start()
-        return {"job_id":job_id,"poll":"/api/private-film/deep-scan/"+job_id}
+        return {"job_id":job_id,"job_tracking":"persistent" if durable else "memory-only",
+                "poll":"/api/private-film/deep-scan/"+job_id}
 
     @router.get("/api/private-film/deep-scan/{job_id}")
     def status(job_id:str,request:Request):
         uid=owner(request,portal)
         with LOCK:
             job=dict(JOBS.get(job_id) or {})
-        if not job or job.get("owner_id")!=uid:raise HTTPException(404,"فحص غير موجود")
+        if not job:
+            from studio_jobs import restore as restore_studio_job
+            job=restore_studio_job(job_id,uid,"deep_scan")
+            if not job:raise HTTPException(404,"فحص غير موجود")
+            return job
+        if job.get("owner_id")!=uid:raise HTTPException(404,"فحص غير موجود")
         job.pop("owner_id",None)
         return job
