@@ -161,11 +161,15 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{
           <div class="panel-head"><div class="panel-num">01</div><div><h2 id="discover-title">اكتشاف مصادر الفيديو والحلقات</h2><p>ابدأ بصفحة موقع عامة، وليس بالضرورة رابط MP4 مباشرًا</p></div></div>
           <div class="field"><label class="small-label" for="page-url">رابط صفحة الفيلم أو المسلسل</label><input id="page-url" type="url" dir="ltr" maxlength="2048" placeholder="https://example.com/movie-or-series/" autocomplete="url"></div>
           <div class="actions">
-            <button type="button" class="btn primary" id="discover-page">⌕ اكتشاف HTML</button>
-            <button type="button" class="btn secondary" id="browser-diagnose">◈ فحص Chromium المتقدم</button>
+            <button type="button" class="btn primary" id="deep-scan">◉ الفحص الذكي الشامل لكل الحلقات</button>
+            <button type="button" class="btn secondary" id="discover-page">⌕ فحص HTML السريع</button>
+            <button type="button" class="btn secondary" id="browser-diagnose">◈ Chromium</button>
           </div>
           <p class="hint">الفحص يكتشف البيانات والروابط المتاحة علنًا فقط؛ لا يُتجاوز تسجيل الدخول أو DRM أو قيود المصدر.</p>
           <div id="discovery-status" class="mini-status" role="status">لم يبدأ فحص الصفحة.</div>
+          <div id="deep-progress" class="notice" style="margin-top:12px" role="status">الفحص الشامل: HTML ← إعدادات JS ← yt-dlp ← Chromium ← جميع صفحات الحلقات المكتشفة.</div>
+          <div id="deep-methods" class="results" aria-label="نتائج محركات الفحص"></div>
+          <div id="deep-episodes" class="results" aria-label="مصادر الحلقات بعد الفحص"></div>
           <div class="segment" role="tablist" aria-label="نتائج الاكتشاف" style="margin-top:16px">
             <button type="button" role="tab" id="tab-media" aria-selected="true" data-panel="media">الفيديوهات <span id="media-count">0</span></button>
             <button type="button" role="tab" id="tab-episodes" aria-selected="false" data-panel="episodes">الحلقات <span id="episodes-count">0</span></button>
@@ -309,6 +313,88 @@ for(const tab of document.querySelectorAll(".segment button")){
 for(const anchor of document.querySelectorAll(".menu a[href^='#']")){
  anchor.addEventListener("click",()=>{for(const a of document.querySelectorAll(".menu a"))a.classList.remove("is-active");anchor.classList.add("is-active")});
 }
+const deepScanState={id:null,timer:null};
+function deepMethods(result){
+ const methods=Array.isArray(result.methods)?result.methods:[];
+ clearResult("deep-methods",methods.length?"":"لم تظهر مراحل فحص بعد.");
+ const labels={html:"HTML وBeautifulSoup",inline_config:"إعدادات JavaScript",yt_dlp:"yt-dlp",chromium:"Playwright وChromium",episode:"صفحة الحلقة"};
+ for(const method of methods){
+  const state=method.state||method.status||"غير معروف";
+  card("deep-methods",labels[method.engine]||method.engine,
+   "النتيجة: "+state+" • المصادر: "+(method.found??0)+(method.episodes!==undefined?" • الحلقات: "+method.episodes:""),null,null);
+ }
+}
+function showDeepResults(result){
+ const collected=Array.isArray(result.media)?result.media:[];
+ for(const media of collected){
+  if(cleanLink(media.url)&&!current.media.some(existing=>existing.url===media.url)){
+   current.media.push({url:media.url,label:(media.label||"مصدر")+(media.engine?" • "+media.engine:"")});
+  }
+ }
+ renderMedia();
+ const episodes=Array.isArray(result.episodes)?result.episodes:[];
+ current.episodes=episodes.map(ep=>({title:ep.title,page_url:ep.page_url}));
+ renderEpisodes();
+ deepMethods(result);
+ clearResult("deep-episodes",episodes.length?"":"لم تُكتشف صفحات حلقات من هذا المصدر.");
+ for(const ep of episodes){
+  const sources=Array.isArray(ep.sources)?ep.sources:[];
+  const summary=ep.methods?.map(m=>m.engine+": "+(m.state||m.status||"تم")).join(" | ")||"";
+  card("deep-episodes",ep.title||"حلقة",sources.length+" مصدر مرشح • "+summary,
+    null,null);
+  for(const source of sources){
+   card("deep-episodes","↳ "+(source.engine||"مصدر فيديو"),
+     shortLink(source.url)+" • غير معتمد حتى يُفحص","اختيار المصدر",
+     ()=>chooseSource(source.url,ep.title||"حلقة"));
+  }
+ }
+ $("discovery-status").textContent=(result.page_title||"صفحة العمل")+" — "+collected.length+" مصادر مرشحة — "+episodes.length+" حلقات. "+(result.notes||[]).join(" • ");
+}
+function stopDeepScan(){
+ if(deepScanState.timer){clearInterval(deepScanState.timer);deepScanState.timer=null}
+}
+async function pollDeepScan(){
+ if(!deepScanState.id)return;
+ try{
+  const response=await api("/api/private-film/deep-scan/"+encodeURIComponent(deepScanState.id));
+  const progress=response.progress||{};
+  const totals=(progress.episodes_total||0)?(" • فُحصت "+(progress.episodes_checked||0)+" من "+progress.episodes_total+" حلقات"):"";
+  $("deep-progress").textContent="المرحلة: "+(response.stage||"تجهيز")+" — "+(response.message||"فحص المصادر")+totals;
+  if(response.status==="complete"){
+   stopDeepScan();deepScanState.id=null;setBusy("deep-scan",false);
+   showDeepResults(response.result||{});
+   $("deep-progress").className="notice success";
+   $("deep-progress").textContent="اكتمل الفحص متعدد المحركات. المصادر مرشحة ويجب اختبارها قبل الاستيراد.";
+   toast("اكتمل فحص صفحات المسلسل والحلقات");
+  }else if(response.status==="failed"){
+   stopDeepScan();deepScanState.id=null;setBusy("deep-scan",false);
+   $("deep-progress").className="notice error";
+   $("deep-progress").textContent="تعذر إكمال الفحص: "+(response.message||response.error||"خطأ غير معروف");
+  }
+ }catch(error){
+  stopDeepScan();deepScanState.id=null;setBusy("deep-scan",false);
+  $("deep-progress").className="notice error";
+  $("deep-progress").textContent="تعذر متابعة الفحص: "+error.message;
+ }
+}
+async function deepScan(){
+ const url=$("page-url").value.trim();
+ if(!cleanLink(url))return toast("أدخل رابط صفحة HTTPS صحيحًا");
+ stopDeepScan();setBusy("deep-scan",true);
+ $("deep-progress").className="notice";$("deep-progress").textContent="يجري إنشاء مهمة فحص متعددة المحركات...";
+ clearResult("deep-methods","");
+ clearResult("deep-episodes","");
+ try{
+  const result=await post("/api/private-film/deep-scan",{page_url:url,max_episodes:12});
+  deepScanState.id=result.job_id;
+  await pollDeepScan();
+  if(deepScanState.id)deepScanState.timer=setInterval(pollDeepScan,3200);
+ }catch(error){
+  setBusy("deep-scan",false);
+  $("deep-progress").className="notice error";
+  $("deep-progress").textContent="تعذر بدء الفحص: "+error.message;
+ }
+}
 async function discover(){
  const url=$("page-url").value.trim();if(!cleanLink(url))return toast("أدخل رابط صفحة HTTPS صحيحًا");
  setBusy("discover-page",true);$("discovery-status").textContent="جارٍ قراءة HTML العام من الخادم...";
@@ -448,6 +534,7 @@ async function refreshHealth(){
   for(const id of ["cap-api","cap-chromium","cap-ffprobe","cap-ffmpeg","cap-storage"])$(id).textContent="غير مؤكد";
  }
 }
+$("deep-scan").addEventListener("click",deepScan);
 $("discover-page").addEventListener("click",discover);
 $("browser-diagnose").addEventListener("click",browserDiagnose);
 $("check-source").addEventListener("click",checkSource);
