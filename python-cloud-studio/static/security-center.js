@@ -9,7 +9,7 @@ async function refresh(){sites=(await api("/api/security/sites")).sites;drawSite
 function drawSites(){const root=$("sites");root.replaceChildren();$("totalSites").textContent=sites.length;$("verifiedSites").textContent=sites.length;$("scannedSites").textContent=sites.filter(s=>s.latest).length;const pick=$("importSite");const current=pick.value;pick.replaceChildren(n("option",null,"اختر موقعًا"));pick.firstChild.value="";sites.forEach(s=>{const o=n("option",null,s.host);o.value=s.id;pick.append(o)});if(sites.some(s=>s.id===current))pick.value=current;
 if(!sites.length){root.append(n("div","empty","لم تضف أي موقع بعد."));return}
 sites.forEach(s=>{const card=n("article","site-card"),head=n("div","site-top");head.append(n("strong",null,s.host),n("span","pill good","✓ جاهز للفحص"));card.append(head);
-if(s.last_run)card.append(n("p","note","آخر فحص: "+s.last_run));if(s.job&&s.job.state==="running")card.append(n("p","note","جارٍ الفحص في الخلفية…"));if(s.job&&s.job.state==="failed")card.append(n("p","note","فشل الفحص: "+(s.job.error||"راجع الخدمة")));
+if(s.last_run)card.append(n("p","note","آخر فحص: "+s.last_run));if(s.job&&s.job.state==="running")card.append(n("p","note","جارٍ الفحص في الخلفية…"));if(s.job&&s.job.state==="failed")card.append(n("p","note","فشل الفحص: "+(s.job.error||"راجع الخدمة")));if(s.job&&s.job.state==="done")card.append(n("p","note","✓ اكتمل الفحص؛ افتح التقرير الأخير لمراجعة النتائج."));
 const controls=n("div","site-actions");
 controls.append(b("فحص الآن",()=>action(async()=>{await api("/api/security/scan",{site_id:s.id});toast("بدأ فحص الموقع");await refresh()}),"scan-btn"));
 if(s.latest)controls.append(b("التقرير الأخير",()=>action(()=>showReport(s.id))));
@@ -24,6 +24,25 @@ const overview=$("reportOverview");overview.replaceChildren();const row=n("div",
 [[report.indicator===null?"—":report.indicator,"مؤشر الإعدادات — ليس شهادة أمان"],...["critical","high","medium","low"].map(x=>[report.counts[x],levels[x]])].forEach(pair=>{const e=n("div","score");e.append(n("strong",null,pair[0]),n("span",null,pair[1]));row.append(e)});overview.append(row);
 const list=$("findings");list.replaceChildren();if(!report.findings.length)list.append(n("p","empty","لا توجد مؤشرات ضمن الفحوصات المحدودة التي اكتملت."));
 report.findings.forEach(f=>{const item=n("div","finding");item.dataset.level=f.severity;item.append(n("span","severity",levels[f.severity]||f.severity),n("h4",null,f.title),n("p",null,f.detail),n("p",null,"الإصلاح: "+f.fix));if(f.evidence)item.append(n("small",null,"الدليل: "+f.evidence));list.append(item)});
+const evidence=$("technologyDetails"),tech=report.technology||null,tls=report.tls||null;
+$("technologySection").hidden=!(tech||tls);
+evidence.replaceChildren();
+function evidenceCard(title,value,source){
+  const item=n("div","route-entry");
+  item.append(n("b",null,title),n("p","tech-value",value||"غير معلن"));
+  if(source)item.append(n("small",null,source));
+  evidence.append(item);
+}
+if(tech){
+  const cms=tech.cms||{},php=tech.php||{},db=tech.database||{};
+  evidenceCard("المنصة", (cms.name||report.platform||"غير محدد")+" • "+(cms.version||"غير معلن"),cms.evidence||"بصمة عامة");
+  evidenceCard("PHP", (php.type||"غير معروف")+" • "+(php.version||"غير معلن"),php.evidence||"لا تتوفر أدلة إصدار");
+  evidenceCard("قاعدة البيانات", (db.type||"غير معروف")+" • "+(db.version||"غير معلن"),db.evidence||"لا يمكن تحديدها من موقع عام");
+  (tech.languages||[]).slice(0,8).forEach(x=>evidenceCard("لغة: "+x.name,x.version,(x.confidence||"")+(x.evidence?" • "+x.evidence:"")));
+  (tech.libraries||[]).slice(0,12).forEach(x=>evidenceCard("مكتبة: "+x.name,x.version,(x.confidence||"")+(x.evidence?" • "+x.evidence:"")));
+  (tech.infrastructure||[]).slice(0,8).forEach(x=>evidenceCard("بنية: "+x.name,x.version,(x.confidence||"")+(x.evidence?" • "+x.evidence:"")));
+}
+if(tls)evidenceCard("شهادة HTTPS",tls.verified?"صالحة • "+(tls.tls_version||"TLS")+" • المتبقي "+(tls.days_remaining??"غير محدد")+" يوم":"لم يُتحقق من تفاصيل الشهادة", tls.issuer?"جهة الإصدار: "+tls.issuer:"فحص اتصال TLS العام");
 const discovery=report.discovery,section=$("discoverySection");
 section.hidden=!discovery;
 if(discovery){
@@ -32,14 +51,22 @@ if(discovery){
   [["admin","مسارات الإدارة"],["login","مسارات الدخول"],["api","واجهات API"]].forEach(([kind,title])=>{
     const c=n("div","score");c.append(n("strong",null,discovery.summary?.[kind]||0),n("span",null,title));head.append(c)
   });
-  $("discoveryNote").textContent=discovery.limits||"المسارات المستدل عليها ليست ثغرات مثبتة.";
+  const conf=discovery.confidence_summary||{},cNames={observed:"مرصودة",documented:"موثقة علنًا",inferred:"مستنتجة",uncertain:"غير مؤكدة"};
+  Object.entries(cNames).forEach(([key,title])=>{const c=n("div","score");c.append(n("strong",null,conf[key]??0),n("span",null,title));head.append(c)});
+  $("discoveryNote").textContent=(discovery.limits||"المسارات المكتشفة ليست ثغرات مثبتة.")+
+    " • الطلبات الإضافية: "+(discovery.requests??"—")+
+    " • وقت الاستكشاف: "+(discovery.duration_seconds??"—")+" ثانية"+
+    (discovery.openapi?.length?" • OpenAPI: "+discovery.openapi.map(x=>x.path+" ("+x.documented_routes+")").join("، "):"");
   const routes=$("discoveryPaths");routes.replaceChildren();
   if(!discovery.paths?.length)routes.append(n("p","empty","لا توجد مسارات مستدل عليها ضمن حدود الفحص."));
   (discovery.paths||[]).forEach(row=>{
     const card=n("div","route-entry");
     const title=n("div","route-head");
-    title.append(n("span","route-tag",names[row.kind]||row.kind),n("code","route-path",row.path));
-    card.append(title,n("small",null,"المصدر: "+(row.sources||[]).join("، ")+(row.status?" • HTTP "+row.status:" • لم يُختبر المسار مباشرة")));
+    title.append(n("span","route-tag",names[row.kind]||row.kind),n("code","route-path",row.path),n("span","route-tag confidence-"+(row.confidence||"inferred"),cNames[row.confidence]||"مستنتجة"));
+    card.append(title,n("small",null,(row.note||"دلالة غير مؤكدة")+
+      " • المصدر: "+(row.sources||[]).join("، ")+
+      (row.status!==null&&row.status!==undefined?" • HTTP "+row.status:" • لم يُختبر المسار مباشرة")+
+      (row.methods?.length?" • الطرق الموثقة: "+row.methods.join(", "):"")));
     routes.append(card)
   });
   $("browserStatus").textContent="حالة المتصفح: "+(discovery.browser_status||"غير محددة")+". لا تُحفظ الكوكيز أو الترويسات الحساسة أو أجسام الاستجابات.";
