@@ -38,7 +38,7 @@ def inspect(url):
         browser=p.chromium.launch(headless=True,args=["--no-sandbox"])
         try:
             context=browser.new_context(ignore_https_errors=False,user_agent="AlEzzTV-AuthorizedMediaChecker/1.0")
-            response=context.request.get(url,timeout=20000,max_redirects=0)
+            response=context.request.get(url,timeout=20000,max_redirects=0,headers={"Range":"bytes=0-65535"} if urlsplit(url).path.lower().endswith(".mp4") else None)
             out["http_status"]=response.status
             if response.status in (301,302,303,307,308):
                 raise ValueError("Source redirects instead of serving the media")
@@ -60,7 +60,7 @@ def inspect(url):
                     raise ValueError("Empty HLS playlist")
                 child=urljoin(url,items[0])
                 valid_public(child)
-                small=context.request.get(child,timeout=16000,max_redirects=0)
+                small=context.request.get(child,timeout=16000,max_redirects=0,headers={"Range":"bytes=0-65535"})
                 if small.status not in (200,206):
                     raise ValueError("First playlist/segment returned HTTP "+str(small.status))
                 sample=small.body()
