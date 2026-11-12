@@ -1181,19 +1181,9 @@ public final class MainActivity extends Activity {
         focusWhenReady("btn:رجوع إلى القائمة");
     }
     private void play(JSONObject item,String nextUrl,String nextId,String nextTitle){
-        // Official-channel entries are navigation only; they are not playable HLS streams.
         if("official_link".equals(str(item,"playback_mode")) &&
            str(item,"stream_url").length()==0){
-            String official=str(item,"official_url");
-            if(!official.startsWith("https://")){
-                showStatus("رابط صفحة المشاهدة الخارجية غير متوفر");return;
-            }
-            try{
-                startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(official)));
-            }catch(android.content.ActivityNotFoundException error){
-                showStatus("لم يتم العثور على متصفح متوافق لفتح صفحة المشاهدة الخارجية");
-            }
-            return;
+            UnavailableVideoActivity.show(this,"live",str(item,"title_ar"));return;
         }
         String youtube=str(item,"youtube_url");
         String variants=item.optJSONArray("stream_variants")==null?
@@ -1201,27 +1191,13 @@ public final class MainActivity extends Activity {
         boolean kids="kids".equals(mode);
         ArrayList<PlaybackSources.Source> available=PlaybackSources.collect(
             str(item,"stream_url"),str(item,"quality"),variants,youtube,kids);
-        if(available.isEmpty()){showStatus("لا يوجد مصدر MP4/HLS أو Embed/YouTube معتمد");return;}
+        if(available.isEmpty()){
+            UnavailableVideoActivity.show(this,str(item,"_type"),str(item,"title_ar"));return;
+        }
         PlaybackSources.Source selected=available.get(PlaybackSources.preferred(available));
         String url=selected.url;
         String encoded=PlaybackSources.encode(available);
-        if("embed".equals(selected.kind)||"youtube".equals(selected.kind)){
-            if(kids || !"approved".equals(str(item,"rights_status"))){
-                showStatus("مشغل Embed/YouTube غير معتمد الحقوق");return;
-            }
-            if(available.size()==1 && "youtube".equals(selected.kind)){
-                openYouTube(youtube,str(item,"title_ar"));return;
-            }
-            Intent embed=new Intent(this,EmbedPlayerActivity.class);
-            embed.putExtra("stream_url",url);
-            embed.putExtra("title",str(item,"title_ar"));
-            embed.putExtra("available_sources",encoded);
-            embed.putExtra("stream_variants",variants);
-            embed.putExtra("item_id",str(item,"id"));
-            startActivity(embed);
-            return;
-        }
-        Intent i=new Intent(this,available.size()>1?CinemaPlayerActivity.class:PlayerActivity.class);
+        Intent i=new Intent(this,CinemaPlayerActivity.class);
         i.putExtra("available_sources",encoded);
         i.putExtra("stream_url",url);
         i.putExtra("quality",available.size()>1?"default":str(item,"quality"));
