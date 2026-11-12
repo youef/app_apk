@@ -2,11 +2,11 @@
   "schema": 1,
   "channel": "stable",
   "package_name": "sa.alezz.tv",
-  "version_code": 300052,
-  "version_name": "21.0.52",
-  "download_url": "https://github.com/youef/app_apk/releases/download/al-ezz-stable-v21.0.52/al-ezz-tv-stable.apk",
-  "sha256": "7312b43e8130e488c5d573e643299938c4645ac3506fe0f88df8b70724adcdf5",
+  "version_code": 300053,
+  "version_name": "21.0.53",
+  "download_url": "https://github.com/youef/app_apk/releases/download/al-ezz-stable-v21.0.53/al-ezz-tv-stable.apk",
+  "sha256": "86e68d70d4b5425092f1eb19d0f42607691053103f89c21b379bd3c4bfdf519d",
   "required": true,
-  "min_supported_version_code": 300052,
-  "notes": "إظهار بطاقات الأفلام والمسلسلات دائمًا مع دعم تحديث الحلقات من قاعدة البيانات دون إعادة إصدار التطبيق."
+  "min_supported_version_code": 300053,
+  "notes": ""
 }
