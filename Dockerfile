@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 ALEZZ_PUBLIC_MODE=1 ALEZZ_BROWS
     ALEZZ_AUTOSYNC_CONCURRENCY=5
 WORKDIR /app
 COPY python-cloud-studio/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*\nRUN pip install --no-cache-dir -r requirements.txt
 # Install Playwright's headless Chromium browser plus required Linux libraries.
 RUN python -m playwright install --with-deps --only-shell chromium
 COPY python-cloud-studio/ ./
