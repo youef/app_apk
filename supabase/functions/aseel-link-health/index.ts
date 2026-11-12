@@ -136,7 +136,9 @@ function signedExpiry(url:URL):number {
 }
 function approvedEmbedShape(url:URL):boolean {
   const host=url.hostname.toLowerCase(), path=url.pathname;
-  return (host==="fushaar.world" && /^\/embed\/v-[a-z0-9]+\/?$/i.test(path)) ||
+  return ((host==="ok.ru"||host==="www.ok.ru") &&
+      /^\/video(?:embed)?\/[0-9]{1,20}\/?$/.test(path) && !url.search && !url.hash) ||
+    (host==="fushaar.world" && /^\/embed\/v-[a-z0-9]+\/?$/i.test(path)) ||
     (host==="liiivideo.com" && /^\/embed-[a-z0-9]+\.html$/i.test(path)) ||
     (host==="hanerix.com" && /^\/e\/[a-z0-9_-]+\/?$/i.test(path)) ||
     ((host==="1vid.xyz"||host==="www.1vid.xyz") && /^\/embed-[a-z0-9_-]+\.html$/i.test(path));
