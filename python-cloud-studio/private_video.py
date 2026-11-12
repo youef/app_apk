@@ -98,7 +98,7 @@ def worker(job_id, payload):
                 except Exception: pass
                 raise
             set_job(job_id,status="ready",video_id=media_id,
-                    playback_path="/web/private-video/"+media_id)
+                    playback_path="/studio/private-video/"+media_id)
     except Exception as ex:
         set_job(job_id,status="failed",error=str(ex)[:500])
 
@@ -143,7 +143,7 @@ def authorized_session(request, portal):
     return session[0]
 
 def register_playback(portal):
-    @router.get("/web/private-video/{video_id}")
+    @router.get("/studio/private-video/{video_id}")
     def play(video_id:uuid.UUID,request:Request):
         uid=authorized_session(request,portal)
         is_admin=False
