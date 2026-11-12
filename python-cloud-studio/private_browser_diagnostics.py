@@ -89,7 +89,20 @@ def diagnose(url):
             try:
                 first=page.goto(url,wait_until="domcontentloaded",timeout=20000)
                 output["http_status"]=first.status if first else None
-                page.wait_for_timeout(1600)
+                page.wait_for_timeout(1400)
+                # Normal muted playback of already-present public <video> elements
+                # may expose the first network media request without clicking ads.
+                try:
+                    page.evaluate("""() => {
+                      for (const v of Array.from(document.querySelectorAll('video')).slice(0,2)) {
+                        v.muted = true;
+                        const promise = v.play();
+                        if (promise && promise.catch) promise.catch(() => {});
+                      }
+                    }""")
+                    page.wait_for_timeout(1000)
+                except Exception:
+                    pass
                 output["page_title"]=page.title()[:180]
                 output["video_elements"]=page.locator("video").count()
                 # Media tags created by public JavaScript can expose URLs absent from the HTML.
