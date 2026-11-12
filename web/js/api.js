@@ -168,6 +168,7 @@
         language: row.language_code || null,
         stream: row.stream_url || "",
         variants: Array.isArray(row.stream_variants) ? row.stream_variants : [],
+        health: row.link_health_status || "unchecked",
         subtitleTrack: row.subtitle_url || "",
         subtitleLanguage: row.subtitle_language_code || "",
         youtubeId: yt,
@@ -180,13 +181,14 @@
       };
     }
 
-    // Preserve unpublished/failed works in the admin database, never expose
-    // sources marked suspect or broken as playable titles to viewers.
-    function approvedMedia(row) {
-      return row && row.status === "published" &&
-        row.link_health_status !== "broken" && row.link_health_status !== "suspect";
+    // A source-level health flag is a snapshot, not proof that every alternate
+    // player is unavailable. Keep published catalogue entries visible and let
+    // the video player test licensed direct alternatives when the user selects
+    // a title. Never relabel untested sources as healthy.
+    function visibleMedia(row) {
+      return row && row.status === "published";
     }
-    var movies = (raw.movies || []).filter(approvedMedia).map(function (r) { return base("movie", r); });
+    var movies = (raw.movies || []).filter(visibleMedia).map(function (r) { return base("movie", r); });
 
     var series = (raw.series || []).map(function (r) {
       var item = base("series", r);
@@ -210,7 +212,7 @@
       }
     });
 
-    (raw.episodes || []).filter(approvedMedia).forEach(function (e) {
+    (raw.episodes || []).filter(visibleMedia).forEach(function (e) {
       var season = seasonsById[e.season_id];
       if (!season) return;
       season.episodes.push({
@@ -225,6 +227,7 @@
         duration: e.duration_minutes || null,
         stream: e.stream_url || "",
         variants: Array.isArray(e.stream_variants) ? e.stream_variants : [],
+        health: e.link_health_status || "unchecked",
         youtubeId: e.youtube_url ? youtubeId(e.youtube_url) : "",
         rightsStatus: e.rights_status || "pending",
         officialPage: /^https:\/\/roya\.tv\/program\/1703\/episodes(?:[?#]|$)/.test(e.source_page_url || "") ? e.source_page_url : ""
@@ -291,9 +294,8 @@
       };
     });
 
-    // Hide empty series from viewers: every remaining series has at least
-    // one published episode not flagged suspect/broken. Draft metadata stays
-    // untouched in Supabase and the admin studio.
+    // Keep series with published episodes visible. A stale primary-source
+    // health flag must not erase all of the series' alternative players.
     var playableSeries = series.filter(function (s) { return s.episodeCount > 0; });
     var all = movies.concat(playableSeries, channels, youtube);
 
@@ -351,9 +353,11 @@
         id: "eq." + id, limit: 1
       }).then(function (rows) {
         var row = Array.isArray(rows) && rows[0];
-        if (!row || row.status !== "published" || row.rights_status !== "approved" ||
-            row.link_health_status === "broken" || row.link_health_status === "suspect") return null;
+        if (!row || row.status !== "published" || row.rights_status !== "approved") return null;
+        // Do not turn a suspect/broken source into a verified result. Return
+        // the saved alternatives for the first-party player to try normally.
         return { stream: row.stream_url || "", variants: Array.isArray(row.stream_variants) ? row.stream_variants : [],
+          health: row.link_health_status || "unchecked",
           youtubeId: row.youtube_url ? youtubeId(row.youtube_url) : "" };
       });
     },
