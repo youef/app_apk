@@ -28,6 +28,13 @@ button:disabled{opacity:.55;cursor:progress}
 <header><div class="brand">العز <span>TV</span> <span class="tag">استوديو خاص</span></div><a href="/studio/">العودة للإدارة</a></header>
 <h1>تحميل فيلم إلى مكتبتي الخاصة</h1>
 <p class="muted">ألصق رابط الفيديو المباشر MP4 أو M3U8 المصرّح باستضافته. الأداة تنزّل الفيلم كاملًا، وتتحقق من المدة، وترفعه إلى تخزين خاص، ثم تسجله في الأفلام كمسودة غير منشورة.</p>
+<section class="panel"><h2>اكتشاف فيديو أو حلقات من صفحة موقع</h2>
+<p class="muted">ألصق رابط صفحة عامة HTTPS. نستخرج الفيديوهات والحلقات المعلنة في HTML؛ لن تُحمل أي ملفات تلقائيًا قبل الفحص وتأكيد الإذن.</p>
+<label for="page-url">رابط صفحة الفيلم أو المسلسل</label>
+<input id="page-url" type="url" maxlength="2048" placeholder="https://example.com/movie-page/" value="https://egytbest.live/%D9%85%D8%B4%D8%A7%D9%87%D8%AF%D8%A9-%D9%81%D9%8A%D9%84%D9%85-%D9%81%D9%8A-%D8%B9%D8%B2-%D8%A7%D9%84%D8%B6%D9%87%D8%B1-2025-%D8%A7%D9%88%D9%86%D9%84%D8%A7%D9%8A%D9%86/#video-section"/>
+<p><button type="button" id="discover-page">فحص صفحة الموقع واكتشاف المشغلات والحلقات</button></p>
+<div id="discovery-results" class="status" aria-live="polite">لم تُفحص الصفحة بعد.</div>
+</section>
 <section class="panel">
 <h2>بيانات الفيلم</h2>
 <form id="film-form">
@@ -49,6 +56,26 @@ button:disabled{opacity:.55;cursor:progress}
 </main><script>
 const el=id=>document.getElementById(id),form=el('film-form'),start=el('start'),status=el('state'),progress=el('progress'),result=el('result');
 let poller=null;
+const discoveryBox=el('discovery-results');
+el('discover-page').addEventListener('click',async()=>{
+ const button=el('discover-page');button.disabled=true;discoveryBox.replaceChildren();discoveryBox.textContent='جارٍ تحليل روابط الصفحة العامة...';
+ try{
+ const r=await fetch('/api/private-film/discover',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({page_url:el('page-url').value.trim()})});
+ const data=await r.json();if(!r.ok)throw Error(JSON.stringify(data));
+ discoveryBox.replaceChildren();
+ const headline=document.createElement('div');headline.textContent=(data.title||'الصفحة')+' — '+(data.status||'غير معروف')+' — HTTP '+(data.http_status||'غير متاح');discoveryBox.append(headline);
+ for(const note of data.notes||[]){const p=document.createElement('p');p.textContent=note;discoveryBox.append(p)}
+ const addTitle=(txt)=>{const h=document.createElement('h3');h.textContent=txt;discoveryBox.append(h)};
+ addTitle('روابط الفيديو المرشحة: '+(data.media||[]).length);
+ for(const media of data.media||[]){const row=document.createElement('div');row.style.margin='12px 0';const name=document.createElement('span');name.textContent=(media.label||'فيديو')+' — '+media.url.slice(0,160)+' ';const button=document.createElement('button');button.type='button';button.textContent='اختيار الرابط للفحص';button.onclick=()=>{el('source').value=media.url;el('title').value=data.title||el('title').value;el('source').scrollIntoView({behavior:'smooth',block:'center'})};row.append(name,button);discoveryBox.append(row)}
+ addTitle('صفحات الحلقات: '+(data.episodes||[]).length);
+ for(const episode of data.episodes||[]){const p=document.createElement('p');const a=document.createElement('a');a.href=episode.page_url;a.target='_blank';a.rel='noopener noreferrer';a.textContent=episode.title;p.append(a);discoveryBox.append(p)}
+ addTitle('المشغلات المضمّنة: '+(data.embeds||[]).length);
+ for(const url of data.embeds||[]){const p=document.createElement('p');p.textContent=url;discoveryBox.append(p)}
+ }catch(e){discoveryBox.textContent='تعذر فحص صفحة الموقع: '+e.message}
+ finally{button.disabled=false}
+});
+
 el('source').value='https://playnixes.com/stream/HPugpAaoo6Lz8UXkOEf7SA/kjhhiuahiuhgihdf/1794563654/69496958/master.m3u8';
 el('check-source').addEventListener('click',async()=>{
  const btn=el('check-source');btn.disabled=true;
