@@ -165,7 +165,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{
             <button type="button" class="btn secondary" id="discover-page">⌕ فحص HTML السريع</button>
             <button type="button" class="btn secondary" id="browser-diagnose">◈ Chromium</button>
           </div>
-          <p class="hint">الفحص يكتشف البيانات والروابط المتاحة علنًا فقط؛ لا يُتجاوز تسجيل الدخول أو DRM أو قيود المصدر.</p>
+          <p class="hint">الفحص المتعدد يجرب BeautifulSoup ثم إعدادات JavaScript ثم yt-dlp ثم Chromium ويفحص روابط الحلقات واحدًا تلو الآخر، دون تجاوز DRM أو رفض الخادم.</p>
           <div id="discovery-status" class="mini-status" role="status">لم يبدأ فحص الصفحة.</div>
           <div id="deep-progress" class="notice" style="margin-top:12px" role="status">الفحص الشامل: HTML ← إعدادات JS ← yt-dlp ← Chromium ← جميع صفحات الحلقات المكتشفة.</div>
           <div id="deep-methods" class="results" aria-label="نتائج محركات الفحص"></div>
@@ -215,6 +215,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{
           <ul class="service-list" aria-live="polite">
             <li><span class="service-label">FastAPI</span><strong class="service-value" id="cap-api">فحص...</strong></li>
             <li><span class="service-label">Chromium / Playwright</span><strong class="service-value" id="cap-chromium">فحص...</strong></li>
+            <li><span class="service-label">yt-dlp</span><strong class="service-value" id="cap-ytdlp">فحص...</strong></li>
             <li><span class="service-label">FFprobe</span><strong class="service-value" id="cap-ffprobe">فحص...</strong></li>
             <li><span class="service-label">FFmpeg</span><strong class="service-value" id="cap-ffmpeg">فحص...</strong></li>
             <li><span class="service-label">Supabase Storage</span><strong class="service-value" id="cap-storage">فحص...</strong></li>
@@ -526,12 +527,12 @@ async function refreshHealth(){
   $("top-version").textContent=safeText(data.version||"Film Studio",35);
   $("engine-stat").textContent="متصل";
   $("side-dot").className="dot good";$("side-service").textContent="الخدمة متصلة: "+safeText(data.version,45);
-  setCap("cap-api",true);setCap("cap-chromium",data.chromium);setCap("cap-ffprobe",data.ffprobe);setCap("cap-ffmpeg",data.ffmpeg);setCap("cap-storage",data.private_storage_configured);
+  setCap("cap-api",true);setCap("cap-chromium",data.chromium);setCap("cap-ytdlp",data.yt_dlp);setCap("cap-ffprobe",data.ffprobe);setCap("cap-ffmpeg",data.ffmpeg);setCap("cap-storage",data.private_storage_configured);
   $("health-detail").textContent="صيغة الإدخال: "+(data.formats||[]).join(", ").toUpperCase()+" • حد الملف "+(data.limits?.max_file_gib||"؟")+" GB • هذا التحقق للإعدادات وليس اختبار رفع فعلي.";
  }catch(e){
   $("engine-stat").textContent="غير متاح";$("side-dot").className="dot bad";$("side-service").textContent="لم يتأكد اتصال واجهة الإدارة";
   $("health-detail").textContent="تعذر فحص المحرك: "+e.message;
-  for(const id of ["cap-api","cap-chromium","cap-ffprobe","cap-ffmpeg","cap-storage"])$(id).textContent="غير مؤكد";
+  for(const id of ["cap-api","cap-chromium","cap-ytdlp","cap-ffprobe","cap-ffmpeg","cap-storage"])$(id).textContent="غير مؤكد";
  }
 }
 $("deep-scan").addEventListener("click",deepScan);
