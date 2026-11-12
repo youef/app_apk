@@ -2,11 +2,11 @@
   "schema": 1,
   "channel": "stable",
   "package_name": "sa.alezz.tv",
-  "version_code": 300031,
-  "version_name": "21.0.31",
-  "download_url": "https://github.com/youef/app_apk/releases/download/al-ezz-stable-v21.0.31/al-ezz-tv-stable.apk",
-  "sha256": "835a07e509130c9b430fb60f70755ccd9748f638adc7212389b097be6cdd05c2",
+  "version_code": 300032,
+  "version_name": "21.0.32",
+  "download_url": "https://github.com/youef/app_apk/releases/download/al-ezz-stable-v21.0.32/al-ezz-tv-stable.apk",
+  "sha256": "edd161cee276e172d548a82c0f2f6c1020463abd94e5064d031e7be5f750dc41",
   "required": true,
-  "min_supported_version_code": 300031,
-  "notes": "إصلاح ريموت الجوال: منع تعارض جلسات الباركود، فحص الاتصال، وتحسين استجابة أوامر المتصفح."
+  "min_supported_version_code": 300032,
+  "notes": ""
 }
