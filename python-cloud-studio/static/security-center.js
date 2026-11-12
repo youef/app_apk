@@ -12,7 +12,7 @@ const u="https://"+site.host+"/.well-known/alezz-security-verification.txt",a=n(
 const inp=n("input");inp.value=site.token;inp.readOnly=true;p.append(inp,b("نسخ الرمز",()=>{inp.select();navigator.clipboard.writeText(site.token).then(()=>toast("تم النسخ")).catch(()=>toast("يمكن نسخ النص المحدد"));}));
 p.append(n("p","note","يجب أن يعرض رابط الملف النص نفسه عبر HTTPS دون إعادة توجيه."));
 p.append(b("تأكيد إثبات الملكية",()=>action(async()=>{await api("/api/security/verify",{site_id:site.id});toast("تم توثيق الموقع");await refresh()}),"primary"));card.append(p)}
-function drawSites(){const root=$("sites");root.replaceChildren();$("totalSites").textContent=sites.length;$("verifiedSites").textContent=sites.filter(s=>s.verified_at).length;$("scannedSites").textContent=sites.filter(s=>s.latest).length;
+function drawSites(){const root=$("sites");root.replaceChildren();$("totalSites").textContent=sites.length;$("verifiedSites").textContent=sites.filter(s=>s.verified_at).length;$("scannedSites").textContent=sites.filter(s=>s.latest).length;const pick=$("importSite");const current=pick.value;pick.replaceChildren(n("option",null,"اختر موقعًا"));pick.firstChild.value="";sites.filter(s=>s.verified_at).forEach(s=>{const o=n("option",null,s.host);o.value=s.id;pick.append(o)});if(sites.some(s=>s.id===current&&s.verified_at))pick.value=current;
 if(!sites.length){root.append(n("div","empty","لم تضف أي موقع بعد."));return}
 sites.forEach(s=>{const card=n("article","site-card"),head=n("div","site-top");head.append(n("strong",null,s.host),n("span",s.verified_at?"pill good":"pill",s.verified_at?"✓ تم إثبات الملكية":"بانتظار إثبات الملكية"));card.append(head);
 if(s.last_run)card.append(n("p","note","آخر فحص: "+s.last_run));if(s.job&&s.job.state==="running")card.append(n("p","note","جارٍ الفحص في الخلفية…"));if(s.job&&s.job.state==="failed")card.append(n("p","note","فشل الفحص: "+(s.job.error||"راجع الخدمة")));
@@ -30,7 +30,7 @@ card.append(controls);root.append(card)})}
 const levels={critical:"حرجة",high:"عالية",medium:"متوسطة",low:"منخفضة",info:"معلومة"};
 async function showReport(id){const r=await api("/api/security/report/"+encodeURIComponent(id));report=r.report;active=id;$("reportSection").hidden=false;$("reportMeta").textContent=report.host+" • "+r.created_at;
 const overview=$("reportOverview");overview.replaceChildren();const row=n("div","report-summary");
-[[report.indicator,"مؤشر الإعدادات — ليس شهادة أمان"],...["critical","high","medium","low"].map(x=>[report.counts[x],levels[x]])].forEach(pair=>{const e=n("div","score");e.append(n("strong",null,pair[0]),n("span",null,pair[1]));row.append(e)});overview.append(row);
+[[report.indicator===null?"—":report.indicator,"مؤشر الإعدادات — ليس شهادة أمان"],...["critical","high","medium","low"].map(x=>[report.counts[x],levels[x]])].forEach(pair=>{const e=n("div","score");e.append(n("strong",null,pair[0]),n("span",null,pair[1]));row.append(e)});overview.append(row);
 const list=$("findings");list.replaceChildren();if(!report.findings.length)list.append(n("p","empty","لا توجد مؤشرات ضمن الفحوصات المحدودة التي اكتملت."));
 report.findings.forEach(f=>{const item=n("div","finding");item.dataset.level=f.severity;item.append(n("span","severity",levels[f.severity]||f.severity),n("h4",null,f.title),n("p",null,f.detail),n("p",null,"الإصلاح: "+f.fix));if(f.evidence)item.append(n("small",null,"الدليل: "+f.evidence));list.append(item)});
 const manual=$("manualList");manual.replaceChildren();(report.manual_review||[]).forEach(s=>manual.append(n("div","manual-item",s)));$("reportSection").scrollIntoView({behavior:"smooth"})}
@@ -84,6 +84,17 @@ function drawCatalog(){const root=$("coverage");root.replaceChildren();catalog.f
 integrations.forEach(([name,description])=>{const item=n("div","tool-card");item.append(n("b",null,name),n("p",null,description));$("toolCards").append(item)});drawCatalog();
 $("addForm").onsubmit=e=>{e.preventDefault();action(async()=>{$("addButton").disabled=true;try{let data=await api("/api/security/sites",{url:$("siteUrl").value.trim()});toast("أُضيف "+data.host+"؛ أثبت الملكية لبدء الفحص");$("siteUrl").value="";await refresh()}finally{$("addButton").disabled=false}})};
 $("refreshButton").onclick=()=>action(refresh);
+$("importForm").onsubmit=e=>{e.preventDefault();action(async()=>{
+  const file=$("importFile").files[0],site_id=$("importSite").value,tool=$("importTool").value;
+  if(!site_id)throw Error("اختر نطاقًا موثق الملكية");
+  if(!file)throw Error("اختر ملف تقرير JSON");
+  if(file.size>900000)throw Error("الحد الأقصى للتقرير 900 كيلوبايت");
+  const report_json=await file.text();
+  const result=await api("/api/security/import",{site_id,tool,report_json});
+  toast("تم استيراد "+result.count+" نتيجة من "+tool);
+  $("importFile").value="";await refresh();await showReport(site_id);
+})};
+
 $("exportButton").onclick=()=>{if(!report)return;const url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:"application/json"}));const a=n("a");a.href=url;a.download="alezz-security-"+report.host+"-"+new Date().toISOString().slice(0,10)+".json";a.click();setTimeout(()=>URL.revokeObjectURL(url),2000)};
 action(async()=>{csrf=(await api("/api/security/session")).csrf;await refresh()});
 setInterval(()=>{if(sites.some(s=>s.job?.state==="running"))action(refresh)},9000);
