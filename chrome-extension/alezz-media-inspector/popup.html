@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,Arial,sans-serif}
+*{box-sizing:border-box}body{width:370px;margin:0;padding:22px;background:#0f1118;color:#f5f5fa}
+h1{font-size:20px;margin:0 0 8px}p{font-size:12px;color:#b5b8c7;line-height:1.8}
+.top{display:flex;gap:10px;align-items:center;margin-bottom:19px}
+.logo{border-radius:11px;background:#d42a4a;padding:11px;font-weight:900}
+button{border:0;border-radius:11px;background:#db3658;color:#fff;padding:12px 14px;font:inherit;font-weight:750;cursor:pointer}
+button:disabled{opacity:.5;cursor:progress}.row{display:flex;gap:8px}
+#copy{background:#333846}
+#result{margin-top:15px;padding:13px;border-radius:11px;background:#1c202a;border:1px solid #3d4350;font-size:12px;white-space:pre-wrap;max-height:350px;overflow:auto;line-height:1.9}
+.note{color:#c7adb6}
+</style>
+</head>
+<body>
+<div class="top"><div class="logo">ع TV</div><div><h1>فحص تبويب Chrome</h1><p style="margin:0">تشخيص محلي بإذن منك، دون أي إرسال للخادم</p></div></div>
+<p class="note">يتحقق من الوسائط المعلنة بالصفحة، Performance Network، وعدد مخازن CacheStorage. لا يقرأ Cookies أو بيانات الدخول أو محتويات الكاش.</p>
+<div class="row"><button id="scan">فحص التبويب الحالي</button><button id="copy" disabled>نسخ التقرير JSON</button></div>
+<div id="result" role="status">افتح الصفحة التي تملك حق فحصها، ثم اضغط «فحص التبويب الحالي».</div>
+<script src="popup.js"></script>
+</body></html>
