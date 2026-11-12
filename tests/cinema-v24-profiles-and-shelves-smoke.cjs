@@ -17,7 +17,8 @@ check("Main portal keeps exactly three primary categories with compact extras",
     home.includes('{"المسلسلات","المواسم والحلقات","series"}') &&
     home.includes('{"الأفلام","مكتبة السينما","movies"}') &&
     home.includes('{"البث المباشر","القنوات والبرامج","live"}')&&
-    home.includes('{"الأطفال","kids"},{"قائمتي","favorites"},{"البحث","search"},{"الإعدادات","settings"}'));
+    home.includes('{"الأطفال","kids"},{"قائمتي","favorites"},{"البحث","search"},{"مشاهداتي","watching"},{"الإعدادات","settings"}') &&
+    home.includes('for(int i=0;i<main.length;i++)') && home.includes('for(int i=0;i<small.length;i++)'));
 check("Native poster quality badges and saved watch progress are data-driven",
     home.includes('quality.contains("4K")')&&home.includes('quality.contains("1080")')&&
     home.includes('PlaybackMemory.recent(this,PlaybackMemory.activeProfile(this))')&&
