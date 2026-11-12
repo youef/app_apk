@@ -32,7 +32,7 @@ button:disabled{opacity:.55;cursor:progress}
 <p class="muted">ألصق رابط صفحة عامة HTTPS. نستخرج الفيديوهات والحلقات المعلنة في HTML؛ لن تُحمل أي ملفات تلقائيًا قبل الفحص وتأكيد الإذن.</p>
 <label for="page-url">رابط صفحة الفيلم أو المسلسل</label>
 <input id="page-url" type="url" maxlength="2048" placeholder="https://example.com/movie-page/" value="https://egytbest.live/%D9%85%D8%B4%D8%A7%D9%87%D8%AF%D8%A9-%D9%81%D9%8A%D9%84%D9%85-%D9%81%D9%8A-%D8%B9%D8%B2-%D8%A7%D9%84%D8%B6%D9%87%D8%B1-2025-%D8%A7%D9%88%D9%86%D9%84%D8%A7%D9%8A%D9%86/#video-section"/>
-<p><button type="button" id="discover-page">فحص صفحة الموقع واكتشاف المشغلات والحلقات</button></p>
+<p><button type="button" id="discover-page">فحص الصفحة واكتشاف المصادر</button> <button type="button" id="browser-diagnose">تشخيص متقدم عبر Chrome Chromium</button></p><div id="browser-diagnostics" class="status" aria-live="polite" style="margin-bottom:12px">لم يبدأ فحص Chromium بعد.</div>
 <div id="discovery-results" class="status" aria-live="polite">لم تُفحص الصفحة بعد.</div>
 </section>
 <section class="panel">
@@ -57,6 +57,28 @@ button:disabled{opacity:.55;cursor:progress}
 const el=id=>document.getElementById(id),form=el('film-form'),start=el('start'),status=el('state'),progress=el('progress'),result=el('result');
 let poller=null;
 const discoveryBox=el('discovery-results');
+const browserDiagnostics=el('browser-diagnostics');
+el('browser-diagnose').addEventListener('click',async()=>{
+ const btn=el('browser-diagnose');btn.disabled=true;
+ browserDiagnostics.replaceChildren();browserDiagnostics.textContent='جارٍ فتح الصفحة عبر Chromium وفحص استجابات الشبكة...';
+ try{
+  const response=await fetch('/api/private-film/browser-diagnose',{method:'POST',credentials:'same-origin',
+    headers:{'Content-Type':'application/json'},body:JSON.stringify({page_url:el('page-url').value.trim()})});
+  const data=await response.json();
+  if(!response.ok)throw Error(JSON.stringify(data));
+  browserDiagnostics.replaceChildren();
+  const header=document.createElement('div');
+  header.textContent='فحص Chromium: '+(data.state||'غير معروف')+' | HTTP '+(data.http_status||'غير متاح')+' | مشغلات الفيديو: '+(data.video_elements??0);
+  browserDiagnostics.append(header);
+  for(const note of data.notes||[]){const row=document.createElement('p');row.textContent=note;browserDiagnostics.append(row)}
+  for(const record of data.responses||[]){const row=document.createElement('p');row.textContent='HTTP '+record.status+' — '+record.host+' — '+record.mime+' — '+record.type;browserDiagnostics.append(row)}
+  for(const media of data.candidate_media||[]){
+   const row=document.createElement('p');const btn=document.createElement('button');btn.type='button';btn.textContent='اختيار مصدر عام للفحص';btn.onclick=()=>{el('source').value=media.url;el('source').scrollIntoView({behavior:'smooth',block:'center'})};row.append(btn);browserDiagnostics.append(row)
+  }
+ }catch(err){browserDiagnostics.textContent='تعذر تشخيص Chromium: '+err.message}
+ finally{btn.disabled=false}
+});
+
 el('discover-page').addEventListener('click',async()=>{
  const button=el('discover-page');button.disabled=true;discoveryBox.replaceChildren();discoveryBox.textContent='جارٍ تحليل روابط الصفحة العامة...';
  try{
