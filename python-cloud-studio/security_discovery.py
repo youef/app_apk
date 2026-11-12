@@ -38,6 +38,8 @@ def _path(url: str, host: str) -> str | None:
         if p.scheme != "https" or p.hostname != host or p.port not in (None, 443):
             return None
         path = unquote(p.path)
+        if path.lower().startswith("/cdn-cgi/challenge-platform/"):
+            return None  # Cloudflare challenge internals are not site APIs or entrypoints.
         if not path.startswith("/") or path.startswith("//") or len(path) > 150:
             return None
         if any(ord(c) < 32 for c in path) or ".." in path or "\\" in path:
@@ -130,6 +132,7 @@ def _chromium_network(host: str, public_addresses):
                             or dest.port not in (None, 443)
                             or req.method not in ("GET", "HEAD")
                             or req.resource_type in ("image", "media", "font")
+                            or dest.path.lower().startswith("/cdn-cgi/challenge-platform/")
                             or re.search(r"(?i)(?:^|/)(?:logout|delete|destroy|reset|remove|reboot)(?:/|$)", dest.path)):
                         route.abort()
                         return
