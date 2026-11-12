@@ -156,6 +156,8 @@ jobs:
           node tests/unified-sources-smoke.cjs
           node tests/kids-world-smoke.cjs
           node tests/cast-airplay-smoke.cjs
+          node tests/tv-manual-update-policy-smoke.cjs
+          node tests/tv-dynamic-update-smoke.cjs
       - name: Build legacy-compatible APK
         shell: bash
         run: |
