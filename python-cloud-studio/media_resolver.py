@@ -298,6 +298,10 @@ class MediaResolver:
         deadline = deadline or time.monotonic()+self.max_seconds
         def probe(item):
             row = dict(item)
+            try:
+                row['url'] = normalized_source_url(row.get('url', ''))
+            except (ValueError, TypeError, AttributeError):
+                pass  # Invalid URLs are recorded as failed without network access.
             if supported_source_kind(row.get('url','')) == 'embed':
                 row['kind'] = 'embed'
             if time.monotonic() >= deadline:
