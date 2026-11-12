@@ -6,7 +6,7 @@
   "version_name": "21.0.53",
   "download_url": "https://github.com/youef/app_apk/releases/download/al-ezz-stable-v21.0.53/al-ezz-tv-stable.apk",
   "sha256": "86e68d70d4b5425092f1eb19d0f42607691053103f89c21b379bd3c4bfdf519d",
-  "required": true,
-  "min_supported_version_code": 300053,
+  "required": false,
+  "min_supported_version_code": 0,
   "notes": ""
 }
