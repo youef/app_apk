@@ -1,0 +1,61 @@
+/* Al Ezz TV Studio V5 — unified premium dark/crimson identity, RTL, mobile */
+:root{
+  --bg:#0b0c13;
+  --sidebar:#11131c;
+  --panel:#151823;
+  --panel-light:#1a1e29;
+  --border:#343746;
+  --border-soft:#2b2e3b;
+  --text:#f7f7fb;
+  --muted:#a0a5b6;
+  --muted2:#c7c8d5;
+  --gold:#f45b75;
+  --gold-dark:#b32543;
+  --green:#54cda5;
+  --red:#ff8092;
+  --radius:18px
+}
+body{background:radial-gradient(ellipse 650px 490px at 100% -18%,rgba(204,42,70,.12),transparent 80%),var(--bg);color:var(--text)}
+.sidebar{background:linear-gradient(180deg,#171823 0%,#11121a 63%,#0c0e15 100%);border-left:1px solid #383444}
+.brand-symbol{color:#fff;background:linear-gradient(135deg,#fa5f78,#951333);box-shadow:0 10px 28px #ce23494d}
+.brand-symbol span{color:#fff}
+.brand em{color:#ff6b86}
+.nav-link{border:1px solid transparent;transition:background .17s ease,color .17s ease,border-color .17s ease}
+.nav-link:hover{background:#29232f;color:#fef8fb;border-color:#553647}
+.nav-link.active{background:linear-gradient(90deg,#4b2232,#2a202e);color:#ffc7d3;border-color:#703447}
+.nav-link.active:before{background:#ff708a}
+.topbar{background:rgba(15,17,25,.88);border-bottom-color:#3b303d;backdrop-filter:blur(20px)}
+.main-area{background:transparent}
+.section-panel{border-color:#343543;background:#161925;border-radius:20px;box-shadow:0 14px 35px #05081020}
+.section-panel h2,.section-panel h3{letter-spacing:-.2px}
+.section-head-main p,.lead{color:#b7bbc9}
+.primary-btn,.small-gold,.account-btn,.outline-action:hover{border-color:#c83d59;background:linear-gradient(128deg,#ee526b,#a51d3b);color:#fff;box-shadow:0 8px 22px #d1224030}
+.primary-btn:hover:not(:disabled),.small-gold:hover:not(:disabled){filter:brightness(1.09);transform:translateY(-1px)}
+.secondary-btn,.small-outline,.outline-action{border-color:#514352;color:#f0dbe3}
+input,select,textarea{accent-color:#f45b75}
+input:focus,select:focus,textarea:focus{border-color:#ea5a75!important;box-shadow:0 0 0 3px #ef496b26!important}
+button:focus-visible,a:focus-visible{outline-color:#ff8aa0}
+.studio-command-bar{border:1px solid #453342;border-radius:18px;background:linear-gradient(120deg,#211d2a,#151b27)}
+.studio-edit-state[data-dirty=true]{color:#ffd7dd}
+.server-label{color:#c1bdca}
+.live-light,.status-dot{background:#52cf9f;box-shadow:0 0 12px #52cf9f50}
+.sidebar-bottom{background:#191b29;border-color:#393342}
+.mobile-dock{background:rgba(21,21,30,.93);backdrop-filter:blur(20px);border-top:1px solid #4a3142}
+.mobile-dock a[aria-current=page],.mobile-dock a.active{color:#ff8298}
+#quality .quality-hero{border-color:#8637476a;background:radial-gradient(circle at 85% 10%,#c5264950,transparent 45%),linear-gradient(120deg,#271522,#121924 65%,#171723)}
+#quality .quality-kicker{color:#ff9cac}
+#quality .quality-hero h1 em{color:#ff9caf}
+#quality .quality-btn.primary{background:linear-gradient(110deg,#f45b75,#aa1d3c);border-color:#f37791;color:#fff}
+#quality .quality-metric.warning strong{color:#ffba8b}
+#quality .quality-links a{color:#ffc7d0}
+#quality .quality-note{border-right-color:#d34a66}
+@media (max-width:760px){
+  .topbar{padding-inline:clamp(13px,4vw,22px)}
+  .section-panel{border-radius:16px}
+  .mobile-dock{padding-bottom:max(8px,env(safe-area-inset-bottom))}
+  #privateFilmPromo{padding:12px!important;border-radius:13px!important}
+  .page{padding-inline:clamp(12px,3vw,19px)}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;transition-duration:0s!important;animation-duration:0s!important}
+}
