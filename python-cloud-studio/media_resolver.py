@@ -243,8 +243,11 @@ class MediaResolver:
                     result = self.browser_capture(url)
                 sources = merge_sources(sources, result)
             except Exception as exc: errors.append(safe_error(exc))
-            if any(row.get('kind') == 'direct' and row['url'] not in known for row in sources): break
-        return sources, errors
+            # Do not quit at the first direct URL. A movie or episode can have
+            # multiple public player pages; their independent alternatives are
+            # needed when the first HLS/MP4 endpoint is stale.
+            # The deadline, page limit and MAX_CANDIDATES remain enforced.
+        return merge_sources(sources, limit=MAX_CANDIDATES), errors
 
     def _http(self, pages: list[str], *, deadline=None) -> tuple[list[dict], list[str]]:
         deadline = deadline or time.monotonic()+self.max_seconds
