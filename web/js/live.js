@@ -64,8 +64,7 @@
   function isOfficial(channel) { return channel.playback === "official_link" && !!https(channel.official); }
   function playable(channel) {
     if (!channel) return false;
-    if (isOfficial(channel)) return true;
-    if (channel.youtubeId && channel.playback === "youtube_embed") return true;
+    // Only actual direct media goes to the internal video player.
     return !!(https(channel.stream) && mediaType(channel.stream));
   }
   function stateText(message, error) {
@@ -187,7 +186,7 @@
     });
   }
   function channelKind(channel) {
-    return isOfficial(channel) ? "موقع الناشر" : !playable(channel) ? "رابط غير مدعوم" : "بث مباشر";
+    return !playable(channel) ? "قريبًا داخل العز TV" : "بث مباشر";
   }
   function row(channel, index) {
     var on = state.current && channel.key === state.current.key;
@@ -199,7 +198,7 @@
       '<span class="live-guide__copy"><strong>' + esc(channel.title) + '</strong><small>' +
       esc(channelGenre(channel)) + ' · ' + esc(channel.country || "TV") + '</small></span>' +
       '<span class="live-guide__indicator">' + (state.favorites.indexOf(channel.key)>=0 ? '<span aria-label="مفضلة" class="live-guide__star">★</span>' : '') +
-      (isOfficial(channel) ? icon("external") : '<i></i>') + '</span></button>';
+      (playable(channel) ? '<i></i>' : '<span aria-label="قريبًا">◌</span>') + '</span></button>';
   }
   function sortedChannels() {
     var query=state.search.trim().toLocaleLowerCase();
@@ -249,21 +248,16 @@
     desc.textContent = channelGenre(channel) + " • " + channelKind(channel);
     art.innerHTML = poster(channel);
     art.hidden = false;
-    // Third-party page entries remain navigation links, not fake HLS streams.
-    var external = $("liveOfficial");
-    if (external) {
-      external.hidden = !isOfficial(channel);
-      if (isOfficial(channel)) { external.href = https(channel.official); external.textContent = "↗ فتح صفحة المشاهدة الخارجية"; }
-      else external.removeAttribute("href");
-    }
-    $("liveStart").textContent = isOfficial(channel) ? "↗ فتح صفحة المشاهدة" : "تشغيل الآن";
-    var direct = !isOfficial(channel);
+    // An official website is metadata, not a playable stream or browser shortcut.
+    var external=$("liveOfficial");
+    if(external){external.hidden=true;external.removeAttribute("href");}
+    $("liveStart").textContent = "تشغيل داخل العز TV";
+    var direct=playable(channel);
     $("liveRetry").disabled = !direct;
     $("liveMute").disabled = !direct;
     $("liveGoLive").disabled = !direct;
     var badges = $("liveFormat");
-    badges.textContent = isOfficial(channel) ? "صفحة خارجية" :
-      channel.playback === "youtube_embed" ? "YouTube" : mediaType(channel.stream).toUpperCase() || "غير معروف";
+    badges.textContent=playable(channel)?mediaType(channel.stream).toUpperCase():"قريبًا";
   }
 
   function stopStream() {
@@ -280,6 +274,10 @@
     }
     state.hlsRecoveries = 0;
     state.awaitingGesture = false;
+    var standby=$("liveUnavailable");
+    var clip=$("liveComingSoonVideo");
+    if(standby)standby.hidden=true;
+    if(clip){clip.pause();clip.currentTime=0;}
     resetLiveQuality();
   }
   function error(message) {
@@ -288,8 +286,13 @@
     stateText(message, true);
     var stage = $("liveStage");
     if (stage) stage.classList.remove("is-loading", "is-playing");
-    if ($("livePoster")) $("livePoster").hidden = false;
+    if ($("livePoster")) $("livePoster").hidden = true;
     if ($("liveStart")) $("liveStart").hidden = false;
+    var standby=$("liveUnavailable"),clip=$("liveComingSoonVideo");
+    if(standby)standby.hidden=false;
+    if(clip){clip.muted=true;clip.currentTime=0;
+      var p=clip.play();if(p&&p.catch)p.catch(function(){});
+    }
   }
   function updateLiveMuteButton(video) {
     var button = $("liveMute");
@@ -471,7 +474,7 @@
     $("livePoster").hidden = false;
     stateText("جارٍ الاتصال بمصدر القناة…", false);
     var url = https(channel.stream), type = mediaType(url);
-    if (!url || !type) { error("لا يوجد رابط فيديو مباشر صالح لهذه القناة. افتح صفحة المصدر الخارجي إن توفر."); return; }
+    if (!url || !type) { error("لا يوجد رابط فيديو مباشر صالح لهذه القناة. ستظهر قريبًا على العز TV."); return; }
     if (window.AlezzCast) window.AlezzCast.bind("live",video,{
       stream:url,title:channel.title,subtitle:"بث مباشر • العز TV",poster:channel.poster,live:true,kids:channel.kids,
       youtubeId:channel.youtubeId
@@ -541,31 +544,10 @@
     displaySelection(channel);
     markGuideSelection();
     if (Store && Store.setPref) Store.setPref("lastLiveChannel", channel.key);
-    if (isOfficial(channel)) {
-      stateText("هذه القناة تفتح صفحة مشاهدة خارجية. لم يتم التحقق من وجود رابط بث مباشر داخل العز TV.", false);
-      if (autoplay) window.open(https(channel.official), "_blank", "noopener,noreferrer");
-      return;
+    if(isOfficial(channel) || channel.playback==="youtube_embed"){
+      error("هذا البث غير متاح برابط فيديو مباشر داخل العز TV. قريبًا سيتم دعمه.");return;
     }
-    if (channel.playback === "youtube_embed" && channel.youtubeId) {
-      if (!autoplay) { stateText("اضغط تشغيل لعرض الفيديو المضمّن.", false); return; }
-      stopStream();
-      var video = $("liveVideo");
-      if (video) video.hidden = true;
-      var iframe = document.createElement("iframe");
-      iframe.className = "live-youtube-frame";
-      iframe.title = channel.title;
-      iframe.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
-      iframe.allowFullscreen = true;
-      iframe.referrerPolicy = "strict-origin-when-cross-origin";
-      iframe.src = "https://www.youtube-nocookie.com/embed/" + encodeURIComponent(channel.youtubeId) + "?autoplay=1&playsinline=1&rel=0";
-      $("liveStage").appendChild(iframe);
-      state.frame = iframe;
-      $("livePoster").hidden = true;
-      $("liveStart").hidden = true;
-      stateText("تشغيل عبر تضمين يوتيوب الرسمي.", false);
-      return;
-    }
-    if (!playable(channel)) { error("القناة محفوظة لكن رابطها غير متوافق مع مشغّل الويب."); return; }
+    if (!playable(channel)) { error("لا يتوفر مصدر HLS أو MP4 أو DASH للقناة حاليًا."); return; }
     if (autoplay) startVideo(channel);
     else stateText("اختر تشغيل الآن لبدء البث.", false);
   }
@@ -707,8 +689,7 @@
     $("liveStart").addEventListener("click", function () {
       if (!state.current) return;
       if (isOfficial(state.current)) {
-        window.open(https(state.current.official), "_blank", "noopener,noreferrer");
-        return;
+        error("قريبًا سيتم دعم البث المباشر داخل تطبيق العز TV.");return;
       }
       // Resume the already-loaded media synchronously inside the user's click.
       // Restarting async HLS setup here would lose the gesture again.
@@ -802,6 +783,9 @@
       $("liveStage").classList.add("is-playing");
       $("livePoster").hidden = true;
       $("liveStart").hidden = true;
+      var standby=$("liveUnavailable"),clip=$("liveComingSoonVideo");
+      if(standby)standby.hidden=true;
+      if(clip)clip.pause();
       stateText(video.muted ? "البث يعمل الآن بدون صوت • اضغط زر الصوت لتفعيله" : "البث يعمل الآن • LIVE", false);
     });
     video.addEventListener("waiting", function () {
@@ -876,8 +860,9 @@
   }
   function render(catalog, initialCategory) {
     state.channels = ((catalog && catalog.channels) || []).filter(function (channel) {
-      return channel.playback === "stream" && !!https(channel.stream) &&
-        /\.(m3u8|mp4)(\?|$)/i.test(channel.stream);
+      // Unavailable records remain visible with first-party coming-soon messaging.
+      return channel && (channel.playback==="stream" || channel.playback==="official_link" ||
+        channel.playback==="youtube_embed" || !!channel.stream);
     }).sort(compareChannels);
     state.catalogCategories=(catalog && catalog.categories)||[];
     state.search = "";
@@ -898,6 +883,9 @@
       '<div class="live-layout"><div class="live-viewer">' +
       '<div class="live-stage" id="liveStage" tabindex="0" aria-label="منطقة مشاهدة التلفزيون؛ السهم فوق وتحت لتغيير القنوات">' +
       '<video id="liveVideo" controls playsinline webkit-playsinline x-webkit-airplay="allow" preload="none" aria-label="مشغل البث المباشر"></video>' +
+      '<div class="live-unavailable" id="liveUnavailable" hidden>' +
+      '<video id="liveComingSoonVideo" src="assets/al_ezz_coming_soon.mp4" autoplay muted loop playsinline preload="metadata" aria-hidden="true"></video>' +
+      '<div class="live-unavailable__message">قريبًا سيتم دعم البث المباشر في تطبيق العز TV</div></div>' +
       '<div class="live-channel-hud" id="liveChannelHud" aria-live="off" hidden></div>' +
       '<div class="live-stage__zap" role="group" aria-label="التنقل بين قنوات الفئة"><button type="button" id="liveZapUp" aria-label="القناة التالية">▲</button><button type="button" id="liveZapDown" aria-label="القناة السابقة">▼</button></div>' +
       '<button type="button" class="live-stage__guide-btn" id="liveGuideOverlay" title="فتح دليل القنوات" aria-label="فتح دليل القنوات">' + icon("list") + '</button>' +
@@ -925,7 +913,7 @@
       '<button id="liveAirPlay" type="button" class="live-control live-icon-action cast-airplay" title="اختيار شاشة AirPlay" aria-label="اختيار شاشة AirPlay" hidden>AirPlay</button>' +
       '<span id="liveCastStatus" class="cast-status" role="status" aria-live="polite" hidden></span>' +
       '<button id="liveFullscreen" type="button" class="live-control live-icon-action" title="ملء الشاشة" aria-label="ملء الشاشة">' + icon("expand") + '</button></div>' +
-      '<a id="liveOfficial" class="live-official" target="_blank" rel="noopener noreferrer" hidden>' + icon("external") + ' فتح صفحة المصدر الخارجي</a>' +
+      '<span id="liveOfficial" class="live-official" hidden></span>' +
       '<p class="live-help">البث متاح وفق المصدر وبلد المشاهدة. قد يرفض بعض الناشرين تشغيله داخل المتصفح (CORS)، كما أن iPhone وiPad يتحكمان تلقائيًا في جودات HLS الأصلية.</p>' +
       '</div><aside class="live-guide" aria-label="دليل القنوات">' +
       '<div class="live-guide__head"><div><span class="live-eyebrow">TV GUIDE</span><h2>دليل القنوات</h2></div>' +
