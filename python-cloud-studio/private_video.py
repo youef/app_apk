@@ -22,7 +22,12 @@ def admin_headers():
     key = os.getenv("ALEZZ_SUPABASE_SECRET_KEY") or os.getenv("ALEZZ_SUPABASE_SERVICE_ROLE_KEY")
     if not key:
         raise RuntimeError("Supabase server secret is not configured in Render")
-    return {"apikey":key, "Authorization":"Bearer "+key}
+    headers={"apikey":key}
+    # Opaque sb_secret keys are API keys, not JWTs. Legacy service-role JWTs
+    # still require the Bearer header for the REST and Storage APIs.
+    if not key.startswith("sb_secret_"):
+        headers["Authorization"]="Bearer "+key
+    return headers
 
 def source_check(value):
     u = urlsplit(value)
