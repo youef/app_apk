@@ -425,7 +425,9 @@
       var u = new URL(String(value || "").trim());
       if (u.protocol !== "https:" || u.username || u.password || (u.port && u.port !== "443")) return false;
       var host = u.hostname.toLowerCase(), path = u.pathname;
-      return (host === "fushaar.world" && path === "/embed/v-hk8a7pgjqd/") ||
+      return ((host === "ok.ru" || host === "www.ok.ru") &&
+        /^\/video(?:embed)?\/[0-9]{1,20}\/?$/.test(path) && !u.search && !u.hash) ||
+        (host === "fushaar.world" && path === "/embed/v-hk8a7pgjqd/") ||
         (host === "liiivideo.com" && path === "/embed-ie536pnmp7qz.html") ||
         (host === "hanerix.com" && /^\/e\/[a-z0-9_-]+\/?$/i.test(path)) ||
         ((host === "1vid.xyz" || host === "www.1vid.xyz") && /^\/embed-[a-z0-9_-]+\.html$/i.test(path)) ||
@@ -482,8 +484,16 @@
     return "";
   }
   function canonicalSource(url){
-    var id=youtubeSourceId(url);
-    return id?"https://www.youtube-nocookie.com/embed/"+id:String(url||"").trim();
+    var raw=String(url||"").trim();
+    if(isEmbedUrl(raw)){
+      var u=new URL(raw), host=u.hostname.toLowerCase();
+      if(host==="ok.ru"||host==="www.ok.ru"){
+        var match=u.pathname.match(/^\/video(?:embed)?\/([0-9]{1,20})\/?$/);
+        if(match)return "https://ok.ru/videoembed/"+match[1];
+      }
+    }
+    var id=youtubeSourceId(raw);
+    return id?"https://www.youtube-nocookie.com/embed/"+id:raw;
   }
   function sourceTypeLabel(type){
     return {hls:"HLS",mp4:"MP4",embed:"Embed",youtube:"YouTube"}[type]||"فيديو";
@@ -503,7 +513,7 @@
     frame.setAttribute("allowfullscreen", "");
     frame.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
     frame.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms allow-presentation");
-    frame.src = url;
+    frame.src = canonicalSource(url);
     var embedLoaded = false;
     var embedTimeout = setTimeout(function () {
       if (embedFrame === frame && !embedLoaded)
