@@ -77,6 +77,9 @@ portal = Portal(os.getenv('ALEZZ_PORTAL_DIR', str(BASE.parent)),
                 os.getenv('ALEZZ_SUPABASE_PUBLISHABLE_KEY', DEFAULT_PUBLIC_KEY),
                 secure=os.getenv('ALEZZ_PUBLIC_MODE') == '1')
 app.middleware('http')(portal.middleware)
+from private_video import router as private_video_router, register_playback
+register_playback(portal)
+app.include_router(private_video_router)
 @app.api_route('/login',methods=['GET','POST'],include_in_schema=False)
 async def legacy_login():
     return RedirectResponse('/account/admin',status_code=303)
