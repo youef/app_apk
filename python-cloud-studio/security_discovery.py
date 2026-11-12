@@ -5,7 +5,11 @@ no cookies, no brute force or private IPs. Chromium is DNS-pinned to a public IP
 """
 from __future__ import annotations
 
+import difflib
 import ipaddress
+import json
+import secrets
+import time
 import os
 import re
 import threading
@@ -47,7 +51,7 @@ def _path(url: str, host: str) -> str | None:
 
 def _kind(path: str) -> str | None:
     lower = path.lower().rstrip("/") or "/"
-    if re.search(r"(?:^|/)(?:api|graphql|wp-json|rest)(?:/|$)", lower):
+    if re.search(r"(?:^|/)(?:api|graphql|wp-json|rest|openapi.json|swagger.json|swagger-ui|api-docs)(?:/|$)", lower):
         return "api"
     if re.search(r"(?:^|/)(?:admin|dashboard|wp-admin|moderator|acp|manage|backend)(?:/|$)", lower):
         return "admin"
@@ -181,11 +185,109 @@ def _chromium_network(host: str, public_addresses):
         BROWSER_GATE.release()
 
 
+
+def _soft_missing(reference, candidate):
+    """Conservatively identify SPA catch-all / soft-404 HTML responses."""
+    if not reference or not candidate:
+        return False
+    status_a, headers_a, body_a = reference
+    status_b, headers_b, body_b = candidate
+    if not (200 <= status_a < 300 and 200 <= status_b < 300):
+        return False
+    if "html" not in headers_a.get("Content-Type", "").lower() or "html" not in headers_b.get("Content-Type", "").lower():
+        return False
+    try:
+        def normalized(payload):
+            soup = BeautifulSoup(payload.decode("utf-8", "replace"), "html.parser")
+            for tag in soup(["script", "style", "noscript"]):
+                tag.decompose()
+            text = " ".join(soup.stripped_strings).lower()
+            return re.sub(r"(?i)\b[0-9a-f]{10,}\b|\b\d{5,}\b", "#", text)[:1600]
+        a, b = normalized(body_a), normalized(body_b)
+        return bool(a and b and difflib.SequenceMatcher(None, a, b, autojunk=False).ratio() >= .92)
+    except (ValueError, TypeError):
+        return False
+
+
+def _apply_evidence(row):
+    sources = row.get("sources") or []
+    state = row.get("validation")
+    if state == "network":
+        confidence = "observed"
+        note = "ظهر في Network أثناء زيارة عامة؛ ليس دليلًا على صلاحيات الوصول."
+    elif state == "matched":
+        confidence = "observed"
+        note = "استجاب المسار بتميّز عن صفحة غير موجودة؛ لا يثبت أنه نقطة دخول فعالة."
+    elif state == "fallback":
+        confidence = "uncertain"
+        note = "عاد مثل صفحة غير موجودة؛ قد يكون مجرد توجيه SPA عام."
+    elif state == "unavailable":
+        confidence = "uncertain"
+        note = "المسار مذكور علنًا لكنه غير متاح عند التحقق."
+    elif any("OpenAPI" in src for src in sources):
+        confidence = "documented"
+        note = "موثق في مواصفة عامة، ولم يُجرّب الإجراء."
+    elif any(src.startswith("HTML") for src in sources):
+        confidence = "documented"
+        note = "مذكور في HTML العام ولم يؤكد تسجيل الدخول أو الصلاحية."
+    else:
+        confidence = "inferred"
+        note = "مستنتج من JavaScript أو مسار عام ولا يعني وجوده فعليًا."
+    row["confidence"] = confidence
+    row["note"] = note
+    return row
+
+
+def _spec_entries(host, safe_get, found, calls):
+    """Enumerate a public OpenAPI schema's route names, not its request bodies."""
+    specs = []
+    for path in ("/openapi.json", "/swagger.json"):
+        if len(found) >= MAX_PATHS:
+            break
+        calls.append(path)
+        try:
+            status, headers, raw = safe_get(host, path, max_bytes=64000)
+            if status != 200 or "json" not in headers.get("Content-Type", "").lower():
+                continue
+            parsed = json.loads(raw.decode("utf-8", "replace"))
+            if not isinstance(parsed, dict) or not (parsed.get("openapi") or parsed.get("swagger")):
+                continue
+            endpoints = parsed.get("paths")
+            if not isinstance(endpoints, dict):
+                continue
+            count = 0
+            for name, verbs in list(endpoints.items())[:35]:
+                if not isinstance(name, str) or not isinstance(verbs, dict):
+                    continue
+                endpoint = _path(name, host)
+                if not endpoint:
+                    continue
+                _add(found, host, name, "OpenAPI public specification", forced_kind="api")
+                if endpoint in found:
+                    found[endpoint]["methods"] = [
+                        method.upper() for method in ("get", "post", "put", "patch", "delete", "head")
+                        if method in verbs
+                    ][:6]
+                count += 1
+                if len(found) >= MAX_PATHS:
+                    break
+            specs.append({"path": path, "documented_routes": count})
+        except (ValueError, UnicodeError, json.JSONDecodeError, OSError):
+            pass
+        except Exception:
+            # A malformed or unavailable public spec should not break the scan.
+            pass
+    return specs
+
+
 def discover(host: str, html: str, safe_get, public_addresses) -> dict:
-    """Read-only discovery: static public links + at most 2 scripts + 6 entrypoint GETs."""
+    """Small read-only public endpoint inventory with soft-404 calibration."""
+    started = time.monotonic()
     found: dict = {}
+    requests_made = []
     scripts = _html_entries(host, html, found)
     for path in scripts[:2]:
+        requests_made.append(path)
         try:
             status, headers, blob = safe_get(host, path, max_bytes=32000)
             if status in (200, 206) and "javascript" in headers.get("Content-Type", "").lower():
@@ -194,30 +296,79 @@ def discover(host: str, html: str, safe_get, public_addresses) -> dict:
         except Exception:
             continue
 
-    # Explicit read-only probes of a short fixed set; never submit forms or credentials.
-    for path in COMMON_ENTRYPOINTS:
+    specs = _spec_entries(host, safe_get, found, requests_made)
+
+    # A randomly named path provides a soft-404 baseline for SPA fallback pages.
+    baseline = None
+    baseline_path = "/__alezz_notfound_" + secrets.token_hex(8)
+    try:
+        requests_made.append(baseline_path)
+        baseline = safe_get(host, baseline_path, max_bytes=3072)
+    except Exception:
+        pass
+
+    # Only a short fixed path list and four discovered links are checked via GET.
+    linked = [
+        row["path"] for row in found.values()
+        if row["kind"] in ("login", "admin") and row["path"] not in COMMON_ENTRYPOINTS
+        and row["path"] != "/" and not re.search(r"(?i)(?:logout|delete|reset|remove)", row["path"])
+    ][:4]
+    paths_to_probe = list(dict.fromkeys(COMMON_ENTRYPOINTS + tuple(linked)))
+    for path in paths_to_probe:
+        requests_made.append(path)
         try:
-            code, headers, payload = safe_get(host, path, max_bytes=2048)
-            if code in (200, 401, 403, 405):
-                _add(found, host, path, "public GET")
+            status, headers, body = safe_get(host, path, max_bytes=3072)
+            if status in (200, 206, 401, 403, 405):
+                fallback = _soft_missing(baseline, (status, headers, body))
                 if path in found:
-                    found[path]["status"] = code
+                    found[path]["status"] = status
+                    found[path]["validation"] = "fallback" if fallback else "matched"
+                elif not fallback:
+                    _add(found, host, path, "bounded public GET")
+                    if path in found:
+                        found[path]["status"] = status
+                        found[path]["validation"] = "matched"
+            elif path in found:
+                found[path]["status"] = status
+                found[path]["validation"] = "unavailable"
         except Exception:
-            pass
+            if path in found:
+                found[path]["validation"] = "unavailable"
 
     network, browser_state = _chromium_network(host, public_addresses)
     for entry in network:
-        if _kind(entry["path"]):
-            _add(found, host, entry["path"], "Chromium Network")
+        category = _kind(entry["path"])
+        if category is None and entry["type"] in ("XHR", "Fetch") and "json" in entry.get("mime", "").lower():
+            category = "api"
+        if category:
+            _add(found, host, entry["path"], "Chromium Network", forced_kind=category)
             if entry["path"] in found:
                 found[entry["path"]]["status"] = entry["status"]
+                found[entry["path"]]["validation"] = "network"
+
+    rows = [_apply_evidence(row) for row in found.values()]
+    rows.sort(key=lambda row: (
+        {"observed": 0, "documented": 1, "inferred": 2, "uncertain": 3}.get(row["confidence"], 4),
+        {"admin": 0, "login": 1, "api": 2}.get(row["kind"], 3),
+        row["path"],
+    ))
     categories = {"admin": 0, "login": 0, "api": 0}
-    for row in found.values():
+    confidence = {"observed": 0, "documented": 0, "inferred": 0, "uncertain": 0}
+    for row in rows:
         categories[row["kind"]] += 1
+        confidence[row["confidence"]] += 1
     return {
-        "paths": list(found.values())[:MAX_PATHS],
+        "version": 3,
+        "paths": rows[:MAX_PATHS],
         "network": network,
         "browser_status": browser_state,
         "summary": categories,
-        "limits": PASSIVE_DISCLAIMER + " عرض المسارات فقط دون معاملات أو رموز جلسات أو أجسام استجابات.",
+        "confidence_summary": confidence,
+        "openapi": specs,
+        "requests": len(requests_made),
+        "duration_seconds": round(time.monotonic() - started, 2),
+        "baseline_status": baseline[0] if baseline else None,
+        "limits": PASSIVE_DISCLAIMER +
+                  " تم مقارنة استجابات المسارات بصفحة عشوائية لتقليل نتائج SPA الوهمية؛ " +
+                  "لا تخزن معاملات URL أو أجسام API أو بيانات الحسابات.",
     }
