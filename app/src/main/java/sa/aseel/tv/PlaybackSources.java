@@ -51,6 +51,7 @@ public final class PlaybackSources {
             if(StreamQuality.isDirectUrl(raw)) {
                 String path=uri.getPath()==null?"":uri.getPath().toLowerCase(Locale.US);
                 if(path.endsWith(".m3u8"))return "hls";
+                if(path.endsWith(".mpd"))return "dash";
                 return "mp4";
             }
         }catch(Exception ignored){}
@@ -66,7 +67,9 @@ public final class PlaybackSources {
     private static void append(ArrayList<Source> result, HashSet<String> seen,
                                String raw, String label, boolean kids) {
         String kind=type(raw);
-        if(kind.isEmpty() || (kids && !"hls".equals(kind) && !"mp4".equals(kind)))return;
+        // Only native direct streams: embedded websites are not media files.
+        if(!"hls".equals(kind)&&!"mp4".equals(kind)&&!"dash".equals(kind))return;
+        if(kids && !"hls".equals(kind) && !"mp4".equals(kind))return;
         String url=canonical(raw);
         if(!seen.add(url) || result.size()>=9)return;
         label=label==null?"":label.trim();
@@ -108,7 +111,8 @@ public final class PlaybackSources {
                     return i;
         for(int i=0;i<sources.size();i++)
             if(!SignedStreamExpiry.expired(sources.get(i).url) &&
-                ("hls".equals(sources.get(i).kind) || "mp4".equals(sources.get(i).kind)))
+                ("hls".equals(sources.get(i).kind) || "mp4".equals(sources.get(i).kind) ||
+                 "dash".equals(sources.get(i).kind)))
                 return i;
         return fallback;
     }
@@ -158,8 +162,7 @@ public final class PlaybackSources {
         String current=activity.getIntent().getStringExtra("stream_url");
         for(int i=0;i<list.size();i++){
             Source source=list.get(i);
-            String tag="hls".equals(source.kind)?"HLS":"mp4".equals(source.kind)?"MP4":
-                "youtube".equals(source.kind)?"YouTube":"Embed";
+            String tag="hls".equals(source.kind)?"HLS":"dash".equals(source.kind)?"DASH":"MP4";
             labels[i]=source.label+"  ·  "+tag;
             if(source.url.equals(current))selected=i;
         }
@@ -175,9 +178,11 @@ public final class PlaybackSources {
     }
     public static void open(Activity activity, Source chosen) {
         if(activity==null || chosen==null || type(chosen.url).isEmpty())return;
-        boolean embed="embed".equals(chosen.kind) || "youtube".equals(chosen.kind);
-        Class<?> target=embed?EmbedPlayerActivity.class:CinemaPlayerActivity.class;
-        Intent intent=new Intent(activity,target);
+        if(!StreamQuality.isDirectUrl(chosen.url)){
+            UnavailableVideoActivity.show(activity,"movie",activity.getIntent().getStringExtra("title"));
+            return;
+        }
+        Intent intent=new Intent(activity,CinemaPlayerActivity.class);
         Bundle extras=activity.getIntent().getExtras();
         if(extras!=null)intent.putExtras(extras);
         intent.putExtra("stream_url",chosen.url);
