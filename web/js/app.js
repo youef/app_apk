@@ -720,11 +720,12 @@
       })[0] || item.seasons[0];
       epsHTML = '<div class="eps"><div class="eps__head"><div><h3>المواسم والحلقات</h3>' +
         '<p class="eps__summary">' + item.seasons.length + ' موسم · ' + (item.episodeCount || 0) + ' حلقة</p></div>' +
+        '<button class="btn btn--ghost" type="button" data-refresh-episodes="true" aria-label="جلب آخر تحديث للحلقات من قاعدة البيانات">↻ تحديث الحلقات الآن</button>' +
         '<div class="seasons" role="group" aria-label="اختيار الموسم">' +
         item.seasons.map(function (s) {
           return '<button class="filter' + (s.id === firstSeason.id ? " is-on" : "") + '" data-season="' + esc(s.id) + '" aria-label="' + esc(s.title) + '">' + esc(s.title) + "</button>";
         }).join("") + "</div></div>" +
-        '<div id="epList">' + episodesHTML(firstSeason) + "</div></div>";
+        '<div id="epList">' + episodesHTML(firstSeason,item.poster) + "</div></div>";
     }
 
     return '<div class="detail__hero">' +
@@ -763,23 +764,28 @@
       "</div>";
   }
 
-  function episodesHTML(season) {
+  function episodesHTML(season,seriesPoster) {
     if (!season || !season.episodes.length) return '<p class="search__hint">لا حلقات منشورة في هذا الموسم.</p>';
     return season.episodes.map(function (e) {
       var pct = progressOf(e), started = pct > 1 && pct < 97;
+      var hasSource=!!(e.stream || e.youtubeId ||
+        (Array.isArray(e.variants) && e.variants.length));
+      var thumb=e.poster || seriesPoster || "";
       var tag = "button";
-      var attrs = ' type="button" data-ep="' + esc(e.key) + '" aria-label="تشغيل ' + esc(e.title) + ' داخل العز TV"';
-      return '<' + tag + ' class="ep' + (started ? ' is-playing' : '') + '"' + attrs + '>' +
+      var attrs = ' type="button" data-ep="' + esc(e.key) + '" aria-label="' +
+        (hasSource ? "تشغيل " : "قريبًا: ") + esc(e.title) + ' داخل العز TV"';
+      return '<' + tag + ' class="ep' + (started ? ' is-playing' : '') +
+        (hasSource ? '' : ' ep--pending') + '"' + attrs + '>' +
         '<span class="ep__thumb">' +
-        (e.poster ? '<img src="' + esc(e.poster) + '" alt="" loading="lazy" onerror="this.remove()">' : '<span class="ep__thumb-placeholder">▶</span>') +
+        (thumb ? '<img src="' + esc(thumb) + '" alt="" loading="lazy" onerror="this.remove()">' : '<span class="ep__thumb-placeholder">▶</span>') +
         '<span class="ep__number">الحلقة ' + esc(e.number || "—") + '</span></span>' +
         '<span class="ep__txt"><strong>' + esc(e.title) + '</strong>' +
-        '<span>' + esc(e.description || 'اضغط لمشاهدة هذه الحلقة') + '</span>' +
+        '<span>' + esc(e.description || (hasSource ? 'اضغط لمشاهدة هذه الحلقة' : 'قريبًا — يجري تحديث مصدر التشغيل')) + '</span>' +
         (started ? '<span class="ep__watching">● آخر مشاهدة · ' + Math.round(pct) + '%</span>' : '') +
         (started ? '<span class="ep__progress"><i style="width:' + pct.toFixed(1) + '%"></i></span>' : '') +
         '</span><span class="ep__trailing">' +
         (e.duration ? '<span class="ep__dur">' + esc(fmtDuration(e.duration)) + '</span>' : '') +
-        '<span class="ep__play">▶</span></span></' + tag + '>';
+        '<span class="ep__play">' + (hasSource ? '▶' : '◌') + '</span></span></' + tag + '>';
     }).join("");
   }
 
@@ -1125,6 +1131,14 @@
       // Dedicated TV guide and kids world own their controls.
       if (t.closest("#livePage")) return;
       if (t.closest("#kidsWorld") && Kids && Kids.handleClick(e)) return;
+      var refreshEpisodes = t.closest("[data-refresh-episodes]");
+      if (refreshEpisodes) {
+        refreshEpisodes.disabled = true;
+        toast("جارٍ جلب أحدث الحلقات من مكتبة العز…");
+        bootCatalog().then(function() { toast("تم تحديث قائمة الحلقات"); })
+          .catch(function() { toast("تعذر تحديث الحلقات الآن", "err"); });
+        return;
+      }
       var playBtn = t.closest("[data-play]");
       if (playBtn) { playItem(findItem(playBtn.getAttribute("data-play"))); return; }
 
@@ -1163,7 +1177,7 @@
         var host = $("epList"), currentSeries = findItem(seriesKey);
         if (host && currentSeries && currentSeries.kind === "series") {
           currentSeries.seasons.forEach(function (season) {
-            if (season.id === sid) host.innerHTML = episodesHTML(season);
+            if (season.id === sid) host.innerHTML = episodesHTML(season,currentSeries.poster);
           });
         }
         return;
