@@ -39,8 +39,10 @@ assert.ok(home.includes('if("channel".equals(browseKind))channelBrowse('),
 assert.ok(home.includes("goTo(browseOrigin)")&&home.includes("restorePosition(browseOriginFocus,browseOriginScroll)"),
     "back button returns to category directory");
 assert.ok(home.includes('cardGridLimit+72'),"large lists progressively render");
-assert.ok(home.includes("CatalogApi.officialChannelLink(external)")&&api.includes("officialChannelLink(external)"),
-    "official outbound channels no longer discarded");
+assert.ok(home.includes('UnavailableVideoActivity.show(this,"live",label(item))') &&
+    api.includes("officialChannelLink(external)") &&
+    !home.includes("android.content.Intent.ACTION_VIEW"),
+    "official link metadata retained but never opens an external video browser");
 assert.ok(nativeCategory.includes('category.contains("قنوات روتانا")'),"Rotana entries grouped by network");
 assert.ok(home.includes("appUpdater.check(true)"),"settings update button wired");
 assert.ok(home.includes('all.setTag("live:all")'),"live categories have View All");
