@@ -37,14 +37,29 @@ class FilmInput(BaseModel):
     license_reference: str = Field(default="",max_length=300)
 
 def safe_source(value):
-    u = urlsplit(value)
-    hosts = {h.strip().lower() for h in os.getenv("ALEZZ_VIDEO_SOURCE_HOSTS","hglamioz.com").split(",") if h.strip()}
-    if u.scheme != "https" or not u.hostname or u.hostname.lower() not in hosts or u.port not in (None,443) or u.username or u.password or len(value)>2048 or not u.path.lower().endswith((".mp4",".m3u8")):
-        raise ValueError("Only direct HTTPS MP4/M3U8 URLs on the approved host list are accepted")
-    addresses=socket.getaddrinfo(u.hostname,443,type=socket.SOCK_STREAM)
-    if not addresses or any(not ipaddress.ip_address(a[4][0]).is_global for a in addresses):
-        raise ValueError("Non-public DNS target rejected")
-    return value
+    """Accept any public HTTPS host; never permit internal networks or credentials."""
+    try:
+        u=urlsplit(value)
+        host=(u.hostname or "").lower().rstrip(".")
+        if (u.scheme!="https" or not host or u.username or u.password or
+                u.port not in (None,443) or len(value)>2048 or
+                not u.path.lower().endswith((".mp4",".m3u8")) or
+                host=="localhost" or "." not in host or
+                host.endswith((".local",".internal",".lan",".test",".invalid",".onion"))):
+            raise ValueError("أدخل رابط HTTPS مباشر بصيغة MP4 أو M3U8 على نطاق عام")
+        try:
+            ipaddress.ip_address(host)
+            raise ValueError("روابط IP المباشرة غير مسموحة")
+        except ValueError as e:
+            if str(e)=="روابط IP المباشرة غير مسموحة":
+                raise
+        addresses=socket.getaddrinfo(host,443,type=socket.SOCK_STREAM)
+        if not addresses or any(not ipaddress.ip_address(x[4][0]).is_global for x in addresses):
+            raise ValueError("تم رفض عنوان DNS غير عام أو محلي")
+        return value
+    except (TypeError,AttributeError) as exc:
+        raise ValueError("رابط غير صالح") from exc
+
 
 def owner(request, portal):
     token=request.cookies.get("alezz_member","")
