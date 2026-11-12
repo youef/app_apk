@@ -56,7 +56,24 @@ public final class EmbedPlayerActivity extends Activity {
         if(!embedLoadFailure)chromeHandler.postDelayed(hideChrome,3000L);
     }
 
+    /** Resolve a public OK.ru watch link to the official embedded player. */
+    public static String okEmbedUrl(String value) {
+        if (value == null || value.length() > 2048) return null;
+        try {
+            Uri u = Uri.parse(value.trim());
+            if (!"https".equalsIgnoreCase(u.getScheme()) || u.getUserInfo() != null ||
+                (u.getPort() != -1 && u.getPort() != 443) ||
+                u.getQuery() != null || u.getFragment() != null) return null;
+            String host = u.getHost(), path = u.getPath();
+            if (host == null || path == null ||
+                !(host.equalsIgnoreCase("ok.ru") || host.equalsIgnoreCase("www.ok.ru")) ||
+                !path.matches("^/video(?:embed)?/[0-9]{1,20}/?$")) return null;
+            String id = path.replaceAll("^/video(?:embed)?/([0-9]{1,20})/?$", "$1");
+            return "https://ok.ru/videoembed/" + id;
+        } catch (Exception ignored) { return null; }
+    }
     public static boolean isAllowed(String value) {
+        if (okEmbedUrl(value) != null) return true;
         if (value == null || value.length() > 2048) return false;
         try {
             Uri uri = Uri.parse(value.trim());
@@ -78,6 +95,7 @@ public final class EmbedPlayerActivity extends Activity {
     }
 
     private static boolean approvedNavigation(String value) {
+        if (okEmbedUrl(value) != null) return true;
         if (value == null || !value.startsWith("https://")) return false;
         try {
             Uri uri = Uri.parse(value);
@@ -122,6 +140,8 @@ public final class EmbedPlayerActivity extends Activity {
         }
         sourceUrl = getIntent().getStringExtra("stream_url");
         if (!isAllowed(sourceUrl)) { finish(); return; }
+        String okPlayer = okEmbedUrl(sourceUrl);
+        if (okPlayer != null) sourceUrl = okPlayer;
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         if (Build.VERSION.SDK_INT >= 19) {
