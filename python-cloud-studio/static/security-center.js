@@ -24,6 +24,33 @@ const overview=$("reportOverview");overview.replaceChildren();const row=n("div",
 [[report.indicator===null?"—":report.indicator,"مؤشر الإعدادات — ليس شهادة أمان"],...["critical","high","medium","low"].map(x=>[report.counts[x],levels[x]])].forEach(pair=>{const e=n("div","score");e.append(n("strong",null,pair[0]),n("span",null,pair[1]));row.append(e)});overview.append(row);
 const list=$("findings");list.replaceChildren();if(!report.findings.length)list.append(n("p","empty","لا توجد مؤشرات ضمن الفحوصات المحدودة التي اكتملت."));
 report.findings.forEach(f=>{const item=n("div","finding");item.dataset.level=f.severity;item.append(n("span","severity",levels[f.severity]||f.severity),n("h4",null,f.title),n("p",null,f.detail),n("p",null,"الإصلاح: "+f.fix));if(f.evidence)item.append(n("small",null,"الدليل: "+f.evidence));list.append(item)});
+const discovery=report.discovery,section=$("discoverySection");
+section.hidden=!discovery;
+if(discovery){
+  const names={admin:"إدارة",login:"تسجيل دخول",api:"واجهة API"},head=$("discoverySummary");
+  head.replaceChildren();
+  [["admin","مسارات الإدارة"],["login","مسارات الدخول"],["api","واجهات API"]].forEach(([kind,title])=>{
+    const c=n("div","score");c.append(n("strong",null,discovery.summary?.[kind]||0),n("span",null,title));head.append(c)
+  });
+  $("discoveryNote").textContent=discovery.limits||"المسارات المستدل عليها ليست ثغرات مثبتة.";
+  const routes=$("discoveryPaths");routes.replaceChildren();
+  if(!discovery.paths?.length)routes.append(n("p","empty","لا توجد مسارات مستدل عليها ضمن حدود الفحص."));
+  (discovery.paths||[]).forEach(row=>{
+    const card=n("div","route-entry");
+    const title=n("div","route-head");
+    title.append(n("span","route-tag",names[row.kind]||row.kind),n("code","route-path",row.path));
+    card.append(title,n("small",null,"المصدر: "+(row.sources||[]).join("، ")+(row.status?" • HTTP "+row.status:" • لم يُختبر المسار مباشرة")));
+    routes.append(card)
+  });
+  $("browserStatus").textContent="حالة المتصفح: "+(discovery.browser_status||"غير محددة")+". لا تُحفظ الكوكيز أو الترويسات الحساسة أو أجسام الاستجابات.";
+  const net=$("discoveryNetwork");net.replaceChildren();
+  if(!discovery.network?.length)net.append(n("p","empty","لا توجد طلبات شبكة متاحة، أو تعذر تشغيل Chromium لهذا الموقع."));
+  (discovery.network||[]).forEach(entry=>{
+    const card=n("div","route-entry"),header=n("div","route-head");
+    header.append(n("span","route-tag",entry.type),n("code","route-path",entry.path));
+    card.append(header,n("small",null,"HTTP "+entry.status+" • "+(entry.mime||"نوع غير معروف")));net.append(card)
+  })
+}
 const manual=$("manualList");manual.replaceChildren();(report.manual_review||[]).forEach(s=>manual.append(n("div","manual-item",s)));$("reportSection").scrollIntoView({behavior:"smooth"})}
 const catalog=[
 ["SQL Injection (SQLi) / Blind SQLi","manual","مراجعة استعلامات SQL ومراجعة كود الخادم"],
@@ -47,6 +74,8 @@ const catalog=[
 ["Dependency Vulnerabilities / Supply Chain","manual","ربط مصدر الشيفرة وSBOM وتحديثات CVE"],
 ["Rate Limiting / DoS","manual","تدقيق التهيئة دون أي اختبار إغراق"],
 ["WordPress plugins / themes / versions","manual","مطابقة مع WPScan API أو SBOM"],
+["Public login/admin/API discovery","auto","استخراج المسارات العامة من HTML وJavaScript وChromium Network"],
+["Chromium DevTools Network","auto","عرض المسارات وحالة HTTP فقط بدون كوكيز أو رموز أو استجابات"],
 ["WordPress REST API","auto","اكتشاف واجهة عامة، مراجعة صلاحيات API يدويًا"],
 ["WordPress xmlrpc / admin-ajax / cron","manual","مراجعة الوظائف وضوابط الاستعمال"],
 ["WordPress wp-config / .env / .git","auto","فحص بصمات مكشوفة دون تخزين أسرار"],
