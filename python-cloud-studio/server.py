@@ -101,6 +101,9 @@ app.include_router(security_center_router)
 from security_tools import router as security_import_router, register as register_security_tools
 register_security_tools(portal)
 app.include_router(security_import_router)
+# Standalone, rate-limited public website audit; does not alter the admin portal.
+from public_siteguard import router as public_siteguard_router
+app.include_router(public_siteguard_router)
 @app.api_route('/login',methods=['GET','POST'],include_in_schema=False)
 async def legacy_login():
     return RedirectResponse('/account/admin',status_code=303)
