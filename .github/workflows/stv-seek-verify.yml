@@ -1,0 +1,35 @@
+name: STV full-length playback verification (late frame)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - scripts/audit_stv_seek.py
+      - .github/workflows/stv-seek-verify.yml
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 43210059466
+          name: stv-longform-audit
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: stv-original
+      - name: Install video decoding tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Decode a video frame after minute 25
+        run: python3 scripts/audit_stv_seek.py --input stv-original/verified-only.json
+      - name: Save audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stv-seek-verification
+          path: stv-seek-audit/
+          if-no-files-found: warn
+          retention-days: 30
