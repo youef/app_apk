@@ -174,7 +174,10 @@
    ["movies","series","channels","categories"].forEach((field, index) => {
      if (results[index].status === "fulfilled") {
        const items = results[index].value || [];
-       state[field] = field === "movies" ? items.filter(x => playable(x,"movie")) :
+       // Keep published movie/series cards visible even when an individual media
+       // link is pending. Playback eligibility is checked separately at click time.
+       state[field] = field === "movies" || field === "series" ?
+         items.filter(x => x.status === "published" && x.rights_status === "approved") :
          field === "channels" ? items.filter(x => playable(x,"channel")) : items;
      }
      else { state[field] = []; errors.push(field); }
@@ -558,8 +561,10 @@
    const buttons=el("div","detail-buttons");
    if (type!=="series") {
      const isOfficial=officialNavigation(item,type);
-     buttons.append(detailButton(isOfficial?"↗  فتح صفحة المشاهدة الخارجية":type==="channel"?"◉  شاهد الآن":"▶  تشغيل الآن","btn-primary",()=>{
-       if(isOfficial) window.open(safeUrl(item.official_url),"_blank","noopener,noreferrer");
+     const pendingMovie=type==="movie" && !playable(item,type);
+     buttons.append(detailButton(pendingMovie?"◌  قريبًا — تحديث المصدر":isOfficial?"↗  فتح صفحة المشاهدة الخارجية":type==="channel"?"◉  شاهد الآن":"▶  تشغيل الآن",pendingMovie?"btn-outline":"btn-primary",()=>{
+       if(pendingMovie) announce("الفيلم موجود في المكتبة؛ رابط الفيديو قيد التحديث وسيُفعّل عند توفر مصدر صالح.");
+       else if(isOfficial) window.open(safeUrl(item.official_url),"_blank","noopener,noreferrer");
        else startPlayer(item,type);
      }));
    }
@@ -602,13 +607,16 @@
          const ready=playable(ep,"episode");
          const b=el(ready?"button":"div","episode"+(ready?"":" episode--pending"));
          b.append(el("span","",ep.number+". "+(ep.title_ar||("الحلقة "+ep.number))));
-         b.append(el("small","",ready?(ep.duration_minutes?ep.duration_minutes+" دقيقة":"▶ مشاهدة"):"بانتظار اعتماد حقوق العرض"));
+         b.append(el("small","",ready?(ep.duration_minutes?ep.duration_minutes+" دقيقة":"▶ مشاهدة"):
+           ep.rights_status==="approved"?"قريبًا — تحديث مصدر الحلقة":"بانتظار اعتماد حقوق العرض"));
          if (ready) b.onclick=()=>startPlayer(ep,"episode");
-         else b.setAttribute("aria-label","الحلقة "+ep.number+" محفوظة لكنها غير متاحة للتشغيل قبل اعتماد الحقوق");
+         else b.setAttribute("aria-label","الحلقة "+ep.number+" محفوظة؛ التشغيل غير متاح حاليًا");
          list.append(b);
        });
      };
      picker.addEventListener("change",()=>display().catch(e=>{announce(e.message)}));
+     const refresh=detailButton("↻ تحديث الحلقات الآن","btn-outline",()=>display().catch(e=>announce(e.message)));
+     holder.append(refresh);
      await display();
    } catch (e) {holder.replaceChildren(el("p","detail-desc","تعذر تحميل الحلقات: "+e.message));}
  }
