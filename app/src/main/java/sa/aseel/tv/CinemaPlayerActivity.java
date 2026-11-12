@@ -127,6 +127,7 @@ public final class CinemaPlayerActivity extends Activity {
     private boolean mediaMuted=false,firstFrameRendered=false,playbackVisible=false;
     private long lastChromeInteraction=0L;
     private int progressTicks=0;
+    private int expectedDurationMinutes=0; // catalog hint; never treated as real media duration
     private final Runnable hideLiveHud=new Runnable(){public void run(){
         if(liveHud!=null)liveHud.setVisibility(View.GONE);
     }};
@@ -442,6 +443,7 @@ public final class CinemaPlayerActivity extends Activity {
         profile=intent.getStringExtra("profile");if(profile==null)profile=PlaybackMemory.activeProfile(this);
         seriesId=intent.getStringExtra("series_id");if(seriesId==null)seriesId="";
         live=intent.getBooleanExtra("is_live",false);
+        expectedDurationMinutes=Math.max(0,intent.getIntExtra("expected_duration_minutes",0));
         kidsPlayback=intent.getBooleanExtra("kids_mode",false);
         kidsAge=intent.getIntExtra("kids_age",6);
         kidsMinutes=intent.getIntExtra("kids_minutes",60);
@@ -716,7 +718,18 @@ public final class CinemaPlayerActivity extends Activity {
                     handler.postDelayed(watchdog,22000L);
                     showControls(false);
                 }else if(state==Player.STATE_READY){
-                    handler.removeCallbacks(watchdog);started=true;tries=0;
+                    handler.removeCallbacks(watchdog);
+                    long measuredMs=engine.getDuration();
+                    // Never accept a one-minute preview as a full episode/movie.
+                    // Report the bad source and try only other approved variants.
+                    if(!live && expectedDurationMinutes>25 && measuredMs!=C.TIME_UNSET
+                       && measuredMs>0L && measuredMs<=25L*60000L){
+                        tryNextOrExplain("هذا المصدر مدته "+(measuredMs/60000L)+
+                            " دقيقة فقط بينما العمل مسجل "+expectedDurationMinutes+
+                            " دقيقة. يلزم مصدر الفيديو الكامل.");
+                        return;
+                    }
+                    started=true;tries=0;
                     if(currentUrl!=null)SourceHealth.recovered(CinemaPlayerActivity.this,currentUrl);
                     if(live)PlaybackMemory.lastChannel(CinemaPlayerActivity.this,profile,itemId);
                     updateSkipButton();
@@ -731,6 +744,12 @@ public final class CinemaPlayerActivity extends Activity {
                     details.setText((live ? "● القناة "+(tvChannelIndex+1)+" / "+tvChannels.size()
                         : "سينما العز • جودة تلقائية")+"   |  "+sources.get(index).label);
                 }else if(state==Player.STATE_ENDED){
+                    long endedAtMs=engine.getDuration();
+                    if(!live && expectedDurationMinutes>25 && endedAtMs!=C.TIME_UNSET
+                       && endedAtMs>0L && endedAtMs<=25L*60000L){
+                        tryNextOrExplain("انتهى مقطع قصير بدل الفيديو الكامل.");
+                        return;
+                    }
                     if(!live){
                         PlaybackMemory.remove(CinemaPlayerActivity.this,profile,itemId);
                         getSharedPreferences("alezz_v11_player",MODE_PRIVATE)
@@ -1231,6 +1250,7 @@ public final class CinemaPlayerActivity extends Activity {
         itemId=selected.optString("id","");
         seriesId=selected.optString("series_id",seriesId);
         itemTitle=selected.optString("title","العز TV");
+        expectedDurationMinutes=Math.max(0,selected.optInt("duration_minutes",0));
         sources=variants;
         // Source picker must follow the currently selected film/episode, not the original one.
         ArrayList<PlaybackSources.Source> alternatives=PlaybackSources.collect(
