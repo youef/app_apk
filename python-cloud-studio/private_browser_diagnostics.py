@@ -43,7 +43,11 @@ def diagnose(url):
     url = safe_public_https(url)
     output = {"page_url":url, "engine":"Chromium / Playwright", "state":"started",
               "http_status":None,"page_title":"","video_elements":0,
-              "candidate_media":[],"dom_media":[],"responses":[],"blocked_requests":0,"notes":[]}
+              "candidate_media":[],"dom_media":[],"responses":[],"blocked_requests":0,"notes":[],
+              "devtools":{"enabled":False,"requests":[],"console_errors":0,
+                          "failed_requests":0,"cache_hits":0,"cache_policies":[],
+                          "cookies":{"count":0,"http_only":0,"secure":0,"same_site_none":0},
+                          "note":"جلسة Chromium جديدة بدون كوكيز مستوردة أو ذاكرة تخزين سابقة."}}
     observed=set()
     allowed_cache=set()
     with sync_playwright() as p:
@@ -52,6 +56,46 @@ def diagnose(url):
             context=browser.new_context(ignore_https_errors=False,service_workers="block",
                 accept_downloads=False, java_script_enabled=True)
             page=context.new_page()
+            # Read-only CDP Network domain, equivalent to DevTools Network panel.
+            # Request/response headers and cookie values are never collected.
+            dev=output["devtools"]
+            cdp=None
+            try:
+                cdp=context.new_cdp_session(page)
+                cdp.send("Network.enable",{"maxTotalBufferSize":65536})
+                dev["enabled"]=True
+                def cdp_response(event):
+                    if len(dev["requests"])>=90:return
+                    response=event.get("response",{})
+                    raw_url=response.get("url","")
+                    parsed=urlsplit(raw_url)
+                    if parsed.scheme not in ("https","http"):return
+                    headers={str(k).lower():str(v) for k,v in response.get("headers",{}).items()}
+                    cache_control=headers.get("cache-control","")[:100]
+                    record={
+                        "host":(parsed.hostname or "")[:120],
+                        "type":str(event.get("type","Other"))[:30],
+                        "status":int(response.get("status",0)),
+                        "mime":str(response.get("mimeType",""))[:75],
+                        "from_disk_cache":bool(response.get("fromDiskCache")),
+                        "from_service_worker":bool(response.get("fromServiceWorker")),
+                        "cache_control":cache_control,
+                        "age":headers.get("age","")[:15],
+                    }
+                    dev["requests"].append(record)
+                    if record["from_disk_cache"]:dev["cache_hits"]+=1
+                    if cache_control and cache_control not in dev["cache_policies"] and len(dev["cache_policies"])<10:
+                        dev["cache_policies"].append(cache_control)
+                cdp.on("Network.responseReceived",cdp_response)
+                cdp.on("Network.requestServedFromCache",
+                       lambda _event:dev.__setitem__("cache_hits",dev["cache_hits"]+1))
+            except Exception:
+                dev["enabled"]=False
+                output["notes"].append("تعذّر تمكين بروتوكول DevTools؛ سيُستخدم فحص Playwright المعتاد.")
+            page.on("requestfailed",lambda _request:dev.__setitem__(
+                "failed_requests",dev["failed_requests"]+1))
+            page.on("pageerror",lambda _error:dev.__setitem__(
+                "console_errors",dev["console_errors"]+1))
             def route_handler(route):
                 target=route.request.url
                 try:
@@ -115,6 +159,18 @@ def diagnose(url):
                             output["dom_media"].append({"url":target,"verified":False})
                     except (ValueError,OSError):
                         continue
+                # Only summary flags from the isolated in-memory browsing session:
+                # never expose cookies, localStorage, auth tokens or values.
+                try:
+                    cookies=context.cookies([url])
+                    dev["cookies"]={
+                        "count":len(cookies),
+                        "http_only":sum(bool(c.get("httpOnly")) for c in cookies),
+                        "secure":sum(bool(c.get("secure")) for c in cookies),
+                        "same_site_none":sum(c.get("sameSite")=="None" for c in cookies)
+                    }
+                except Exception:
+                    pass
                 output["state"]="inspected"
             except PlaywrightTimeout:
                 output["state"]="timeout"
@@ -130,6 +186,7 @@ def diagnose(url):
         output["notes"].append("خادم الموقع رفض زيارة Render، ولا يمكن معالجة ذلك بتغيير User-Agent وحده.")
     if not output["candidate_media"]:
         output["notes"].append("لم تظهر استجابة فيديو عامة قابلة للفحص، ولا يعني ذلك عدم وجود مشغل محمي داخل الموقع.")
+    output["notes"].append("تم جمع ملخصات Network وسياسات الكاش فقط. لا تُستخدم كوكيز الحسابات الخارجية أو ملفات المتصفح الشخصية.")
     output["notes"].append("هذه أداة تشخيص وليست إذنًا بالتحميل أو إعادة استضافة الأفلام.")
     return output
 
