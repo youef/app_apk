@@ -173,5 +173,53 @@ def analyze(headers, markup):
     if re.search(r"(?i)https?://[a-z0-9-]+\.supabase\.co|@supabase/supabase-js", html):
         result["database"] = {"type": "PostgreSQL (احتمال عبر Supabase)", "version": UNKNOWN,
                               "evidence": "مرجع Supabase عام؛ قد لا يكون قاعدة البيانات الرئيسية"}
+    for name, pattern, language in (
+        ("Django", r"(?i)\bdjango(?:/|\s)\d|\bdjango\b", "Python"),
+        ("Ruby on Rails", r"(?i)\bruby on rails\b|\brails\b", "Ruby"),
+        ("Node.js", r"(?i)\bnode\.js/|\bnodejs/", "JavaScript"),
+        ("Uvicorn", r"(?i)\buvicorn(?:/|\s)", "Python"),
+        ("Gunicorn", r"(?i)\bgunicorn(?:/|\s)", "Python"),
+        ("Kestrel", r"(?i)\bkestrel\b", "C# / .NET"),
+    ):
+        if re.search(pattern, power + " " + server):
+            add(infra, name, disclosed_version(power + " " + server, name),
+                "Server / X-Powered-By", "معلن")
+            add(languages, language, UNKNOWN, "بصمة خادم / إطار عمل", "مستنتج")
+
+    # Explicit, publicly returned DB headers only. Do not connect to the DB.
+    db_text = " ".join(
+        h.get(key, "") for key in ("x-database", "x-dbms", "x-db-type", "x-database-type"))
+    version_text = " ".join(
+        h.get(key, "") for key in ("x-database-version", "x-db-version", "x-postgresql-version",
+                                   "x-mysql-version", "x-mariadb-version", "x-mongodb-version"))
+    db_engine = "غير معروف"
+    for name, aliases in (
+        ("PostgreSQL", ("postgresql", "postgres")),
+        ("MariaDB", ("mariadb",)),
+        ("MySQL", ("mysql",)),
+        ("SQLite", ("sqlite",)),
+        ("MongoDB", ("mongodb",)),
+        ("Microsoft SQL Server", ("mssql", "sql server")),
+    ):
+        if any(alias in (db_text + " " + version_text).lower() for alias in aliases):
+            db_engine = name
+            break
+    if db_engine == "غير معروف":
+        for header, engine in (
+            ("x-postgresql-version", "PostgreSQL"),
+            ("x-mysql-version", "MySQL"),
+            ("x-mariadb-version", "MariaDB"),
+            ("x-mongodb-version", "MongoDB"),
+        ):
+            if h.get(header):
+                db_engine = engine
+                break
+    match = VERSION.search(version_text)
+    if db_engine != "غير معروف" or match:
+        result["database"] = {
+            "type": db_engine,
+            "version": match.group(1) if match else UNKNOWN,
+            "evidence": "نسخة أو نوع معلن في ترويسة HTTP (غير موثّق من الخادم الداخلي)"
+        }
     # Intentionally no probing of DB ports, SQL syntax, .env, backups or phpinfo.
     return result
