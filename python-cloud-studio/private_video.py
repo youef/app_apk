@@ -174,7 +174,19 @@ def register_playback(portal):
                   json={"expiresIn":60},timeout=15)
             r.raise_for_status()
             signed=r.json()["signedURL"]
-            url=(BASE+"/storage/v1"+signed) if signed.startswith("/") else signed
+            # Supabase may return either /object/sign/... or /storage/v1/object/sign/...
+            if signed.startswith("/storage/v1/object/sign/"):
+                url=BASE+signed
+            elif signed.startswith("/object/sign/"):
+                url=BASE+"/storage/v1"+signed
+            elif signed.startswith("https://"):
+                target=urlsplit(signed)
+                trusted={urlsplit(BASE).hostname, urlsplit(BASE).hostname.replace(".supabase.co",".storage.supabase.co")}
+                if target.hostname not in trusted or target.username or target.password:
+                    raise HTTPException(502,"Untrusted signed media location")
+                url=signed
+            else:
+                raise HTTPException(502,"Invalid private media signed URL")
             return RedirectResponse(url,status_code=307,
                 headers={"Cache-Control":"private, no-store","Referrer-Policy":"no-referrer"})
         except requests.RequestException:
