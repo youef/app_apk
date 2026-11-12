@@ -24,6 +24,23 @@ _BROWSER_SLOTS = threading.BoundedSemaphore(2)
 
 # Reachability of an embed page is not evidence of playable media.
 ONEVID_EMBED_PATH = re.compile(r'^/embed-[A-Za-z0-9_-]+\.html$', re.I)
+OK_RU_VIDEO_PATH = re.compile(r'^/video(?:embed)?/([0-9]{1,20})/?$')
+
+
+def official_ok_embed(value: str) -> str:
+    """Canonical public OK.ru share/iframe URL; never use signed CDN URLs."""
+    try:
+        parts = urlsplit(value.strip())
+        if (parts.scheme != 'https' or parts.username or parts.password or
+                parts.port not in (None, 443) or
+                (parts.hostname or '').lower() not in ('ok.ru', 'www.ok.ru') or
+                parts.query or parts.fragment):
+            return ''
+        match = OK_RU_VIDEO_PATH.fullmatch(parts.path)
+        return 'https://ok.ru/videoembed/' + match.group(1) if match else ''
+    except (TypeError, AttributeError, ValueError):
+        return ''
+
 
 
 def supported_source_kind(value: str) -> str:
@@ -35,6 +52,8 @@ def supported_source_kind(value: str) -> str:
             return ''
         if MEDIA_EXT.search(parts.path):
             return 'direct'
+        if official_ok_embed(value):
+            return 'embed'
         if (parts.hostname.lower() in ('1vid.xyz', 'www.1vid.xyz') and
                 ONEVID_EMBED_PATH.fullmatch(parts.path)):
             return 'embed'
@@ -56,6 +75,8 @@ def safe_error(exc) -> str:
 def normalized_source_url(value: str) -> str:
     """Drop browser fragments, preserving query order and signed query values."""
     value = public_url(value)
+    if official := official_ok_embed(value):
+        return official
     url = urlsplit(value)
     return urlunsplit((url.scheme, url.netloc.lower(), url.path, url.query, ''))
 
@@ -137,7 +158,7 @@ def extract_candidates(body: str, base: str, *, now: float | None = None) -> tup
         try: url = normalized_source_url(urljoin(base, value))
         except (ValueError, TypeError): return
         kind = 'direct' if MEDIA_EXT.search(url) else 'embed'
-        if kind == 'embed' and not embed: return
+        if kind == 'embed' and not embed and not official_ok_embed(url): return
         item = dict(url=url, label=clean(label, 80) or urlsplit(url).hostname,
                     kind=kind, page_url=base, verified=False,
                     discovered_at=now, last_seen_at=now)
@@ -277,6 +298,8 @@ class MediaResolver:
         deadline = deadline or time.monotonic()+self.max_seconds
         def probe(item):
             row = dict(item)
+            if supported_source_kind(row.get('url','')) == 'embed':
+                row['kind'] = 'embed'
             if time.monotonic() >= deadline:
                 row.update(verified=False,reachable=False,error='انتهت مهلة الفحص؛ سيُعاد تلقائيًا')
                 return row
@@ -288,7 +311,7 @@ class MediaResolver:
                     if row.get('kind') == 'embed':
                         _, typ, body = client.get(row['url'], max_size=750000)
                         row.update(verified=False, reachable=bool(body) and 'html' in typ.lower(),
-                                   error='صفحة مشغل؛ لم يتم إثبات تشغيل الفيديو')
+                                   error='صفحة مشغل متاحة؛ لم يتم إثبات تشغيل الفيديو')
                     else:
                         ok, error = client.media_verified(row['url'])
                         row.update(verified=bool(ok), error='' if ok else safe_error(error))
