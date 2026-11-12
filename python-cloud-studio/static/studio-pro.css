@@ -176,3 +176,9 @@ button:active:not(:disabled){transform:scale(.985)}
  .studio-paste-btn{width:100%;flex-basis:100%}
  .studio-command-bar .command-copy{min-width:0}
 }
+
+/* Studio: test official OK.ru iframe without extracting or proxying video segments. */
+.okru-preview-modal{width:min(96vw,1120px);max-width:none;max-height:95dvh;overflow-y:auto}
+.okru-preview-modal iframe{display:block;width:100%;aspect-ratio:16/9;min-height:240px;max-height:68dvh;border:0;border-radius:12px;background:#000}
+.okru-preview-modal p{color:#b4c2d1;line-height:1.7}
+@media(max-width:640px){.okru-preview-modal{padding:14px}.okru-preview-modal iframe{min-height:220px}}
