@@ -57,6 +57,8 @@ public final class PlaybackSources {
         return "";
     }
     public static String canonical(String raw) {
+        String ok=EmbedPlayerActivity.okEmbedUrl(raw);
+        if(ok!=null)return ok;
         String id=youtubeId(raw);
         return id!=null ? "https://www.youtube-nocookie.com/embed/"+id :
             (raw==null?"":raw.trim());
