@@ -188,6 +188,10 @@ async def studio_short():
 async def studio_homepage():
     return FileResponse(BASE/'templates'/'index.html',headers={'Cache-Control':'private, no-store'})
 
+@app.get('/studio/private-videos')
+async def private_video_import_page():
+    return FileResponse(BASE/'templates'/'private-videos.html',headers={'Cache-Control':'private, no-store'})
+
 @app.get('/studio/sources')
 async def series_review_page():
     return FileResponse(BASE/'templates'/'series-review.html',headers={'Cache-Control':'private, no-store'})
