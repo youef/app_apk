@@ -12,13 +12,19 @@ router=APIRouter()
 class ProbeInput(BaseModel):
     source_url:str=Field(min_length=15,max_length=2048)
 
-def valid_public(url, approved):
+def valid_public(url):
     p=urlsplit(url)
     if p.scheme!="https" or not p.hostname or p.username or p.password or p.port not in (None,443):
         raise ValueError("Only public HTTPS media URLs are supported")
-    host=p.hostname.lower()
-    if host not in approved and not any(host.endswith("."+h) for h in approved):
-        raise ValueError("Segment or redirect host not in approved source domains")
+    host=p.hostname.lower().rstrip(".")
+    if host=="localhost" or "." not in host or host.endswith((".local",".internal",".lan",".test",".invalid",".onion")):
+        raise ValueError("Non-public source hostname refused")
+    try:
+        ipaddress.ip_address(host)
+        raise ValueError("Direct IP host refused")
+    except ValueError as err:
+        if str(err)=="Direct IP host refused":
+            raise
     dns=socket.getaddrinfo(host,443,type=socket.SOCK_STREAM)
     if not dns or any(not ipaddress.ip_address(a[4][0]).is_global for a in dns):
         raise ValueError("Nonpublic source DNS refused")
@@ -27,7 +33,6 @@ def valid_public(url, approved):
 def inspect(url):
     from private_film_import import safe_source
     url=safe_source(url)
-    allowed={x.strip().lower() for x in os.getenv("ALEZZ_VIDEO_SOURCE_HOSTS","hglamioz.com,playnixes.com").split(",") if x.strip()}
     out={"url":url,"http_ok":False,"browser_check":"not_checked","media_check":"not_checked","duration_seconds":None}
     with sync_playwright() as p:
         browser=p.chromium.launch(headless=True,args=["--no-sandbox"])
@@ -54,7 +59,7 @@ def inspect(url):
                 if not items:
                     raise ValueError("Empty HLS playlist")
                 child=urljoin(url,items[0])
-                valid_public(child,allowed)
+                valid_public(child)
                 small=context.request.get(child,timeout=16000,max_redirects=0)
                 if small.status not in (200,206):
                     raise ValueError("First playlist/segment returned HTTP "+str(small.status))
