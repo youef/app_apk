@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Audit every Al Ezz TV live channel and replace failed streams from the
 same broadcaster's IPTV-org ID only. Never guess a channel by display name.
-Missing streams can be removed; repeated definitive failures are archived
-to the run report before deletion. Network/geo failures are inconclusive.
+Broken streams are never deleted; confirmed failures temporarily hide a channel
+while its identity and sources remain available for automatic recovery. Network/geo failures are inconclusive.
 """
 from __future__ import annotations
 
@@ -131,24 +131,18 @@ def process(result):
         REPORT["unchanged"] += 1
         return
     if result["permanent"]:
-        # Only a missing link or definitively gone (404/410) across all saved
-        # sources and without an available verified alternate is removable.
-        if result["no_url"] or (old_status == "broken" and failures >= 3):
-            REPORT["changes"].append({"name": title, "id": rid, "action": "deleted",
-                                      "previous_health": old_status,
-                                      "reason": "no source" if result["no_url"] else "repeated confirmed 404/410"})
-            api("DELETE", "aseel_channels?id=eq." + urllib.parse.quote(rid))
-            REPORT["deleted"] += 1
-            return
+        # Never delete channels from the database. Their existing links and
+        # provider metadata are needed for automatic recovery later.
         failures += 1
         status = "broken" if failures >= 3 else "suspect"
         update(row, {
             "link_health_status": status, "link_health_failures": failures,
-            "link_health_reason": "All saved HLS sources returned HTTP 404/410; retry before deletion",
+            "link_health_reason": "All saved media sources are definitively unavailable; kept for automatic retry",
             "link_health_checked_at": now
         })
         REPORT[status] += 1
-        REPORT["changes"].append({"name": title, "action": status, "reason": "confirmed 404/410"})
+        REPORT["changes"].append({"name": title, "action": "temporarily_hidden" if status == "broken" else "suspect",
+                                  "reason": "confirmed source failure; original channel preserved"})
         return
     # Geoblocking, missing authentication, DNS or transient network failures.
     # Keep existing broken state until a successful recovery verifies playback.
