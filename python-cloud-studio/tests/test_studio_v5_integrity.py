@@ -98,15 +98,17 @@ class StudioV5IntegrityTests(unittest.TestCase):
 
     def test_viewer_only_uses_healthy_content(self):
         content = (ROOT / "web" / "js" / "api.js").read_text(encoding="utf-8")
-        self.assertIn(".filter(approvedMedia)", content)
+        self.assertIn(".filter(visibleMedia)", content)
         self.assertIn('season.poster = parent.poster || parent.backdrop || null', content)
         self.assertIn('poster: e.poster_url || season.poster || null', content)
         self.assertIn('series: playableSeries', content)
-        self.assertIn('link_health_status === "broken"', content)
-        self.assertIn('link_health_status === "suspect"', content)
+        self.assertIn('health: row.link_health_status || "unchecked"', content)
+        self.assertIn('health: e.link_health_status || "unchecked"', content)
+        self.assertIn('row.rights_status !== "approved"', content)
+        self.assertNotIn('row.link_health_status === "broken" || row.link_health_status === "suspect"', content)
         self.assertIn('row.rights_status !== "approved"', content)
         index = (ROOT / "web" / "index.view").read_text(encoding="utf-8")
-        self.assertIn("health-guard-20261113-v5", index)
+        self.assertIn("restore-players-20261113-v6", index)
 
     def test_autosync_reduces_polling_after_unauthorized(self):
         source = (PYTHON / "static" / "autosync.js").read_text(encoding="utf-8")
