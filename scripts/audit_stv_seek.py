@@ -25,7 +25,7 @@ def audit(item):
             # A real framemd5 record, not a successful process exit, is mandatory.
             frame_records=[line for line in (out.stdout or "").splitlines()
                            if line.strip() and not line.lstrip().startswith("#")
-                           and re.match(r"^\\s*\\d+\\s*,",line)]
+                           and re.match(r"^\s*\d+\s*,",line)]
             passed=(out.returncode==0 and len(frame_records)>0)
             r["status"]="seek_verified" if passed else "seek_failed"
             r["frames_decoded"]=len(frame_records)
