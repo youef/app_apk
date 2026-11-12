@@ -221,12 +221,58 @@ async def series_review_page():
     return FileResponse(BASE/'templates'/'series-review.html',headers={'Cache-Control':'private, no-store'})
 
 
+def _connect_portal_admin_studio(request: Request, state: UserState) -> bool:
+    """Bridge an already-authorized portal administrator to server-only Supabase.
+
+    The portal middleware guards all /api routes. We independently validate
+    the opaque admin session and active admin status before creating this client.
+    We do not persist user passwords or expose service keys in HTTP responses.
+    """
+    with state.lock:
+        if state.db is not None:
+            return True
+    token=request.cookies.get("alezz_member","")
+    if not token:
+        return False
+    found=portal.admin_sessions.get(token)
+    if not found:
+        return False
+    session, _renewed, _check_role = found
+    if session[1]!="admin" or session[2] <= time.monotonic():
+        return False
+    uid=session[0]
+    if not portal.admin_active(uid):
+        return False
+    secret=(os.getenv("ALEZZ_SUPABASE_SECRET_KEY") or
+            os.getenv("ALEZZ_SUPABASE_SERVICE_ROLE_KEY") or "")
+    if not secret:
+        return False
+    db=Supabase(os.getenv("ALEZZ_SUPABASE_URL",DEFAULT_DB_URL),secret,
+                trusted_admin_uid=uid)
+    with state.lock:
+        if state.db is None:
+            state.db=db
+        else:
+            db.session.close()
+    return True
+
+
 @app.get('/api/init')
 async def init(request: Request):
     sid, state = find_state(request, True)
+    # The portal login is authoritative: avoid a second password prompt for
+    # the same active administrator on every Render restart or new studio tab.
+    auth_mode="manual"
+    try:
+        if await run_in_threadpool(_connect_portal_admin_studio,request,state):
+            auth_mode="portal"
+    except (ValueError,requests.RequestException,RuntimeError,OSError):
+        # Keep traditional user-JWT login available when the server-side
+        # secret or Supabase is temporarily unavailable.
+        auth_mode="manual"
     if any(LIBRARY.snapshot()["counts"][k].get("pending",0) for k in ("pages","works")):
         _start_library_worker()
-    res = JSONResponse({'csrf': state.csrf, **get_summary(state)}, headers={'Cache-Control': 'no-store'})
+    res = JSONResponse({'csrf': state.csrf, 'auth_mode': auth_mode, **get_summary(state)}, headers={'Cache-Control': 'no-store'})
     res.set_cookie(COOKIE, sid, httponly=True, samesite='strict', max_age=EXPIRY_SECONDS,
                    secure=os.getenv('ALEZZ_PUBLIC_MODE') == '1' or request.url.scheme == 'https', path='/')
     return res
