@@ -375,6 +375,54 @@ def require_admin(request, portal, write=False):
     return uid
 
 
+REMOTE_PORTAL = None
+
+def _has_cloud():
+    return bool(REMOTE_PORTAL and (
+        os.getenv("ALEZZ_SUPABASE_SECRET_KEY") or
+        os.getenv("ALEZZ_SUPABASE_SERVICE_ROLE_KEY")))
+
+def _cloud(method, table, params=None, payload=None):
+    if not _has_cloud():
+        return None
+    options = {}
+    if params is not None:
+        options["params"] = params
+    if payload is not None:
+        options["json"] = payload
+    if method in ("POST", "PATCH"):
+        options["prefer"] = "return=minimal"
+    return REMOTE_PORTAL.upstream(
+        method, "/rest/v1/" + table, secret=True, **options)
+
+def _restore_cloud():
+    if not _has_cloud():
+        return
+    sites = _cloud("GET", "aseel_security_sites", params={
+        "select": "id,owner_uid,host,verification_token,created_at,verified_at,interval_hours,last_run,next_run",
+        "limit": 1000})
+    with database() as db:
+        for row in sites or []:
+            db.execute("""INSERT INTO sites
+                (id,uid,host,token,created_at,verified_at,interval_hours,last_run,next_run)
+                VALUES(?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(id) DO UPDATE SET
+                 verified_at=excluded.verified_at,
+                 interval_hours=excluded.interval_hours,
+                 last_run=excluded.last_run,
+                 next_run=excluded.next_run""",
+                (row["id"],row["owner_uid"],row["host"],row["verification_token"],
+                 row["created_at"],row["verified_at"],row["interval_hours"],
+                 row["last_run"],row["next_run"]))
+    history = _cloud("GET", "aseel_security_audits", params={
+        "select":"id,site_id,created_at,payload",
+        "order":"created_at.desc", "limit": 1000})
+    with database() as db:
+        for item in history or []:
+            db.execute("INSERT OR IGNORE INTO audits(id,site_id,created_at,payload) VALUES(?,?,?,?)",
+                (item["id"],item["site_id"],item["created_at"],
+                 json.dumps(item["payload"],ensure_ascii=False)))
+
 def target(db, uid, site_id):
     row = db.execute("SELECT * FROM sites WHERE id=? AND uid=?", (site_id, uid)).fetchone()
     if not row:
@@ -448,6 +496,12 @@ class Schedule(TargetId):
 
 
 def register(portal):
+    global REMOTE_PORTAL
+    REMOTE_PORTAL = portal
+    try:
+        _restore_cloud()
+    except (ValueError, requests.RequestException, OSError):
+        pass
     @router.get("/studio/security", include_in_schema=False)
     def page(request: Request):
         require_admin(request, portal)
