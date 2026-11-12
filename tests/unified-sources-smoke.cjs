@@ -27,8 +27,8 @@ for(const denied of ["javascript:alert(1)","http://example.org/video.mp4",
 
 for(const text of ["appendSource(item.stream","entry.url||entry.stream_url",
   'Store.pref("source:"','Store.setPref("source:"+current.key',
-  "function toggleSourceMenu","function renderSourcesMenu","sourceKind(url)===\"youtube\"",
-  "sourceKind(url)===\"embed\"","playSelectedSource(url, false)"])
+  "function toggleSourceMenu","function renderSourcesMenu","function isPlayableUrl(url)",
+  'if(directFormat!=="mp4"',"playSelectedSource(url, false)"])
   assert(player.includes(text),"Unified playback integration missing: "+text);
 for(const id of ["playerSourcesToggle","playerSourcesMenu","playerEmbedExternal"])
   assert(html.includes('id="'+id+'"'),"Player control missing: "+id);
@@ -55,4 +55,7 @@ assert(embed.includes("PlaybackSources.show(EmbedPlayerActivity.this)")&&
   embed.includes("KEYCODE_MENU")&&embed.includes("KEYCODE_DPAD_UP")&&
   embed.includes("chromeHandler.postDelayed"),
   "Embedded player must support cinematic remote controls");
-console.log("PASS: unified MP4/HLS/Embed/YouTube source detection, selector, admin, Android and TV.");
+assert.equal(kind("https://cdn.example.org/video.mpd"),"dash");
+assert(java.includes('if(path.endsWith(".mpd"))return "dash"'),"TV DASH support missing");
+assert(html.includes('id="playerComingSoonVideo"'));
+console.log("PASS: unified direct MP4/HLS/DASH, quality selector and internal coming-soon playback.");
