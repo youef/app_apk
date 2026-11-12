@@ -126,6 +126,16 @@ async def worker_health():
 
 app.add_api_route('/healthz', worker_health, methods=['GET'], include_in_schema=False)
 
+# OS and browser icon fallbacks, publicly cacheable and free of account data.
+@app.get('/favicon.ico',include_in_schema=False)
+@app.get('/apple-touch-icon.png',include_in_schema=False)
+@app.get('/apple-touch-icon-precomposed.png',include_in_schema=False)
+async def studio_device_icon():
+    return FileResponse(portal.root/'web'/'alizz-tv-transparent.png',
+        media_type='image/png',headers={'Cache-Control':'public, max-age=86400'})
+
+
+
 
 @dataclass
 class UserState:
