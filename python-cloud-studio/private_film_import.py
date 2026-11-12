@@ -18,6 +18,8 @@ from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 import requests
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import HTMLResponse
+from html import escape
 from pydantic import BaseModel, Field
 from private_video import BASE, BUCKET, LOCK, JOBS, admin_headers, rest, execute, set_job
 
@@ -160,7 +162,7 @@ def ingest(job_id:str, payload:FilmInput, uid:str):
                 "owner_user_id":uid,"movie_id":movie_id})
             # Owner can access the private media using the existing admin login.
             set_job(job_id,status="ready",video_id=media_id,movie_id=movie_id,
-                    playback_path="/web/private-video/"+media_id)
+                    playback_path="/web/private-film/watch/"+media_id)
     except Exception as ex:
         set_job(job_id,status="failed",error=str(ex)[:450])
         if stored and path:
@@ -192,6 +194,42 @@ def register(router_app,portal):
             JOBS[job_id]={"status":"queued","created_at":int(time.time()),"owner_uid":uid}
         threading.Thread(target=ingest,args=(job_id,payload,uid),daemon=True).start()
         return {"job_id":job_id,"status":"queued","poll":"/api/private-film/job/"+job_id}
+
+
+    @router_app.get("/api/private-film/mine")
+    def mine(request:Request):
+        uid=owner(request,portal)
+        try:
+            rows=rest("GET","aseel_private_videos",params={
+                "owner_user_id":"eq."+uid,"status":"eq.ready",
+                "select":"id,title,duration_seconds,movie_id,created_at",
+                "order":"created_at.desc","limit":"50"})
+            return [{"id":v["id"],"title":v["title"],
+                     "duration_seconds":v["duration_seconds"],"movie_id":v["movie_id"],
+                     "playback_path":"/web/private-film/watch/"+v["id"]} for v in rows]
+        except requests.RequestException:
+            raise HTTPException(502,"Storage catalog unavailable")
+
+    @router_app.get("/web/private-film/watch/{video_id}",response_class=HTMLResponse)
+    def watch(video_id:uuid.UUID,request:Request):
+        uid=owner(request,portal)
+        rows=rest("GET","aseel_private_videos",params={
+            "id":"eq."+str(video_id),"owner_user_id":"eq."+uid,
+            "status":"eq.ready","select":"id,title","limit":1})
+        if not rows:
+            raise HTTPException(404,"Film not found in your private library")
+        name=escape(rows[0]["title"],quote=True)
+        url="/web/private-video/"+str(video_id)
+        return HTMLResponse("""<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>""" + name + """ | العز TV</title>
+<style>body{font-family:system-ui;background:#07090d;color:white;margin:0;padding:25px}
+main{max-width:1000px;margin:auto}a{color:#fb6b83}video{width:100%;max-height:78vh;background:black;border-radius:15px}</style>
+<main><p><a href="/studio/private-videos">العودة إلى مكتبتي</a></p><h1>""" + name + """</h1>
+<video controls controlsList="nodownload" preload="metadata" playsinline src="""" + url + """"></video>
+<p>تشغيل خاص بالحساب الذي استورد الفيلم. يلزم اتصال بالإنترنت وجلسة دخول صالحة.</p></main></html>""",
+headers={"Cache-Control":"private,no-store","X-Content-Type-Options":"nosniff",
+"Referrer-Policy":"no-referrer","X-Frame-Options":"DENY"})
 
     @router_app.get("/api/private-film/job/{job_id}")
     def report(job_id:str,request:Request):
