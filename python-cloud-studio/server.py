@@ -83,6 +83,9 @@ app.include_router(private_video_router)
 from private_film_import import router as private_film_router, register as register_private_film
 register_private_film(private_film_router,portal)
 app.include_router(private_film_router)
+from private_film_probe import router as private_film_probe_router, register as register_film_probe
+register_film_probe(portal)
+app.include_router(private_film_probe_router)
 @app.api_route('/login',methods=['GET','POST'],include_in_schema=False)
 async def legacy_login():
     return RedirectResponse('/account/admin',status_code=303)
