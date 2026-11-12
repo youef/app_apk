@@ -8,6 +8,7 @@ import ipaddress
 import json
 import os
 import secrets
+import shutil
 import socket
 import subprocess
 import tempfile
@@ -236,6 +237,30 @@ def ingest(job_id:str, payload:FilmInput, uid:str):
                 pass
 
 def register(router_app,portal):
+    @router_app.get("/api/private-film/capabilities")
+    def capabilities(request: Request):
+        owner(request,portal)
+        from pathlib import Path
+        try:
+            from playwright.sync_api import sync_playwright
+            with sync_playwright() as engine:
+                chromium_available=Path(engine.chromium.executable_path).is_file()
+        except Exception:
+            chromium_available=False
+        return {
+            "version":"film-studio-4",
+            "engine":"python-fastapi",
+            "ffmpeg":bool(shutil.which("ffmpeg")),
+            "ffprobe":bool(shutil.which("ffprobe")),
+            "chromium":chromium_available,
+            "private_storage_configured":bool(
+                os.getenv("ALEZZ_SUPABASE_SECRET_KEY") or
+                os.getenv("ALEZZ_SUPABASE_SERVICE_ROLE_KEY")),
+            "formats":["mp4","m3u8"],
+            "limits":{"minimum_minutes":1,"maximum_minutes":600,
+                      "max_file_gib":round(MAX_BYTES/(1024**3),1)}
+        }
+
     @router_app.post("/api/private-film/import",status_code=202)
     def start(payload:FilmInput,request:Request):
         uid=owner(request,portal)
