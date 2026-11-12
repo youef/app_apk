@@ -5,6 +5,7 @@ from pathlib import Path
 
 EXPECTED_PACKAGE=os.environ.get("AL_EZZ_EXPECTED_PACKAGE", "sa.alezz.tv.redclassic.local")
 MIN_SDK=19
+EXPECTED_TARGET_SDK=int(os.environ.get("AL_EZZ_EXPECTED_TARGET_SDK", "31"))
 MIN_VERSION=int(os.environ.get("AL_EZZ_MIN_VERSION", "19"))
 REQUIRED_ABIS=("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
 ELF_MACHINE={"armeabi-v7a": 40, "arm64-v8a": 183, "x86": 3, "x86_64": 62}
@@ -61,7 +62,7 @@ def main():
     if EXPECTED_PACKAGE=="sa.alezz.tv":
         check("application-debuggable" not in badging,"Stable APK is not debuggable")
     check(f"sdkVersion:'{MIN_SDK}'" in badging,"minSdkVersion API 19")
-    check("targetSdkVersion:'28'" in badging,"Target SDK as declared")
+    check(f"targetSdkVersion:'{EXPECTED_TARGET_SDK}'" in badging,"Target SDK as declared")
     version=re.search(r"versionCode='(\d+)'",badging)
     check(version is not None and int(version.group(1))>=MIN_VERSION,"Minimum updated versionCode")
     check("android.permission.INTERNET" in badging,"Internet access included")
