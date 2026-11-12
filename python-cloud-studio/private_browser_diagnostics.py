@@ -43,7 +43,7 @@ def diagnose(url):
     url = safe_public_https(url)
     output = {"page_url":url, "engine":"Chromium / Playwright", "state":"started",
               "http_status":None,"page_title":"","video_elements":0,
-              "candidate_media":[],"responses":[],"blocked_requests":0,"notes":[]}
+              "candidate_media":[],"dom_media":[],"responses":[],"blocked_requests":0,"notes":[]}
     observed=set()
     allowed_cache=set()
     with sync_playwright() as p:
@@ -92,6 +92,16 @@ def diagnose(url):
                 page.wait_for_timeout(1600)
                 output["page_title"]=page.title()[:180]
                 output["video_elements"]=page.locator("video").count()
+                # Media tags created by public JavaScript can expose URLs absent from the HTML.
+                dom_urls=page.eval_on_selector_all("video, video source, source",
+                    "nodes => nodes.map(n => n.currentSrc || n.src || n.getAttribute('src')).filter(Boolean).slice(0,35)")
+                for candidate in dom_urls:
+                    try:
+                        target=safe_public_https(candidate)
+                        if MEDIA_EXT.search(target) and not any(m["url"]==target for m in output["dom_media"]):
+                            output["dom_media"].append({"url":target,"verified":False})
+                    except (ValueError,OSError):
+                        continue
                 output["state"]="inspected"
             except PlaywrightTimeout:
                 output["state"]="timeout"
