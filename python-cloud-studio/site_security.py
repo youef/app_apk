@@ -177,6 +177,27 @@ def record(severity, title, detail, fix, evidence=""):
             "fix": fix, "evidence": evidence[:240]}
 
 
+def classify_access(status, headers, body):
+    """Classify edge challenges without following their internal JavaScript URLs.
+
+    The cf-mitigated: challenge header is authoritative. HTML markers alone
+    are only considered for an HTTP access-denied response.
+    """
+    lower = {str(k).lower(): str(v).lower() for k, v in (headers or {}).items()}
+    if lower.get("cf-mitigated", "").strip() == "challenge":
+        return "cloudflare_challenge"
+    if status in (403, 429, 503) and "html" in lower.get("content-type", ""):
+        sample = body[:15000].lower()
+        marker = (b"__cf_chl_opt" in sample or
+                  b"cdn-cgi/challenge-platform/" in sample or
+                  (b"just a moment" in sample and b"cloudflare" in sample))
+        if marker and (lower.get("cf-ray") or b"cloudflare" in sample):
+            return "cloudflare_challenge"
+    if status in (401, 403, 429):
+        return "access_restricted"
+    return "reachable"
+
+
 def audit(host):
     """Bounded GET requests, HTTPS only; no form submissions."""
     public_addresses(host)
@@ -198,6 +219,29 @@ def audit(host):
         return finish(meta, results)
     meta["http_status"] = status
     meta["checks"].append("HTTPS / TLS / HTTP status")
+    access_state = classify_access(status, headers, body)
+    meta["access_status"] = access_state
+    if access_state == "cloudflare_challenge":
+        meta["scan_complete"] = False
+        meta["checks"].append("Cloudflare challenge detected; deep inspection skipped")
+        add("info", "Cloudflare يمنع فحص محتوى الموقع",
+            "استجاب نطاق الموقع بصفحة تحقق Cloudflare بدل صفحته الفعلية. "
+            "مسارات /cdn-cgi/challenge-platform/ داخلية، وتتطلب معاملات صالحة "
+            "مثل ray من جلسة التحدي ولا ينبغي طلبها منفردة.",
+            "للموقع الذي تديره: راجع Cloudflare Security Events وسجلات WAF، "
+            "واستخدم بيئة اختبار مصرح بها أو تقارير فحص داخلية. "
+            "لا تُعطّل حماية Cloudflare للمستخدمين.",
+            "HTTP " + str(status) + " • cf-mitigated/challenge")
+        return finish(meta, results)
+    if access_state == "access_restricted":
+        meta["scan_complete"] = False
+        meta["checks"].append("HTTP access restriction; deep inspection skipped")
+        add("info", "تعذّر الفحص بسبب تقييد وصول HTTP",
+            "لم تسمح الاستجابة العامة بالوصول إلى محتوى الموقع "
+            "(HTTP %s). ليس هذا دليلًا على ثغرة أو نوع حماية محدد." % status,
+            "راجع قواعد الوصول وWAF من لوحة إدارة الموقع إذا كان لديك تصريح.",
+            "HTTP " + str(status))
+        return finish(meta, results)
     if 300 <= status < 400:
         add("medium", "تحويل من الصفحة الرئيسية",
             "عاد الموقع بتحويل HTTP ولم يُتبع التحويل إلى نطاق آخر.",
@@ -398,7 +442,8 @@ def finish(meta, findings):
     counts = {s: sum(x["severity"] == s for x in findings)
               for s in ("critical", "high", "medium", "low", "info")}
     return {**meta, "finished_at": iso(), "findings": findings, "counts": counts,
-            "indicator": max(0, 100 - sum(weights[x["severity"]] for x in findings)),
+            "indicator": (max(0, 100 - sum(weights[x["severity"]] for x in findings))
+                          if meta.get("scan_complete", True) else None),
             "disclaimer": "مؤشر إعدادات تقريبي، وليس نسبة أمان أو اختبار اختراق شامل.",
             "manual_review": [
                 "اختبر تسجيل الدخول وتحديد المحاولات وMFA على حسابات تجريبية.",
