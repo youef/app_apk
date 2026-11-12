@@ -59,6 +59,35 @@ class ResolverTests(unittest.TestCase):
         self.assertNotIn('checked_at',rows[0])
         self.assertNotIn('failures',rows[0])
 
+    def test_ok_ru_watch_url_is_canonical_and_embedded_not_video_verified(self):
+        from media_resolver import normalized_source_url, official_ok_embed
+        share = 'https://ok.ru/video/16115671698037'
+        player = 'https://ok.ru/videoembed/16115671698037'
+        self.assertEqual(official_ok_embed(share), player)
+        self.assertEqual(normalized_source_url(share), player)
+        self.assertEqual(supported_source_kind(share), 'embed')
+        self.assertEqual(supported_source_kind(player), 'embed')
+        for unsafe in ('http://ok.ru/video/16115671698037',
+                       'https://ok.ru.evil.example/video/16115671698037',
+                       'https://ok.ru/video/xyz',
+                       'https://user@ok.ru/video/16115671698037',
+                       'https://ok.ru/video/16115671698037?redirect=https://evil.example'):
+            self.assertEqual(supported_source_kind(unsafe), '', unsafe)
+        page = FakeSite({player: '<html><body>official player</body></html>'})
+        checked = self.resolver(page, mode='http').check([{'url':share,'kind':'direct'}])
+        self.assertEqual(checked[0]['url'], player)
+        self.assertEqual(checked[0]['kind'], 'embed')
+        self.assertTrue(checked[0]['reachable'])
+        self.assertFalse(checked[0]['verified'])
+        self.assertFalse(page.checked)
+
+    def test_ok_ru_link_in_html_becomes_embed_candidate(self):
+        share = 'https://ok.ru/video/16115671698037'
+        src, pages = extract_candidates('<a href="'+share+'">play video</a>', ROOT)
+        self.assertEqual(src[0]['url'], 'https://ok.ru/videoembed/16115671698037')
+        self.assertEqual(src[0]['kind'], 'embed')
+        self.assertEqual(pages, ['https://ok.ru/videoembed/16115671698037'])
+
     def test_1vid_embed_format_and_nonvideo_probe(self):
         url = 'https://1vid.xyz/embed-cnpn8jvjzx9p.html'
         self.assertEqual(supported_source_kind(url), 'embed')
