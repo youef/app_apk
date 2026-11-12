@@ -58,7 +58,7 @@
   }
   const studioPages = {
     import:'الاستيراد الذكي', library:'بيانات العمل', episodes:'المواسم والحلقات',
-    publish:'الحفظ والنشر', 'smart-sync':'المزامنة الذكية', tools:'الإضافات والمميزات'
+    publish:'الحفظ والنشر', 'smart-sync':'المزامنة الذكية', quality:'جودة المكتبة والإصلاح', tools:'الإضافات والمميزات'
   };
   function showStudioPage(){
     const route=location.hash.slice(1);
