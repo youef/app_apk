@@ -41,7 +41,7 @@ button:disabled{opacity:.55;cursor:progress}
 <div><label for="license">مرجع التصريح (اختياري)</label><input id="license" maxlength="300"></div>
 </div>
 <p class="note">يجب أن يكون نطاق المصدر ضمن قائمة الخوادم المعتمدة في إعدادات Render. لا تعمل روابط صفحات المشاهدة أو الروابط التي تتطلب تجاوز حماية المصدر. الفيلم يبقى مسودة خاصة ولا يظهر لجميع العملاء.</p>
-<button type="submit" id="start">تنزيل الفيلم وحفظه في الداتا</button>
+<button type="button" id="check-source">فحص الرابط عبر المتصفح والمشغّل</button> <button type="submit" id="start">تنزيل الفيلم وحفظه في الداتا</button>
 </form></section>
 <section class="panel"><h2>حالة العملية</h2><div id="state" class="status" aria-live="polite">لا توجد عملية تنزيل حالية.</div><div class="bar"><i id="progress"></i></div>
 <div id="result" class="result"><p>تم إنشاء الفيلم الخاص بنجاح.</p><a id="play" href="#" target="_blank" rel="noopener noreferrer">فتح رابط الفيلم الخاص</a><div class="note">الرابط محمي بجلسة حسابك؛ لن يعمل في حساب آخر غير مصرح له. يمكن نسخ رابط المسار الخاص وتضمينه في تطبيقك بعد إضافة دعم جلسة الدخول.</div><p class="note" id="movieid"></p></div></section>
@@ -49,6 +49,30 @@ button:disabled{opacity:.55;cursor:progress}
 </main><script>
 const el=id=>document.getElementById(id),form=el('film-form'),start=el('start'),status=el('state'),progress=el('progress'),result=el('result');
 let poller=null;
+el('source').value='https://playnixes.com/stream/HPugpAaoo6Lz8UXkOEf7SA/kjhhiuahiuhgihdf/1794563654/69496958/master.m3u8';
+el('check-source').addEventListener('click',async()=>{
+ const btn=el('check-source');btn.disabled=true;
+ status.textContent='جارٍ فحص رابط المصدر عبر شبكة متصفح Chromium ثم ffprobe...';
+ try {
+  const r=await fetch('/api/private-film/check',{
+   method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({source_url:el('source').value.trim()})
+  });
+  const data=await r.json();
+  if(!r.ok)throw Error(JSON.stringify(data));
+  const lines=['نتيجة الفحص:',
+   'حالة HTTP: '+(data.http_status||'غير متاحة'),
+   'فحص شبكة المتصفح: '+data.browser_check,
+   'فحص مسار الفيديو: '+data.media_check];
+  if(data.duration_seconds)lines.push('المدة: '+Math.round(data.duration_seconds/60)+' دقيقة');
+  if(data.error)lines.push('السبب: '+data.error);
+  if(data.media_error)lines.push('تفاصيل فحص الفيديو: '+data.media_error);
+  if(data.http_ok && data.media_check==='passed')lines.push('المصدر قابل للقراءة مبدئيًا؛ التنزيل الكامل والرفع يحتاجان اختبارًا مستقلًا.');
+  status.textContent=lines.join('\n');
+ } catch(e){status.textContent='تعذر الفحص: '+e.message}
+ finally{btn.disabled=false}
+});
+
 const library=el('library');
 async function loadLibrary(){
  try {
