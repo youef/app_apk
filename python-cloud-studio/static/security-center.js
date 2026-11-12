@@ -20,6 +20,13 @@ controls.append(b("حذف",()=>action(async()=>{if(!confirm("حذف الموقع
 card.append(controls);root.append(card)})}
 const levels={critical:"حرجة",high:"عالية",medium:"متوسطة",low:"منخفضة",info:"معلومة"};
 async function showReport(id){const r=await api("/api/security/report/"+encodeURIComponent(id));report=r.report;active=id;$("reportSection").hidden=false;$("reportMeta").textContent=report.host+" • "+r.created_at;
+const access=$("accessWarning");
+access.hidden=!report.access_status||report.access_status==="reachable";
+if(!access.hidden){
+  access.textContent=report.access_status==="cloudflare_challenge"?
+    "الفحص غير مكتمل: Cloudflare قدّم صفحة تحقق بدل محتوى الموقع. مسار /cdn-cgi/challenge-platform/ داخلي وليس صفحة دخول أو API، ومعامل ray لا يُنشأ يدويًا. راجع لوحة Cloudflare للموقع إذا كنت تديره.":
+    "الفحص غير مكتمل: منع الموقع الوصول من بيئة الفحص (HTTP "+(report.http_status||"غير معروف")+"). لا يمكن اعتبار المسارات أو مؤشر الأمان مؤكّدًا.";
+}
 const overview=$("reportOverview");overview.replaceChildren();const row=n("div","report-summary");
 [[report.indicator===null?"—":report.indicator,"مؤشر الإعدادات — ليس شهادة أمان"],...["critical","high","medium","low"].map(x=>[report.counts[x],levels[x]])].forEach(pair=>{const e=n("div","score");e.append(n("strong",null,pair[0]),n("span",null,pair[1]));row.append(e)});overview.append(row);
 const list=$("findings");list.replaceChildren();if(!report.findings.length)list.append(n("p","empty","لا توجد مؤشرات ضمن الفحوصات المحدودة التي اكتملت."));
