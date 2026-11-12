@@ -17,3 +17,5 @@
 .route-tag.confidence-inferred{background:#39301c;color:#f2d8a7;border-color:#735c2f}
 .route-tag.confidence-uncertain{background:#3d2431;color:#ffbbca;border-color:#764354}
 #discoverySummary .score strong{font-size:27px}
+
+.access-warning{border:1px solid #956a43;background:#352619;color:#ffe3bd;padding:14px 17px;border-radius:11px;margin:12px 0 20px;line-height:1.9;font-size:13px}
