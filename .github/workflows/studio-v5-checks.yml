@@ -1,0 +1,82 @@
+name: Al Ezz Studio V5 Quality Checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "python-cloud-studio/**"
+      - "web/js/**"
+      - "web/index.view"
+      - "web/index.html"
+      - ".github/workflows/studio-v5-checks.yml"
+  pull_request:
+    paths:
+      - "python-cloud-studio/**"
+      - "web/js/**"
+      - "web/index.view"
+      - "web/index.html"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  studio-static-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Compile Python source (without network or production credentials)
+        run: python -m compileall -q python-cloud-studio
+      - name: Validate browser JavaScript
+        run: |
+          node --check web/js/api.js
+          node --check web/js/app.js
+          node --check python-cloud-studio/static/app.js
+          node --check python-cloud-studio/static/autosync.js
+          node --check python-cloud-studio/static/studio-pro.js
+          node --check python-cloud-studio/static/studio-quality.js
+          node --check chrome-extension/alezz-media-inspector/popup.js
+      - name: Verify studio and viewer integration
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from html.parser import HTMLParser
+          import json
+          class IdParser(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.ids=[]
+              def handle_starttag(self, tag, attrs):
+                  for key,val in attrs:
+                      if key=="id":
+                          self.ids.append(val)
+          base=Path("python-cloud-studio")
+          studio=(base/"templates/index.html").read_text()
+          app_js=Path("web/js/api.js").read_text()
+          quality=(base/"static/studio-quality.js").read_text()
+          server=(base/"server.py").read_text()
+          for path in ("web/index.view","web/index.html"):
+              assert "health-guard-20261113-v5" in Path(path).read_text(), path
+          assert 'filter(approvedMedia)' in app_js
+          assert 'link_health_status === "broken"' in app_js
+          assert 'link_health_status === "suspect"' in app_js
+          assert 'id="qualityDashboard"' in studio
+          assert 'id="qualityRefresh"' in studio
+          assert '"/api/studio/quality"' in (base/"studio_quality.py").read_text()
+          assert 'app.include_router(studio_quality_router)' in server
+          for path in ("templates/index.html","templates/private-videos.html"):
+              data=(base/path).read_text()
+              p=IdParser();p.feed(data)
+              assert len(p.ids)==len(set(p.ids)),f"duplicate IDs: {path}"
+          assert "window.location" not in quality
+          manifest=json.loads((base/"static/manifest.webmanifest").read_text())
+          assert manifest["start_url"]=="/studio/"
+          print("Studio V5 static checks passed")
+          PY
