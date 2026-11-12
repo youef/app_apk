@@ -239,7 +239,7 @@ def ingest(job_id:str, payload:FilmInput, uid:str):
                 "owner_user_id":uid,"movie_id":movie_id})
             # Owner can access the private media using the existing admin login.
             set_job(job_id,status="ready",video_id=media_id,movie_id=movie_id,
-                    playback_path="/web/private-film/watch/"+media_id)
+                    playback_path="/studio/private-film/watch/"+media_id)
     except Exception as ex:
         set_job(job_id,status="failed",error=str(ex)[:450])
         if stored and path:
@@ -307,11 +307,11 @@ def register(router_app,portal):
                 "order":"created_at.desc","limit":"50"})
             return [{"id":v["id"],"title":v["title"],
                      "duration_seconds":v["duration_seconds"],"movie_id":v["movie_id"],
-                     "playback_path":"/web/private-film/watch/"+v["id"]} for v in rows]
+                     "playback_path":"/studio/private-film/watch/"+v["id"]} for v in rows]
         except requests.RequestException:
             raise HTTPException(502,"Storage catalog unavailable")
 
-    @router_app.get("/web/private-film/watch/{video_id}",response_class=HTMLResponse)
+    @router_app.get("/studio/private-film/watch/{video_id}",response_class=HTMLResponse)
     def watch(video_id:uuid.UUID,request:Request):
         uid=owner(request,portal)
         rows=rest("GET","aseel_private_videos",params={
@@ -320,7 +320,7 @@ def register(router_app,portal):
         if not rows:
             raise HTTPException(404,"Film not found in your private library")
         name=escape(rows[0]["title"],quote=True)
-        url="/web/private-video/"+str(video_id)
+        url="/studio/private-video/"+str(video_id)
         return HTMLResponse(f'''<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex"><title>{name} | العز TV</title>
