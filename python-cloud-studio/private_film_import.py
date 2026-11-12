@@ -6,6 +6,7 @@ from __future__ import annotations
 import base64
 import ipaddress
 import json
+import importlib.util
 import os
 import secrets
 import shutil
@@ -269,6 +270,7 @@ def register(router_app,portal):
             "ffmpeg":bool(shutil.which("ffmpeg")),
             "ffprobe":bool(shutil.which("ffprobe")),
             "chromium":chromium_available,
+            "yt_dlp":bool(importlib.util.find_spec("yt_dlp")),
             "private_storage_configured":bool(
                 os.getenv("ALEZZ_SUPABASE_SECRET_KEY") or
                 os.getenv("ALEZZ_SUPABASE_SERVICE_ROLE_KEY")),
