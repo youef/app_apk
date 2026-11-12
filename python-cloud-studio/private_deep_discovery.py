@@ -28,6 +28,8 @@ LOCK=threading.RLock()
 MAX_EPISODES=12
 MAX_MEDIA_PER_EPISODE=12
 MAX_GLOBAL_MEDIA=90
+MAX_EMBEDS=48
+MAX_IFRAME_BROWSERS=4
 ACTIVE_STATES={"queued","scanning"}
 URL_IN_SCRIPT=re.compile(r'https:\\?/\\?/[^"' + "'"+r'\s<>\\]{6,900}?\.(?:mp4|m3u8|m4v|webm|mov|mkv)(?:\?[^"' + "'" +r'\s<>\\]*)?',re.I)
 
@@ -156,7 +158,8 @@ def attempt(func,*args):
 
 
 def run_scan(job_id,url,max_episodes):
-    result={"media":[],"episodes":[],"methods":[],"notes":[],"page_title":""}
+    result={"media":[],"embeds":[],"episodes":[],"methods":[],"notes":[],"page_title":""}
+    iframe_browser_count=0
     try:
         steps=["html","inline_config","yt_dlp","chromium","episodes"]
         def update(stage,text):
@@ -164,8 +167,9 @@ def run_scan(job_id,url,max_episodes):
         update("html","قراءة صفحة العمل وقائمة الحلقات")
         public=discover_page(url)
         result["page_title"]=public.get("title","")
+        result["embeds"]=list(dict.fromkeys(public.get("embeds",[])))[:MAX_EMBEDS]
         result["episodes"]=[{"title":x["title"],"page_url":x["page_url"],
-                             "sources":[],"methods":[]} for x in public.get("episodes",[])[:max_episodes]]
+                             "sources":[],"embeds":[],"methods":[]} for x in public.get("episodes",[])[:max_episodes]]
         for src in public.get("media",[]):
             add_source(result,src.get("url"),"html","مصدر ظاهر في HTML",url)
         result["methods"].append({"engine":"html","status":public.get("status"),
@@ -189,6 +193,10 @@ def run_scan(job_id,url,max_episodes):
             scoped={"media":[]}
             try:
                 item=discover_page(ep["page_url"])
+                ep["embeds"]=list(dict.fromkeys(item.get("embeds",[])))[:8]
+                for iframe_url in ep["embeds"]:
+                    if iframe_url not in result["embeds"] and len(result["embeds"])<MAX_EMBEDS:
+                        result["embeds"].append(iframe_url)
                 for source in item.get("media",[])[:MAX_MEDIA_PER_EPISODE]:
                     add_source(scoped,source.get("url"),"html",ep["title"],ep["page_url"])
                 ep["methods"].append({"engine":"html","status":item.get("status","unavailable"),
@@ -203,6 +211,28 @@ def run_scan(job_id,url,max_episodes):
                     if not scoped["media"]:
                         status=attempt(browser_metadata,ep["page_url"],scoped)
                         ep["methods"].append({"engine":"chromium",**status})
+                    # Some pages only declare public iframe players. The
+                    # previous implementation ignored these URLs entirely,
+                    # so a series could show episodes while showing 0 players.
+                    # Read only two public iframe documents per episode, and
+                    # run up to four extra Chromium checks for the entire job.
+                    for embed_url in ep["embeds"][:2]:
+                        if scoped["media"]:break
+                        if embed_url == ep["page_url"]:continue
+                        embedded=attempt(discover_page,embed_url)
+                        for candidate in embedded.get("media",[])[:MAX_MEDIA_PER_EPISODE]:
+                            add_source(scoped,candidate.get("url"),"iframe_html",ep["title"],embed_url)
+                        ep["methods"].append({"engine":"iframe_html",
+                            "status":embedded.get("status","engine_failed"),
+                            "found":len(scoped["media"])})
+                        if embedded.get("http_status") in (401,403):continue
+                        if not scoped["media"]:
+                            status=attempt(inline_config,embed_url,scoped)
+                            ep["methods"].append({"engine":"iframe_script",**status})
+                        if not scoped["media"] and iframe_browser_count<MAX_IFRAME_BROWSERS:
+                            iframe_browser_count+=1
+                            status=attempt(browser_metadata,embed_url,scoped)
+                            ep["methods"].append({"engine":"iframe_chromium",**status})
                 ep["sources"]=scoped["media"][:MAX_MEDIA_PER_EPISODE]
                 for src in ep["sources"]:
                     add_source(result,src["url"],src["engine"],ep["title"],ep["page_url"],src["verified"])
