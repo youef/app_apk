@@ -31,6 +31,16 @@
   function make(tag, cls='', content){const el=document.createElement(tag);if(cls)el.className=cls;if(content!=null)text(el,content);return el;}
   function rowField(id, value){const el=$(id);if(el && document.activeElement!==el)el.value=value??'';}
   function fmtKind(kind){return kind==='series'?'مسلسل':'فيلم';}
+  function okPlayerUrl(input){
+    try {
+      const u=new URL(String(input||'').trim());
+      if(u.protocol!=='https:'||u.username||u.password||(u.port&&u.port!=='443')
+        || !['ok.ru','www.ok.ru'].includes(u.hostname.toLowerCase())||u.search||u.hash)return '';
+      const match=u.pathname.match(/^\/video(?:embed)?\/([0-9]{1,20})\/?$/);
+      return match?'https://ok.ru/videoembed/'+match[1]:'';
+    }catch(_){return '';}
+  }
+  function normalizeMediaInput(value){return okPlayerUrl(value)||String(value||'').trim();}
   function mediaBadge(ep){if(ep.verified)return ['✓ فيديو مباشر مُتحقق','ok'];if((ep.sources||[]).some(s=>s.kind==='embed'&&s.reachable&&s.url===ep.media_url))return ['◷ صفحة Embed متاحة (التشغيل غير مثبت)','wait'];if(ep.error)return ['✕ غير متحقق','fail'];return [ep.media_url?'◷ يحتاج فحصًا':'— بلا رابط','wait'];}
   function updateStatus(payload){
     app.catalogue=payload.catalogue || null;app.authenticated=!!payload.authenticated;
@@ -75,6 +85,9 @@
       rowField('movieMediaUrl',cat.media_url);
       const [label,cls]=mediaBadge(cat);
       $('movieMediaStatus').textContent=label+ (cat.media_url?' · '+cat.media_url.slice(0,120):'');
+      const moviePreview=$('movieOkPreview');
+      if(moviePreview){const link=okPlayerUrl(cat.media_url);
+        moviePreview.hidden=!link;moviePreview.href=link||'#';}
       $('movieSources').replaceChildren(mediaSources(cat));
       $('seasonTabs').replaceChildren();
     } else renderSeasons();
@@ -97,6 +110,11 @@
         catch{toast('حدّد الرابط وانسخه يدويًا.','error');}
       };
       row.append(make('strong','',label+(source.label?' · '+source.label:'')),make('code','',source.url),copy);
+      if(okPlayerUrl(source.url)){
+        const preview=make('a','small-outline','معاينة OK.ru');
+        preview.href=okPlayerUrl(source.url);preview.target='_blank';preview.rel='noopener noreferrer';
+        row.append(preview);
+      }
       list.append(row);
     }
     container.append(list);
@@ -127,12 +145,26 @@
       const identity=make('div','episode-identity');const title=make('input');title.type='text';title.value=ep.title;title.maxLength=250;title.setAttribute('aria-label','اسم الحلقة '+ep.number);
       title.oninput=()=>{app.catalogue.episodes[ep.i].title=title.value;};
       identity.append(title,make('small','',`الموسم ${ep.season} · الحلقة ${ep.number}`));
-      const url=make('input','episode-url');url.type='url';url.value=ep.media_url||'';url.placeholder='MP4 / HLS / Embed 1vid (اختياري)';url.dir='ltr';url.setAttribute('aria-label','رابط تشغيل الحلقة '+ep.number);
-      url.onchange=()=>{const current=app.catalogue.episodes[ep.i];if(current.media_url!==url.value.trim()){
-        current.media_url=url.value.trim();current.verified=false;current.error='';
-        redrawStats();
-      }};
+      const url=make('input','episode-url');url.type='url';url.value=ep.media_url||'';url.placeholder='MP4 / HLS / OK.ru / Embed';url.dir='ltr';url.setAttribute('aria-label','رابط تشغيل الحلقة '+ep.number);
+      url.onchange=()=>{const current=app.catalogue.episodes[ep.i];
+        const value=normalizeMediaInput(url.value);url.value=value;
+        if(current.media_url!==value){
+          current.media_url=value;current.verified=false;current.error='';
+          current.sources=[];redrawStats();
+          badge.textContent=value?'◷ يحتاج فحصًا':'— بلا رابط';
+          badge.className='media-badge wait';
+        }
+      };
       const [label,cls]=mediaBadge(ep);const badge=make('span','media-badge '+cls,label);
+      const verifyOne=make('button','tiny-btn','فحص');verifyOne.type='button';verifyOne.title='فحص رابط الحلقة';
+      verifyOne.onclick=()=>verifyRows([ep.i]);
+      const preview=make('a','small-outline','معاينة');
+      preview.href=okPlayerUrl(ep.media_url)||'#';
+      preview.target='_blank';preview.rel='noopener noreferrer';
+      preview.hidden=!okPlayerUrl(ep.media_url);
+      url.addEventListener('change',()=>{
+        const link=okPlayerUrl(url.value);preview.href=link||'#';preview.hidden=!link;
+      });
       const expand=make('button','row-info','⋯');expand.type='button';expand.title='وصف الحلقة وصورتها';expand.setAttribute('aria-label','تفاصيل الحلقة '+ep.number);
       expand.onclick=()=>wrapper.classList.toggle('expanded');
       const details=make('div','episode-details');
@@ -142,7 +174,7 @@
       posterUrl.onchange=()=>{app.catalogue.episodes[ep.i].poster_url=posterUrl.value.trim();};plabel.append(posterUrl);
       if(ep.error)details.append(make('small','',`نتيجة الفحص: ${ep.error}`));
       details.append(dlabel,plabel,mediaSources(ep));
-      wrapper.append(check,poster,identity,url,badge,expand,details);list.append(wrapper);
+      wrapper.append(check,poster,identity,url,badge,verifyOne,preview,expand,details);list.append(wrapper);
     }
   }
   function redrawStats(){
@@ -158,7 +190,7 @@
       country:$('metaCountry').value.trim(),language:$('metaLanguage').value.trim(),
       genres:$('metaGenres').value.split(/[,،]+/).map(x=>x.trim()).filter(Boolean),
       description:$('metaDescription').value.trim(),poster_url:$('metaPoster').value.trim(),backdrop_url:$('metaBackdrop').value.trim(),
-      media_url:cat.kind==='movie'&&!app.scanning?$('movieMediaUrl').value.trim():undefined,
+      media_url:cat.kind==='movie'&&!app.scanning?normalizeMediaInput($('movieMediaUrl').value):undefined,
       episodes:cat.kind==='series'&&!app.scanning?cat.episodes.map(e=>({season:e.season,number:e.number,title:e.title,description:e.description,
         poster_url:e.poster_url,media_url:e.media_url})):undefined};
   }
@@ -487,6 +519,10 @@
     };
     $('verifyAllBtn').onclick=()=>verifyRows(app.catalogue&&app.catalogue.kind==='series'?app.catalogue.episodes.map((e,i)=>i):[]);
     $('verifySelectedBtn').onclick=()=>verifyRows([...app.selected]);$('verifyMovieBtn').onclick=()=>verifyRows([]);
+    $('movieMediaUrl').addEventListener('change',()=>{
+      const input=$('movieMediaUrl');input.value=normalizeMediaInput(input.value);
+      const button=$('movieOkPreview');if(button){const link=okPlayerUrl(input.value);button.hidden=!link;button.href=link||'#';}
+    });
     $('edgeCaptureBtn').onclick=()=>action(async()=>{
       if(!app.catalogue)throw new Error('اكتشف العمل أولًا.');
       const cloud=!['localhost','127.0.0.1'].includes(location.hostname);
