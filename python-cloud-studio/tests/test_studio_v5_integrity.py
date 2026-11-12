@@ -116,6 +116,16 @@ class StudioV5IntegrityTests(unittest.TestCase):
         self.assertIn("if (state.authRequired && !force) return;", source)
         self.assertIn("now-state.lastRefreshAt", source)
 
+    def test_episode_scanner_tracks_embed_players_separately(self):
+        python = (PYTHON / "private_deep_discovery.py").read_text(encoding="utf-8")
+        html = (PYTHON / "templates" / "private-videos.html").read_text(encoding="utf-8")
+        self.assertIn('result={"media":[],"embeds":[]', python)
+        self.assertIn('ep["embeds"]=', python)
+        self.assertIn('"iframe_html"', python)
+        self.assertIn('MAX_IFRAME_BROWSERS', python)
+        self.assertIn('current.embeds=(Array.isArray(result.embeds)', html)
+        self.assertIn('↳ صفحة مشغّل مضمنة', html)
+
     def test_portal_admin_login_bridge_is_server_only(self):
         server = (PYTHON / "server.py").read_text(encoding="utf-8")
         importer = (PYTHON / "alezz_fetchv_importer.py").read_text(encoding="utf-8")
