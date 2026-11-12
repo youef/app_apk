@@ -821,7 +821,8 @@ def collect_edge_network(
 
 
 class Supabase:
-    def __init__(self,url: str,key: str,access_token: str="",email: str="",password: str=""):
+    def __init__(self,url: str,key: str,access_token: str="",email: str="",password: str="",
+                 *, trusted_admin_uid: str=""):
         self.root=url.rstrip("/")
         self.session=requests.Session()
         self.session.trust_env=False
@@ -829,6 +830,22 @@ class Supabase:
         self.refresh_token = ''
         self.expires_at = 0
         self.auth_lock = threading.RLock()
+        # Only backend routes that have verified an active portal admin may use
+        # this path. Never send an elevated key or token back to the browser.
+        if trusted_admin_uid:
+            secret=(os.getenv("ALEZZ_SUPABASE_SECRET_KEY") or
+                    os.getenv("ALEZZ_SUPABASE_SERVICE_ROLE_KEY") or "")
+            if not secret or key != secret or access_token or email or password:
+                raise ValueError("Trusted studio login requires server-side credentials")
+            # Modern sb_secret keys are NOT JWTs. Legacy service_role JWTs still
+            # require Authorization: Bearer; both use apikey.
+            if not key.startswith("sb_secret_"):
+                self.session.headers["Authorization"]="Bearer "+key
+            admins=self.query("aseel_admins",{"select":"user_id,active",
+                          "user_id":"eq."+trusted_admin_uid,"active":"eq.true","limit":"1"})
+            if not admins:
+                raise ValueError("Portal session administrator is not active")
+            return
         if not access_token and email and password:
             reply=self.session.post(self.root+"/auth/v1/token?grant_type=password",json={"email":email,"password":password},timeout=20)
             if not reply.ok:raise ValueError("Failed to authenticate admin: "+str(reply.status_code))
