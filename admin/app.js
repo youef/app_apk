@@ -226,7 +226,7 @@ $("editorForm").addEventListener("submit",async ev=>{
   }catch(_){return "";}
  };
  const isDirect = value => {
-   try { const u=new URL(String(value||"")); return u.protocol==="https:" && /\.(?:mp4|m3u8)$/i.test(u.pathname); }
+   try { const u=new URL(String(value||"")); return u.protocol==="https:" && /\.(?:mp4|m3u8|mpd)$/i.test(u.pathname); }
    catch (_) {return false;}
  };
  const isEmbed = value => {
