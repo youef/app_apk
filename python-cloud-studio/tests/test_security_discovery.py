@@ -14,6 +14,35 @@ class SecurityDiscoveryTests(unittest.TestCase):
         self.assertIsNone(_path("https://www.example.org/api/session", "www.example.org"))
         self.assertIsNone(_path("https://www.example.org@127.0.0.1/admin", "www.example.org"))
 
+    def test_cloudflare_challenge_path_not_listed_as_api_or_script(self):
+        self.assertIsNone(_path(
+            "https://www.example.org/cdn-cgi/challenge-platform/h/g/orchestrate/chl_page/v1?ray=abc",
+            "www.example.org"))
+        self.assertIsNone(_path(
+            "/cdn-cgi/challenge-platform/h/g/orchestrate/chl_page/v1",
+            "www.example.org"))
+
+    def test_cloudflare_challenge_classifier(self):
+        import ast
+        from pathlib import Path
+        code = Path(__file__).resolve().parents[1] / "site_security.py"
+        tree = ast.parse(code.read_text(encoding="utf-8"))
+        fn = next(node for node in tree.body
+                  if isinstance(node, ast.FunctionDef) and node.name == "classify_access")
+        module = ast.fix_missing_locations(ast.Module(body=[fn], type_ignores=[]))
+        scope = {}
+        exec(compile(module, str(code), "exec"), scope)
+        classify = scope["classify_access"]
+        self.assertEqual(classify(403, {"cf-mitigated": "challenge"}, b""), "cloudflare_challenge")
+        self.assertEqual(classify(200, {"CF-Mitigated": "Challenge"}, b""), "cloudflare_challenge")
+        self.assertEqual(classify(403, {"Content-Type": "text/html", "cf-ray": "redacted"},
+            b"<html><title>Just a moment...</title><script src='/cdn-cgi/challenge-platform/h/g/'></script>Cloudflare</html>"),
+            "cloudflare_challenge")
+        self.assertEqual(classify(403, {"Content-Type": "text/html"}, b"Forbidden"), "access_restricted")
+        self.assertEqual(classify(200, {"Content-Type": "text/html"},
+            b"<script src='/cdn-cgi/challenge-platform/scripts/jsd/main.js'></script>"),
+            "reachable")
+
     def test_login_admin_api_classification(self):
         self.assertEqual(_kind("/admin"), "admin")
         self.assertEqual(_kind("/wp-login.php"), "login")
