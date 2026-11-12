@@ -199,10 +199,15 @@
 
     var seasonsById = {};
     (raw.seasons || []).forEach(function (s) {
-      var season = { id: s.id, number: s.number || 1, title: s.title_ar || ("الموسم " + (s.number || 1)), episodes: [] };
+      var season = { id: s.id, number: s.number || 1, title: s.title_ar || ("الموسم " + (s.number || 1)), episodes: [], poster: null };
       seasonsById[s.id] = season;
       var parent = seriesById[s.series_id];
-      if (parent) parent.seasons.push(season);
+      if (parent) {
+        // No invented image URLs or database writes: episodes can inherit
+        // their own series artwork when no episode-specific poster exists.
+        season.poster = parent.poster || parent.backdrop || null;
+        parent.seasons.push(season);
+      }
     });
 
     (raw.episodes || []).filter(approvedMedia).forEach(function (e) {
@@ -215,7 +220,7 @@
         number: e.number || 0,
         title: e.title_ar || ("الحلقة " + (e.number || "")),
         description: e.description || "",
-        poster: e.poster_url || null,
+        poster: e.poster_url || season.poster || null,
         genreTags: (e.genre_tags || []).concat(e.auto_tags || []),
         duration: e.duration_minutes || null,
         stream: e.stream_url || "",
@@ -286,7 +291,11 @@
       };
     });
 
-    var all = movies.concat(series, channels, youtube);
+    // Hide empty series from viewers: every remaining series has at least
+    // one published episode not flagged suspect/broken. Draft metadata stays
+    // untouched in Supabase and the admin studio.
+    var playableSeries = series.filter(function (s) { return s.episodeCount > 0; });
+    var all = movies.concat(playableSeries, channels, youtube);
 
     var byKey = {};
     all.forEach(function (i) { byKey[i.key] = i; });
@@ -316,7 +325,7 @@
       categories: categories,
       catById: catById,
       movies: movies,
-      series: series,
+      series: playableSeries,
       channels: channels,
       youtube: youtube,
       items: all,
