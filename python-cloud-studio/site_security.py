@@ -277,6 +277,37 @@ def audit(host):
         meta["platform"] = "Laravel"
     meta["checks"].append("Platform fingerprint (non-exploit)")
 
+    # Technology versions are reported only when visible in public HTML/headers.
+    # Do not invent PHP or database versions from the CMS fingerprint.
+    try:
+        from siteguard_tech import analyze as analyze_tech
+        technology = analyze_tech(headers, html)
+        meta["technology"] = technology
+        cms = technology.get("cms") or {}
+        if cms.get("name") and cms["name"] != "غير محدد":
+            meta["platform"] = cms["name"]
+        meta["platform_version"] = cms.get("version", "غير معلن")
+        meta["checks"].append("Evidence-based public technology and version fingerprint")
+    except Exception:
+        meta["platform_version"] = "غير معلن"
+
+    try:
+        from siteguard_network import tls_metadata
+        tls = tls_metadata(host)
+        meta["tls"] = tls
+        if tls.get("verified"):
+            meta["checks"].append("TLS negotiated protocol, certificate issuer, expiry")
+            remaining = tls.get("days_remaining")
+            if remaining is not None and remaining < 14:
+                add("high" if remaining < 0 else "medium",
+                    "شهادة HTTPS منتهية أو قاربت الانتهاء",
+                    "المدة المتبقية حسب شهادة الاتصال العامة: %s يوم." % remaining,
+                    "تحقق من التجديد الآلي لشهادة TLS وصلاحية سلسلة الثقة.")
+        else:
+            meta["checks"].append("TLS metadata unavailable")
+    except Exception:
+        meta["tls"] = {"verified": False, "note": "تعذرت قراءة تفاصيل TLS."}
+
     try:
         s, ch, _ = safe_get(host, "/", origin="https://alezz-security-check.invalid", max_bytes=1024)
         cors = {k.lower(): v for k, v in ch.items()}
