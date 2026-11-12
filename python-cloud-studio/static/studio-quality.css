@@ -1,0 +1,44 @@
+/* Studio V5 — quality command center */
+.quality-page{max-width:1280px;margin:0 auto 40px;color:#f3f5fb}
+.quality-hero{position:relative;overflow:hidden;padding:clamp(24px,4vw,42px);border:1px solid #7e67395b;border-radius:24px;background:radial-gradient(circle at 85% 10%,#af8a3542,transparent 40%),linear-gradient(120deg,#1b2738,#0d1626 60%,#141826);box-shadow:0 20px 60px #050b1650}
+.quality-hero::after{content:"◈";position:absolute;font-size:240px;opacity:.07;line-height:1;left:-15px;top:-15px;pointer-events:none}
+.quality-hero>*{position:relative;z-index:1}
+.quality-kicker{font:800 11px/1.6 system-ui;letter-spacing:2px;color:#edc87a}
+.quality-hero h1{font-size:clamp(24px,3.5vw,40px);margin:11px 0;line-height:1.3;font-weight:850}
+.quality-hero h1 em{color:#f5c775;font-style:normal}
+.quality-hero p{max-width:700px;margin:0;color:#b7c4d6;line-height:1.9}
+.quality-hero-actions{display:flex;gap:9px;margin-top:21px;flex-wrap:wrap}
+.quality-btn{border:1px solid #8b6a4380;background:#1e2a3c;color:#f7e5c4;border-radius:12px;padding:11px 17px;min-height:44px;font:800 13px system-ui;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px}
+.quality-btn:hover{border-color:#ebbe69;background:#29384b}
+.quality-btn.primary{background:linear-gradient(120deg,#e6b86c,#a16b2b);border-color:#e8c37b;color:#152032}
+.quality-btn:focus-visible{outline:3px solid #eccd819c;outline-offset:3px}
+.quality-status{font-size:12px;color:#b8c6d6;margin-top:14px;line-height:1.8;overflow-wrap:anywhere}
+.quality-status[data-error=true]{color:#ff9296}
+.quality-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:19px 0 25px}
+.quality-metric{background:#111b2a;border:1px solid #2b3b50;border-radius:18px;padding:20px;min-width:0}
+.quality-metric .name{display:block;font-size:12px;color:#a9bbd0;font-weight:700}
+.quality-metric strong{display:block;font:900 clamp(27px,3.5vw,39px)/1.4 system-ui;color:#f7f8fa;letter-spacing:-1px;margin:8px 0}
+.quality-metric small{font-size:11px;color:#93a3b7}
+.quality-metric.warning{border-color:#ce84466a}.quality-metric.warning strong{color:#ffca80}
+.quality-metric.danger{border-color:#c058626c}.quality-metric.danger strong{color:#fc929b}
+.quality-columns{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(270px,.75fr);gap:19px;align-items:start}
+.quality-panel{border:1px solid #273b4e;background:#101927;border-radius:19px;padding:clamp(17px,2vw,25px);margin-bottom:16px}
+.quality-panel h2{margin:0;font-size:18px;color:#f7f8fa;font-weight:850}
+.quality-panel p{color:#9cadc3;margin:8px 0 14px;line-height:1.9;font-size:12px}
+.quality-table{width:100%;border-collapse:collapse;font:500 12px/1.9 system-ui}
+.quality-table th,.quality-table td{padding:11px 7px;text-align:right;border-bottom:1px solid #293547}
+.quality-table th{color:#aebdd0;white-space:nowrap;font-weight:800}
+.quality-table td{color:#e6eaf0}
+.quality-table tr:last-child td{border-bottom:0}
+.quality-table .danger{color:#ff8f99;font-weight:850}
+.quality-table .warning{color:#ffd199;font-weight:850}
+.quality-table-wrap{overflow-x:auto}
+.quality-issues{list-style:none;padding:0;margin:0;display:grid;gap:12px}
+.quality-issues li{border:1px solid #344152;background:#172230;border-radius:12px;padding:13px 14px;font-size:12px;color:#c3cfdd;line-height:1.8}
+.quality-issues strong{color:#f7f8fa;display:block;margin-bottom:3px}
+.quality-links{display:flex;flex-wrap:wrap;gap:8px}
+.quality-links a{background:#1d2a3d;border:1px solid #394d61;border-radius:11px;padding:9px 12px;font-size:12px;color:#f5d9a1;font-weight:700;text-decoration:none}
+.quality-links a:hover{border-color:#e6b86c}
+.quality-note{display:block;margin-top:13px;border-right:3px solid #bd9552;color:#a8b9cd;padding:11px 14px;background:#ffffff08;border-radius:7px;font-size:12px}
+@media(max-width:1030px){.quality-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.quality-columns{grid-template-columns:1fr}}
+@media(max-width:520px){.quality-grid{gap:9px}.quality-metric{padding:14px;border-radius:13px}.quality-metric strong{font-size:27px}.quality-panel{padding:14px}.quality-hero{border-radius:17px;padding:21px}.quality-hero-actions .quality-btn{flex:1}}
