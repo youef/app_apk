@@ -1508,25 +1508,42 @@ public final class TVHomeActivity extends Activity {
             content.addView(revoke,space(-1,dp(54),4));
             revoke.setOnClickListener(v->{PhoneRemote.stop();render();});
         }
-        final boolean automaticApkChecks=appUpdater!=null && appUpdater.automaticChecksEnabled();
-        heading("تحديثات نسخة APK",automaticApkChecks?
-            "التنبيه عن نسخ التطبيق الجديدة مفعل • لا يتم تثبيت أي إصدار دون موافقتك":
-            "الوضع اليدوي مفعل • لن تظهر نوافذ تحديث APK تلقائيًا. المحتوى يتجدد دون إصدار جديد.");
-        Button toggleApkUpdates=button((automaticApkChecks?"✓  ":"○  ")+
-            "تنبيهات تحديثات APK التلقائية: "+(automaticApkChecks?"مفعّلة":"متوقفة"));
-        toggleApkUpdates.setTag("settings:apk-auto-checks");
-        content.addView(toggleApkUpdates,space(-1,dp(60),5));
-        toggleApkUpdates.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-            if(appUpdater==null)return;
-            appUpdater.setAutomaticChecksEnabled(!appUpdater.automaticChecksEnabled());
+        final String apkUpdateMode=appUpdater==null?"manual":appUpdater.updateMode();
+        heading("تحديث إصدار العز TV",
+            "اختر طريقة التحديث. تنزيل APK يتم عبر متصفح التلفزيون، ولا توجد تحديثات إجبارية.\n"+
+            "تحديث القنوات والأفلام والحلقات من قاعدة البيانات مستقل تمامًا عن هذا الخيار.");
+        Button offApkUpdates=button(("off".equals(apkUpdateMode)?"◉  ":"○  ")+
+            "إيقاف تحديثات التطبيق — بدون فحص أو تنبيهات");
+        offApkUpdates.setTag("settings:apk-off");
+        content.addView(offApkUpdates,space(-1,dp(57),4));
+        offApkUpdates.setOnClickListener(v->{
+            if(appUpdater!=null)appUpdater.setUpdateMode("off");
             render();
-        }});
-        Button updateApp=primaryButton("↻ البحث عن تحديث APK وتثبيته يدويًا");
-        updateApp.setTag("settings:app-update");
-        content.addView(updateApp,space(-1,dp(60),5));
-        updateApp.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-            if(appUpdater!=null)appUpdater.check(true);
-        }});
+        });
+        Button manualApkUpdates=button(("manual".equals(apkUpdateMode)?"◉  ":"○  ")+
+            "تحديث يدوي — عند طلبك فقط");
+        manualApkUpdates.setTag("settings:apk-manual");
+        content.addView(manualApkUpdates,space(-1,dp(57),4));
+        manualApkUpdates.setOnClickListener(v->{
+            if(appUpdater!=null)appUpdater.setUpdateMode("manual");
+            render();
+        });
+        Button toggleApkUpdates=button(("automatic".equals(apkUpdateMode)?"◉  ":"○  ")+
+            "فحص تلقائي اختياري — تنبيه غير إلزامي بحد أقصى مرة أسبوعيًا");
+        toggleApkUpdates.setTag("settings:apk-auto-checks");
+        content.addView(toggleApkUpdates,space(-1,dp(57),4));
+        toggleApkUpdates.setOnClickListener(v->{
+            if(appUpdater!=null)appUpdater.setAutomaticChecksEnabled(true);
+            render();
+        });
+        if(!"off".equals(apkUpdateMode)){
+            Button updateApp=primaryButton("↻ البحث عن تحديث وفتح APK في المتصفح");
+            updateApp.setTag("settings:app-update");
+            content.addView(updateApp,space(-1,dp(60),5));
+            updateApp.setOnClickListener(v->{
+                if(appUpdater!=null)appUpdater.check(true);
+            });
+        }
         if(appUpdater!=null && appUpdater.hasPendingDownload()){
             Button cancelApk=button("✕ إلغاء تنزيل التحديث المعلق");
             cancelApk.setTag("settings:apk-cancel");
