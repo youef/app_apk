@@ -19,7 +19,8 @@ test("kids TV streams require approved direct playback",home.includes("private b
 test("kids TV has age and time settings",home.includes("kidsAge=6,kidsDailyMinutes=60")&&home.includes('putInt("minutes",minutes)'));
 test("native playback enforces kids daily limit",player.includes("kidsClock")&&player.includes("seconds>=kidsMinutes*60"));
 test("cards use official YouTube thumbnails",home.includes('https://i.ytimg.com/vi/'));
-test("youtube opens official embed activity",home.includes("new Intent(this,YouTubeActivity.class)"));
+test("youtube cards never invoke browser/iframe playback",!home.includes("new Intent(this,YouTubeActivity.class)") &&
+  home.includes('UnavailableVideoActivity.show(this,"movie",label(selected))'));
 test("YouTube stays in the application",!youtube.includes("LegacyYoutubeBridge.open(this")&&!youtube.includes("openOfficialPlayer()"));
 test("KitKat attempts official embedded player without outside apps",youtube.includes("web=new WebView(this)")&&youtube.includes("web.loadDataWithBaseURL("));
 test("license-approved media can open in ExoPlayer",home.includes('licensed_stream_approved')&&home.includes('licensed_stream_url')&&home.includes('new Intent(this,CinemaPlayerActivity.class)'));
