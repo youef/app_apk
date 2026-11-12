@@ -15,15 +15,14 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-from site_security import audit as detailed_audit, finish, public_addresses, public_host, safe_get, iso, record
+from site_security import finish, public_addresses, public_host, safe_get, iso, record
+from siteguard_tech import analyze
 
 router = APIRouter()
 HERE = Path(__file__).resolve().parent
 LOCK = threading.RLock()
 EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="public-siteguard")
 JOBS: dict[str, dict] = {}
-CHALLENGES: dict[tuple[str, str], tuple[str, float]] = {}
-VERIFIED: dict[tuple[str, str], float] = {}
 LAST_HOST: dict[str, float] = {}
 RECENT = deque()
 COOKIE = "alezz_siteguard"
@@ -62,7 +61,7 @@ def host_from(raw):
     except (ValueError, OSError) as exc:
         raise HTTPException(400, "استخدم اسم نطاق HTTPS عامًا صحيحًا، وليس عنوانًا داخليًا.") from exc
 
-def quick_audit(host):
+def quick_audit(host, extended=False):
     result = {
         "host": host, "url": "https://" + host, "started_at": iso(),
         "engine": "Al Ezz SiteGuard / limited safe website configuration audit",
@@ -125,16 +124,63 @@ def quick_audit(host):
         if match:
             result["version"] = match.group(1)
     result["checks"].extend(["HTTP response security headers", "Public HTML platform fingerprint"])
+    tech = analyze(headers, markup)
+    result.update(tech)
+    if tech["cms"]["name"] != "غير محدد":
+        result["platform"] = tech["cms"]["name"]
+        result["version"] = tech["cms"]["version"]
+    if extended:
+        # Public documents and response metadata only; no credentials or secrets.
+        for path, description in (
+            ("/robots.txt", "robots.txt"),
+            ("/.well-known/security.txt", "security.txt"),
+        ):
+            try:
+                code, _, _ = safe_get(host, path, max_bytes=2048)
+                result["checks"].append(description + " / " + str(code))
+            except Exception:
+                result["checks"].append(description + " / unavailable")
+        try:
+            code, cors_headers, _ = safe_get(
+                host, "/", origin="https://siteguard-cors-probe.invalid", max_bytes=512)
+            ch = {str(k).lower(): str(v).lower() for k, v in cors_headers.items()}
+            if (ch.get("access-control-allow-origin") == "https://siteguard-cors-probe.invalid" and
+                    ch.get("access-control-allow-credentials") == "true"):
+                items.append(record(
+                    "high", "انعكاس مصدر CORS مع بيانات الاعتماد",
+                    "أعاد الخادم ترويسات CORS تسمح بأصل غير موثوق مع إرسال بيانات الاعتماد.",
+                    "اسمح فقط للأصول المعروفة، وراجع إعدادات CORS لكل واجهة.",
+                    "Access-Control-Allow-Origin"))
+            result["checks"].append("CORS response headers")
+        except Exception:
+            result["checks"].append("CORS response headers / unavailable")
+        if result["platform"] == "WordPress":
+            try:
+                code, _, payload = safe_get(host, "/wp-json/", max_bytes=4096)
+                result["checks"].append("WordPress REST API / " + str(code))
+                if code == 200 and b'"namespaces"' in payload:
+                    items.append(record("info", "واجهة WordPress REST API متاحة",
+                        "واجهة REST العامة مرئية؛ وجودها لا يعني ثغرة.",
+                        "راجع صلاحيات واجهات REST والإضافات."))
+            except Exception:
+                result["checks"].append("WordPress REST API / unavailable")
+            try:
+                code, _, payload = safe_get(host, "/feed/", max_bytes=4096)
+                if code == 200:
+                    match = re.search(rb"<generator>[^<]*[?&]v=(\d+(?:\.\d+){1,3})", payload, re.I)
+                    if match and result["version"] == "غير معلن":
+                        result["version"] = match.group(1).decode("ascii")
+                        result["cms"]["version"] = result["version"]
+                        result["cms"]["evidence"] = "RSS generator"
+                    result["checks"].append("WordPress public feed / " + str(code))
+            except Exception:
+                result["checks"].append("WordPress public feed / unavailable")
     return finish(result, items)
 
 def run_job(job_id, host, mode):
     try:
-        output = detailed_audit(host) if mode == "verified" else quick_audit(host)
-        if mode == "verified":
-            output["mode"] = "فحص موسع بعد إثبات ملكية النطاق"
-            # Detailed checks never save the bodies of files containing secrets.
-        else:
-            output["mode"] = "فحص خارجي عام"
+        output = quick_audit(host, extended=(mode == "extended"))
+        output["mode"] = "فحص خارجي موسع للبيانات العامة" if mode == "extended" else "فحص خارجي سريع"
         with LOCK:
             JOBS[job_id]["state"] = "done"
             JOBS[job_id]["report"] = output
@@ -165,47 +211,14 @@ def siteguard_page(request: Request):
 def siteguard_health():
     return {"ok": True, "component": "Al Ezz SiteGuard"}
 
-@router.post("/siteguard/api/challenge")
-def challenge(request: Request, data: Target):
-    sid = api_request(request)
-    host = host_from(data.url)
-    token = "alezz-siteguard=" + secrets.token_urlsafe(30)
-    with LOCK:
-        CHALLENGES[(sid, host)] = (token, time.monotonic() + 1800)
-    return {
-        "host": host, "path": "/.well-known/alezz-siteguard.txt",
-        "token": token, "url": "https://" + host + "/.well-known/alezz-siteguard.txt"
-    }
-
-@router.post("/siteguard/api/verify")
-def verify(request: Request, data: Target):
-    sid = api_request(request)
-    host = host_from(data.url)
-    with LOCK:
-        entry = CHALLENGES.get((sid, host))
-    if not entry or entry[1] < time.monotonic():
-        raise HTTPException(400, "اطلب ملف تحقق جديدًا.")
-    try:
-        code, _, data_bytes = safe_get(host, "/.well-known/alezz-siteguard.txt", max_bytes=250)
-    except Exception:
-        raise HTTPException(400, "تعذر قراءة ملف إثبات ملكية النطاق.") from None
-    if code != 200 or not secrets.compare_digest(data_bytes.strip().decode("utf-8", "replace"), entry[0]):
-        raise HTTPException(400, "ملف التحقق غير موجود أو محتواه غير مطابق.")
-    with LOCK:
-        VERIFIED[(sid, host)] = time.monotonic() + 12 * 3600
-        CHALLENGES.pop((sid, host), None)
-    return {"ok": True, "host": host, "valid_hours": 12}
-
 @router.post("/siteguard/api/start")
 def start_scan(request: Request, data: Target):
     sid = api_request(request)
     host = host_from(data.url)
-    if data.mode not in ("quick", "verified"):
+    if data.mode not in ("quick", "extended"):
         raise HTTPException(400, "وضع فحص غير صالح.")
     now = time.monotonic()
     with LOCK:
-        if data.mode == "verified" and VERIFIED.get((sid, host), 0) < now:
-            raise HTTPException(403, "الفحص الموسع يتطلب إثبات ملكية النطاق أولًا.")
         while RECENT and now - RECENT[0] > 3600:
             RECENT.popleft()
         if len(RECENT) >= MAX_RUNS_PER_HOUR:
