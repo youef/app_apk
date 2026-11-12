@@ -144,6 +144,67 @@ function approvedEmbedShape(url:URL):boolean {
     ((host==="1vid.xyz"||host==="www.1vid.xyz") && /^\/embed-[a-z0-9_-]+\.html$/i.test(path));
 }
 type Probe={kind:"healthy"|"definite"|"unknown",reason:string};
+
+async function sampleHlsMedia(playlistUrl:URL, contents:string):Promise<Probe>{
+  let parent=playlistUrl;
+  let body=contents;
+  // Handle a single HLS master variant, then inspect a real segment.
+  for(let depth=0;depth<2;depth++){
+    const lines=body.replace(/^\\uFEFF/,"").split(/\\r?\\n/).map(x=>x.trim());
+    const master=lines.some(x=>x.startsWith("#EXT-X-STREAM-INF:"));
+    let target="";
+    if(master){
+      const at=lines.findIndex(x=>x.startsWith("#EXT-X-STREAM-INF:"));
+      target=lines.slice(at+1).find(x=>!!x&&!x.startsWith("#"))||"";
+      if(!target)return {kind:"unknown",reason:"تعذر استخراج جودة من قائمة HLS"};
+    }else{
+      const at=lines.findIndex(x=>x.startsWith("#EXTINF:"));
+      if(at<0)return {kind:"unknown",reason:"قائمة HLS لا تحتوي مقاطع بث قابلة للفحص"};
+      target=lines.slice(at+1).find(x=>!!x&&!x.startsWith("#"))||"";
+      if(!target)return {kind:"unknown",reason:"لا يوجد مقطع HLS قابل للتحميل"};
+    }
+    let url:URL|null=null;
+    try{url=safeUrl(new URL(target,parent).href);}catch{return {kind:"unknown",reason:"رابط مقطع غير صالح"};}
+    if(!url)return {kind:"unknown",reason:"رابط مقطع غير آمن"};
+    for(let redirect=0;redirect<3;redirect++){
+      if(!(await publicHost(url)))return {kind:"unknown",reason:"تعذر التحقق من نطاق مقطع HLS"};
+      try{
+        const response=await fetch(url.href,{method:"GET",redirect:"manual",
+          headers:{"Range":"bytes=0-4095","User-Agent":"AlEzzTV-HealthAgent/1.0"},
+          signal:AbortSignal.timeout(9000)});
+        if(response.status>=300&&response.status<400){
+          const next=response.headers.get("location");
+          url=next?safeUrl(new URL(next,url).href):null;
+          if(!url)return {kind:"unknown",reason:"تحويل مقطع HLS غير آمن"};
+          continue;
+        }
+        if(response.status===404||response.status===410)
+          return {kind:"definite",reason:"مقطع HLS مفقود (HTTP "+response.status+")"};
+        if(!response.ok)return {kind:"unknown",reason:"مقطع HLS غير متاح من نقطة الفحص (HTTP "+response.status+")"};
+        const reader=response.body?.getReader();
+        if(!reader)return {kind:"unknown",reason:"المقطع بدون بيانات"};
+        const first=await reader.read();
+        try{await reader.cancel();}catch{}
+        const chunk=first.value;
+        if(!chunk||chunk.length<16)return {kind:"unknown",reason:"مقطع بث فارغ أو قصير"};
+        const contentType=(response.headers.get("content-type")||"").toLowerCase();
+        const prefix=new TextDecoder().decode(chunk.slice(0,80)).trimStart().toLowerCase();
+        if(contentType.includes("text/html")||contentType.includes("application/json")||
+          prefix.startsWith("<html")||prefix.startsWith("<!doctype")||prefix.startsWith('{"error"'))
+          return {kind:"definite",reason:"رابط مقطع HLS أعاد HTML/JSON بدل الفيديو"};
+        if(master){
+          body=new TextDecoder().decode(chunk);
+          parent=url;
+          if(!body.trimStart().startsWith("#EXTM3U"))return {kind:"unknown",reason:"جودة HLS لا تعرض قائمة تشغيل"};
+          break;
+        }
+        return {kind:"healthy",reason:"تم تحميل بيانات مقطع فيديو فعلي من قائمة HLS"};
+      }catch{return {kind:"unknown",reason:"تعذر قراءة مقطع HLS؛ قد يكون المصدر محجوبًا جغرافيًا"};}
+    }
+    if(!master)break;
+  }
+  return {kind:"unknown",reason:"لم يثبت وجود مقطع قابل للتشغيل"};
+}
 async function probe(raw:unknown,mode:"stream"|"official"|"youtube"):Promise<Probe> {
   let u=safeUrl(raw);
   if(!u)return {kind:"unknown",reason:"رابط غير آمن أو غير صالح للفحص التلقائي"};
@@ -196,7 +257,8 @@ async function probe(raw:unknown,mode:"stream"|"official"|"youtube"):Promise<Pro
       if(isHls||isDash){
         const text=(await response.text()).slice(0,8000).trimStart();
         const valid=isHls ? text.startsWith("#EXTM3U") : /<MPD\b/i.test(text);
-        if(valid)return {kind:"healthy",reason:"تم التحقق من ملف البث"};
+        if(valid)return isHls ? await sampleHlsMedia(u,text) :
+          {kind:"healthy",reason:"تم التحقق من قائمة DASH"};
         if(/text\/html/i.test(type))return {kind:"definite",reason:"المصدر يعيد صفحة HTML بدل ملف البث"};
         return {kind:"unknown",reason:"تعذر قراءة صيغة قائمة البث من هذا المصدر"};
       }
@@ -544,8 +606,8 @@ Deno.serve(async(req:Request)=>{
       return reply({channels,count:channels.length});
     }catch(e){return reply({error:"Live inventory error: "+String(e).slice(0,150)},500);}
   }
-  // Replace only an already verified stream of the SAME channel, or remove a
-  // channel after repeated definitive broken results and a fresh full audit.
+  // Replace only a verified stream of the SAME channel. Never delete channels.
+  // The hourly monitor hides confirmed broken media via health state/RLS.
   // A timeout, HTTP 403, regional block or rate limit is NEVER proof of death.
   if(body.mode==="channel_repair"){
     const raw=Array.isArray(body.actions)?body.actions:[];
@@ -601,27 +663,11 @@ Deno.serve(async(req:Request)=>{
           }else{unchanged++;}
           continue;
         }
-        if(entry?.alternatives_checked!==true){unchanged++;continue;}
-        const sources=mediaList(row,true);
-        if(sources.some(s=>s.mode!=="stream")){unchanged++;continue;}
-        if(!sources.length){
-          await rest("aseel_channels","id=eq."+encodeURIComponent(id),{method:"DELETE"});
-          deleted++;changes.push({id,name:row.title_ar,action:"deleted",reason:"No media sources"});continue;
-        }
-        // For permanent deletion all existing sources must be definitively
-        // 404/410 or invalid HTML; the saved 3-strike result must still match.
-        if(row.link_health_status!=="broken"||Number(row.link_health_failures||0)<3 ||
-          row.link_health_url!==JSON.stringify(sources)){unchanged++;continue;}
-        const checks=await Promise.all(sources.map(s=>probe(s.url,"stream")));
-        if(!checks.every(p=>p.kind==="definite")){unchanged++;continue;}
-        const latest=await rest("aseel_channels",
-          "select=stream_url,link_health_status,link_health_failures,link_health_url&id=eq."+encodeURIComponent(id)+"&limit=1");
-        if(!Array.isArray(latest)||!latest.length||
-          latest[0].stream_url!==row.stream_url||latest[0].link_health_status!=="broken"||
-          Number(latest[0].link_health_failures||0)<3||
-          latest[0].link_health_url!==row.link_health_url){unchanged++;continue;}
-        await rest("aseel_channels","id=eq."+encodeURIComponent(id),{method:"DELETE"});
-        deleted++;changes.push({id,name:row.title_ar,action:"deleted",reason:"Three-strike confirmed dead sources"});
+        // No more hard deletion: a temporarily broken channel must retain
+        // its title, poster, stream URLs and provider ID for automatic recovery.
+        // The hourly 3-strike probe marks it "broken"; RLS then hides it from
+        // viewers, and a later healthy probe exposes it again.
+        unchanged++;
       }catch(e){errors.push(id+": "+String(e).slice(0,120));}
     }
     return reply({mode:"channel_repair",renewed,deleted,unchanged,changes,errors},
