@@ -35,3 +35,12 @@ assert.ok(edgeHealth.includes('if(body.mode==="items")'),"Safe Edge item mode mi
 assert.ok(edgeHealth.includes('if(!admin)return reply({error:"تسجيل دخول مسؤول مطلوب للفحص الشامل"},403)'),"Item scan must verify admin role");
 
 console.log("PASS: new admin, legacy importer, viewer assets, browser compatibility and download links");
+const studioHtml=read("python-cloud-studio/templates/index.html");
+const studioApp=read("python-cloud-studio/static/app.js");
+new vm.Script(studioApp,{filename:"studio-app.js"});
+const studioIds=ids(studioHtml,"Python Studio");
+for(const id of ["okPreviewModal","okPreviewFrame","okPreviewOpen","okPreviewClose","movieOkPreview","verifyMovieBtn"])
+  assert.ok(studioIds.has(id),"Missing OK.ru player/fallback control: "+id);
+assert.ok(studioApp.includes("OK.ru — تحقق بالمعاينة على الجهاز"),"Indeterminate OK.ru is not incorrectly labelled failed");
+assert.ok(studioApp.includes("okPlayerUrl(source.url)?'OK.ru:"),"Provider embed health is separate from MP4 probe");
+console.log("PASS: OK.ru admin preview, official external fallback and uncertain health states");
