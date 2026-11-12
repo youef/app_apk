@@ -21,7 +21,7 @@ assert.equal(live.mediaType("https://example.org/test.m3u8?token=abc"), "hls");
 assert.equal(live.mediaType("https://example.org/test.mp4"), "video");
 assert.equal(live.mediaType("https://example.org/test.mpd"), "dash");
 assert.equal(live.mediaType("http://example.org/test.m3u8"), "");
-assert.ok(live.playable({ playback: "official_link", official: "https://example.org/live" }));
+assert.ok(!live.playable({ playback: "official_link", official: "https://example.org/live" }));
 assert.ok(!live.playable({ playback: "stream", stream: "https://example.org/page.html" }));
 const channels = [
   { key: "channel:1", title: "قناة اختبار", poster: "https://example.org/logo.png", stream: "https://example.org/live.m3u8", playback: "stream", category: "الأخبار", categoryId: "news" },
@@ -32,7 +32,7 @@ const page = live.render({ channels, categories: [
 ] }, "");
 const ids = [...page.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]);
 assert.equal(new Set(ids).size, ids.length, "Duplicate live page IDs");
-for (const id of ["livePage", "liveVideo", "liveGuideItems", "liveStart", "liveRetry", "liveSearch", "liveFilters", "liveNext", "livePrev", "liveStatus", "liveFullscreen"]) {
+for (const id of ["liveUnavailable", "liveComingSoonVideo", "livePage", "liveVideo", "liveGuideItems", "liveStart", "liveRetry", "liveSearch", "liveFilters", "liveNext", "livePrev", "liveStatus", "liveFullscreen"]) {
   assert.ok(ids.includes(id), "Missing live UI: " + id);
 }
 assert.ok(page.includes("قناة في الدليل") && page.includes("دليل القنوات"));
