@@ -48,6 +48,7 @@ public final class AppUpdater {
     private boolean active,stopped,verified,installerOpened,prompting;
     private boolean requiredUpdate=false,launchedInstaller=false;
     private long downloadId=-1;
+    private long pausedSinceMs=0L;
     private JSONObject selected;
     private AlertDialog mandatoryDialog;
     private AlertDialog progressDialog;
@@ -58,6 +59,35 @@ public final class AppUpdater {
     public AppUpdater(Activity activity){
         this.activity=activity;
         this.preferences=activity.getSharedPreferences("alezz_stable_updates_v1",Context.MODE_PRIVATE);
+    }
+    /** On first install APK prompts are disabled; viewers choose when to update. */
+    public boolean automaticChecksEnabled(){
+        return preferences.getBoolean("automatic_checks",false);
+    }
+    public void setAutomaticChecksEnabled(boolean enabled){
+        preferences.edit().putBoolean("automatic_checks",enabled).apply();
+    }
+    public boolean hasPendingDownload(){
+        return downloadId>0 || preferences.getLong("download_id",-1L)>0;
+    }
+    /** Cancels only a download created by this updater; never affects installed data. */
+    public void cancelPendingDownload(){
+        if(verifying){say("جارٍ فحص سلامة الملف؛ لا يمكن إلغاء العملية أثناء التحقق.");return;}
+        handler.removeCallbacks(progress);
+        long id=downloadId>0?downloadId:preferences.getLong("download_id",-1L);
+        if(id>0){
+            try{
+                DownloadManager manager=(DownloadManager)activity.getSystemService(Context.DOWNLOAD_SERVICE);
+                if(manager!=null)manager.remove(id);
+            }catch(Exception e){Log.w(TAG,"Failed to cancel updater-owned download",e);}
+        }
+        downloading=false;pausedSinceMs=0L;verified=false;
+        installAfterPermission=false;launchedInstaller=false;requiredUpdate=false;
+        selected=null;
+        forgetDownload();
+        cleanupTemporaryApks();
+        if(progressDialog!=null){progressDialog.dismiss();progressDialog=null;}
+        say("تم إيقاف تنزيل التحديث. يمكنك الفحص والتحديث يدويًا من الإعدادات.");
     }
     private void say(final String message){
         if(activity.isFinishing())return;
@@ -85,6 +115,7 @@ public final class AppUpdater {
     }
     /** Automatic checks are throttled. The settings action always checks afresh. */
     public void check(final boolean manual){
+        if(!manual && !automaticChecksEnabled())return;
         if(!active||stopped||checking||downloading||verifying||prompting||installAfterPermission)return;
         if(downloadId>0){
             if(manual&&verified){installerOpened=false;requestInstall();}
@@ -232,6 +263,7 @@ public final class AppUpdater {
     }
     private void forgetDownload(){
         downloadId=-1;
+        pausedSinceMs=0L;
         verified=false;
         installerOpened=false;
         preferences.edit().remove("download_id").remove("release_json").apply();
@@ -277,7 +309,7 @@ public final class AppUpdater {
             progressDialog=new AlertDialog.Builder(activity)
                 .setTitle("تحديث العز TV")
                 .setView(body)
-                .setNegativeButton("إخفاء",null).create();
+                .setNegativeButton("إلغاء التنزيل",(d,w)->cancelPendingDownload()).create();
             progressDialog.setOnDismissListener(d->{progressDialog=null;progressBar=null;progressText=null;});
             progressDialog.show();
         }
@@ -297,6 +329,18 @@ public final class AppUpdater {
             default:return "رمز خطأ التنزيل: "+reason;
         }
     }
+    private static String pausedReason(int reason){
+        switch(reason){
+            case DownloadManager.PAUSED_WAITING_TO_RETRY:
+                return "خادم التنزيل لا يستجيب الآن؛ سيعيد Android المحاولة";
+            case DownloadManager.PAUSED_WAITING_FOR_NETWORK:
+                return "التنزيل ينتظر اتصال الإنترنت";
+            case DownloadManager.PAUSED_QUEUED_FOR_WIFI:
+                return "الجهاز ينتظر شبكة Wi-Fi مناسبة";
+            default:
+                return "أوقف Android مدير التنزيل مؤقتًا";
+        }
+    }
     private void beginDownload(){
         if(selected==null || downloading)return;
         try{
@@ -314,6 +358,7 @@ public final class AppUpdater {
             request.setAllowedOverRoaming(false);
             request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
             downloadId=manager.enqueue(request);
+            pausedSinceMs=0L;
             rememberDownload();
             downloading=true;
             handler.removeCallbacks(progress);
@@ -347,8 +392,26 @@ public final class AppUpdater {
                 int reason=cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_REASON));
                 throw new java.io.IOException(downloadError(reason));
             }
-            showProgress((state==DownloadManager.STATUS_PAUSED?"التنزيل متوقف مؤقتًا":"جارٍ تنزيل APK")+
-                (percent<0?"...":" • "+percent+"٪"),percent);
+            if(state==DownloadManager.STATUS_PAUSED){
+                int reason=cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_REASON));
+                if(pausedSinceMs==0L)pausedSinceMs=System.currentTimeMillis();
+                String explanation=pausedReason(reason);
+                showProgress("متوقف مؤقتًا • "+explanation+(percent<0?"":" • "+percent+"٪"),percent);
+                if(System.currentTimeMillis()-pausedSinceMs>60000L){
+                    // Firmware DownloadManager sometimes never resumes GitHub redirects.
+                    // Cancel only this app's attempt; do not keep a stuck system notification.
+                    long id=downloadId;
+                    downloading=false;
+                    if(id>0)manager.remove(id);
+                    forgetDownload();
+                    showProgress("تعذر استكمال التنزيل عبر نظام التلفزيون. أعد المحاولة يدويًا من الإعدادات أو نزّل APK الرسمي من GitHub.",0);
+                    say("توقف تنزيل التحديث. ألغينا التنزيل العالق؛ التحديث يدوي الآن.");
+                    return;
+                }
+            }else{
+                pausedSinceMs=0L;
+                showProgress("جارٍ تنزيل APK"+(percent<0?"...":" • "+percent+"٪"),percent);
+            }
         }catch(Exception e){
             downloading=false;
             cleanupManagedDownloads(-1L);
