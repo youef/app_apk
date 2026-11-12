@@ -108,10 +108,10 @@ class MemberSessions:
 
 
 # Admin browser sessions are longer lived than the in-memory studio workspace.
-# A 30-day hard limit prevents an old stolen cookie from being renewed indefinitely.
-ADMIN_SESSION_SECONDS = 7 * 86400
-ADMIN_MAX_AGE_SECONDS = 30 * 86400
-ADMIN_RENEW_WINDOW = 24 * 3600
+# An absolute 180-day limit, periodic role checks and server-side revocation bound trusted-admin sessions.
+ADMIN_SESSION_SECONDS = 30 * 86400
+ADMIN_MAX_AGE_SECONDS = 180 * 86400
+ADMIN_RENEW_WINDOW = 7 * 86400
 ADMIN_ROLE_RECHECK_SECONDS = 4 * 3600
 
 
@@ -191,3 +191,111 @@ class AdminSessions(MemberSessions):
     def revoke_user(self, user_id):
         with self._db() as conn:
             conn.execute("DELETE FROM admin_sessions WHERE user_id=?", (user_id,))
+
+
+class _SupabaseAdminSessions(AdminSessions):
+    """Durable admin sessions in Supabase (service-role only, with RLS).
+
+    This is used when the existing server-side Supabase secret key is set.
+    It avoids losing trusted-device sign-ins whenever a free Render container
+    restarts. The cookie remains opaque; only SHA-256 hashes reach Postgres.
+    """
+
+    def __init__(self, directory):
+        super().__init__(directory)
+        import os
+        self._remote_key = (os.getenv("ALEZZ_SUPABASE_SECRET_KEY") or
+                            os.getenv("ALEZZ_SUPABASE_SERVICE_ROLE_KEY") or "")
+        self._remote_url = os.getenv(
+            "ALEZZ_SUPABASE_URL", "https://qyzmlwtvzzgooccqxglq.supabase.co"
+        ).rstrip("/") + "/rest/v1/aseel_admin_web_sessions"
+
+    def _remote(self, method, *, params=None, payload=None, extra_headers=None):
+        import requests
+        headers = {"apikey": self._remote_key, "Content-Type": "application/json",
+                   "Accept": "application/json"}
+        if not self._remote_key.startswith("sb_secret_"):
+            headers["Authorization"] = "Bearer " + self._remote_key
+        if extra_headers:
+            headers.update(extra_headers)
+        with requests.Session() as client:
+            client.trust_env = False
+            response = client.request(method, self._remote_url, params=params,
+                                      json=payload, headers=headers,
+                                      timeout=(4, 9), allow_redirects=False)
+            response.raise_for_status()
+            return response.json() if response.content else []
+
+    def create(self, token, user_id, csrf):
+        if not self._remote_key:
+            return super().create(token, user_id, csrf)
+        digest = self._digest(token)
+        if not digest or not csrf or not user_id:
+            raise ValueError("Invalid administrator session")
+        now = int(time.time())
+        self._remote("POST", payload={
+            "token_hash": digest, "user_id": user_id, "csrf": csrf,
+            "created_at": now, "last_seen_at": now, "verified_at": now,
+            "expires_at": now + ADMIN_SESSION_SECONDS
+        }, extra_headers={"Prefer": "return=minimal"})
+        # SQLite cache is optional, never authoritative for cloud admin sessions.
+        try:
+            super().create(token, user_id, csrf)
+        except OSError:
+            pass
+
+    def get(self, token):
+        if not self._remote_key:
+            return super().get(token)
+        digest = self._digest(token)
+        if not digest:
+            return None
+        now = int(time.time())
+        rows = self._remote("GET", params={
+            "token_hash": "eq." + digest,
+            "select": "user_id,csrf,expires_at,created_at,verified_at",
+            "limit": "1"
+        })
+        if not rows:
+            return None
+        row = rows[0]
+        deadline = min(int(row["expires_at"]), int(row["created_at"]) + ADMIN_MAX_AGE_SECONDS)
+        if deadline <= now:
+            self._remote("DELETE", params={"token_hash": "eq." + digest})
+            return None
+        fresh = min(now + ADMIN_SESSION_SECONDS, int(row["created_at"]) + ADMIN_MAX_AGE_SECONDS)
+        renewed = deadline - now <= ADMIN_RENEW_WINDOW and fresh > deadline
+        if renewed:
+            self._remote("PATCH", params={"token_hash": "eq." + digest},
+                         payload={"expires_at": fresh, "last_seen_at": now})
+            deadline = fresh
+        needs_role = now - int(row["verified_at"]) >= ADMIN_ROLE_RECHECK_SECONDS
+        session = (str(row["user_id"]), "admin", time.monotonic() + deadline - now, str(row["csrf"]))
+        return session, renewed, needs_role
+
+    def mark_verified(self, token):
+        if not self._remote_key:
+            return super().mark_verified(token)
+        digest = self._digest(token)
+        if digest:
+            self._remote("PATCH", params={"token_hash": "eq." + digest},
+                         payload={"verified_at": int(time.time())})
+        try:
+            super().mark_verified(token)
+        except OSError:
+            pass
+
+    def delete(self, token):
+        if self._remote_key:
+            digest = self._digest(token)
+            if digest:
+                self._remote("DELETE", params={"token_hash": "eq." + digest})
+        return super().delete(token)
+
+    def revoke_user(self, user_id):
+        if self._remote_key:
+            self._remote("DELETE", params={"user_id": "eq." + str(user_id)})
+        return super().revoke_user(user_id)
+
+
+AdminSessions = _SupabaseAdminSessions
