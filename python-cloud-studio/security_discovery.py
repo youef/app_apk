@@ -186,15 +186,20 @@ def _chromium_network(host: str, public_addresses):
 
 
 
+def _content_type(headers):
+    return next((str(v).lower() for k, v in (headers or {}).items()
+                 if str(k).lower() == "content-type"), "")
+
+
 def _soft_missing(reference, candidate):
     """Conservatively identify SPA catch-all / soft-404 HTML responses."""
     if not reference or not candidate:
         return False
     status_a, headers_a, body_a = reference
     status_b, headers_b, body_b = candidate
-    if not (200 <= status_a < 300 and 200 <= status_b < 300):
+    if status_a != status_b or status_b not in (200, 206, 401, 403, 405):
         return False
-    if "html" not in headers_a.get("Content-Type", "").lower() or "html" not in headers_b.get("Content-Type", "").lower():
+    if "html" not in _content_type(headers_a) or "html" not in _content_type(headers_b):
         return False
     try:
         def normalized(payload):
@@ -218,6 +223,9 @@ def _apply_evidence(row):
     elif state == "matched":
         confidence = "observed"
         note = "استجاب المسار بتميّز عن صفحة غير موجودة؛ لا يثبت أنه نقطة دخول فعالة."
+    elif state == "restricted":
+        confidence = "inferred"
+        note = "استجابة رفض أو قيود HTTP؛ لا تثبت وجود المسار أو إمكانية دخوله."
     elif state == "fallback":
         confidence = "uncertain"
         note = "عاد مثل صفحة غير موجودة؛ قد يكون مجرد توجيه SPA عام."
@@ -247,7 +255,7 @@ def _spec_entries(host, safe_get, found, calls):
         calls.append(path)
         try:
             status, headers, raw = safe_get(host, path, max_bytes=64000)
-            if status != 200 or "json" not in headers.get("Content-Type", "").lower():
+            if status != 200 or "json" not in _content_type(headers):
                 continue
             parsed = json.loads(raw.decode("utf-8", "replace"))
             if not isinstance(parsed, dict) or not (parsed.get("openapi") or parsed.get("swagger")):
@@ -290,7 +298,7 @@ def discover(host: str, html: str, safe_get, public_addresses) -> dict:
         requests_made.append(path)
         try:
             status, headers, blob = safe_get(host, path, max_bytes=32000)
-            if status in (200, 206) and "javascript" in headers.get("Content-Type", "").lower():
+            if status in (200, 206) and "javascript" in _content_type(headers):
                 for literal in PATH_LITERAL.findall(blob.decode("utf-8", "replace"))[:90]:
                     _add(found, host, literal, "public JavaScript")
         except Exception:
@@ -322,12 +330,17 @@ def discover(host: str, html: str, safe_get, public_addresses) -> dict:
                 fallback = _soft_missing(baseline, (status, headers, body))
                 if path in found:
                     found[path]["status"] = status
-                    found[path]["validation"] = "fallback" if fallback else "matched"
+                    found[path]["validation"] = (
+                        "fallback" if fallback else
+                        "matched" if status in (200, 206) else "restricted"
+                    )
                 elif not fallback:
                     _add(found, host, path, "bounded public GET")
                     if path in found:
                         found[path]["status"] = status
-                        found[path]["validation"] = "matched"
+                        found[path]["validation"] = (
+                            "matched" if status in (200, 206) else "restricted"
+                        )
             elif path in found:
                 found[path]["status"] = status
                 found[path]["validation"] = "unavailable"
