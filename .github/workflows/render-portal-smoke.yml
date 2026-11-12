@@ -21,6 +21,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - name: Probe Render deployment with bounded retries
         shell: bash
         run: |
@@ -32,7 +36,18 @@ jobs:
             code="${health##* }"
             json="${health% *}"
             live_sha=$(printf '%s' "$json" | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')
-            if [[ "$code" == "200" && "$live_sha" == "$GITHUB_SHA" ]] && grep -q '"member_portal":true' <<<"$json" &&
+            # Render may be ahead of this workflow when later main commits
+            # have already deployed. Require the live revision to equal this
+            # commit or to be a known descendant on main; never accept stale
+            # commits, arbitrary hashes, or an unrelated deployment.
+            revision_ok=false
+            if [[ "$live_sha" == "$GITHUB_SHA" ]] ||
+               { [[ "$live_sha" =~ ^[a-f0-9]{40}$ ]] &&
+                 git cat-file -e "$live_sha^{commit}" 2>/dev/null &&
+                 git merge-base --is-ancestor "$GITHUB_SHA" "$live_sha"; }; then
+              revision_ok=true
+            fi
+            if [[ "$code" == "200" && "$revision_ok" == true ]] && grep -q '"member_portal":true' <<<"$json" &&
               curl -fsS --max-time 12 "$BASE/" -o /tmp/alezz-landing.html &&
               grep -q 'دخول المشاهدة' /tmp/alezz-landing.html &&
               curl -fsS --max-time 12 "$BASE/account/login" -o /tmp/alezz-customer.html &&
