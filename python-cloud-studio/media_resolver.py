@@ -306,6 +306,8 @@ class MediaResolver:
             client = self._client(deadline)
             try:
                 row = dict(item)
+                if supported_source_kind(row.get('url','')) == 'embed':
+                    row['kind'] = 'embed'
                 try:
                     public_url(row['url'])
                     if row.get('kind') == 'embed':
