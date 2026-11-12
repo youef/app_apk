@@ -604,7 +604,7 @@ public final class CinemaPlayerActivity extends Activity {
                 PlaybackSources.show(CinemaPlayerActivity.this);
             }});
         }
-        externalButton=button("مشغل بديل");
+        externalButton=button("↻ إعادة المحاولة");
         if(!live)footer.addView(externalButton,new LinearLayout.LayoutParams(dp(132),-1));
         externalButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){external();}});
         Button guideButton=tvTool("",live?"دليل القنوات":"قائمة الأفلام والحلقات");
@@ -663,9 +663,8 @@ public final class CinemaPlayerActivity extends Activity {
         if(live)showLiveHud("● البث المباشر  •  "+itemTitle+"\nOK: التحكم    MENU: دليل القنوات    CH±: تغيير");
         handler.postDelayed(progressTick,1000L);
         if(sources.isEmpty()){
-            status.setText("لا يوجد رابط MP4/HLS صالح لهذا العنوان. يرجى تحديثه في لوحة الإدارة.");
-            showControls(true);
-            externalButton.setEnabled(false);backButton.requestFocus();return;
+            UnavailableVideoActivity.show(this,live?"live":mediaKind,itemTitle);
+            finish();return;
         }
         JSONObject previous=PlaybackMemory.entry(this,profile,itemId);
         String preferred=previous==null
@@ -807,18 +806,9 @@ public final class CinemaPlayerActivity extends Activity {
                 tries=0;playSource(next);return;
             }
         }
-        if(!live && !kidsPlayback){
-            PlaybackSources.Source backup=PlaybackSources.alternateEmbed(this);
-            if(backup!=null){
-                status.setText("انتهت المصادر المباشرة؛ الانتقال إلى مشغل احتياطي...");
-                PlaybackSources.open(this,backup);
-                return;
-            }
-        }
-        status.setText("رمز العطل: "+explanation+" — انتهت المحاولات والجودات المتاحة. راجع الرابط من لوحة الإدارة.");
-        showControls(true);
-        footer.setVisibility(View.VISIBLE);
-        externalButton.requestFocus();
+        // All authorised direct streams failed; never open a website or external player.
+        UnavailableVideoActivity.show(this,live?"live":mediaKind,itemTitle);
+        finish();
     }
     private void playSource(int which){
         if(which<0||which>=sources.size()||engine==null)return;
@@ -1387,16 +1377,13 @@ public final class CinemaPlayerActivity extends Activity {
             }).setNegativeButton("إلغاء",null).show();
     }
     private void external(){
-        if(currentUrl==null||!StreamQuality.isDirectUrl(currentUrl))return;
-        try{
-            Intent external=new Intent(Intent.ACTION_VIEW);
-            external.setDataAndType(Uri.parse(currentUrl),
-                currentUrl.toLowerCase(Locale.US).contains(".m3u8")?
-                "application/vnd.apple.mpegurl":"video/mp4");
-            startActivity(external);
-        }catch(Exception ex){
-            status.setText("لا يوجد مشغل خارجي مثبت يدعم الرابط. جرّب جودة MP4 أو مصدرًا آخر.");
+        // Retrying is always in ExoPlayer within Al Ezz TV.
+        if(engine==null || sources==null || sources.isEmpty()){
+            UnavailableVideoActivity.show(this,live?"live":mediaKind,itemTitle);
+            finish();return;
         }
+        attempted.clear();tries=0;
+        playSource(Math.max(0,index));
     }
     @Override public boolean dispatchKeyEvent(KeyEvent event){
         if(event.getAction()==KeyEvent.ACTION_DOWN)noteChromeInteraction();
