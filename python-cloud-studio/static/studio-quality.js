@@ -16,7 +16,7 @@
     cells.forEach((value,index)=>{
       const td=document.createElement("td");
       td.textContent=value;
-      if(badIndexes.includes(index) && Number(String(value).replace(/[^\d]/g,""))!==0)td.className="danger";
+      if(badIndexes.includes(index) && String(value)!==num(0))td.className="danger";
       tr.appendChild(td);
     });
     return tr;
