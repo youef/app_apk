@@ -678,7 +678,7 @@
   }
 
   function sourceLabel(item) {
-    if (item.kind === "channel" && item.playback === "official_link") return "صفحة مشاهدة خارجية";
+    if (item.kind === "channel" && item.playback === "official_link") return "قريبًا داخل العز TV";
     if (item.youtubeId) return "فيديو رسمي";
     if (item.kind === "series" && item.episodeCount) return "حلقات عبر مصادر رسمية";
     if (item.live) return "بث مباشر";
@@ -694,7 +694,7 @@
     var isOfficial = item.kind === "channel" && item.playback === "official_link" &&
       /^https:\/\//i.test(item.official || "") && !item.stream;
     var chips = [];
-    if (isOfficial) chips.push('<span class="chip">↗ صفحة خارجية</span>');
+    if (isOfficial) chips.push('<span class="chip">قريبًا على العز TV</span>');
     else if (item.live) chips.push('<span class="chip chip--live"><i></i>مباشر</span>');
     if (item.year) chips.push('<span class="chip">' + esc(item.year) + "</span>");
     if (item.quality) chips.push('<span class="chip chip--hd">' + esc(item.quality) + "</span>");
@@ -710,7 +710,7 @@
     if (item.language) meta.push(["اللغة", item.language]);
     meta.push(["المصدر", sourceLabel(item)]);
     if (item.rights && item.rights.holder) meta.push(["صاحب الحقوق", item.rights.holder]);
-    if (item.live) meta.push(["النوع", isOfficial ? "رابط لصفحة مشاهدة خارجية" : "قناة مباشرة"]);
+    if (item.live) meta.push(["النوع", isOfficial ? "قريبًا داخل العز TV" : "قناة مباشرة"]);
 
     var epsHTML = "";
     if (item.kind === "series" && item.seasons && item.seasons.length) {
@@ -743,7 +743,8 @@
       // Playback does not link to third-party episode websites.
       "" +
       (canPlay ? '<button class="btn btn--gold" data-play="' + esc(item.key) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6L20 12z" fill="currentColor" stroke="none"/></svg>' +
-        (progressOf(item) > 1 ? "متابعة المشاهدة" : item.live ? "مشاهدة مباشرة" : "تشغيل") + "</button>" : "") +
+        (progressOf(item) > 1 ? "متابعة المشاهدة" : item.live ? "مشاهدة مباشرة" : "تشغيل") + "</button>" :
+        '<button type="button" class="btn btn--gold" data-play="' + esc(item.key) + '">قريبًا على العز TV</button>') +
       '<button class="btn btn--ghost" data-fav="' + esc(item.key) + '"><svg viewBox="0 0 24 24" aria-hidden="true">' +
       (fav ? '<path d="M5 12l5 5L19 7"/>' : '<path d="M12 5v14M5 12h14"/>') + "</svg>" +
       (fav ? "في قائمتي" : "أضف إلى قائمتي") + "</button>" +
@@ -859,8 +860,8 @@
         if (!first && s.episodes && s.episodes.length) first = s.episodes[0];
       });
       if (first) { playEpisode(first.key); return; }
-      toast("لا توجد حلقات منشورة لهذا المسلسل بعد", "err");
-      return;
+      // The title still opens our own first-party coming-soon player.
+      // No episode page, embed site or outside browser is opened.
     }
 
     if (parseHash().name !== "watch" || parseHash().arg !== item.key) {
