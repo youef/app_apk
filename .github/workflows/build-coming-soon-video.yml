@@ -1,0 +1,52 @@
+name: Al Ezz TV — Build first-party coming-soon video
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/build-coming-soon-video.py
+      - .github/workflows/build-coming-soon-video.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: alezz-first-party-video
+  cancel-in-progress: false
+jobs:
+  render:
+    name: Render and commit MP4 to web and Android
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install fonts and frame compositor
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y fonts-noto-core ffmpeg
+          python -m pip install --disable-pip-version-check pillow numpy
+      - name: Produce original silent six-second H.264 video
+        run: |
+          set -euo pipefail
+          python scripts/build-coming-soon-video.py
+          test -s web/assets/al_ezz_coming_soon.mp4
+          test -s app/src/main/res/raw/al_ezz_coming_soon.mp4
+          cmp web/assets/al_ezz_coming_soon.mp4 app/src/main/res/raw/al_ezz_coming_soon.mp4
+          ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,width,height -of csv=p=0 web/assets/al_ezz_coming_soon.mp4
+      - name: Commit generated binary player assets
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add web/assets/al_ezz_coming_soon.mp4 app/src/main/res/raw/al_ezz_coming_soon.mp4
+          if git diff --cached --quiet; then
+            echo 'Coming-soon video already matches generated source'
+            exit 0
+          fi
+          git commit -m 'feat(media): include original in-app coming-soon MP4 for Android and web'
+          git pull --rebase origin main
+          git push origin HEAD:main
