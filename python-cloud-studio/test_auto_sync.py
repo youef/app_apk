@@ -196,6 +196,18 @@ class AutoSyncTests(unittest.TestCase):
         self.assertEqual(remote['status'], 'published')
         self.assertEqual(remote['stream_url'], NEW)
 
+    def test_okru_provider_rate_limit_never_autodrafts_on_inconclusive_probe(self):
+        embed='https://ok.ru/videoembed/16115671698037'
+        row=self.row(name='okru-rate-limited',stream=embed)
+        for _ in range(3):
+            self.worker.check_target(self.job(row))
+            self.now+=125
+        final=self.db.rows['aseel_movies'][row['id']]
+        self.assertEqual(final['status'],'published')
+        self.assertEqual(final['stream_url'],embed)
+        self.assertEqual(final['link_health_status'],'suspect')
+        self.assertEqual(final['link_health_failures'],0)
+
     def test_reachable_embedded_backup_is_not_proof_primary_is_working(self):
         embed = 'https://player.example.org/embed/7'
         row = self.row(name='only-embed-backup',stream_variants=[dict(url=embed,kind='embed')])
