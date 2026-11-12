@@ -137,6 +137,14 @@ def browser_metadata(page_url,result):
     except (OSError,ValueError) as error:
         return {"state":"failed","detail":type(error).__name__}
 
+def attempt(func,*args):
+    """A failed extraction engine must never prevent trying the next engine."""
+    try:
+        return func(*args)
+    except Exception as error:
+        return {"state":"engine_failed","error":type(error).__name__}
+
+
 def run_scan(job_id,url,max_episodes):
     result={"media":[],"episodes":[],"methods":[],"notes":[],"page_title":""}
     try:
@@ -157,13 +165,13 @@ def run_scan(job_id,url,max_episodes):
             snapshot(job_id,status="complete",stage="complete",result=result)
             return
         update("inline_config","فحص إعدادات JavaScript العامة")
-        status=inline_config(url,result)
+        status=attempt(inline_config,url,result)
         result["methods"].append({"engine":"inline_config",**status})
         update("yt_dlp","استخراج بيانات المصدر العامة بواسطة yt-dlp")
-        status=yt_dlp_metadata(url,result)
+        status=attempt(yt_dlp_metadata,url,result)
         result["methods"].append({"engine":"yt_dlp",**status})
         update("chromium","تشغيل Chromium ورصد ملفات الفيديو")
-        status=browser_metadata(url,result)
+        status=attempt(browser_metadata,url,result)
         result["methods"].append({"engine":"chromium",**status})
         # Episode sources are distinct from main show page. Scan every public episode.
         for index,ep in enumerate(result["episodes"]):
@@ -177,13 +185,13 @@ def run_scan(job_id,url,max_episodes):
                                        "found":len(scoped["media"])})
                 # Do not probe further if the source page explicitly refused access.
                 if item.get("http_status") not in (401,403):
-                    status=inline_config(ep["page_url"],scoped)
+                    status=attempt(inline_config,ep["page_url"],scoped)
                     ep["methods"].append({"engine":"inline_config",**status})
                     if not scoped["media"]:
-                        status=yt_dlp_metadata(ep["page_url"],scoped)
+                        status=attempt(yt_dlp_metadata,ep["page_url"],scoped)
                         ep["methods"].append({"engine":"yt_dlp",**status})
                     if not scoped["media"]:
-                        status=browser_metadata(ep["page_url"],scoped)
+                        status=attempt(browser_metadata,ep["page_url"],scoped)
                         ep["methods"].append({"engine":"chromium",**status})
                 ep["sources"]=scoped["media"][:MAX_MEDIA_PER_EPISODE]
                 for src in ep["sources"]:
