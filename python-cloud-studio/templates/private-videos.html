@@ -45,9 +45,28 @@ button:disabled{opacity:.55;cursor:progress}
 </form></section>
 <section class="panel"><h2>حالة العملية</h2><div id="state" class="status" aria-live="polite">لا توجد عملية تنزيل حالية.</div><div class="bar"><i id="progress"></i></div>
 <div id="result" class="result"><p>تم إنشاء الفيلم الخاص بنجاح.</p><a id="play" href="#" target="_blank" rel="noopener noreferrer">فتح رابط الفيلم الخاص</a><div class="note">الرابط محمي بجلسة حسابك؛ لن يعمل في حساب آخر غير مصرح له. يمكن نسخ رابط المسار الخاص وتضمينه في تطبيقك بعد إضافة دعم جلسة الدخول.</div><p class="note" id="movieid"></p></div></section>
+<section class="panel"><h2>أفلامي الخاصة</h2><p class="muted">الفيديوهات المحفوظة في حساب الإدارة هذا فقط، وليست منشورة للمشاهدين.</p><div id="library" class="status">يجري تحميل القائمة...</div><p><button type="button" id="refresh">تحديث القائمة</button></p></section>
 </main><script>
 const el=id=>document.getElementById(id),form=el('film-form'),start=el('start'),status=el('state'),progress=el('progress'),result=el('result');
 let poller=null;
+const library=el('library');
+async function loadLibrary(){
+ try {
+  const r=await fetch('/api/private-film/mine',{credentials:'same-origin'});
+  const films=await r.json();
+  if(!r.ok)throw Error(JSON.stringify(films));
+  library.replaceChildren();
+  if(!films.length){library.textContent='لا توجد أفلام خاصة حتى الآن.';return;}
+  for(const film of films){
+   const row=document.createElement('div');row.style.padding='12px 0';row.style.borderBottom='1px solid #333';
+   const name=document.createElement('strong');name.textContent=film.title+' — '+Math.round(film.duration_seconds/60)+' دقيقة';
+   const link=document.createElement('a');link.href=film.playback_path;link.textContent='  |  مشاهدة خاصة';link.target='_blank';link.rel='noopener noreferrer';
+   row.append(name,link);library.append(row);
+  }
+ }catch(e){library.textContent='تعذر تحميل المكتبة: '+e.message;}
+}
+el('refresh').addEventListener('click',loadLibrary);
+loadLibrary();
 const names={queued:'في الانتظار',downloading:'يجري تنزيل الفيلم',uploading:'يرفع الفيديو إلى التخزين الخاص',ready:'اكتمل الاستيراد',failed:'فشلت العملية'};
 form.addEventListener('submit',async event=>{
  event.preventDefault();start.disabled=true;result.style.display='none';progress.style.width='0%';
@@ -70,7 +89,7 @@ form.addEventListener('submit',async event=>{
     if(j.error)lines.push('السبب: '+j.error);
     status.textContent=lines.join('\n');
     progress.style.width=(j.status==='ready'?100:(j.upload_percent||0))+'%';
-    if(j.status==='ready'){result.style.display='block';el('play').href=j.playback_path;el('movieid').textContent='معرّف الفيلم: '+j.movie_id;clearInterval(poller);start.disabled=false;}
+    if(j.status==='ready'){result.style.display='block';el('play').href=j.playback_path;el('movieid').textContent='معرّف الفيلم: '+j.movie_id;clearInterval(poller);start.disabled=false;loadLibrary();}
     if(j.status==='failed'){clearInterval(poller);start.disabled=false;}
    }catch(e){status.textContent='تعذر تحديث حالة العملية: '+e.message;clearInterval(poller);start.disabled=false;}
   };
