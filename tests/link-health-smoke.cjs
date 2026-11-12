@@ -31,7 +31,7 @@ for(const token of ["health-row--broken","health-label--broken","healthOnly","ru
 assert.ok(css.includes(".health-row--broken") && css.includes(".health-label--broken"));
 assert.ok(workflow.includes("id-token: write") && workflow.includes("schedule:") && workflow.includes("cron:"));
 assert.ok(workflow.includes("aseel-link-health"));
-assert.ok(workflow.includes("23 */6 * * *"), "Health agent must run every six hours");
+assert.ok(workflow.includes("23 * * * *"), "Health agent must run hourly (more frequently than the old six-hour sweep)");
 assert.ok(workflow.includes("for table in aseel_channels aseel_movies aseel_episodes aseel_youtube_videos"), "Sweep all playable kinds");
 assert.ok(workflow.includes("mode"), "Recalculate series health after episodes");
 assert.ok(workflow.includes("before"), "Use cutoff so each item is checked once per sweep");
