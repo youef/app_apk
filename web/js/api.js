@@ -11,10 +11,10 @@
 
   var SELECT = {
     categories: "id,name_ar,sort_order,published",
-    movies: "id,title_ar,title_original,description,poster_url,backdrop_url,release_year,category_id,duration_minutes,quality,stream_url,stream_variants,subtitle_url,subtitle_language_code,is_kids,age_rating,featured,display_order,status,rights_status,rights_holder,license_reference,youtube_url,country_code,language_code,genre_tags,auto_tags",
+    movies: "id,title_ar,title_original,description,poster_url,backdrop_url,release_year,category_id,duration_minutes,quality,stream_url,stream_variants,subtitle_url,subtitle_language_code,link_health_status,is_kids,age_rating,featured,display_order,status,rights_status,rights_holder,license_reference,youtube_url,country_code,language_code,genre_tags,auto_tags",
     series: "id,title_ar,title_original,description,poster_url,backdrop_url,release_year,category_id,quality,is_kids,age_rating,featured,display_order,status,rights_status,rights_holder,license_reference,country_code,language_code,genre_tags,auto_tags",
     seasons: "id,series_id,number,title_ar",
-    episodes: "id,season_id,number,title_ar,description,poster_url,duration_minutes,stream_url,stream_variants,youtube_url,status,rights_status,genre_tags,auto_tags,source_page_url",
+    episodes: "id,season_id,number,title_ar,description,poster_url,duration_minutes,stream_url,stream_variants,youtube_url,status,link_health_status,rights_status,genre_tags,auto_tags,source_page_url",
     channels: "id,title_ar,description,poster_url,stream_url,official_url,category_id,is_kids,country_code,language_code,youtube_url,playback_mode,status,rights_status,link_health_status,age_rating,display_order,genre_tags,auto_tags",
     youtube: "id,youtube_url,title_ar,channel_name,language_code,topic,age_rating,is_kids,sort_order,status",
     collections: "id,title_ar,slug,description,display_order,is_active",
@@ -180,7 +180,13 @@
       };
     }
 
-    var movies = (raw.movies || []).map(function (r) { return base("movie", r); });
+    // Preserve unpublished/failed works in the admin database, never expose
+    // sources marked suspect or broken as playable titles to viewers.
+    function approvedMedia(row) {
+      return row && row.status === "published" &&
+        row.link_health_status !== "broken" && row.link_health_status !== "suspect";
+    }
+    var movies = (raw.movies || []).filter(approvedMedia).map(function (r) { return base("movie", r); });
 
     var series = (raw.series || []).map(function (r) {
       var item = base("series", r);
@@ -199,7 +205,7 @@
       if (parent) parent.seasons.push(season);
     });
 
-    (raw.episodes || []).forEach(function (e) {
+    (raw.episodes || []).filter(approvedMedia).forEach(function (e) {
       var season = seasonsById[e.season_id];
       if (!season) return;
       season.episodes.push({
@@ -332,11 +338,12 @@
       if (!name || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(String(id || "")))
         return Promise.resolve(null);
       return rest(TABLE_PATHS[name], {
-        select: "id,stream_url,stream_variants,youtube_url,status,rights_status",
+        select: "id,stream_url,stream_variants,youtube_url,status,rights_status,link_health_status",
         id: "eq." + id, limit: 1
       }).then(function (rows) {
         var row = Array.isArray(rows) && rows[0];
-        if (!row || row.status !== "published" || row.rights_status !== "approved") return null;
+        if (!row || row.status !== "published" || row.rights_status !== "approved" ||
+            row.link_health_status === "broken" || row.link_health_status === "suspect") return null;
         return { stream: row.stream_url || "", variants: Array.isArray(row.stream_variants) ? row.stream_variants : [],
           youtubeId: row.youtube_url ? youtubeId(row.youtube_url) : "" };
       });
