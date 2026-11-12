@@ -2394,6 +2394,7 @@ public final class TVHomeActivity extends Activity {
         intent.putExtra("series_id",value(item,"_series_id"));
         intent.putExtra("profile","kids".equals(section)?"kids":PlaybackMemory.activeProfile(this));
         intent.putExtra("stream_url",url);
+        intent.putExtra("expected_duration_minutes",Math.max(0,item.optInt("duration_minutes",0)));
         intent.putExtra("available_sources",sourceList);
         intent.putExtra("is_live","channel".equals(kind(item)));
         intent.putExtra("kids_mode",kidsMode);
@@ -2424,6 +2425,7 @@ public final class TVHomeActivity extends Activity {
                     record.put("youtube_url",value(candidate,"youtube_url"));
                     record.put("series_id",value(candidate,"_series_id"));
                     record.put("url",candidateUrl);
+                    record.put("duration_minutes",candidate.optInt("duration_minutes",0));
                     record.put("quality",value(candidate,"quality"));
                     record.put("variants",new JSONArray(variants));
                     if(value(candidate,"id").equals(value(item,"id")))currentIndex=mediaQueue.length();
