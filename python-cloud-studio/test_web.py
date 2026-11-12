@@ -49,6 +49,17 @@ class DemoTest(unittest.TestCase):
         self.assertEqual(db.rows['aseel_movies'][0]['status'],'draft')
         self.assertTrue(queue.call_args.kwargs['refresh'])
 
+    def test_okru_episode_update_accepts_watch_link_and_normalizes(self):
+        url = 'https://ok.ru/video/16115671698037'
+        series = Catalogue('series','Series','https://source.example.org/series/example/',
+                           episodes=[Episode(1,1,'Ep 1','https://source.example.org/episodes/1/')])
+        state = server.UserState(catalogue=series)
+        with patch.object(server,'protected',return_value=state):
+            response = self.post('update', {'episodes':[{'season':1,'number':1,'media_url':url}]})
+        self.assertEqual(response.status_code,200,response.text)
+        self.assertEqual(series.episodes[0].media_url,'https://ok.ru/videoembed/16115671698037')
+        self.assertFalse(series.episodes[0].verified)
+
     def test_discovery_extracts_direct_media_from_existing_embed(self):
         source = 'https://source.example.org/movies/example'
         embed = 'https://source.example.org/embed/abc'
