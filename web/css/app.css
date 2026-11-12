@@ -982,3 +982,11 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{
  .player.is-embed .player__title span,.player.is-embed .player__badges{display:none}
  .player__sources-menu{right:auto;left:0}
 }
+
+
+/* First-party cinematic fallback: silent looping offline MP4, never a browser iframe. */
+#playerError{isolation:isolate;overflow:hidden;background:radial-gradient(circle at 60% 30%,#441029,#090711 70%);}
+#playerError .coming-soon-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.78;z-index:-1;pointer-events:none;}
+#playerError>strong,#playerError>p,#playerError>.player__error-actions{position:relative;z-index:2;}
+#playerError>strong{font-size:clamp(18px,2.4vw,29px);line-height:1.75;text-wrap:balance;}
+#playerError .player__error-actions{display:flex;justify-content:center;flex-wrap:wrap;gap:10px;}
