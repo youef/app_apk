@@ -41,8 +41,49 @@ class SecurityDiscoveryTests(unittest.TestCase):
         self.assertGreaterEqual(report["summary"]["api"], 2)
         self.assertTrue(any(x["path"] == "/api/v2/items" for x in report["paths"]))
         self.assertEqual(report["network"], [])
-        self.assertLessEqual(len(calls), 9)
+        self.assertLessEqual(len(calls), 12)
         self.assertIn("معطل", report["browser_status"])
+
+    def test_spa_catchall_not_mistaken_for_admin(self):
+        page = b"<html><body>Welcome application shell</body></html>"
+        def fake_get(host, path, *, max_bytes=0):
+            return 200, {"Content-Type":"text/html"}, page
+        report = discover("www.example.org", "<html><body>Welcome</body></html>",
+                          fake_get, lambda host:["93.184.215.14"])
+        self.assertFalse(any("bounded public GET" in x["sources"] for x in report["paths"]))
+        self.assertEqual(report["summary"]["admin"], 0)
+        self.assertIsNotNone(report["baseline_status"])
+
+    def test_openapi_routes_are_documented_without_execution(self):
+        from json import dumps
+        spec = dumps({"openapi":"3.1.0","paths":{
+            "/api/v2/catalog":{"get":{"summary":"list"}},
+            "/api/v2/orders":{"post":{"summary":"create"}},
+            "/api/private/token":{"get":{"summary":"should be redacted"}}}}).encode()
+        calls = []
+        def fake_get(host, path, *, max_bytes=0):
+            calls.append(path)
+            if path=="/openapi.json":
+                return 200, {"Content-Type":"application/json"}, spec
+            return 404, {"Content-Type":"text/html"}, b"missing"
+        report = discover("www.example.org","<html></html>",
+                          fake_get,lambda host:["93.184.215.14"])
+        found = {row["path"]:row for row in report["paths"]}
+        self.assertEqual(found["/api/v2/catalog"]["confidence"],"documented")
+        self.assertEqual(found["/api/v2/orders"]["methods"],["POST"])
+        self.assertNotIn("/api/private/token",found)
+        self.assertNotIn("/api/v2/orders",calls)
+        self.assertGreaterEqual(report["openapi"][0]["documented_routes"], 2)
+
+    def test_explicit_html_route_kept_but_marked_uncertain_if_spa_fallback(self):
+        page = b"<html><body>One application shell</body></html>"
+        def fake_get(host,path,*,max_bytes=0):
+            return 200, {"Content-Type":"text/html"}, page
+        report=discover("www.example.org","<a href='/admin'>Administration</a>",
+                        fake_get, lambda host:["93.184.215.14"])
+        admin=[row for row in report["paths"] if row["path"]=="/admin"]
+        self.assertEqual(len(admin),1)
+        self.assertEqual(admin[0]["confidence"],"uncertain")
 
 
 if __name__ == "__main__":
