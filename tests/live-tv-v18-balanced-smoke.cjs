@@ -43,7 +43,7 @@ test("Native favorite uses existing profile-scoped keys",player.includes('getSha
 test("Native mute persists and ExoPlayer volume follows it",player.includes('putBoolean("live_mute_"+profile,liveMuted)') &&
     player.includes('engine.setVolume(liveMuted?0f:1f)'));
 test("Browser cache keys changed but private shell policy retained",html.includes("tv-studio-v18-balanced-20261107") &&
-    html.includes("js/live.js?v=channel-external-pages-20261109") &&
+    html.includes("js/live.js?v=direct-only-coming-soon-20261112") &&
     html.includes("customer-session-guard.js") &&
     read("web/sw.js").includes("alezz-shell-member-privacy-") &&
     read("web/sw.js").includes("css/glass.css") &&
