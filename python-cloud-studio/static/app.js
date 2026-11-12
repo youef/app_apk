@@ -87,7 +87,7 @@
       $('movieMediaStatus').textContent=label+ (cat.media_url?' · '+cat.media_url.slice(0,120):'');
       const moviePreview=$('movieOkPreview');
       if(moviePreview){const link=okPlayerUrl(cat.media_url);
-        moviePreview.hidden=!link;moviePreview.href=link||'#';}
+        moviePreview.hidden=!link;moviePreview.onclick=()=>openOkPreview($('movieMediaUrl').value);}
       $('movieSources').replaceChildren(mediaSources(cat));
       $('seasonTabs').replaceChildren();
     } else renderSeasons();
@@ -111,8 +111,8 @@
       };
       row.append(make('strong','',label+(source.label?' · '+source.label:'')),make('code','',source.url),copy);
       if(okPlayerUrl(source.url)){
-        const preview=make('a','small-outline','معاينة OK.ru');
-        preview.href=okPlayerUrl(source.url);preview.target='_blank';preview.rel='noopener noreferrer';
+        const preview=make('button','small-outline','معاينة OK.ru');
+        preview.type='button';preview.onclick=()=>openOkPreview(source.url);
         row.append(preview);
       }
       list.append(row);
@@ -158,12 +158,11 @@
       const [label,cls]=mediaBadge(ep);const badge=make('span','media-badge '+cls,label);
       const verifyOne=make('button','tiny-btn','فحص');verifyOne.type='button';verifyOne.title='فحص رابط الحلقة';
       verifyOne.onclick=()=>verifyRows([ep.i]);
-      const preview=make('a','small-outline','معاينة');
-      preview.href=okPlayerUrl(ep.media_url)||'#';
-      preview.target='_blank';preview.rel='noopener noreferrer';
+      const preview=make('button','small-outline','معاينة');preview.type='button';
       preview.hidden=!okPlayerUrl(ep.media_url);
+      preview.onclick=()=>openOkPreview(url.value);
       url.addEventListener('change',()=>{
-        const link=okPlayerUrl(url.value);preview.href=link||'#';preview.hidden=!link;
+        preview.hidden=!okPlayerUrl(url.value);
       });
       const expand=make('button','row-info','⋯');expand.type='button';expand.title='وصف الحلقة وصورتها';expand.setAttribute('aria-label','تفاصيل الحلقة '+ep.number);
       expand.onclick=()=>wrapper.classList.toggle('expanded');
@@ -202,7 +201,18 @@
   }
   async function action(fn){if(app.busy)return;busy(true);try{await fn();}catch(error){toast(error.message,'error');activity(error.message,'error');}finally{busy(false);}}
   function openModal(id){$(id).hidden=false;const first=$(id).querySelector('input:not([type=hidden]),textarea');if(first)setTimeout(()=>first.focus(),60);}
-  function closeModal(id){$(id).hidden=true;}
+  function closeModal(id){
+    if(id==='okPreviewModal')$('okPreviewFrame').removeAttribute('src');
+    $(id).hidden=true;
+  }
+  function openOkPreview(value){
+    const url=okPlayerUrl(value);
+    if(!url){toast('رابط معاينة OK.ru غير صالح.','error');return;}
+    // Explicit user gesture only. Never test playback by downloading signed media.
+    $('okPreviewFrame').src=url;
+    openModal('okPreviewModal');
+    $('okPreviewClose').focus();
+  }
   function renderBatch(errors){
     const list=$('batchCards');list.replaceChildren();
     $('batchStatusText').textContent=app.batch.length?`تم اكتشاف ${app.batch.length} عملًا. اضغط أي بطاقة لعرض تفاصيلها.`:'اكتشاف متزامن من عدة مصادر عامة';
@@ -521,7 +531,7 @@
     $('verifySelectedBtn').onclick=()=>verifyRows([...app.selected]);$('verifyMovieBtn').onclick=()=>verifyRows([]);
     $('movieMediaUrl').addEventListener('change',()=>{
       const input=$('movieMediaUrl');input.value=normalizeMediaInput(input.value);
-      const button=$('movieOkPreview');if(button){const link=okPlayerUrl(input.value);button.hidden=!link;button.href=link||'#';}
+      const button=$('movieOkPreview');if(button){button.hidden=!okPlayerUrl(input.value);}
     });
     $('edgeCaptureBtn').onclick=()=>action(async()=>{
       if(!app.catalogue)throw new Error('اكتشف العمل أولًا.');
