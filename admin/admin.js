@@ -2152,7 +2152,8 @@
           ((parts[0] === 'embed' || parts[0] === 'live' || parts[0] === 'shorts') && parts.length === 2 ? parts[1] : '');
         return /^[A-Za-z0-9_-]{11}$/.test(id || '') ? 'youtube' : '';
       }
-      if ((host === 'hanerix.com' && /^\/e\/[a-z0-9_-]+\/?$/i.test(u.pathname)) ||
+      if (((host === 'ok.ru' || host === 'www.ok.ru') && /^\/video(?:embed)?\/[0-9]{1,20}\/?$/.test(u.pathname) && !u.search && !u.hash) ||
+          (host === 'hanerix.com' && /^\/e\/[a-z0-9_-]+\/?$/i.test(u.pathname)) ||
           (host === 'player.vimeo.com' && /^\/video\/[0-9]+\/?$/.test(u.pathname)) ||
           (host === 'www.dailymotion.com' && /^\/embed\/video\/[a-z0-9_-]+\/?$/i.test(u.pathname)))
         return 'embed';
