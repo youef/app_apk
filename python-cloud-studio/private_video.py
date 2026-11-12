@@ -146,17 +146,29 @@ def register_playback(portal):
     @router.get("/web/private-video/{video_id}")
     def play(video_id:uuid.UUID,request:Request):
         uid=authorized_session(request,portal)
-        if not uid: raise HTTPException(401,"Active customer and device required")
+        is_admin=False
+        if not uid:
+            token=request.cookies.get("alezz_member","")
+            record=portal.admin_sessions.get(token) if token else None
+            if record:
+                session,_,_=record
+                if session[1]=="admin" and session[2]>time.monotonic():
+                    uid=session[0]
+                    is_admin=True
+        if not uid:
+            raise HTTPException(401,"Active authorized account required")
         try:
-            rights=rest("GET","aseel_private_video_access",
-                 params={"video_id":"eq."+str(video_id),"user_id":"eq."+uid,
-                         "select":"video_id","limit":1})
-            if not rights: raise HTTPException(403,"Video not granted to this account")
             rows=rest("GET","aseel_private_videos",
                  params={"id":"eq."+str(video_id),"status":"eq.ready",
-                         "select":"storage_bucket,storage_path","limit":1})
+                         "select":"storage_bucket,storage_path,owner_user_id","limit":1})
             if not rows: raise HTTPException(404,"Video unavailable")
             v=rows[0]
+            if not (is_admin and v.get("owner_user_id")==uid):
+                rights=rest("GET","aseel_private_video_access",
+                    params={"video_id":"eq."+str(video_id),"user_id":"eq."+uid,
+                            "select":"video_id","limit":1})
+                if not rights:
+                    raise HTTPException(403,"Video not granted to this account")
             r=requests.post(BASE+"/storage/v1/object/sign/"+v["storage_bucket"]+"/"+v["storage_path"],
                   headers={**admin_headers(),"Content-Type":"application/json"},
                   json={"expiresIn":60},timeout=15)
