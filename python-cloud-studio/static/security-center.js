@@ -76,7 +76,7 @@ if(discovery){
       (row.methods?.length?" • الطرق الموثقة: "+row.methods.join(", "):"")));
     routes.append(card)
   });
-  $("browserStatus").textContent="حالة المتصفح: "+(discovery.browser_status||"غير محددة")+". لا تُحفظ الكوكيز أو الترويسات الحساسة أو أجسام الاستجابات.";
+  $("browserStatus").textContent="حالة المتصفح: "+(discovery.browser_status||"غير محددة")+". المعروض مسارات مجردة فقط؛ معاملات URL مثل ray محذوفة عمدًا، لذا قد لا تصلح للفتح المنفرد. لا تُحفظ الكوكيز أو أجسام الاستجابات.";
   const net=$("discoveryNetwork");net.replaceChildren();
   if(!discovery.network?.length)net.append(n("p","empty","لا توجد طلبات شبكة متاحة، أو تعذر تشغيل Chromium لهذا الموقع."));
   (discovery.network||[]).forEach(entry=>{
