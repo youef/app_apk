@@ -92,6 +92,18 @@ class Tests(unittest.TestCase):
         self.assertEqual(len(db.rows["aseel_series"]),1)
         self.assertEqual(len(db.rows["aseel_episodes"]),3)
 
+    def test_ok_ru_embed_is_saved_as_unverified_source_with_rights_guard(self):
+        source='https://ok.ru/videoembed/16115671698037'
+        cat=mod.Catalogue('movie','Approved test','https://source.example.org/film/1',media_url=source)
+        db=FakeDB()
+        result=mod.store(cat,db,publish=False,rights=False)
+        self.assertEqual(result['embed_reachable'],1)
+        self.assertEqual(db.rows['aseel_movies'][0]['stream_url'],source)
+        self.assertEqual(db.rows['aseel_movies'][0]['link_health_status'],'suspect')
+        self.assertEqual(db.rows['aseel_movies'][0]['status'],'draft')
+        with self.assertRaises(ValueError):
+            mod.store(cat,db,publish=True,rights=False)
+
     def test_rights_requirement_for_public_publish(self):
         cat=mod.pull_html("https://public.example.com/series",FakeClient())
         db=FakeDB()
