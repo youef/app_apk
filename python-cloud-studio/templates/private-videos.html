@@ -170,6 +170,21 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{
           <div id="deep-progress" class="notice" style="margin-top:12px" role="status">الفحص الشامل: HTML ← إعدادات JS ← yt-dlp ← Chromium ← جميع صفحات الحلقات المكتشفة.</div>
           <div id="deep-methods" class="results" aria-label="نتائج محركات الفحص"></div>
           <div id="deep-episodes" class="results" aria-label="مصادر الحلقات بعد الفحص"></div>
+          <details class="notice" style="margin-top:15px">
+            <summary style="font-weight:800;cursor:pointer">تفاصيل DevTools • Network / Cache / Cookies</summary>
+            <p class="hint">تقارير آمنة من جلسة Chromium جديدة: حالات HTTP والنطاقات وسياسة الكاش فقط. لا تُعرض قيم الكوكيز أو رموز الدخول.</p>
+            <div id="devtools-summary" class="mini-status">اضغط «Chromium» لقراءة التشخيص من الخادم.</div>
+            <div id="devtools-network" class="results"></div>
+          </details>
+          <details class="notice" style="margin-top:12px">
+            <summary style="font-weight:800;cursor:pointer">إضافة Chrome المرافقة • فحص التبويب المحلي</summary>
+            <p class="hint">تعمل على Chrome للكمبيوتر بإذن منك. ترصد ملخصات Performance ووسوم الفيديو والكاش دون قراءة الكوكيز أو إرسال البيانات لأي خادم.</p>
+            <a class="btn secondary" href="https://github.com/youef/app_apk/tree/main/chrome-extension/alezz-media-inspector" target="_blank" rel="noopener noreferrer">عرض ملفات إضافة Chrome على GitHub ↗</a>
+            <label class="small-label" for="chrome-report" style="margin-top:13px">ألصق تقرير JSON المنسوخ من الإضافة لعرضه هنا فقط</label>
+            <textarea id="chrome-report" style="min-height:100px;max-width:100%;border-radius:10px;background:var(--surface);color:var(--ink);border:1px solid var(--stroke);padding:10px" placeholder='{"version":1,"resourceTypes":{}}'></textarea>
+            <div class="actions"><button type="button" id="parse-chrome-report" class="btn secondary">قراءة تقرير Chrome محليًا</button></div>
+            <div id="chrome-report-output" class="mini-status">لم يُضف تقرير بعد.</div>
+          </details>
           <div class="segment" role="tablist" aria-label="نتائج الاكتشاف" style="margin-top:16px">
             <button type="button" role="tab" id="tab-media" aria-selected="true" data-panel="media">الفيديوهات <span id="media-count">0</span></button>
             <button type="button" role="tab" id="tab-episodes" aria-selected="false" data-panel="episodes">الحلقات <span id="episodes-count">0</span></button>
@@ -294,6 +309,50 @@ function renderEmbeds(){
  clearResult("embed-results",current.embeds.length?"":"لم تظهر مشغلات iframe معلنة.");
  for(const url of current.embeds.slice(0,30))card("embed-results",shortLink(url),"مشغل مضمن — ليس رابطًا مباشرًا قابلًا للتنزيل",null,null);
  $("embeds-count").textContent=current.embeds.length;
+}
+function renderDevtools(dev){
+ const summary=$("devtools-summary"), rows=$("devtools-network");
+ rows.replaceChildren();
+ if(!dev){summary.textContent="لم تتوفر بيانات CDP لهذه الصفحة.";return}
+ const cookies=dev.cookies||{};
+ summary.textContent=[
+   "CDP Network: "+(dev.enabled?"متصل":"غير متاح"),
+   "استجابات HTTP: "+(dev.requests||[]).length,
+   "فشل الطلبات: "+(dev.failed_requests||0),
+   "أخطاء JavaScript: "+(dev.console_errors||0),
+   "مؤشرات Cache: "+(dev.cache_hits||0),
+   "كوكيز جلسة جديدة (عدد فقط): "+(cookies.count||0),
+   "HttpOnly: "+(cookies.http_only||0),
+   "Secure: "+(cookies.secure||0),
+   "Service Worker: محظور في فحص الخادم"
+ ].join(" • ");
+ const requests=Array.isArray(dev.requests)?dev.requests:[];
+ if(!requests.length){const p=document.createElement("p");p.textContent="لا توجد استجابات مسجلة من CDP.";rows.append(p)}
+ for(const record of requests.slice(0,60)){
+  const title="HTTP "+(record.status??"-")+" | "+(record.host||"")+" | "+(record.type||"");
+  const details=(record.mime||"")+" • Cache-Control: "+(record.cache_control||"غير محدد")+
+                (record.from_disk_cache?" • Disk cache":"")+
+                (record.from_service_worker?" • Service Worker":"");
+  card("devtools-network",title,details,null,null);
+ }
+}
+function readLocalChromeReport(){
+ try{
+  const raw=$("chrome-report").value.trim();
+  if(raw.length>750000)throw Error("حجم التقرير أكبر من الحد المسموح");
+  const info=JSON.parse(raw);
+  if(!info||info.version!==1||typeof info!=="object")throw Error("تنسيق التقرير غير مدعوم");
+  const counts=info.resourceTypes||{};
+  $("chrome-report-output").textContent=[
+    "الموقع: "+safeText(info.host,120),
+    "عدد موارد Performance: "+Number(info.resources_total||0),
+    "عدد عناصر Video: "+Number(info.video_elements||0),
+    "عدد مخازن CacheStorage: "+safeText(info.cache_storage_count??"غير متاح",15),
+    "أنواع الموارد: "+Object.entries(counts).slice(0,12).map(([k,v])=>safeText(k,30)+": "+Number(v||0)).join(" • "),
+    "بيانات الكوكيز غير مقروءة ولا تُرفع للخادم."
+  ].join("\n");
+  toast("تمت قراءة التقرير داخل المتصفح دون رفعه إلى Render");
+ }catch(e){$("chrome-report-output").textContent="تعذر قراءة التقرير: "+e.message}
 }
 function renderNetwork(){
  clearResult("network-results",current.network.length?"":"لا توجد استجابات شبكة مُسجلة بعد.");
@@ -421,6 +480,7 @@ async function browserDiagnose(){
   const data=await post("/api/private-film/browser-diagnose",{page_url:url});
   current.network=Array.isArray(data.responses)?data.responses:[];
   renderNetwork();
+  renderDevtools(data.devtools);
   for(const item of data.candidate_media||[]){
    if(cleanLink(item.url)&&!current.media.some(row=>row.url===item.url))current.media.push({url:item.url,label:"استجابة فيديو عبر Chromium"});
   }
@@ -540,6 +600,7 @@ async function refreshHealth(){
  }
 }
 $("deep-scan").addEventListener("click",deepScan);
+$("parse-chrome-report").addEventListener("click",readLocalChromeReport);
 $("discover-page").addEventListener("click",discover);
 $("browser-diagnose").addEventListener("click",browserDiagnose);
 $("check-source").addEventListener("click",checkSource);
