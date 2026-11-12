@@ -295,8 +295,11 @@ def register(router_app,portal):
                 raise HTTPException(429,"A private media import is already running")
             job_id=secrets.token_urlsafe(20)
             JOBS[job_id]={"status":"queued","created_at":int(time.time()),"owner_uid":uid}
+        from studio_jobs import save as save_studio_job
+        durable=save_studio_job(job_id,uid,"film_import",dict(JOBS[job_id]),force=True)
         threading.Thread(target=ingest,args=(job_id,payload,uid),daemon=True).start()
-        return {"job_id":job_id,"status":"queued","poll":"/api/private-film/job/"+job_id}
+        return {"job_id":job_id,"status":"queued","job_tracking":"persistent" if durable else "memory-only",
+                "poll":"/api/private-film/job/"+job_id}
 
 
     @router_app.get("/api/private-film/mine")
@@ -340,6 +343,11 @@ headers={"Cache-Control":"private,no-store","X-Content-Type-Options":"nosniff",
         uid=owner(request,portal)
         with LOCK:
             result=JOBS.get(job_id)
-        if not result or result.get("owner_uid")!=uid:
+        if not result:
+            from studio_jobs import restore as restore_studio_job
+            result=restore_studio_job(job_id,uid,"film_import")
+            if not result:raise HTTPException(404,"Job not found")
+            return result
+        if result.get("owner_uid")!=uid:
             raise HTTPException(404,"Job not found")
         return {k:v for k,v in result.items() if k!="owner_uid"}
