@@ -220,16 +220,17 @@ def register(router_app,portal):
             raise HTTPException(404,"Film not found in your private library")
         name=escape(rows[0]["title"],quote=True)
         url="/web/private-video/"+str(video_id)
-        return HTMLResponse("""<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8">
+        return HTMLResponse(f'''<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex"><title>""" + name + """ | العز TV</title>
-<style>body{font-family:system-ui;background:#07090d;color:white;margin:0;padding:25px}
-main{max-width:1000px;margin:auto}a{color:#fb6b83}video{width:100%;max-height:78vh;background:black;border-radius:15px}</style>
-<main><p><a href="/studio/private-videos">العودة إلى مكتبتي</a></p><h1>""" + name + """</h1>
-<video controls controlsList="nodownload" preload="metadata" playsinline src="""" + url + """"></video>
-<p>تشغيل خاص بالحساب الذي استورد الفيلم. يلزم اتصال بالإنترنت وجلسة دخول صالحة.</p></main></html>""",
+<meta name="robots" content="noindex"><title>{name} | العز TV</title>
+<style>body{{font-family:system-ui;background:#07090d;color:white;margin:0;padding:25px}}
+main{{max-width:1000px;margin:auto}}a{{color:#fb6b83}}video{{width:100%;max-height:78vh;background:black;border-radius:15px}}</style>
+<main><p><a href="/studio/private-videos">العودة إلى مكتبتي</a></p><h1>{name}</h1>
+<video controls controlsList="nodownload" preload="metadata" playsinline src="{url}"></video>
+<p>تشغيل خاص بالحساب الذي استورد الفيلم. يلزم اتصال بالإنترنت وجلسة دخول صالحة.</p></main></html>''',
 headers={"Cache-Control":"private,no-store","X-Content-Type-Options":"nosniff",
 "Referrer-Policy":"no-referrer","X-Frame-Options":"DENY"})
+
 
     @router_app.get("/api/private-film/job/{job_id}")
     def report(job_id:str,request:Request):
