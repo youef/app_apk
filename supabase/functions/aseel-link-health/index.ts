@@ -150,7 +150,7 @@ async function sampleHlsMedia(playlistUrl:URL, contents:string):Promise<Probe>{
   let body=contents;
   // Handle a single HLS master variant, then inspect a real segment.
   for(let depth=0;depth<2;depth++){
-    const lines=body.replace(/^\\uFEFF/,"").split(/\\r?\\n/).map(x=>x.trim());
+    const lines=body.split(String.fromCharCode(10)).map(x=>x.trim());
     const master=lines.some(x=>x.startsWith("#EXT-X-STREAM-INF:"));
     let target="";
     if(master){
