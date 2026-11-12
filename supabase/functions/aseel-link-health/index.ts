@@ -158,7 +158,8 @@ async function sampleHlsMedia(playlistUrl:URL, contents:string):Promise<Probe>{
       target=lines.slice(at+1).find(x=>!!x&&!x.startsWith("#"))||"";
       if(!target)return {kind:"unknown",reason:"تعذر استخراج جودة من قائمة HLS"};
     }else{
-      const at=lines.findIndex(x=>x.startsWith("#EXTINF:"));
+      let at=-1;
+      for(let n=0;n<lines.length;n++)if(lines[n].startsWith("#EXTINF:"))at=n;
       if(at<0)return {kind:"unknown",reason:"قائمة HLS لا تحتوي مقاطع بث قابلة للفحص"};
       target=lines.slice(at+1).find(x=>!!x&&!x.startsWith("#"))||"";
       if(!target)return {kind:"unknown",reason:"لا يوجد مقطع HLS قابل للتحميل"};
@@ -179,7 +180,7 @@ async function sampleHlsMedia(playlistUrl:URL, contents:string):Promise<Probe>{
           continue;
         }
         if(response.status===404||response.status===410)
-          return {kind:"definite",reason:"مقطع HLS مفقود (HTTP "+response.status+")"};
+          return {kind:master?"unknown":"definite",reason:"مقطع HLS مفقود (HTTP "+response.status+")"};
         if(!response.ok)return {kind:"unknown",reason:"مقطع HLS غير متاح من نقطة الفحص (HTTP "+response.status+")"};
         const reader=response.body?.getReader();
         if(!reader)return {kind:"unknown",reason:"المقطع بدون بيانات"};
