@@ -346,6 +346,7 @@
         if (fresh && Array.isArray(fresh.variants)) {
           current.stream = fresh.stream;
           current.variants = fresh.variants;
+          current.health = fresh.health || current.health;
           current.youtubeId = fresh.youtubeId || current.youtubeId;
           configureQualities(current);
           for (var j = 0; j < qualitySources.length; j++) {
@@ -598,7 +599,8 @@
 
   function startPlayback(item) {
     $("playerTitle").textContent = item.title || "—";
-    $("playerSubtitle").textContent = item.subtitle || "";
+    $("playerSubtitle").textContent = (item.subtitle || "") +
+      ((item.health==="suspect"||item.health==="broken") ? " · نختبر المصادر البديلة" : "");
     $("playerBadges").innerHTML = buildBadges(item);
     el.root.classList.remove("is-idle");
     configureQualities(item);
@@ -822,10 +824,22 @@
       if(qualitySources.some(function(s){return s.url===url;}))return;
       qualitySources.push({url:url,label:String(label||sourceTypeLabel(type)).trim().slice(0,36),type:type});
     }
-    appendSource(item.stream,item.quality||"الأساسي");
-    (Array.isArray(item.variants)?item.variants:[]).forEach(function(entry){
-      if(entry)appendSource(entry.url||entry.stream_url,entry.label||entry.quality);
-    });
+    // A stored suspect/broken result can describe an outdated primary URL;
+    // prefer alternate direct sources when available, without claiming any
+    // candidate is verified until the browser actually plays it.
+    var alternatives = Array.isArray(item.variants) ? item.variants : [];
+    function appendAlternatives(){
+      alternatives.forEach(function(entry){
+        if(entry)appendSource(entry.url||entry.stream_url,entry.label||entry.quality);
+      });
+    }
+    if(item.health==="suspect"||item.health==="broken"){
+      appendAlternatives();
+      appendSource(item.stream,item.quality||"الأساسي • يحتاج فحص");
+    }else{
+      appendSource(item.stream,item.quality||"الأساسي");
+      appendAlternatives();
+    }
     if(item.youtubeId)appendSource("https://www.youtube-nocookie.com/embed/"+item.youtubeId,"YouTube");
     if(qualitySources.length)activeStreamUrl=qualitySources[0].url;
     if (qualitySources.length && preferredQuality !== "auto") {
