@@ -339,6 +339,26 @@ def audit(host):
         except (ValueError, requests.RequestException, OSError):
             meta["checks"].append(name + " unavailable")
     meta["checks"].append("Certificate verified by TLS client")
+    if is_html and html:
+        try:
+            from security_discovery import discover
+            meta["discovery"] = discover(host, html, safe_get, public_addresses)
+            meta["checks"].extend([
+                "Public login/admin/API entrypoint discovery",
+                "Chromium DevTools Network metadata (when available)",
+            ])
+            counts = meta["discovery"]["summary"]
+            add("info", "استكشاف المسارات وواجهات API العامة",
+                "تم التعرف على %s مسار إدارة و%s مسار دخول و%s مسار API. "
+                "الاكتشاف لا يعني وجود ثغرة." %
+                (counts["admin"], counts["login"], counts["api"]),
+                "راجع صلاحيات المسارات المكتشفة في خادمك؛ لا تعتمد على إخفاء عنوان الإدارة.")
+        except Exception as exc:
+            meta["discovery"] = {
+                "paths": [], "network": [], "summary": {},
+                "browser_status": "تعذّر الاكتشاف: " + type(exc).__name__,
+                "limits": "لم تُنفذ محاولات دخول أو استخراج معلومات خاصة.",
+            }
     return finish(meta, results)
 
 
