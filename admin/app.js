@@ -233,7 +233,8 @@ $("editorForm").addEventListener("submit",async ev=>{
    try {
      const u=new URL(String(value||""));
      if(u.protocol!=="https:"||u.username||u.password||(u.port&&u.port!=="443"))return false;
-     return (u.hostname==="hanerix.com" && /^\/e\/[a-z0-9_-]+\/?$/i.test(u.pathname)) ||
+     return ((u.hostname==="ok.ru"||u.hostname==="www.ok.ru") && /^\/video(?:embed)?\/[0-9]{1,20}\/?$/.test(u.pathname) && !u.search && !u.hash) ||
+        (u.hostname==="hanerix.com" && /^\/e\/[a-z0-9_-]+\/?$/i.test(u.pathname)) ||
        (u.hostname==="player.vimeo.com" && /^\/video\/[0-9]+\/?$/.test(u.pathname)) ||
        (u.hostname==="www.dailymotion.com" && /^\/embed\/video\/[a-z0-9_-]+\/?$/i.test(u.pathname)) ||
        (u.hostname==="www.youtube-nocookie.com" && /^\/embed\/[a-z0-9_-]{11}\/?$/i.test(u.pathname));
