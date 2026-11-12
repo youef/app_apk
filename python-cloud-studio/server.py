@@ -96,6 +96,9 @@ app.include_router(browser_diagnostics_router)
 from private_deep_discovery import router as deep_discovery_router, register as register_deep_discovery
 register_deep_discovery(portal)
 app.include_router(deep_discovery_router)
+from studio_quality import router as studio_quality_router, register as register_studio_quality
+register_studio_quality(portal)
+app.include_router(studio_quality_router)
 from site_security import router as security_center_router, register as register_security_center
 register_security_center(portal)
 app.include_router(security_center_router)
