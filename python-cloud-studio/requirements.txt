@@ -5,3 +5,6 @@ beautifulsoup4==4.15.0
 tzdata==2025.2; sys_platform == "win32"
 # For cloud Chromium capture and optional desktop Edge inspection.
 playwright==1.64.1
+
+# Bounded, metadata-only public video source analysis (no cookie or DRM bypass)
+yt-dlp==2026.10.26
