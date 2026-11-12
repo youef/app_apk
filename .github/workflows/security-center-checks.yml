@@ -6,6 +6,8 @@ on:
       - 'python-cloud-studio/site_security.py'
       - 'python-cloud-studio/public_siteguard.py'
       - 'python-cloud-studio/siteguard_tech.py'
+      - 'python-cloud-studio/siteguard_network.py'
+      - 'python-cloud-studio/tests/test_siteguard_network.py'
       - 'python-cloud-studio/static/siteguard-public.html'
       - 'python-cloud-studio/tests/test_siteguard_tech.py'
       - 'python-cloud-studio/security_discovery.py'
@@ -16,6 +18,8 @@ on:
       - 'python-cloud-studio/site_security.py'
       - 'python-cloud-studio/public_siteguard.py'
       - 'python-cloud-studio/siteguard_tech.py'
+      - 'python-cloud-studio/siteguard_network.py'
+      - 'python-cloud-studio/tests/test_siteguard_network.py'
       - 'python-cloud-studio/static/siteguard-public.html'
       - 'python-cloud-studio/tests/test_siteguard_tech.py'
       - 'python-cloud-studio/security_discovery.py'
@@ -30,11 +34,14 @@ jobs:
         with:
           python-version: '3.13'
       - name: Install HTML parser for offline discovery tests
-        run: python -m pip install beautifulsoup4
+        run: python -m pip install beautifulsoup4 dnspython==2.9.2
       - name: Compile Python modules
-        run: python -m py_compile python-cloud-studio/site_security.py python-cloud-studio/security_discovery.py python-cloud-studio/security_tools.py python-cloud-studio/public_siteguard.py python-cloud-studio/siteguard_tech.py
+        run: python -m py_compile python-cloud-studio/site_security.py python-cloud-studio/security_discovery.py python-cloud-studio/security_tools.py python-cloud-studio/public_siteguard.py python-cloud-studio/siteguard_tech.py python-cloud-studio/siteguard_network.py
       - name: Check discovery against fake HTML and mocked HTTP responses
         run: PYTHONPATH=python-cloud-studio python -m unittest discover -s python-cloud-studio/tests -p 'test_security_discovery.py' -v
 
       - name: Check public SiteGuard technology fingerprints without network
         run: PYTHONPATH=python-cloud-studio python -m unittest discover -s python-cloud-studio/tests -p 'test_siteguard_tech.py' -v
+
+      - name: Test public nslookup and origin-IP labeling without network
+        run: PYTHONPATH=python-cloud-studio python -m unittest discover -s python-cloud-studio/tests -p 'test_siteguard_network.py' -v
