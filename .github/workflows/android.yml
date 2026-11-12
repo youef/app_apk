@@ -70,8 +70,17 @@ jobs:
           set -euo pipefail
           if [[ -n "$AL_EZZ_KEYSTORE_BASE64" && -n "$AL_EZZ_STORE_PASSWORD" && -n "$AL_EZZ_KEY_ALIAS" && -n "$AL_EZZ_KEY_PASSWORD" ]]; then
             umask 077
-            printf '%s' "$AL_EZZ_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/al-ezz-signing.jks"
+            # Match the successful stable-release workflow: a copied Base64
+            # secret can contain whitespace/newlines without changing the key.
+            # Never print the keystore or encoded bytes to logs.
+            if ! printf '%s' "$AL_EZZ_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 --decode > "$RUNNER_TEMP/al-ezz-signing.jks"; then
+              rm -f "$RUNNER_TEMP/al-ezz-signing.jks"
+              echo "::error::Invalid AL_EZZ_KEYSTORE_BASE64. Restore the original signing keystore."
+              exit 1
+            fi
             test -s "$RUNNER_TEMP/al-ezz-signing.jks"
+            keytool -list -keystore "$RUNNER_TEMP/al-ezz-signing.jks" \
+              -storepass "$AL_EZZ_STORE_PASSWORD" -alias "$AL_EZZ_KEY_ALIAS" >/dev/null
             echo "ORG_GRADLE_PROJECT_ezzStoreFile=$RUNNER_TEMP/al-ezz-signing.jks" >> "$GITHUB_ENV"
             echo "ORG_GRADLE_PROJECT_ezzStorePassword=$AL_EZZ_STORE_PASSWORD" >> "$GITHUB_ENV"
             echo "ORG_GRADLE_PROJECT_ezzKeyAlias=$AL_EZZ_KEY_ALIAS" >> "$GITHUB_ENV"
