@@ -15,7 +15,7 @@
   <nav class="navlinks"><span class="status"><i class="dot"></i> فحص خوادم فعلي</span><a href="/studio/">استوديو العز</a></nav>
 </header>
 <section class="hero">
- <div><div class="eyebrow">WEB SECURITY AUDIT / PUBLIC DASHBOARD</div><h1>افحص أمان موقعك <em>بسهولة.</em></h1><p>افحص إعدادات HTTPS، والترويسات، وتقنية الموقع، ومؤشرات الملفات المكشوفة. افتح الصفحة مباشرة دون تسجيل دخول، وأثبت ملكية موقعك للفحص الموسع.</p></div>
+ <div><div class="eyebrow">WEB SECURITY AUDIT / PUBLIC DASHBOARD</div><h1>افحص أمان موقعك <em>بسهولة.</em></h1><p>افحص إعدادات HTTPS وتقنيات الموقع ولغات البرمجة وإصداراتها المعلنة، مع توضيح المعلومات غير المرئية عن الخادم وقاعدة البيانات. فحص خارجي مفتوح دون تسجيل أو رفع ملف ملكية.</p></div>
  <div class="orbit" aria-hidden="true"><div class="shield">⬡</div></div>
 </section>
 <section class="panel">
@@ -25,25 +25,12 @@
   <div class="urlrow"><span>◎</span><input id="target" type="url" placeholder="https://example.com/" value="https://krmzy.net/" spellcheck="false" required></div>
   <div class="modes">
    <label class="mode"><input type="radio" name="mode" value="quick" checked><span><b>فحص سريع مفتوح</b><small>الصفحة الرئيسية، شهادة HTTPS، ترويسات الأمان، وتحديد تقنية الموقع</small></span></label>
-   <label class="mode"><input type="radio" name="mode" value="verified"><span><b>فحص موسع بعد التحقق</b><small>مؤشرات الملفات المكشوفة، إعدادات إضافية، مراجعة CORS وWordPress</small></span></label>
+   <label class="mode"><input type="radio" name="mode" value="extended"><span><b>فحص موسع بدون تحقق</b><small>فحص معلومات PHP وقاعدة البيانات المعلنة، والمكتبات، وWordPress، وترويسات CORS وملفات التعريف العامة</small></span></label>
   </div>
-  <div class="actions"><button id="scanBtn" class="btn primary" type="submit">◀ بدء فحص الموقع</button><button id="showVerify" class="btn secondary" type="button">إثبات ملكية النطاق</button></div>
-  <div class="hint">الفحص قراءة فقط، بدون تخمين كلمات مرور أو تجاوز دخول أو تحميل بيانات حساسة. يسمح بالنطاقات العامة عبر HTTPS، ولا يفحص عناوين الشبكات الداخلية.</div>
+  <div class="actions"><button id="scanBtn" class="btn primary" type="submit">◀ بدء فحص الموقع</button></div>
+  <div class="hint">الفحص قراءة آمنة للبيانات العامة ولا يتطلب إثبات ملكية. الإصدارات المخفية لا يمكن استخراجها بدقة دون صلاحية على الخادم. يمنع فحص الشبكات الداخلية أو تجاوز الدخول.</div>
  </form>
  <p id="notice" class="error" role="alert" hidden></p>
-</section>
-<section id="verifyPanel" class="panel verify" hidden>
- <div class="section-title"><h2>توثيق ملكية الموقع</h2><span class="muted-pill">صلاحية 12 ساعة</span></div>
- <p>اضغط «توليد ملف التحقق»، ثم ارفع ملفًا نصيًا إلى جذر موقعك بالمحتوى المحدد. لن تكون هناك حاجة إلى كلمة مرور للدخول إلى لوحة الفحص.</p>
- <button type="button" id="challengeBtn" class="btn secondary">1 — توليد ملف التحقق</button>
- <div id="challengeDetails" hidden>
-  <div class="step"><label class="formlabel">المسار على موقعك</label><code>/.well-known/alezz-siteguard.txt</code></div>
-  <div class="step"><label class="formlabel">محتوى الملف</label><code id="challengeToken"></code></div>
-  <div class="step"><label class="formlabel">رابط التحقق</label><code id="challengeUrl"></code></div>
-  <button type="button" id="copyBtn" class="btn secondary">نسخ المحتوى</button>
-  <button type="button" id="verifyBtn" class="btn primary">2 — تحقق من ملكيتي</button>
- </div>
- <p id="verifyNotice" class="error" role="alert" hidden></p>
 </section>
 <section id="progress" class="panel loading" hidden><div class="spinner"></div><div><b>جارٍ فحص إعدادات الموقع…</b><div class="subtle">قد يتطلب اتصال بعض الخوادم عدة ثوانٍ.</div></div></section>
 <section id="results" class="results" hidden>
@@ -51,10 +38,10 @@
  <div class="cards"><div class="card"><small>حرجة</small><strong class="red" id="critical">0</strong></div><div class="card"><small>عالية</small><strong class="orange" id="high">0</strong></div><div class="card"><small>متوسطة</small><strong class="blue" id="medium">0</strong></div><div class="card"><small>منخفضة</small><strong id="low">0</strong></div></div>
  <div class="resultgrid">
   <section class="panel"><h3>الملاحظات الأمنية</h3><div id="findings"></div></section>
-  <section class="panel"><h3>معلومات الموقع</h3><div id="siteInfo"></div><p class="hint">فحص الإعدادات لا يثبت وجود SQL Injection أو XSS أو RCE، ولا يضمن خلو الموقع من الثغرات.</p></section>
+  <section class="panel"><h3>معلومات الموقع والتقنيات</h3><div id="siteInfo"></div><h3 style="margin-top:23px">اللغات البرمجية الظاهرة</h3><div id="langInfo"></div><h3 style="margin-top:23px">المكتبات والأطر</h3><div id="libraryInfo"></div><h3 style="margin-top:23px">الخادم والبنية</h3><div id="infraInfo"></div><p class="hint">نسخة PHP وقاعدة البيانات لا يمكن تأكيدهما خارجيًا إذا لم يعلنهما الخادم. كشف إصدار لا يثبت وجود ثغرة. التقرير لا يضمن خلو الموقع من SQLi أو XSS أو RCE.</p></section>
  </div>
 </section>
-<footer class="bottom"><span>© العز TV — SiteGuard</span><span>صفحة مستقلة لا تتطلب تسجيل دخول • مع حماية شبكة Render</span></footer>
+<footer class="bottom"><span>© العز TV — SiteGuard</span><span>لا يتطلب تسجيل دخول أو إثبات ملكية • فحص غير تخريبي للبيانات العامة</span></footer>
 </div>
 <script>
 'use strict';
@@ -64,14 +51,11 @@ const modes=()=>document.querySelector('input[name="mode"]:checked')?.value||'qu
 function alertAt(id,msg,good=false){const n=el(id);n.textContent=msg||'';n.className=good?'success':'error';n.hidden=!msg;}
 function url(){let x=el('target').value.trim();if(!x)throw Error('أدخل رابط الموقع.');if(!/^https:\/\//i.test(x))throw Error('استخدم رابطًا يبدأ بـ https://');return x;}
 async function call(path,data){const r=await fetch('/siteguard/api/'+path,{method:'POST',headers:{'Content-Type':'application/json','X-SiteGuard-Client':'dashboard'},credentials:'same-origin',body:JSON.stringify(data)});const obj=await r.json().catch(()=>({}));if(!r.ok)throw Error(typeof obj.detail==='string'?obj.detail:'تعذر تنفيذ الطلب (HTTP '+r.status+')');return obj;}
-el('showVerify').addEventListener('click',()=>{el('verifyPanel').hidden=false;el('verifyPanel').scrollIntoView({behavior:'smooth'});});
-el('challengeBtn').addEventListener('click',async()=>{alertAt('verifyNotice','');try{const d=await call('challenge',{url:url()});el('challengeToken').textContent=d.token;el('challengeUrl').textContent=d.url;el('challengeDetails').hidden=false;}catch(e){alertAt('verifyNotice',e.message);}});
-el('copyBtn').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(el('challengeToken').textContent);el('copyBtn').textContent='تم النسخ ✓';}catch{alertAt('verifyNotice','انسخ النص يدويًا من الحقل.');}});
-el('verifyBtn').addEventListener('click',async()=>{const btn=el('verifyBtn');btn.disabled=true;alertAt('verifyNotice','');try{const d=await call('verify',{url:url()});alertAt('verifyNotice','تم توثيق '+d.host+'، ويمكنك اختيار الفحص الموسع لمدة 12 ساعة.',true);}catch(e){alertAt('verifyNotice',e.message);}finally{btn.disabled=false;}});
 function item(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;n.textContent=text??'';return n;}
 function addInfo(key,value){const r=item('div','kv','');r.append(item('span','',key),item('b','',String(value??'غير معروف')));el('siteInfo').append(r);}
-function showReport(r){latestReport=r;el('results').hidden=false;el('progress').hidden=true;const c=r.counts||{};['critical','high','medium','low'].forEach(k=>el(k).textContent=String(c[k]||0));el('siteInfo').replaceChildren();addInfo('الموقع',r.url);addInfo('النظام',r.platform);addInfo('الإصدار الظاهر',r.version||'غير معلن');addInfo('رمز HTTP',r.http_status);addInfo('طريقة الفحص',r.mode);addInfo('عمليات الفحص', (r.checks||[]).length);addInfo('وقت التقرير',r.finished_at||'—');el('findings').replaceChildren();if(!r.findings?.length){el('findings').append(item('div','empty','لم تظهر مشاكل تهيئة ضمن الاختبارات المحدودة. هذا لا يعني أن الموقع خالٍ من الثغرات.'));}const severity={critical:['حرجة','critical'],high:['عالية','high'],medium:['متوسطة','medium'],low:['منخفضة','low'],info:['معلومة','info']};(r.findings||[]).forEach(f=>{const box=item('article','finding','');const head=item('div','findinghead','');const kind=severity[f.severity]||severity.info;head.append(item('b','',f.title),item('span','sev '+kind[1],kind[0]));box.append(head,item('p','',f.detail||''),item('p','fix','الإصلاح: '+(f.fix||'راجع الإعدادات.')));el('findings').append(box);});el('results').scrollIntoView({behavior:'smooth'});}
-el('scanForm').addEventListener('submit',async e=>{e.preventDefault();alertAt('notice','');el('results').hidden=true;el('progress').hidden=false;const btn=el('scanBtn');btn.disabled=true;try{const job=await call('start',{url:url(),mode:modes()});for(let i=0;i<100;i++){await new Promise(resolve=>setTimeout(resolve,1300));const r=await fetch('/siteguard/api/status/'+encodeURIComponent(job.job_id),{cache:'no-store',credentials:'same-origin'});const d=await r.json();if(d.state==='done'){showReport(d.report);return;}if(d.state==='error')throw Error(d.error||'تعذر الفحص');if(!r.ok)throw Error('تعذر متابعة الفحص.');}throw Error('تجاوز الفحص المهلة المحددة.');}catch(err){el('progress').hidden=true;alertAt('notice',err.message);if(err.message.includes('إثبات ملكية'))el('verifyPanel').hidden=false;}finally{btn.disabled=false;}});
+function showTech(id, values){const root=el(id);root.replaceChildren();if(!Array.isArray(values)||values.length===0){root.append(item('div','subtle','لا توجد بصمة معلنة.'));return;}for(const x of values){const r=item('div','kv','');const name=item('span','',x.name);const val=item('b','',x.version&&x.version!=='غير معلن'?x.version:'الإصدار غير معلن');val.title=(x.confidence||'')+' — '+(x.evidence||'');r.append(name,val);root.append(r);}}
+function showReport(r){latestReport=r;el('results').hidden=false;el('progress').hidden=true;const c=r.counts||{};['critical','high','medium','low'].forEach(k=>el(k).textContent=String(c[k]||0));el('siteInfo').replaceChildren();addInfo('الموقع',r.url);addInfo('نظام إدارة المحتوى',r.platform);addInfo('إصدار النظام',r.version||'غير معلن');addInfo('PHP',r.php?.type||'غير معروف');addInfo('إصدار PHP',r.php?.version||'غير معلن');addInfo('دليل PHP',r.php?.evidence||'لا توجد بصمة');addInfo('قاعدة البيانات',r.database?.type||'غير معروف');addInfo('إصدار قاعدة البيانات',r.database?.version||'غير معلن');addInfo('دليل قاعدة البيانات',r.database?.evidence||'لا توجد بصمة');addInfo('رمز HTTP',r.http_status);addInfo('طريقة الفحص',r.mode);addInfo('عمليات الفحص',(r.checks||[]).length);addInfo('وقت التقرير',r.finished_at||'—');showTech('langInfo',r.languages);showTech('libraryInfo',r.libraries);showTech('infraInfo',r.infrastructure);el('findings').replaceChildren();if(!r.findings?.length){el('findings').append(item('div','empty','لم تظهر مشاكل تهيئة ضمن الاختبارات المحدودة. هذا لا يعني أن الموقع خالٍ من الثغرات.'));}const severity={critical:['حرجة','critical'],high:['عالية','high'],medium:['متوسطة','medium'],low:['منخفضة','low'],info:['معلومة','info']};(r.findings||[]).forEach(f=>{const box=item('article','finding','');const head=item('div','findinghead','');const kind=severity[f.severity]||severity.info;head.append(item('b','',f.title),item('span','sev '+kind[1],kind[0]));box.append(head,item('p','',f.detail||''),item('p','fix','الإصلاح: '+(f.fix||'راجع الإعدادات.')));el('findings').append(box);});el('results').scrollIntoView({behavior:'smooth'});}
+el('scanForm').addEventListener('submit',async e=>{e.preventDefault();alertAt('notice','');el('results').hidden=true;el('progress').hidden=false;const btn=el('scanBtn');btn.disabled=true;try{const job=await call('start',{url:url(),mode:modes()});for(let i=0;i<100;i++){await new Promise(resolve=>setTimeout(resolve,1300));const r=await fetch('/siteguard/api/status/'+encodeURIComponent(job.job_id),{cache:'no-store',credentials:'same-origin'});const d=await r.json();if(d.state==='done'){showReport(d.report);return;}if(d.state==='error')throw Error(d.error||'تعذر الفحص');if(!r.ok)throw Error('تعذر متابعة الفحص.');}throw Error('تجاوز الفحص المهلة المحددة.');}catch(err){el('progress').hidden=true;alertAt('notice',err.message);}finally{btn.disabled=false;}});
 el('download').addEventListener('click',()=>{if(!latestReport)return;const blob=new Blob([JSON.stringify(latestReport,null,2)],{type:'application/json'});const href=URL.createObjectURL(blob);const a=document.createElement('a');a.href=href;a.download='al-ezz-siteguard-report.json';a.click();setTimeout(()=>URL.revokeObjectURL(href),1000);});
 </script>
 </body>
