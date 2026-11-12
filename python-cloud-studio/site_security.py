@@ -266,12 +266,16 @@ def audit(host):
         meta["platform"] = "XenForo"
     elif re.search(r"vbulletin", html, re.I):
         meta["platform"] = "vBulletin"
+    elif re.search(r"mybb|mybb_credits", html, re.I):
+        meta["platform"] = "MyBB"
     elif re.search(r"discourse", html, re.I):
         meta["platform"] = "Discourse"
     elif re.search(r"drupal", html, re.I):
         meta["platform"] = "Drupal"
     elif re.search(r"joomla", html, re.I):
         meta["platform"] = "Joomla"
+    elif re.search(r"laravel", html, re.I) or "laravel_session=" in headers.get("Set-Cookie","").lower():
+        meta["platform"] = "Laravel"
     meta["checks"].append("Platform fingerprint (non-exploit)")
 
     try:
