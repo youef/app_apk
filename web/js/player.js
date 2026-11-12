@@ -17,6 +17,7 @@
   var autoNextTimer = null;
   var autoNextSeconds = 0;
   var hls = null;
+  var dashPlayer = null;
   var hideTimer = null;
   var saveTimer = null;
   var scrubbing = false;
@@ -65,6 +66,21 @@
       setTimeout(function () { resolve(window.Hls || null); }, 8000);
     });
     return loadHlsScript._p;
+  }
+
+  function loadDashScript() {
+    if (window.dashjs) return Promise.resolve(window.dashjs);
+    if (loadDashScript._p) return loadDashScript._p;
+    loadDashScript._p = new Promise(function (resolve) {
+      var s=document.createElement("script");
+      s.src="https://cdn.dashjs.org/v4.7.4/dash.all.min.js";
+      s.async=true;
+      s.onload=function(){resolve(window.dashjs||null);};
+      s.onerror=function(){resolve(null);};
+      document.head.appendChild(s);
+      setTimeout(function(){resolve(window.dashjs||null);},9000);
+    });
+    return loadDashScript._p;
   }
 
   function show(id, on) { var node = el[id] || $(id); if (node) node.hidden = !on; }
@@ -153,6 +169,9 @@
     stopAutoNext();
     playbackToken++;
     if (hls) { try { hls.destroy(); } catch (e) {} hls = null; }
+    if (dashPlayer) { try { dashPlayer.reset(); } catch (e) {} dashPlayer = null; }
+    var waitingVideo=$("playerComingSoonVideo");
+    if(waitingVideo){waitingVideo.pause();waitingVideo.hidden=true;}
     if (youtubeFrame) { youtubeFrame.remove(); youtubeFrame = null; }
     if (embedFrame) { embedFrame.remove(); embedFrame = null; }
     el.root.classList.remove("is-embed");
@@ -174,7 +193,16 @@
   function fail(message) {
     show("playerSpinner", false);
     show("playerError", true);
-    $("playerErrorMsg").textContent = message || "قد يكون الرابط غير متاح حاليًا أو غير مدعوم على هذا الجهاز.";
+    var kind=current&&(current.live?"live":current.kind);
+    var label=kind==="live"||kind==="channel"?"البث المباشر":
+      kind==="series"||kind==="episode"?"المسلسل":"الفيلم";
+    var headline=$("playerErrorTitle");
+    if(headline)headline.textContent="قريبًا سيتم دعم "+label+" في تطبيق العز TV";
+    $("playerErrorMsg").textContent=message||"نعمل على توفير مصدر فيديو مباشر ومتوافق.";
+    var waitingVideo=$("playerComingSoonVideo");
+    if(waitingVideo){waitingVideo.hidden=false;waitingVideo.muted=true;
+      var p=waitingVideo.play();if(p&&p.catch)p.catch(function(){});
+    }
     el.root.classList.remove("is-idle");
   }
 
@@ -218,8 +246,12 @@
   }
   function playSelectedSource(url, forceJs) {
     if (!current || el.root.hidden) return;
-    if (sourceKind(url)==="youtube") { playYoutube(youtubeSourceId(url), current.title); return; }
-    if (sourceKind(url)==="embed") { playEmbed(url); return; }
+    var directFormat=sourceKind(url);
+    if(directFormat!=="mp4" && directFormat!=="hls" && directFormat!=="dash"){
+      clearStage();
+      fail("المصدر ليس رابط فيديو مباشرًا. المشاهدة الخارجية والمشغلات المضمّنة معطّلة.");
+      return;
+    }
     activeStreamUrl = url;
     clearStage();
     el.video.controls = iosSafari;
@@ -246,6 +278,22 @@
           "هذا الجهاز لا يدعم طريقة تشغيل HLS الحالية. جرّب مصدر MP4 بترميز H.264/AAC.");
       }).catch(function () {
         if (ticket === playbackToken) recoverSource("تعذّر تهيئة بث HLS.");
+      });
+    } else if(directFormat==="dash") {
+      loadDashScript().then(function (dashjs) {
+        if(ticket!==playbackToken)return;
+        if(!dashjs||!dashjs.MediaPlayer) {
+          recoverSource("مشغل DASH غير متاح على هذا الجهاز.");return;
+        }
+        try {
+          var player=dashjs.MediaPlayer().create();
+          dashPlayer=player;
+          player.initialize(el.video,url,true);
+          player.on(dashjs.MediaPlayer.events.ERROR,function(){
+            if(ticket===playbackToken&&dashPlayer===player)
+              recoverSource("تعذّر تشغيل ملف DASH من المصدر المباشر.");
+          });
+        }catch(e){if(ticket===playbackToken)recoverSource("فشل تهيئة فيديو DASH.");}
       });
     } else attachNative(url);
   }
@@ -479,6 +527,7 @@
       var u=new URL(String(value||"").trim());
       if(u.protocol!=="https:"||u.username||u.password||(u.port&&u.port!=="443"))return "";
       if(/\.m3u8$/i.test(u.pathname))return "hls";
+      if(/\.mpd$/i.test(u.pathname))return "dash";
       if(/\.mp4$/i.test(u.pathname))return "mp4";
     }catch(e){}
     return "";
@@ -496,7 +545,7 @@
     return id?"https://www.youtube-nocookie.com/embed/"+id:raw;
   }
   function sourceTypeLabel(type){
-    return {hls:"HLS",mp4:"MP4",embed:"Embed",youtube:"YouTube"}[type]||"فيديو";
+    return {hls:"HLS",mp4:"MP4",dash:"DASH"}[type]||"فيديو";
   }
   function playEmbed(url) {
     clearStage();
@@ -551,7 +600,7 @@
       recoverSource("لا يوجد رابط تشغيل ساري؛ نتحقق من المصادر البديلة."); return;
     }
     if (!isPlayableUrl(url)) {
-      clearStage(); fail("نوع الرابط غير مدعوم. استخدم رابط فيديو مباشرًا أو Embed من مصدر معتمد.");
+      clearStage(); fail("نوع الرابط غير مدعوم للمشاهدة الداخلية. استخدم MP4 أو HLS أو DASH.");
       return;
     }
     if(item.kids && sourceKind(url)!=="mp4" && sourceKind(url)!=="hls"){
@@ -732,7 +781,10 @@
 
   /* Sources are explicit episode variants; HLS levels come from the live manifest.
      Never invent a quality that the selected stream does not actually advertise. */
-  function isPlayableUrl(url) { return !!sourceKind(url); }
+  function isPlayableUrl(url) {
+    var type=sourceKind(url);
+    return type==="mp4" || type==="hls" || type==="dash";
+  }
   function qualityMenuOpen() {
     var menu = $("playerQualityMenu");
     return !!(menu && !menu.hidden);
@@ -755,7 +807,7 @@
     preferredQuality = String(Store.pref("source:"+(item.key||"video"), "auto")||"auto");
     function appendSource(raw,label){
       var type=sourceKind(raw),url=canonicalSource(raw);
-      if(!type||(item.kids && type!=="mp4"&&type!=="hls")||qualitySources.length>=9)return;
+      if(!isPlayableUrl(raw)||(item.kids&&type!=="mp4"&&type!=="hls")||qualitySources.length>=9)return;
       if(qualitySources.some(function(s){return s.url===url;}))return;
       qualitySources.push({url:url,label:String(label||sourceTypeLabel(type)).trim().slice(0,36),type:type});
     }
@@ -1021,14 +1073,10 @@
       startPlayback(current);
     });
     $("playerEmbedExternal").addEventListener("click", function () {
-      if ((embedFrame || youtubeFrame) && activeStreamUrl && isPlayableUrl(activeStreamUrl))
-        window.open(activeStreamUrl, "_blank", "noopener,noreferrer");
+      fail("لا يُسمح بفتح مصادر الفيديو خارج تطبيق العز TV.");
     });
     $("playerExternal").addEventListener("click", function () {
-      var url = current && (activeStreamUrl || current.stream || (current.youtubeId ? "https://www.youtube.com/watch?v=" + current.youtubeId : ""));
-      if (!url) return;
-      if (window.AlezzNative && window.AlezzNative.openExternal) window.AlezzNative.openExternal(url);
-      else window.open(url, "_blank", "noopener");
+      $("playerClose").click(); // Return to the in-app catalogue only.
     });
     $("btnPlay").addEventListener("click", togglePlay);
     $("playerBigPlay").addEventListener("click", togglePlay);
