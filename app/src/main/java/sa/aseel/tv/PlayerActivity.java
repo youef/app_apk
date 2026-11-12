@@ -144,7 +144,7 @@ public final class PlayerActivity extends Activity {
         qualityButton=action("الجودة",buttons);
         qualityButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){showQualityMenu();}});
         updateQualityButton();
-        Button alternative=action("مشغل بديل",buttons);
+        Button alternative=action("↻ إعادة داخل العز",buttons);
         alternative.setOnClickListener(new View.OnClickListener(){
             public void onClick(View v){openAlternativePlayer();}
         });
@@ -231,6 +231,9 @@ public final class PlayerActivity extends Activity {
                 String details=diagnostics.length()>0?"\nالشبكة: "+diagnostics:"\nقد يكون السبب شهادة TLS أو تنسيق الفيديو أو قدرات المحاكي/الشاشة.";
                 error.setText("تعذر تشغيل الفيديو.\n"+code+details);
                 Log.e("AseelVideo","Playback failed: "+code+" "+diagnostics);
+                UnavailableVideoActivity.show(PlayerActivity.this,live?"live":"movie",
+                    title==null?"":String.valueOf(title.getText()));
+                finish();
                 return true;
             }
         });
@@ -371,19 +374,12 @@ public final class PlayerActivity extends Activity {
         }
     }
     private void openAlternativePlayer(){
-        if(!StreamQuality.isDirectUrl(currentUrl)){
-            error.setText("لا يوجد رابط MP4/HLS صالح للمشغل البديل.");return;
-        }
-        try{
-            Intent intent=new Intent(Intent.ACTION_VIEW);
-            intent.setDataAndType(Uri.parse(currentUrl),
-                currentUrl.toLowerCase(java.util.Locale.US).contains(".m3u8")
-                ? "application/vnd.apple.mpegurl":"video/mp4");
-            intent.addCategory(Intent.CATEGORY_DEFAULT);
-            startActivity(intent);
-        }catch(Exception e){
-            error.setText("لا يوجد مشغل فيديو بديل متوافق. جرّب ملف MP4 بترميز H.264/AAC.");
-            Log.w("AseelVideo","No external video player",e);
+        // No ACTION_VIEW: retries stay inside the native player.
+        if(StreamQuality.isDirectUrl(currentUrl))openStream(currentUrl);
+        else{
+            UnavailableVideoActivity.show(this,live?"live":"movie",
+                title==null?"":String.valueOf(title.getText()));
+            finish();
         }
     }
     private void savePosition(int position){
