@@ -9,13 +9,13 @@ const categories = load("app/src/main/java/sa/aseel/tv/ChannelGuideCategory.java
 const webLive = load("web/js/live.js");
 const docs = load("docs/ROYA_CHANNELS_2026-11-09.md");
 
-// Native channel catalogue must retain outbound-only support for official
-// publisher pages. HLS replay is *not* unlocked by these checks.
+// Official publisher pages remain metadata only. The viewer must never leave
+// Al Ezz TV or mistake a website link for a verified direct media stream.
 assert.ok(catalog.includes('external.startsWith("https://roya.tv/")'),
   "The native catalogue must accept official Roya external-link entries");
-assert.ok(tv.includes("CatalogApi.officialChannelLink(external)") &&
-  fs.readFileSync("app/src/main/java/sa/aseel/tv/CatalogApi.java","utf8").includes('external.startsWith("https://roya.tv/")'),
-  "The TV remote must open official Roya pages in an external browser");
+assert.ok(tv.includes('UnavailableVideoActivity.show(this,"live",label(item))') &&
+  !tv.includes('new android.content.Intent(android.content.Intent.ACTION_VIEW,'),
+  "The TV remote must show internal coming-soon fallback, never an external website");
 assert.ok(categories.includes('category.contains("قنوات رؤيا")'),
   "Android TV channel companies must group Roya separately");
 assert.ok(webLive.includes('category.indexOf("قنوات رؤيا")'),
@@ -30,4 +30,4 @@ assert.ok(docs.includes("https://roya.tv/live-stream/1"));
 const rows = docs.split("\n").filter(line => /^\|\s*\d+\s*\|/.test(line));
 assert.equal(rows.length, 27, "All 27 current official Roya directory entries documented");
 
-console.log("Roya official-link navigation and 27-channel directory: OK");
+console.log("Roya directory retained; official links never start a web browser");
