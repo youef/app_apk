@@ -66,7 +66,12 @@ public final class CatalogApi {
                         (!direct || "broken".equals(item.optString("link_health_status",""))))continue;
                     if(!"stream".equals(mode)&&!"youtube_embed".equals(mode))continue;
                 }
-            } else if(!youtube&&!direct)continue;
+            } else if(!youtube&&!direct) {
+                // Keep published, rights-approved movies and episode outlines visible.
+                // Missing/unusable streams show our built-in Coming Soon view on click.
+                // This is catalog visibility, not playback approval.
+                if(!("aseel_movies".equals(table)||"aseel_episodes".equals(table)))continue;
+            }
             boolean channelAllowed="aseel_channels".equals(table)
                 && "official_link".equals(item.optString("playback_mode",""));
             if(!"published".equals(item.optString("status","")) ||
