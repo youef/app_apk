@@ -99,6 +99,9 @@ class StudioV5IntegrityTests(unittest.TestCase):
     def test_viewer_only_uses_healthy_content(self):
         content = (ROOT / "web" / "js" / "api.js").read_text(encoding="utf-8")
         self.assertIn(".filter(approvedMedia)", content)
+        self.assertIn('season.poster = parent.poster || parent.backdrop || null', content)
+        self.assertIn('poster: e.poster_url || season.poster || null', content)
+        self.assertIn('series: playableSeries', content)
         self.assertIn('link_health_status === "broken"', content)
         self.assertIn('link_health_status === "suspect"', content)
         self.assertIn('row.rights_status !== "approved"', content)
