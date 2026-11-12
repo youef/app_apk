@@ -20,7 +20,10 @@ assert(screen.includes("if(hasFocus)applyCinemaImmersiveLayout()") &&
     "Reapply immersive mode when resuming from system UI, settings or keyboard");
 assert(/applyCinemaImmersiveLayout\(\);\s+catalog=new CatalogApi\(this\);/.test(screen),
     "Apply fullscreen before creating the video app shell");
-assert(screen.includes("root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL)") &&
+const language=read("app/src/main/java/sa/aseel/tv/UiLanguage.java");
+assert(screen.includes("root.setLayoutDirection(UiLanguage.direction(this))") &&
+    language.includes("View.LAYOUT_DIRECTION_RTL") &&
+    language.includes("View.LAYOUT_DIRECTION_LTR") &&
     screen.includes("root.setBackgroundDrawable(new CinemaBackdropDrawable())") &&
     screen.includes("setContentView(root)") &&
     screen.includes("root.addView(top,new LinearLayout.LayoutParams(-1,dp(79)))"),
