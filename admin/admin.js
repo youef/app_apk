@@ -1706,7 +1706,7 @@
   function canPublishChannel(row) {
     return !!row && row.link_health_status !== 'broken' &&
       row.playback_mode === 'stream' && isHttps(row.stream_url) &&
-      /\.(m3u8|mp4)(\?[^\s]*)?$/i.test(row.stream_url);
+      /\.(m3u8|mp4|mpd)(\?[^\s]*)?$/i.test(row.stream_url);
   }
 
   function selectFilteredChannels(checked) {
@@ -2488,8 +2488,8 @@
     if (tableCfg.table === 'aseel_channels') {
       payload.status = 'published';
       payload.playback_mode = 'stream';
-      if (!/^https:\/\/[^\s]+\.(m3u8|mp4)(\?[^\s]*)?$/i.test(payload.stream_url || '')) {
-        errors.stream_url = 'أدخل رابط بث HTTPS مباشر بصيغة HLS أو MP4.';
+      if (!/^https:\/\/[^\s]+\.(m3u8|mp4|mpd)(\?[^\s]*)?$/i.test(payload.stream_url || '')) {
+        errors.stream_url = 'أدخل رابط فيديو HTTPS مباشر: MP4 أو HLS أو DASH (MPD).';
       }
     }
     if (tableCfg.table === 'aseel_home_collection_items') {
