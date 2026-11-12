@@ -1,16 +1,7 @@
 name: Al Ezz TV — Stable signed release and in-app updates
+# Signed updates are issued on demand, not for every GitHub push.
+# This prevents a new mandatory APK prompt whenever source code changes.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'app/**'
-      - 'scripts/**'
-      - 'build.gradle'
-      - 'settings.gradle'
-      - 'gradle/**'
-      - 'gradle.properties'
-      - 'web/alizz-tv-transparent.png'
-      - '.github/workflows/android-stable-release.yml'
   workflow_dispatch:
     inputs:
       version_name:
@@ -171,8 +162,8 @@ jobs:
               "download_url": "https://github.com/youef/app_apk/releases/download/"
                   + os.environ["RELEASE_TAG"] + "/al-ezz-tv-stable.apk",
               "sha256": os.environ["APK_SHA256"],
-              "required": True,
-              "min_supported_version_code": int(os.environ["VERSION_CODE"]),
+              "required": False,
+              "min_supported_version_code": 0,
               "notes": os.environ["NOTES"][:1000]
           }
           Path("data").mkdir(exist_ok=True)
