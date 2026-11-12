@@ -22,7 +22,7 @@
  <div class="section-title"><div><div class="eyebrow">NEW SCAN</div><h2>فحص أمني جديد</h2></div><span class="tag">متصل بـ Render</span></div>
  <form id="scanForm">
   <label class="formlabel" for="target">رابط الموقع</label>
-  <div class="urlrow"><span>◎</span><input id="target" type="url" placeholder="https://example.com/" value="https://krmzy.net/" spellcheck="false" required></div>
+  <div class="urlrow"><span>◎</span><input id="target" type="text" inputmode="url" autocapitalize="off" placeholder="example.com أو https://example.com/" value="https://krmzy.net/" spellcheck="false" required></div>
   <div class="modes">
    <label class="mode"><input type="radio" name="mode" value="quick" checked><span><b>فحص سريع مفتوح</b><small>الصفحة الرئيسية، شهادة HTTPS، ترويسات الأمان، وتحديد تقنية الموقع</small></span></label>
    <label class="mode"><input type="radio" name="mode" value="extended"><span><b>فحص موسع بدون تحقق</b><small>فحص معلومات PHP وقاعدة البيانات المعلنة، والمكتبات، وWordPress، وترويسات CORS وملفات التعريف العامة</small></span></label>
@@ -49,7 +49,7 @@ const el=id=>document.getElementById(id);
 let latestReport=null;
 const modes=()=>document.querySelector('input[name="mode"]:checked')?.value||'quick';
 function alertAt(id,msg,good=false){const n=el(id);n.textContent=msg||'';n.className=good?'success':'error';n.hidden=!msg;}
-function url(){let x=el('target').value.trim();if(!x)throw Error('أدخل رابط الموقع.');if(!/^https:\/\//i.test(x))throw Error('استخدم رابطًا يبدأ بـ https://');return x;}
+function url(){let x=el('target').value.trim();if(!x)throw Error('أدخل رابط الموقع.');if(!x.includes('://'))x='https://'+x;if(!/^https:\/\//i.test(x))throw Error('المواقع العامة عبر HTTPS فقط.');try{const u=new URL(x);if(!u.hostname||u.username||u.password)throw Error();}catch{throw Error('الرابط غير صحيح.');}return x;}
 async function call(path,data){const r=await fetch('/siteguard/api/'+path,{method:'POST',headers:{'Content-Type':'application/json','X-SiteGuard-Client':'dashboard'},credentials:'same-origin',body:JSON.stringify(data)});const obj=await r.json().catch(()=>({}));if(!r.ok)throw Error(typeof obj.detail==='string'?obj.detail:'تعذر تنفيذ الطلب (HTTP '+r.status+')');return obj;}
 function item(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;n.textContent=text??'';return n;}
 function addInfo(key,value){const r=item('div','kv','');r.append(item('span','',key),item('b','',String(value??'غير معروف')));el('siteInfo').append(r);}
