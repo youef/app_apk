@@ -103,6 +103,17 @@
       : '<path d="M8 5.2v13.6L20 12z"/>';
   }
 
+  function rejectUnexpectedShortDuration() {
+    if (!current || current.live) return false;
+    var expectedMinutes=Number(current.duration), observedSeconds=Number(el.video.duration);
+    if (!isFinite(expectedMinutes) || expectedMinutes<=25 ||
+        !isFinite(observedSeconds) || observedSeconds<=0 || observedSeconds>1500) return false;
+    recoverSource("الفيديو الذي أعاده المصدر قصير ("+
+      Math.ceil(observedSeconds/60)+" دقيقة) وليس الحلقة أو الفيلم الكامل ("+
+      expectedMinutes+" دقيقة).");
+    return true;
+  }
+
   function updateScrub() {
     var v = el.video;
     var d = v.duration || 0;
@@ -1022,6 +1033,13 @@
     v.setAttribute("webkit-playsinline", "");
     v.setAttribute("playsinline", "");
     v.setAttribute("x-webkit-airplay", "allow");
+    v.addEventListener("loadedmetadata", function () {
+      var ticket=playbackToken;
+      // Allow MP4/HLS players to settle the timeline before classifying a one-minute preview.
+      setTimeout(function () {
+        if (ticket===playbackToken && !el.root.hidden) rejectUnexpectedShortDuration();
+      },1200);
+    });
     v.addEventListener("timeupdate", function () { if (!scrubbing) updateScrub(); persist(false); updateNextPrompt(); });
     v.addEventListener("playing", function () {
       show("playerSpinner", false);
@@ -1032,6 +1050,7 @@
     v.addEventListener("progress", updateScrub);
     v.addEventListener("pause", function () { setPlayIcon(false); setChromeIdle(false); });
     v.addEventListener("ended", function () {
+      if (rejectUnexpectedShortDuration()) return;
       persist(true);
       if (nextItem) beginAutoNext();
       setChromeIdle(false);
