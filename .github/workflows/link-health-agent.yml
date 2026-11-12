@@ -109,14 +109,18 @@ jobs:
           # in this run. A 0-row result is the completion signal.
           for table in aseel_channels aseel_movies aseel_episodes aseel_youtube_videos; do
             batch=0
-            while (( batch < 40 )); do
+            # Episodes currently exceed 40 x 24 records; the old limit stopped
+            # the entire hourly job after checking channels. Scan every page.
+            max_batches=40
+            if [[ "$table" == "aseel_episodes" ]]; then max_batches=120; fi
+            while (( batch < max_batches )); do
               payload="$(jq -nc --arg table "$table" --arg before "$before" \
                 '{table:$table,before:$before,per_table:24}')"
               request "$payload" "$table"
               batch=$((batch + 1))
               if (( scanned == 0 )); then break; fi
             done
-            if (( batch == 40 && scanned > 0 )); then
+            if (( batch == max_batches && scanned > 0 )); then
               echo "::error::Full sweep of $table did not complete within 40 batches"
               exit 1
             fi
