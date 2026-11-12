@@ -85,6 +85,26 @@ class SecurityDiscoveryTests(unittest.TestCase):
         self.assertEqual(len(admin),1)
         self.assertEqual(admin[0]["confidence"],"uncertain")
 
+    def test_waf_returns_same_403_for_every_unknown_path(self):
+        page=b"<html><body>Access blocked by edge policy</body></html>"
+        def fake_get(host,path,*,max_bytes=0):
+            return 403, {"content-type":"text/html"}, page
+        report=discover("www.example.org","<html></html>",
+                        fake_get,lambda host:["93.184.215.14"])
+        self.assertFalse(any(x["path"]=="/admin" for x in report["paths"]))
+        self.assertEqual(report["baseline_status"],403)
+
+    def test_lowercase_content_type_and_restricted_response(self):
+        def fake_get(host,path,*,max_bytes=0):
+            if path=="/admin":
+                return 403, {"content-type":"text/html"}, b"<p>Access denied</p>"
+            return 404, {"content-type":"text/html"}, b"<p>Missing</p>"
+        report=discover("www.example.org","<html></html>",
+                        fake_get,lambda host:["93.184.215.14"])
+        record=next(x for x in report["paths"] if x["path"]=="/admin")
+        self.assertEqual(record["confidence"],"inferred")
+        self.assertEqual(record["status"],403)
+
 
 if __name__ == "__main__":
     unittest.main()
