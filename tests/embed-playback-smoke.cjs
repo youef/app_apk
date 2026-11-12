@@ -24,7 +24,10 @@ const allowed = [
   "https://hanerix.com/e/1ylubtvqck6l",
   "https://player.vimeo.com/video/12345",
   "https://www.dailymotion.com/embed/video/x1234",
-  "https://www.youtube-nocookie.com/embed/uCYv55twbhE"
+  "https://www.youtube-nocookie.com/embed/uCYv55twbhE",
+  "https://ok.ru/video/16115671698037",
+  "https://ok.ru/videoembed/16115671698037",
+  "https://www.ok.ru/video/16115671698037"
 ];
 for (const link of allowed) assert.equal(ctx.result(link), true, "approved embed: " + link);
 for (const link of [
@@ -34,8 +37,22 @@ for (const link of [
   "https://user@hanerix.com/e/123",
   "javascript:alert(1)",
   "https://localhost/e/123",
-  "https://evil.example/e/1ylubtvqck6l"
+  "https://evil.example/e/1ylubtvqck6l",
+  "http://ok.ru/video/16115671698037",
+  "https://ok.ru.evil.example/video/16115671698037",
+  "https://ok.ru/video/not-a-video",
+  "https://ok.ru/video/16115671698037?redirect=https://example.com",
+  "https://user@ok.ru/videoembed/16115671698037"
 ]) assert.equal(ctx.result(link), false, "rejected embed: " + link);
+const ytMatch=player.match(/  function youtubeSourceId\(value\) \{[\s\S]*?\n  \}/);
+const canonicalMatch=player.match(/  function canonicalSource\(url\)\{[\s\S]*?\n  \}/);
+assert(ytMatch && canonicalMatch, "missing source canonicalization");
+vm.runInNewContext(match[0]+"\n"+ytMatch[0]+"\n"+canonicalMatch[0]+"\ncanonical=canonicalSource;",ctx);
+assert.equal(ctx.canonical("https://ok.ru/video/16115671698037"),
+  "https://ok.ru/videoembed/16115671698037");
+assert.equal(ctx.canonical("https://ok.ru/videoembed/16115671698037"),
+  "https://ok.ru/videoembed/16115671698037");
+assert(android.includes("okEmbedUrl") && android.includes("https://ok.ru/videoembed/"));
 assert(player.includes('frame.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms allow-presentation")'),
   "iframe must restrict popups/top navigation");
 assert(player.includes("if (embedFrame) { embedFrame.remove(); embedFrame = null; }"),
