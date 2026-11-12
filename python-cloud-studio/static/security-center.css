@@ -8,3 +8,12 @@
 .route-entry small{display:block;font-size:11px;color:#8fa1b8;margin-top:7px}
 #discoverySection{margin-top:22px;border-top:1px solid #324154;padding-top:15px}
 #discoverySection h3{margin:20px 0 9px}
+
+/* V3: evidence confidence, technology panel */
+.tech-value{direction:auto;unicode-bidi:plaintext;word-break:break-word;margin:5px 0;color:#d1e5f4;font-size:13px}
+#technologyDetails{grid-template-columns:repeat(auto-fit,minmax(220px,1fr));max-height:590px}
+.route-tag.confidence-observed{background:#153a30;color:#a4edd2;border-color:#27664e}
+.route-tag.confidence-documented{background:#21364b;color:#b6dffb;border-color:#34608c}
+.route-tag.confidence-inferred{background:#39301c;color:#f2d8a7;border-color:#735c2f}
+.route-tag.confidence-uncertain{background:#3d2431;color:#ffbbca;border-color:#764354}
+#discoverySummary .score strong{font-size:27px}
