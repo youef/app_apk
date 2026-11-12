@@ -228,7 +228,7 @@
       s.episodeCount = s.seasons.reduce(function (n, season) { return n + season.episodes.length; }, 0);
     });
 
-    // Published direct streams require a verified HLS/MP4 source; approved
+    // Published direct streams require a verified HLS/MP4/DASH source; approved
     // external viewing pages are separately marked and never passed to HLS.
     var channels = (raw.channels || []).filter(function (r) {
       if (r.status !== "published") return false;
@@ -237,7 +237,7 @@
           /^https:\/\/(?:[^\s/]+\.)?qanwatlive\.com\//i.test(r.official_url || "");
       return r.playback_mode === "stream" && r.rights_status === "approved" &&
         r.link_health_status === "healthy" &&
-        !!(r.stream_url && /^https:\/\/[^\s]+\.(m3u8|mp4)(\?[^\s]*)?$/i.test(r.stream_url));
+        !!(r.stream_url && /^https:\/\/[^\s]+\.(m3u8|mp4|mpd)(\?[^\s]*)?$/i.test(r.stream_url));
     }).map(function (r) {
       var item = base("channel", r);
       item.live = true;
