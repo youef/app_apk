@@ -1,0 +1,51 @@
+name: Studio V5 regression checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "python-cloud-studio/**"
+      - "web/js/api.js"
+      - "web/index.view"
+      - ".github/workflows/studio-v5-qa.yml"
+  pull_request:
+    paths:
+      - "python-cloud-studio/**"
+      - "web/js/api.js"
+      - "web/index.view"
+      - ".github/workflows/studio-v5-qa.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Python and JavaScript regression checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Compile critical Studio Python modules
+        run: |
+          python -m py_compile \
+            python-cloud-studio/server.py \
+            python-cloud-studio/studio_quality.py \
+            python-cloud-studio/member_portal.py \
+            python-cloud-studio/alezz_fetchv_importer.py \
+            python-cloud-studio/private_deep_discovery.py
+      - name: Syntax check JavaScript clients
+        run: |
+          node --check web/js/api.js
+          node --check python-cloud-studio/static/autosync.js
+          node --check python-cloud-studio/static/studio-pro.js
+          node --check python-cloud-studio/static/studio-quality.js
+      - name: Run offline regression tests
+        run: |
+          python -m unittest discover -s python-cloud-studio/tests -p 'test_studio_v5_integrity.py' -v
