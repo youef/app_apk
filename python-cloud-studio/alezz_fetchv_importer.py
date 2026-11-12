@@ -944,10 +944,16 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
         # separately unverified source. Publication still requires rights.
         if not entry.media_url:
             return False
-        from media_resolver import supported_source_kind
-        return (supported_source_kind(entry.media_url) == 'embed' and
-                any(src.get('kind') == 'embed' and src.get('reachable')
-                    and src.get('url') == entry.media_url for src in entry.sources))
+        from media_resolver import supported_source_kind, official_ok_embed
+        if supported_source_kind(entry.media_url) != 'embed':
+            return False
+        # The first-party OK.ru iframe URL may play on client devices even when
+        # the provider blocks our server IP. Save it as unverified/suspect, not
+        # healthy; a separate verified licence is still required to publish.
+        if official_ok_embed(entry.media_url):
+            return True
+        return any(src.get('kind') == 'embed' and src.get('reachable')
+                   and src.get('url') == entry.media_url for src in entry.sources)
     fields=imported_fields(cat,category_id)
     def merge_capture(payload, old, entry):
         if not capture_merge or not old:
