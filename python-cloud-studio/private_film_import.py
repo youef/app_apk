@@ -44,7 +44,7 @@ def safe_source(value):
         host=(u.hostname or "").lower().rstrip(".")
         if (u.scheme!="https" or not host or u.username or u.password or
                 u.port not in (None,443) or len(value)>2048 or
-                not u.path.lower().endswith((".mp4",".m3u8")) or
+                not u.path.lower().endswith((".mp4",".m3u8",".webm",".m4v",".mov",".mkv")) or
                 host=="localhost" or "." not in host or
                 host.endswith((".local",".internal",".lan",".test",".invalid",".onion"))):
             raise ValueError("أدخل رابط HTTPS مباشر بصيغة MP4 أو M3U8 على نطاق عام")
@@ -100,6 +100,8 @@ def source_preflight(url):
                 if urlsplit(url).path.lower().endswith(".m3u8"):
                     if not sample.lstrip().startswith(b"#EXTM3U"):
                         raise ValueError("المصدر لم يرجع ملف M3U8 صحيحًا")
+                    if b"#EXT-X-KEY:" in sample or b"#EXT-X-SESSION-KEY:" in sample:
+                        raise ValueError("ملف HLS مُشفّر أو يتطلب تصريح تشغيل خاص؛ لا يُستورد دون مصدر مرخّص غير محمي.")
                 return {"status":status,"content_type":response.headers.get("Content-Type","")}
     except requests.RequestException as exc:
         raise ValueError("تعذر الاتصال بخادم الفيديو من Render. تحقق من DNS وتوفر المصدر.") from exc
@@ -190,8 +192,22 @@ def ingest(job_id:str, payload:FilmInput, uid:str):
         with tempfile.TemporaryDirectory(prefix="alezz-film-") as d:
             output=Path(d)/"movie.mp4"
             # Source must be an unencrypted, authorized and directly accessible stream.
-            execute(["ffmpeg","-nostdin","-hide_banner","-loglevel","error","-y","-i",url,
-                     "-map","0:v:0","-map","0:a:0?","-c","copy","-movflags","+faststart",str(output)],7200)
+            copy_args=["ffmpeg","-nostdin","-hide_banner","-loglevel","error","-y","-i",url,
+                       "-map","0:v:0","-map","0:a:0?","-c","copy","-movflags","+faststart",str(output)]
+            try:
+                execute(copy_args,7200)
+            except RuntimeError as first_error:
+                # Non-DRM transcode fallback for sources whose codecs cannot be copied to MP4.
+                # Authorization / network failures must never trigger retries intended to evade access controls.
+                message=str(first_error).lower()
+                if any(code in message for code in ("403","401","forbidden","unauthorized","access denied","server returned","timed out","404","410")):
+                    raise
+                output.unlink(missing_ok=True)
+                set_job(job_id,status="transcoding")
+                execute(["ffmpeg","-nostdin","-hide_banner","-loglevel","error","-y","-i",url,
+                         "-map","0:v:0","-map","0:a:0?","-c:v","libx264","-preset","veryfast",
+                         "-crf","23","-pix_fmt","yuv420p","-c:a","aac","-b:a","128k",
+                         "-movflags","+faststart",str(output)],7200)
             if not output.is_file() or not 4096<output.stat().st_size<=MAX_BYTES:
                 raise RuntimeError("Downloaded video empty or above configured size limit")
             probe=json.loads(execute(["ffprobe","-v","error","-show_entries",
@@ -256,7 +272,7 @@ def register(router_app,portal):
             "private_storage_configured":bool(
                 os.getenv("ALEZZ_SUPABASE_SECRET_KEY") or
                 os.getenv("ALEZZ_SUPABASE_SERVICE_ROLE_KEY")),
-            "formats":["mp4","m3u8"],
+            "formats":["mp4","m3u8","webm","m4v","mov","mkv"],
             "limits":{"minimum_minutes":1,"maximum_minutes":600,
                       "max_file_gib":round(MAX_BYTES/(1024**3),1)}
         }
@@ -273,7 +289,7 @@ def register(router_app,portal):
         except (ValueError,OSError) as ex:
             raise HTTPException(422,str(ex)[:250])
         with LOCK:
-            if any(j.get("status") in ("queued","checking_source","downloading","uploading") for j in JOBS.values()):
+            if any(j.get("status") in ("queued","checking_source","downloading","transcoding","uploading") for j in JOBS.values()):
                 raise HTTPException(429,"A private media import is already running")
             job_id=secrets.token_urlsafe(20)
             JOBS[job_id]={"status":"queued","created_at":int(time.time()),"owner_uid":uid}
