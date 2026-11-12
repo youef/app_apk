@@ -739,9 +739,9 @@
       (item.original && item.original !== item.title ? '<p class="detail__orig">' + esc(item.original) + "</p>" : "") +
       '<div class="detail__chips">' + chips.join("") + "</div>" +
       '<div class="detail__actions">' +
-      (isOfficial ? '<a class="btn btn--gold" href="' + esc(item.official) + '" target="_blank" rel="noopener noreferrer">↗ فتح صفحة المشاهدة الخارجية</a>' : "") +
-      (item.kind === "series" && item.id === "42025cef-c611-4866-821f-7aceb1081ebf" ?
-        '<a class="btn btn--ghost" href="https://roya.tv/program/1703/episodes" target="_blank" rel="noopener noreferrer">↗ المشاهدة على رؤيا</a>' : "") +
+      (isOfficial ? '<button type="button" class="btn btn--gold" data-play="' + esc(item.key) + '">▶ تشغيل داخل العز TV</button>' : "") +
+      // Playback does not link to third-party episode websites.
+      "" +
       (canPlay ? '<button class="btn btn--gold" data-play="' + esc(item.key) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6L20 12z" fill="currentColor" stroke="none"/></svg>' +
         (progressOf(item) > 1 ? "متابعة المشاهدة" : item.live ? "مشاهدة مباشرة" : "تشغيل") + "</button>" : "") +
       '<button class="btn btn--ghost" data-fav="' + esc(item.key) + '"><svg viewBox="0 0 24 24" aria-hidden="true">' +
@@ -851,12 +851,7 @@
   function playItem(item, opts) {
     opts = opts || {};
     if (!item) return;
-    if (item.kind === "channel" && item.playback === "official_link" &&
-        /^https:\/\//i.test(item.official || "") && !item.stream) {
-      window.open(item.official, "_blank", "noopener,noreferrer");
-      return;
-    }
-
+    // Official pages are metadata only, never launch external video pages.
     /* a series has no stream of its own: start the first episode */
     if (item.kind === "series" && item.seasons && item.episodeCount) {
       var first = seriesResume(item);
@@ -899,14 +894,7 @@
       if (series === s) list = seriesEpisodes(s);
     });
     if (!episode) return;
-    if (!episode.youtubeId && !episode.stream) {
-      if (/^https:\/\/roya\.tv\/program\/1703\/episodes/.test(episode.officialPage || "")) {
-        window.open(episode.officialPage, "_blank", "noopener,noreferrer");
-      } else {
-        toast("لا يوجد مشغل متاح لهذه الحلقة", "err");
-      }
-      return;
-    }
+    // Even a missing stream opens the first-party coming-soon player.
     if (parseHash().name !== "watch" || parseHash().arg !== epKey) {
       location.hash = watchLink(epKey);
       return;
