@@ -394,21 +394,32 @@ function showDeepResults(result){
  renderMedia();
  const episodes=Array.isArray(result.episodes)?result.episodes:[];
  current.episodes=episodes.map(ep=>({title:ep.title,page_url:ep.page_url}));
- renderEpisodes();
+ current.embeds=(Array.isArray(result.embeds)?result.embeds:[]).filter(cleanLink);
+ renderEpisodes();renderEmbeds();
  deepMethods(result);
  clearResult("deep-episodes",episodes.length?"":"لم تُكتشف صفحات حلقات من هذا المصدر.");
  for(const ep of episodes){
   const sources=Array.isArray(ep.sources)?ep.sources:[];
   const summary=ep.methods?.map(m=>m.engine+": "+(m.state||m.status||"تم")).join(" | ")||"";
-  card("deep-episodes",ep.title||"حلقة",sources.length+" مصدر مرشح • "+summary,
+  const embeds=(Array.isArray(ep.embeds)?ep.embeds:[]).filter(cleanLink);
+  card("deep-episodes",ep.title||"حلقة",sources.length+" مصدر فيديو مرشح • "+embeds.length+" صفحة مشغل • "+summary,
     null,null);
+  for(const iframe of embeds){
+   card("deep-episodes","↳ صفحة مشغّل مضمنة",
+     shortLink(iframe)+" • ليست رابط MP4 أو M3U8 مؤكدًا",
+     "فحص هذه الصفحة",()=>{
+       $("page-url").value=iframe;
+       $("page-url").scrollIntoView({behavior:"smooth",block:"center"});
+       toast("تم اختيار صفحة المشغّل؛ اضغط فحص Chromium لاكتشاف الفيديو الظاهر فيها.");
+     });
+  }
   for(const source of sources){
    card("deep-episodes","↳ "+(source.engine||"مصدر فيديو"),
      shortLink(source.url)+" • غير معتمد حتى يُفحص","اختيار المصدر",
      ()=>chooseSource(source.url,ep.title||"حلقة"));
   }
  }
- $("discovery-status").textContent=(result.page_title||"صفحة العمل")+" — "+collected.length+" مصادر مرشحة — "+episodes.length+" حلقات. "+(result.notes||[]).join(" • ");
+ $("discovery-status").textContent=(result.page_title||"صفحة العمل")+" — "+collected.length+" روابط فيديو مرشحة — "+current.embeds.length+" صفحات مشغّل — "+episodes.length+" حلقات. "+(result.notes||[]).join(" • ");
 }
 function stopDeepScan(){
  if(deepScanState.timer){clearInterval(deepScanState.timer);deepScanState.timer=null}
