@@ -40,7 +40,7 @@ from alezz_fetchv_importer import (
 from metadata_enrichment import enrich
 from library_sync import JobDB,collect_pages,collect_works
 from auto_sync import AutoSync, target_key
-from media_resolver import MediaResolver, read_public_html, safe_error, supported_source_kind
+from media_resolver import MediaResolver, read_public_html, safe_error, supported_source_kind, normalized_source_url
 from title_cleaner import content_title
 from launch import studio_revision
 from member_portal import Portal
@@ -716,8 +716,8 @@ async def links(request: Request, data: LinkForm):
                 if cat.kind == 'movie' and '|' not in line:
                     url = public_url(line)
                     if not supported_source_kind(url):
-                        raise ValueError('الرابط يجب أن يكون MP4/HLS/WebM أو Embed 1vid')
-                    cat.media_url, cat.verified = url, False
+                        raise ValueError('الرابط يجب أن يكون MP4/HLS/WebM أو Embed مدعوم')
+                    cat.media_url, cat.verified = normalized_source_url(url), False
                     count += 1
                     continue
                 if '|' not in line:
@@ -732,7 +732,7 @@ async def links(request: Request, data: LinkForm):
                 if ep is None:
                     problems.append(f'السطر {no}: الحلقة غير موجودة في الاكتشاف')
                     continue
-                ep.media_url, ep.verified, ep.error = url, False, ''
+                ep.media_url, ep.verified, ep.error = normalized_source_url(url), False, ''
                 count += 1
             except (ValueError, TypeError) as exc:
                 problems.append(f'السطر {no}: {clean(exc, 100)}')
@@ -798,7 +798,9 @@ async def update(request: Request, data: UpdateForm):
         if data.media_url is not None and cat.kind == 'movie':
             value = optional_url(data.media_url)
             if value and not supported_source_kind(value):
-                raise HTTPException(400, 'رابط الفيلم يجب أن يكون MP4/HLS/WebM أو Embed 1vid')
+                raise HTTPException(400, 'رابط الفيلم يجب أن يكون MP4/HLS/WebM أو Embed معتمد (OK.ru أو 1vid)')
+            if supported_source_kind(value) == 'embed':
+                value = normalized_source_url(value)
             if value != cat.media_url:
                 cat.media_url, cat.verified = value, False
         if data.episodes is not None and cat.kind == 'series':
@@ -821,6 +823,8 @@ async def update(request: Request, data: UpdateForm):
                     value = optional_url(str(row['media_url']))
                     if value and not supported_source_kind(value):
                         raise HTTPException(400, f'صيغة رابط الموسم {ep.season} الحلقة {ep.number} غير مدعومة')
+                    if supported_source_kind(value) == 'embed':
+                        value = normalized_source_url(value)
                     if value != ep.media_url:
                         ep.media_url, ep.verified, ep.error = value, False, ''
     return get_summary(state)
@@ -858,7 +862,7 @@ def verify_entries(cat: Catalogue, indices: list[int]) -> int:
             return False
         # Probe the iframe document only. Its reachability is not video playback.
         checked = MediaResolver(mode='http').check([
-            {'url': item.media_url, 'kind': 'embed', 'label': '1vid'}])
+            {'url': item.media_url, 'kind': 'embed', 'label': urlsplit(item.media_url).hostname or 'Embed'}])
         item.sources = [s for s in item.sources if s.get('url') != item.media_url] + checked
         item.verified = False
         item.error = '' if checked and checked[0].get('reachable') else (
