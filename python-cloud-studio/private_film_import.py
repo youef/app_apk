@@ -248,7 +248,7 @@ def register(router_app,portal):
         except (ValueError,OSError) as ex:
             raise HTTPException(422,str(ex)[:250])
         with LOCK:
-            if any(j.get("status") in ("queued","downloading","uploading") for j in JOBS.values()):
+            if any(j.get("status") in ("queued","checking_source","downloading","uploading") for j in JOBS.values()):
                 raise HTTPException(429,"A private media import is already running")
             job_id=secrets.token_urlsafe(20)
             JOBS[job_id]={"status":"queued","created_at":int(time.time()),"owner_uid":uid}
