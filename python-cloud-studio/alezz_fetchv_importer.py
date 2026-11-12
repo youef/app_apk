@@ -29,7 +29,7 @@ try:
 except ImportError as exc:
     raise SystemExit("Install dependencies: python -m pip install -r requirements.txt") from exc
 
-MEDIA_EXT = re.compile(r"\.(?:mp4|m4v|webm|m3u8)(?:[?#]|$)", re.I)
+MEDIA_EXT = re.compile(r"\.(?:mp4|m4v|webm|m3u8|mpd)(?:[?#]|$)", re.I)
 WEB_MEDIA = re.compile(r"\.(?:mp4|m4v|webm|m3u8|mpd)(?:[?#]|$)", re.I)
 EP_RE = re.compile(r"(?:\bS(\d{1,2})[.\-_ ]?E(\d{1,3})\b|(?:الحلقة|الحلقه|episode|ep)[\s:_#-]*(\d{1,3}))", re.I)
 SEASON_RE = re.compile(r"(?:الموسم|season)[\s:_#-]*(\d{1,2})", re.I)
@@ -191,7 +191,7 @@ class SourceClient:
 
     def media_verified(self, url: str) -> tuple[bool, str]:
         if not MEDIA_EXT.search(url):
-            return False, "Unsupported: media must be MP4/WebM/M4V/HLS"
+            return False, "Unsupported: media must be MP4/WebM/M4V/HLS/DASH"
         try:
             # A 200 response or a MIME type alone is not proof of playable media.
             for depth in range(3):
@@ -220,6 +220,14 @@ class SourceClient:
                             valid = bool(segment) and b'ftyp' in header[:32] and any(
                                 marker in segment[:64] for marker in (b'styp',b'moof',b'mdat')) and 'html' not in segment_type
                     return (True, "HLS playlist and segment respond") if valid else (False, "HLS segment is unavailable or invalid")
+                if urlsplit(final).path.lower().endswith('.mpd'):
+                    text = sample.decode('utf-8-sig', errors='replace')
+                    if '<MPD' not in text:
+                        return False, 'DASH MPD manifest not detected'
+                    if '<ContentProtection' in text:
+                        return False, 'DRM-protected DASH requires the official licensed player'
+                    # Checking only the XML playlist is not proof of playable segments.
+                    return False, 'DASH manifest responds; verify playback inside the device'
                 if '.m3u8' in urlsplit(final).path.lower(): return False, "HLS manifest not detected"
                 valid = b'ftyp' in sample[:32] or sample.startswith(b'\x1aE\xdf\xa3')
                 return (True, "Media header responds") if valid else (False, "Video header not detected")
