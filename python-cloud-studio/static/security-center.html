@@ -35,7 +35,14 @@
 <section class="panel"><div class="section-head"><div><span class="eyebrow">02 / قائمة المواقع</span><h2>مواقعك المسجلة</h2><p>إثبات الملكية قبل بدء الفحص، مع متابعة الحالات والجدولة.</p></div><button class="secondary" id="refreshButton" type="button">↻ تحديث</button></div><div id="sites" class="sites" aria-live="polite">جارٍ تحميل البيانات…</div></section>
 <section class="panel" id="reportSection" hidden><div class="section-head"><div><span class="eyebrow">03 / التقرير</span><h2>تفاصيل الفحص</h2><p id="reportMeta"></p></div><button type="button" class="secondary" id="exportButton">↓ JSON</button></div>
 <div id="reportOverview"></div><h3>الثغرات والمؤشرات</h3><div id="findings"></div><h3>الفحوصات اليدوية المطلوبة</h3><div id="manualList"></div></section>
-<section class="panel"><div class="section-head"><div><span class="eyebrow">04 / التغطية الفنية</span><h2>الفحوصات والأدوات</h2><p>الوجود في القائمة لا يعني اكتشاف ثغرة. الفحوصات اليدوية والمرتبطة بالشيفرة تحتاج مدخلات إضافية.</p></div></div>
+<section class="panel"><div class="section-head"><div><span class="eyebrow">04 / الأدوات الخارجية</span><h2>استيراد نتائج ماسحات الأمان</h2><p>حلّل تقرير JSON سبق أن شغّلته على بيئتك المصرح بها، وادمج نتائجه في تقارير موقعك.</p></div></div>
+<form id="importForm" class="form">
+<label><span>الموقع الموثّق</span><select required id="importSite"><option value="">اختر موقعًا</option></select></label>
+<label><span>الأداة</span><select id="importTool" required><option value="zap">OWASP ZAP</option><option value="wpscan">WPScan</option><option value="nuclei">Nuclei</option><option value="semgrep">Semgrep</option><option value="trivy">Trivy</option><option value="nikto">Nikto</option><option value="testssl">testssl.sh</option><option value="wazuh">Wazuh</option></select></label>
+<label><span>ملف نتائج JSON</span><input type="file" id="importFile" accept=".json,application/json" required></label>
+<button type="submit">استيراد التقرير</button></form>
+<p class="note">تتم معالجة ملفات التقارير التي تختارها، دون تشغيل هذه الأدوات على Render. لا ترفع تقارير تتضمن مفاتيح سرية أو معلومات مستخدمين حساسة.</p></section>
+<section class="panel"><div class="section-head"><div><span class="eyebrow">05 / التغطية الفنية</span><h2>الفحوصات والأدوات</h2><p>الوجود في القائمة لا يعني اكتشاف ثغرة. الفحوصات اليدوية والمرتبطة بالشيفرة تحتاج مدخلات إضافية.</p></div></div>
 <div class="tabs"><button id="catalogAll" class="tab active" type="button">جميع الفحوصات</button><button id="catalogAuto" class="tab" type="button">تلقائي</button><button id="catalogManual" class="tab" type="button">يدوي</button></div><div id="coverage" class="coverage"></div>
 <h3>أدوات التكامل الاحترافية</h3><div id="toolCards" class="tool-grid"></div></section>
 <footer>AL EZZ TV · Security Center · جميع الفحوصات مقيدة ومصرح بها. لا تضمن النتيجة اكتشاف كل الثغرات.</footer>
