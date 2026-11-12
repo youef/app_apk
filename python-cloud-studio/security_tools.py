@@ -1,7 +1,7 @@
 """Normalize offline authorized scanner reports into Al Ezz's private audit history.
 
 Never executes external scanners or fetches links inside imported data.
-Only a signed-in administrator of a previously verified domain may import JSON.
+Only a signed-in administrator of a admin-registered public domain may import JSON.
 """
 from __future__ import annotations
 
@@ -121,8 +121,6 @@ def register(portal):
             raise HTTPException(400,"أداة غير مدعومة.")
         with database() as db:
             site=target(db,uid,body.site_id)
-            if not site["verified_at"]:
-                raise HTTPException(403,"أثبت ملكية النطاق أولًا.")
             host=site["host"]
         try:
             source=json.loads(body.report_json)
