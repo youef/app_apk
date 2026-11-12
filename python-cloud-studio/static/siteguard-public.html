@@ -15,7 +15,7 @@
   <nav class="navlinks"><span class="status"><i class="dot"></i> فحص خوادم فعلي</span><a href="/studio/">استوديو العز</a></nav>
 </header>
 <section class="hero">
- <div><div class="eyebrow">WEB SECURITY AUDIT / PUBLIC DASHBOARD</div><h1>افحص أمان موقعك <em>بسهولة.</em></h1><p>افحص إعدادات HTTPS وتقنيات الموقع ولغات البرمجة وإصداراتها المعلنة، مع توضيح المعلومات غير المرئية عن الخادم وقاعدة البيانات. فحص خارجي مفتوح دون تسجيل أو رفع ملف ملكية.</p></div>
+ <div><div class="eyebrow">WEB SECURITY AUDIT / PUBLIC DASHBOARD</div><h1>افحص أمان موقعك <em>بسهولة.</em></h1><p>افحص DNS عبر أدوات شبيهة بـ nslookup، واعرف عناوين IP العامة ومؤشرات CDN، وإعدادات TLS، وتقنيات الموقع وإصداراتها المنشورة. دون تسجيل دخول أو إثبات ملكية.</p></div>
  <div class="orbit" aria-hidden="true"><div class="shield">⬡</div></div>
 </section>
 <section class="panel">
@@ -24,11 +24,11 @@
   <label class="formlabel" for="target">رابط الموقع</label>
   <div class="urlrow"><span>◎</span><input id="target" type="text" inputmode="url" autocapitalize="off" placeholder="example.com أو https://example.com/" value="https://krmzy.net/" spellcheck="false" required></div>
   <div class="modes">
-   <label class="mode"><input type="radio" name="mode" value="quick" checked><span><b>فحص سريع مفتوح</b><small>الصفحة الرئيسية، شهادة HTTPS، ترويسات الأمان، وتحديد تقنية الموقع</small></span></label>
-   <label class="mode"><input type="radio" name="mode" value="extended"><span><b>فحص موسع بدون تحقق</b><small>فحص معلومات PHP وقاعدة البيانات المعلنة، والمكتبات، وWordPress، وترويسات CORS وملفات التعريف العامة</small></span></label>
+   <label class="mode"><input type="radio" name="mode" value="quick" checked><span><b>فحص سريع مفتوح</b><small>DNS ‏A/AAAA/CNAME، عنوان IP العام، شهادة TLS، ترويسات الأمان وتقنية الموقع</small></span></label>
+   <label class="mode"><input type="radio" name="mode" value="extended"><span><b>فحص موسع بدون تحقق</b><small>DNS متقدم NS/MX/CAA/SOA/PTR وSPF/DMARC، مع فحص CORS والتقنيات والإصدارات العامة</small></span></label>
   </div>
   <div class="actions"><button id="scanBtn" class="btn primary" type="submit">◀ بدء فحص الموقع</button></div>
-  <div class="hint">الفحص قراءة آمنة للبيانات العامة ولا يتطلب إثبات ملكية. الإصدارات المخفية لا يمكن استخراجها بدقة دون صلاحية على الخادم. يمنع فحص الشبكات الداخلية أو تجاوز الدخول.</div>
+  <div class="hint">الفحص قراءة آمنة للبيانات العامة ولا يتطلب إثبات ملكية. عنوان DNS لا يكشف بالضرورة IP الخادم الأصلي خلف CDN. لا تخمين لعناوين الأصل ولا تجاوز حماية أو فحص للشبكات الداخلية.</div>
  </form>
  <p id="notice" class="error" role="alert" hidden></p>
 </section>
@@ -40,6 +40,7 @@
   <section class="panel"><h3>الملاحظات الأمنية</h3><div id="findings"></div></section>
   <section class="panel"><h3>معلومات الموقع والتقنيات</h3><div id="siteInfo"></div><h3 style="margin-top:23px">اللغات البرمجية الظاهرة</h3><div id="langInfo"></div><h3 style="margin-top:23px">المكتبات والأطر</h3><div id="libraryInfo"></div><h3 style="margin-top:23px">الخادم والبنية</h3><div id="infraInfo"></div><p class="hint">نسخة PHP وقاعدة البيانات لا يمكن تأكيدهما خارجيًا إذا لم يعلنهما الخادم. كشف إصدار لا يثبت وجود ثغرة. التقرير لا يضمن خلو الموقع من SQLi أو XSS أو RCE.</p></section>
  </div>
+<section class="panel" style="margin-top:17px"><h3 style="margin-top:0">DNS / NSLOOKUP</h3><p class="subtle">السجلات المعروضة عامة وقد تشير إلى CDN أو Reverse Proxy وليس إلى خادم الموقع الأصلي.</p><div id="dnsInfo"></div><div id="dnsRecords"></div><h3 style="margin-top:22px">SSL / TLS</h3><div id="tlsInfo"></div><p class="hint">للعثور على عنوان الخادم الأصلي الخاص بك استخدم لوحة الاستضافة أو إعدادات DNS الخاصة به؛ لا يمكن إثباته من DNS العام عند وجود CDN.</p></section>
 </section>
 <footer class="bottom"><span>© العز TV — SiteGuard</span><span>لا يتطلب تسجيل دخول أو إثبات ملكية • فحص غير تخريبي للبيانات العامة</span></footer>
 </div>
@@ -54,7 +55,46 @@ async function call(path,data){const r=await fetch('/siteguard/api/'+path,{metho
 function item(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;n.textContent=text??'';return n;}
 function addInfo(key,value){const r=item('div','kv','');r.append(item('span','',key),item('b','',String(value??'غير معروف')));el('siteInfo').append(r);}
 function showTech(id, values){const root=el(id);root.replaceChildren();if(!Array.isArray(values)||values.length===0){root.append(item('div','subtle','لا توجد بصمة معلنة.'));return;}for(const x of values){const r=item('div','kv','');const name=item('span','',x.name);const val=item('b','',x.version&&x.version!=='غير معلن'?x.version:'الإصدار غير معلن');val.title=(x.confidence||'')+' — '+(x.evidence||'');r.append(name,val);root.append(r);}}
-function showReport(r){latestReport=r;el('results').hidden=false;el('progress').hidden=true;const c=r.counts||{};['critical','high','medium','low'].forEach(k=>el(k).textContent=String(c[k]||0));el('siteInfo').replaceChildren();addInfo('الموقع',r.url);addInfo('نظام إدارة المحتوى',r.platform);addInfo('إصدار النظام',r.version||'غير معلن');addInfo('PHP',r.php?.type||'غير معروف');addInfo('إصدار PHP',r.php?.version||'غير معلن');addInfo('دليل PHP',r.php?.evidence||'لا توجد بصمة');addInfo('قاعدة البيانات',r.database?.type||'غير معروف');addInfo('إصدار قاعدة البيانات',r.database?.version||'غير معلن');addInfo('دليل قاعدة البيانات',r.database?.evidence||'لا توجد بصمة');addInfo('رمز HTTP',r.http_status);addInfo('طريقة الفحص',r.mode);addInfo('عمليات الفحص',(r.checks||[]).length);addInfo('وقت التقرير',r.finished_at||'—');showTech('langInfo',r.languages);showTech('libraryInfo',r.libraries);showTech('infraInfo',r.infrastructure);el('findings').replaceChildren();if(!r.findings?.length){el('findings').append(item('div','empty','لم تظهر مشاكل تهيئة ضمن الاختبارات المحدودة. هذا لا يعني أن الموقع خالٍ من الثغرات.'));}const severity={critical:['حرجة','critical'],high:['عالية','high'],medium:['متوسطة','medium'],low:['منخفضة','low'],info:['معلومة','info']};(r.findings||[]).forEach(f=>{const box=item('article','finding','');const head=item('div','findinghead','');const kind=severity[f.severity]||severity.info;head.append(item('b','',f.title),item('span','sev '+kind[1],kind[0]));box.append(head,item('p','',f.detail||''),item('p','fix','الإصلاح: '+(f.fix||'راجع الإعدادات.')));el('findings').append(box);});el('results').scrollIntoView({behavior:'smooth'});}
+function renderDNS(d,t){
+ const info=el('dnsInfo'),records=el('dnsRecords'),tls=el('tlsInfo');
+ info.replaceChildren();records.replaceChildren();tls.replaceChildren();
+ if(d){
+   const ips=Array.isArray(d.public_ips)?d.public_ips:[];
+   const lines=[
+     ['العناوين العامة (A / AAAA)',ips.length?ips.join(' • '):'غير متوفر'],
+     ['مؤشر CDN / الشبكة',d.cdn_hint||'غير معروف'],
+     ['تصنيف IP',d.ip_classification||'هذه العناوين لا تؤكد الخادم الأصلي'],
+     ['الخادم الأصلي',d.origin_status||'غير قابل للتأكيد من DNS العام']
+   ];
+   for(const [name,value] of lines){const row=item('div','kv','');row.append(item('span','',name),item('b','',value));info.append(row);}
+   const data=d.records||{};
+   for(const type of ['A','AAAA','CNAME','NS','MX','CAA','SOA','SPF','DMARC']){
+     const values=data[type];if(!Array.isArray(values)||!values.length)continue;
+     const block=item('div','finding','');block.append(item('b','',type));
+     for(const value of values){const txt=item('p','',String(value));txt.style.direction='ltr';txt.style.textAlign='left';txt.style.overflowWrap='anywhere';block.append(txt);}
+     records.append(block);
+   }
+   if(Array.isArray(d.reverse_dns)&&d.reverse_dns.length){
+     const block=item('div','finding','');block.append(item('b','','PTR / Reverse DNS'));
+     for(const value of d.reverse_dns){block.append(item('p','',value.ip+' → '+value.ptr));}records.append(block);
+   }
+   if(!records.children.length)records.append(item('div','empty','لم تظهر سجلات إضافية في هذا الفحص.'));
+ }else info.append(item('div','subtle','بيانات DNS غير متاحة.'));
+ if(t){
+   for(const [label,value] of [
+     ['شهادة SSL صالحة',t.verified?'نعم — تم التحقق':'غير مؤكدة'],
+     ['بروتوكول TLS',t.tls_version||'غير معروف'],
+     ['Cipher',t.cipher||'غير معروف'],
+     ['جهة إصدار الشهادة',t.issuer||'غير متاح'],
+     ['صاحب الشهادة',t.subject||'غير متاح'],
+     ['انتهاء الشهادة',t.expires_at||'غير متاح'],
+     ['الأيام المتبقية',t.days_remaining===undefined||t.days_remaining===null?'غير معروف':String(t.days_remaining)],
+     ['عنوان الاتصال العام',t.connected_public_ip||'غير متاح']
+   ]){const row=item('div','kv','');row.append(item('span','',label),item('b','',value));tls.append(row);}
+   if(t.error)tls.append(item('p','error',t.error));
+ }else tls.append(item('div','subtle','معلومات TLS غير متاحة.'));
+}
+function showReport(r){latestReport=r;el('results').hidden=false;el('progress').hidden=true;const c=r.counts||{};['critical','high','medium','low'].forEach(k=>el(k).textContent=String(c[k]||0));el('siteInfo').replaceChildren();addInfo('الموقع',r.url);addInfo('نظام إدارة المحتوى',r.platform);addInfo('إصدار النظام',r.version||'غير معلن');addInfo('PHP',r.php?.type||'غير معروف');addInfo('إصدار PHP',r.php?.version||'غير معلن');addInfo('دليل PHP',r.php?.evidence||'لا توجد بصمة');addInfo('قاعدة البيانات',r.database?.type||'غير معروف');addInfo('إصدار قاعدة البيانات',r.database?.version||'غير معلن');addInfo('دليل قاعدة البيانات',r.database?.evidence||'لا توجد بصمة');addInfo('رمز HTTP',r.http_status);addInfo('طريقة الفحص',r.mode);addInfo('عمليات الفحص',(r.checks||[]).length);addInfo('وقت التقرير',r.finished_at||'—');showTech('langInfo',r.languages);showTech('libraryInfo',r.libraries);showTech('infraInfo',r.infrastructure);renderDNS(r.dns,r.tls);el('findings').replaceChildren();if(!r.findings?.length){el('findings').append(item('div','empty','لم تظهر مشاكل تهيئة ضمن الاختبارات المحدودة. هذا لا يعني أن الموقع خالٍ من الثغرات.'));}const severity={critical:['حرجة','critical'],high:['عالية','high'],medium:['متوسطة','medium'],low:['منخفضة','low'],info:['معلومة','info']};(r.findings||[]).forEach(f=>{const box=item('article','finding','');const head=item('div','findinghead','');const kind=severity[f.severity]||severity.info;head.append(item('b','',f.title),item('span','sev '+kind[1],kind[0]));box.append(head,item('p','',f.detail||''),item('p','fix','الإصلاح: '+(f.fix||'راجع الإعدادات.')));el('findings').append(box);});el('results').scrollIntoView({behavior:'smooth'});}
 el('scanForm').addEventListener('submit',async e=>{e.preventDefault();alertAt('notice','');el('results').hidden=true;el('progress').hidden=false;const btn=el('scanBtn');btn.disabled=true;try{const job=await call('start',{url:url(),mode:modes()});for(let i=0;i<100;i++){await new Promise(resolve=>setTimeout(resolve,1300));const r=await fetch('/siteguard/api/status/'+encodeURIComponent(job.job_id),{cache:'no-store',credentials:'same-origin'});const d=await r.json();if(d.state==='done'){showReport(d.report);return;}if(d.state==='error')throw Error(d.error||'تعذر الفحص');if(!r.ok)throw Error('تعذر متابعة الفحص.');}throw Error('تجاوز الفحص المهلة المحددة.');}catch(err){el('progress').hidden=true;alertAt('notice',err.message);}finally{btn.disabled=false;}});
 el('download').addEventListener('click',()=>{if(!latestReport)return;const blob=new Blob([JSON.stringify(latestReport,null,2)],{type:'application/json'});const href=URL.createObjectURL(blob);const a=document.createElement('a');a.href=href;a.download='al-ezz-siteguard-report.json';a.click();setTimeout(()=>URL.revokeObjectURL(href),1000);});
 </script>
