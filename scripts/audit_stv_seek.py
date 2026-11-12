@@ -18,11 +18,18 @@ def audit(item):
             r.update(status="unverified",note="Invalid declared duration");return r
         second=max(1510,min(int(dur*.82),int(dur-45)));r["seek_second"]=second
         cmd=["ffmpeg","-hide_banner","-nostdin","-loglevel","error","-rw_timeout","14000000",
-             "-ss",str(second),"-i",url,"-map","0:v:0","-frames:v","1","-an","-sn","-f","null","-"]
+             "-ss",str(second),"-i",url,"-map","0:v:0","-frames:v","1","-an","-sn","-f","framemd5","-"]
         try:
-            out=subprocess.run(cmd,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,text=True,timeout=32)
-            r["status"]="seek_verified" if out.returncode==0 else "seek_failed"
-            r["note"]="Decoded a frame after minute 25" if out.returncode==0 else "Cannot decode a frame after minute 25"
+            out=subprocess.run(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=32)
+            # ffmpeg can exit with code zero while producing ZERO output frames!
+            # A real framemd5 record, not a successful process exit, is mandatory.
+            frame_records=[line for line in (out.stdout or "").splitlines()
+                           if line.strip() and not line.lstrip().startswith("#")
+                           and re.match(r"^\\s*\\d+\\s*,",line)]
+            passed=(out.returncode==0 and len(frame_records)>0)
+            r["status"]="seek_verified" if passed else "seek_failed"
+            r["frames_decoded"]=len(frame_records)
+            r["note"]="Confirmed an actual video frame after minute 25" if passed else "No late video frame decoded (or decoder error)"
         except subprocess.TimeoutExpired:
             r.update(status="seek_timeout",note="Late frame request timed out")
     except Exception as e:r.update(status="unverified",note=type(e).__name__)
