@@ -438,6 +438,9 @@ def run_site(site_id, uid, background=False):
                 raise ValueError("أثبت ملكية النطاق أولًا.")
             host, token = site["host"], site["token"]
         if not verify(host, token):
+            _cloud("PATCH", "aseel_security_sites",
+                   params={"id":"eq." + site_id},
+                   payload={"verified_at":None})
             with database() as db:
                 db.execute("UPDATE sites SET verified_at=NULL WHERE id=?", (site_id,))
             raise ValueError("تم إيقاف الفحص لأن ملف إثبات الملكية غير موجود أو تغير.")
@@ -453,6 +456,11 @@ def run_site(site_id, uid, background=False):
             db.execute("""DELETE FROM audits WHERE site_id=? AND id NOT IN
               (SELECT id FROM audits WHERE site_id=? ORDER BY created_at DESC LIMIT 25)""",
                        (site_id, site_id))
+        _cloud("POST", "aseel_security_audits", payload={
+            "id":report_id,"site_id":site_id,"created_at":iso(),"payload":report})
+        _cloud("PATCH", "aseel_security_sites",
+               params={"id":"eq."+site_id},
+               payload={"last_run":iso(),"next_run":time.time()+interval*3600 if interval else 0})
         with RUN_LOCK:
             RUNNING[site_id] = {"state": "done", "report_id": report_id}
     except Exception as exc:
@@ -537,8 +545,8 @@ def register(portal):
                 with RUN_LOCK:
                     item["job"] = dict(RUNNING.get(site["id"], {"state": "idle"}))
                 output.append(item)
-        return {"sites": output, "storage": str(DB.parent) != "/var/data" and
-                "التاريخ يعتمد على تخزين خادم Render؛ قد يضيع عند إعادة النشر دون قرص دائم." or "persistent"}
+        return {"sites":output, "storage":"persistent" if _has_cloud() else
+                "تخزين Render مؤقت؛ أضف مفتاح خدمة Supabase على الخادم لحفظ التاريخ."}
 
     @router.post("/api/security/sites")
     def add_site(request: Request, data: AddSite):
@@ -557,6 +565,9 @@ def register(portal):
                 raise HTTPException(429, "الحد الأقصى 12 نطاقًا لكل مسؤول.")
             site_id = secrets.token_hex(12)
             token = "alezz-verify-" + secrets.token_urlsafe(26)
+            _cloud("POST", "aseel_security_sites", payload={
+                "id":site_id,"owner_uid":uid,"host":host,
+                "verification_token":token,"created_at":iso()})
             db.execute("INSERT INTO sites(id,uid,host,token,created_at) VALUES(?,?,?,?,?)",
                        (site_id, uid, host, token, iso()))
         return {"id": site_id, "host": host, "token": token,
@@ -574,6 +585,8 @@ def register(portal):
             ok = False
         if not ok:
             raise HTTPException(409, "فشل التحقق؛ ارفع الملف النصي في المسار المحدد وتأكد من HTTPS.")
+        _cloud("PATCH", "aseel_security_sites",
+               params={"id":"eq."+data.site_id},payload={"verified_at":iso()})
         with database() as db:
             db.execute("UPDATE sites SET verified_at=? WHERE id=?", (iso(), data.site_id))
         return {"ok": True}
@@ -614,10 +627,12 @@ def register(portal):
             site = target(db, uid, data.site_id)
             if data.interval_hours and not site["verified_at"]:
                 raise HTTPException(403, "أثبت الملكية أولًا.")
+            next_run = time.time() + data.interval_hours * 3600 if data.interval_hours else 0
+            _cloud("PATCH", "aseel_security_sites",
+                   params={"id":"eq."+data.site_id},
+                   payload={"interval_hours":data.interval_hours,"next_run":next_run})
             db.execute("UPDATE sites SET interval_hours=?,next_run=? WHERE id=?",
-                       (data.interval_hours,
-                        time.time() + data.interval_hours * 3600 if data.interval_hours else 0,
-                        data.site_id))
+                       (data.interval_hours,next_run,data.site_id))
         return {"ok": True, "interval_hours": data.interval_hours,
                 "note": "الجدولة تعمل طالما خادم Render مستيقظ؛ التنفيذ المضمون يحتاج Cron خارجيًا."}
 
@@ -626,6 +641,8 @@ def register(portal):
         uid = require_admin(request, portal, write=True)
         with database() as db:
             target(db, uid, data.site_id)
+            _cloud("DELETE", "aseel_security_sites",
+                   params={"id":"eq."+data.site_id,"owner_uid":"eq."+uid})
             db.execute("DELETE FROM audits WHERE site_id=?", (data.site_id,))
             db.execute("DELETE FROM sites WHERE id=? AND uid=?", (data.site_id, uid))
         return {"ok": True}
