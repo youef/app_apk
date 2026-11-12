@@ -126,17 +126,19 @@ try {
   <div class="player__stage" id="playerStage">
     <video id="video" playsinline webkit-playsinline x-webkit-airplay="allow" preload="metadata" controlslist="nodownload" aria-label="مشغل العز TV"></video>
     <img class="player__watermark" src="alizz-tv-transparent.png" alt="" aria-hidden="true" draggable="false" loading="eager" decoding="async">
-    <button class="player__embed-external" id="playerEmbedExternal" type="button" hidden>فتح المصدر في صفحة مستقلة ↗</button>
+    <button class="player__embed-external" id="playerEmbedExternal" type="button" hidden>المشاهدة داخل العز فقط</button>
     <div class="player__veil" id="playerVeil"></div>
     <div class="player__spinner" id="playerSpinner" hidden>
       <span></span><p>جارٍ التحضير…</p>
     </div>
     <div class="player__error" id="playerError" hidden>
-      <strong>تعذّر تشغيل هذا المصدر</strong>
+      <video id="playerComingSoonVideo" class="coming-soon-video" src="assets/al_ezz_coming_soon.mp4"
+        autoplay muted loop playsinline preload="metadata" aria-hidden="true" hidden></video>
+      <strong id="playerErrorTitle">قريبًا سيتم دعم هذا المحتوى في تطبيق العز TV</strong>
       <p id="playerErrorMsg">قد يكون الرابط غير متاح حاليًا أو غير مدعوم على هذا الجهاز.</p>
       <div class="player__error-actions">
         <button class="btn btn--gold" id="playerRetry">إعادة المحاولة</button>
-        <button class="btn btn--ghost" id="playerExternal">فتح في مشغل خارجي</button>
+        <button class="btn btn--ghost" id="playerExternal">العودة إلى المكتبة</button>
       </div>
     </div>
 
@@ -247,8 +249,8 @@ try {
 <script src="js/store.js"></script>
 <script src="js/member-sync.js?v=account-sync-20261107"></script>
 <script src="js/cast.js?v=cast-airplay-20261102-1"></script>
-<script src="js/player.js?v=official-okru-embed-20261112"></script>
-<script src="js/live.js?v=channel-external-pages-20261109"></script>
+<script src="js/player.js?v=direct-only-coming-soon-20261112"></script>
+<script src="js/live.js?v=direct-only-coming-soon-20261112"></script>
 <script src="js/kids.js?v=kids-direct-20261102-1"></script>
 <script src="js/app.js?v=ultimate-catalog-20.2-cache"></script>
 <script src="js/install.js?v=universal-20261102-1"></script>
