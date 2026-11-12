@@ -116,12 +116,17 @@ def _chromium_network(host: str, public_addresses):
                 )
                 context.set_default_timeout(6000)
 
+                request_budget = {"used": 0}
                 def allow(route):
                     req = route.request
                     dest = urlsplit(req.url)
-                    if (dest.scheme != "https" or dest.hostname != host
+                    request_budget["used"] += 1
+                    if (request_budget["used"] > 55 or
+                            dest.scheme != "https" or dest.hostname != host
                             or dest.port not in (None, 443)
-                            or req.method not in ("GET", "HEAD")):
+                            or req.method not in ("GET", "HEAD")
+                            or req.resource_type in ("image", "media", "font")
+                            or re.search(r"(?i)(?:^|/)(?:logout|delete|destroy|reset|remove|reboot)(?:/|$)", dest.path)):
                         route.abort()
                         return
                     try:
