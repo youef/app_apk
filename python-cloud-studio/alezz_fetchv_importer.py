@@ -914,6 +914,9 @@ def playback_variants(entry, existing=None, *, primary=None) -> list[dict]:
         if url in seen: continue
         try: public_url(url)
         except ValueError: continue
+        from media_resolver import normalized_source_url
+        url = normalized_source_url(url)
+        if url in seen: continue
         seen.add(url)
         if source.get('error') and not source.get('verified') and not source.get('reachable'): continue
         rows.append({k: source[k] for k in ('url', 'label', 'kind', 'page_url') if k in source})
