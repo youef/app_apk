@@ -57,8 +57,10 @@ assert(player.includes('frame.setAttribute("sandbox", "allow-scripts allow-same-
   "iframe must restrict popups/top navigation");
 assert(player.includes("if (embedFrame) { embedFrame.remove(); embedFrame = null; }"),
   "closing player must tear down embedded iframe");
-assert(player.includes('sourceKind(url)==="embed"') && player.includes("playEmbed(url)"),
-  "embed must use separate playback flow, not native HTML5 video");
+assert(player.includes('if(directFormat!=="mp4"') &&
+  player.includes('function isPlayableUrl(url)') &&
+  !player.includes('window.open('),
+  "videos must play only from direct native media inside the site");
 assert(index.includes('id="playerEmbedExternal"'), "embedded player needs external-open fallback");
 assert(css.includes(".player.is-embed .alezz-embed-frame"), "embedded player should fill viewing area");
 assert(admin.includes("return 'embed'"), "movie editor must accept approved embed URLs");
@@ -68,9 +70,11 @@ assert(android.includes("class EmbedPlayerActivity") && android.includes("setJav
 assert(android.includes("MemberAuth.hasSession") && android.includes("MemberAuth.isExpiredLocally"),
   "expired members must not open Android embeds");
 assert(tv.includes("PlaybackSources.collect(") && legacy.includes("PlaybackSources.collect(") &&
-  tv.includes("new Intent(this,EmbedPlayerActivity.class)") &&
-  legacy.includes("new Intent(this,EmbedPlayerActivity.class)"),
-  "Android native catalogues must route embeds separately");
+  tv.includes("UnavailableVideoActivity.show(this") &&
+  legacy.includes("UnavailableVideoActivity.show(this") &&
+  !tv.includes("new Intent(this,EmbedPlayerActivity.class)") &&
+  !legacy.includes("new Intent(this,EmbedPlayerActivity.class)"),
+  "Android catalogues must use native videos or the first-party unavailable screen");
 assert(manifest.includes('android:name="sa.aseel.tv.EmbedPlayerActivity"'),
   "Android Embed player activity missing from manifest");
-console.log("PASS: approved HTTPS embeds, URL policy, in-player fallback and Android integration");
+console.log("PASS: OK.ru remains catalogued, but runtime playback is direct-only with a native unavailable fallback");
