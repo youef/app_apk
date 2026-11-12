@@ -1,4 +1,4 @@
-"""Al Ezz Security Center: bounded, read-only checks of verified public websites.
+"""Al Ezz Security Center: bounded, read-only checks of public websites by admins.
 
 No exploits, credential stuffing, brute force, port scans, form submission,
 redirect following, file downloading, or private-network requests.
@@ -36,7 +36,6 @@ BASE = Path(__file__).resolve().parent
 ROOT = Path(os.getenv("ALEZZ_DATA_DIR", str(BASE))).resolve()
 ROOT.mkdir(parents=True, exist_ok=True)
 DB = ROOT / "security_center.sqlite3"
-VERIFY_PATH = "/.well-known/alezz-security-verification.txt"
 AGENT = "AlEzzSecurityCenter/1.0 (authorized read-only website audit)"
 POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="alezz-security")
 RUNNING: dict[str, dict] = {}
@@ -179,7 +178,7 @@ def record(severity, title, detail, fix, evidence=""):
 
 
 def audit(host):
-    """15 or fewer bounded GET requests, all HTTPS, same verified hostname."""
+    """Bounded GET requests, HTTPS only; no form submissions."""
     public_addresses(host)
     results = []
     meta = {"host": host, "url": "https://" + host, "started_at": iso(),
@@ -202,7 +201,7 @@ def audit(host):
     if 300 <= status < 400:
         add("medium", "تحويل من الصفحة الرئيسية",
             "عاد الموقع بتحويل HTTP ولم يُتبع التحويل إلى نطاق آخر.",
-            "أضف النطاق النهائي نفسه للمركز وأثبت ملكيته.",
+            "أضف النطاق النهائي إلى المركز لتفادي التحويل.",
             "HTTP " + str(status))
     elif status >= 400:
         add("medium", "الصفحة الرئيسية تعيد خطأ HTTP",
@@ -361,11 +360,6 @@ def finish(meta, findings):
             ]}
 
 
-def verify(host, token):
-    code, _, data = safe_get(host, VERIFY_PATH, max_bytes=512)
-    return code == 200 and data.decode("utf-8", "replace").strip() == token
-
-
 def require_admin(request, portal, write=False):
     from private_film_import import owner
     uid = owner(request, portal)
@@ -438,16 +432,7 @@ def run_site(site_id, uid, background=False):
     try:
         with database() as db:
             site = target(db, uid, site_id)
-            if not site["verified_at"]:
-                raise ValueError("أثبت ملكية النطاق أولًا.")
-            host, token = site["host"], site["token"]
-        if not verify(host, token):
-            _cloud("PATCH", "aseel_security_sites",
-                   params={"id":"eq." + site_id},
-                   payload={"verified_at":None})
-            with database() as db:
-                db.execute("UPDATE sites SET verified_at=NULL WHERE id=?", (site_id,))
-            raise ValueError("تم إيقاف الفحص لأن ملف إثبات الملكية غير موجود أو تغير.")
+            host = site["host"]
         report = audit(host)
         report_id = secrets.token_hex(12)
         with database() as db:
@@ -487,8 +472,7 @@ def scheduler():
         try:
             now = time.time()
             with database() as db:
-                rows = db.execute("""SELECT id,uid FROM sites WHERE verified_at IS NOT NULL
-                   AND interval_hours>0 AND next_run>0 AND next_run<=? LIMIT 4""", (now,)).fetchall()
+                rows = db.execute("""SELECT id,uid FROM sites WHERE interval_hours>0 AND next_run>0 AND next_run<=? LIMIT 4""", (now,)).fetchall()
             for site in rows:
                 start_run(site["id"], site["uid"])
         except Exception:
@@ -529,13 +513,13 @@ def register(portal):
         require_admin(request, portal)
         cookie = request.cookies.get("alezz_member", "")
         data = portal.admin_sessions.get(cookie)
-        return {"csrf": data[0][3], "verification_path": VERIFY_PATH}
+        return {"csrf": data[0][3], "mode": "admin-passive-only"}
 
     @router.get("/api/security/sites")
     def sites(request: Request):
         uid = require_admin(request, portal)
         with database() as db:
-            rows = db.execute("""SELECT id,host,token,created_at,verified_at,interval_hours,last_run
+            rows = db.execute("""SELECT id,host,created_at,interval_hours,last_run
                                  FROM sites WHERE uid=? ORDER BY created_at DESC LIMIT 20""",
                               (uid,)).fetchall()
             output = []
@@ -568,40 +552,18 @@ def register(portal):
             if count >= 12:
                 raise HTTPException(429, "الحد الأقصى 12 نطاقًا لكل مسؤول.")
             site_id = secrets.token_hex(12)
-            token = "alezz-verify-" + secrets.token_urlsafe(26)
             _cloud("POST", "aseel_security_sites", payload={
                 "id":site_id,"owner_uid":uid,"host":host,
-                "verification_token":token,"created_at":iso()})
+                "verification_token":"not-required","created_at":iso()})
             db.execute("INSERT INTO sites(id,uid,host,token,created_at) VALUES(?,?,?,?,?)",
-                       (site_id, uid, host, token, iso()))
-        return {"id": site_id, "host": host, "token": token,
-                "proof_url": "https://" + host + VERIFY_PATH}
-
-    @router.post("/api/security/verify")
-    def verify_site(request: Request, data: TargetId):
-        uid = require_admin(request, portal, write=True)
-        with database() as db:
-            site = target(db, uid, data.site_id)
-            host, token = site["host"], site["token"]
-        try:
-            ok = verify(host, token)
-        except (ValueError, OSError, requests.RequestException):
-            ok = False
-        if not ok:
-            raise HTTPException(409, "فشل التحقق؛ ارفع الملف النصي في المسار المحدد وتأكد من HTTPS.")
-        _cloud("PATCH", "aseel_security_sites",
-               params={"id":"eq."+data.site_id},payload={"verified_at":iso()})
-        with database() as db:
-            db.execute("UPDATE sites SET verified_at=? WHERE id=?", (iso(), data.site_id))
-        return {"ok": True}
+                       (site_id, uid, host, "not-required", iso()))
+        return {"id":site_id,"host":host,"ready":True}
 
     @router.post("/api/security/scan")
     def scan(request: Request, data: TargetId):
         uid = require_admin(request, portal, write=True)
         with database() as db:
             site = target(db, uid, data.site_id)
-            if not site["verified_at"]:
-                raise HTTPException(403, "يجب إثبات الملكية أولًا.")
             if site["last_run"]:
                 try:
                     last_ts = datetime.fromisoformat(site["last_run"]).timestamp()
@@ -629,8 +591,6 @@ def register(portal):
             raise HTTPException(400, "المتاح: إيقاف، يوميًا، أسبوعيًا.")
         with database() as db:
             site = target(db, uid, data.site_id)
-            if data.interval_hours and not site["verified_at"]:
-                raise HTTPException(403, "أثبت الملكية أولًا.")
             next_run = time.time() + data.interval_hours * 3600 if data.interval_hours else 0
             _cloud("PATCH", "aseel_security_sites",
                    params={"id":"eq."+data.site_id},
