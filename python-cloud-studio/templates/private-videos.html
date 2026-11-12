@@ -1,1 +1,80 @@
-<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>استيراد فيديو خاص | العز TV</title><style>body{background:#0c0d12;color:#f4f4f5;font:16px system-ui;margin:0}main{max-width:760px;margin:40px auto;padding:24px}h1{color:#f43f5e}p{line-height:1.9;color:#aaa}label{display:block;margin:18px 0 6px}input{box-sizing:border-box;width:100%;background:#1a1d27;color:white;border:1px solid #3c4151;border-radius:12px;padding:14px;font-size:15px}button,a.btn{background:#bd1233;color:white;border:0;border-radius:12px;padding:14px 20px;cursor:pointer;text-decoration:none}button:disabled{opacity:.6}pre{background:#181c27;padding:18px;border-radius:12px;white-space:pre-wrap;word-break:break-all}a{color:#fb7185}</style></head><body><main><p><a href="/studio/">العودة إلى الاستوديو</a></p><h1>استيراد فيديو خاص</h1><p>تنزيل محتوى HLS المصرّح به، وفحص مدته، ثم رفعه إلى تخزين Supabase الخاص. رابط التشغيل متاح فقط لحساب عميل يمتلك تصريح الوصول. قد تمنع حدود مساحة التخزين رفع ملفات الفيديو الكبيرة.</p><form id="f"><label>رابط M3U8</label><input id="url" required type="url" value="https://hglamioz.com/stream/xH-homnpYwMwSCPtcv2N7w/kjhhiuahiuhgihdf/1794562257/69496958/master.m3u8"><label>عنوان الفيديو</label><input id="title" required minlength="2" placeholder="اسم الفيلم أو الحلقة"><label>المدة المطلوبة بالدقائق</label><input id="minutes" type="number" min="1" max="600" value="25" required><label>معرّف حساب العميل UUID (اختياري؛ بدون تصريح لن يعمل لأي عميل)</label><input id="uid" placeholder="UUID"><p><button id="send">تنزيل وفحص ورفع الفيديو</button></p></form><pre id="status">لم يبدأ الاستيراد.</pre></main><script>const f=document.querySelector('#f'),o=document.querySelector('#status'),b=document.querySelector('#send');f.addEventListener('submit',async e=>{e.preventDefault();b.disabled=true;try{const data={source_url:document.querySelector('#url').value,title:document.querySelector('#title').value,min_minutes:Number(document.querySelector('#minutes').value),grant_user_id:document.querySelector('#uid').value||null};const r=await fetch('/api/private-video/import',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const x=await r.json();if(!r.ok)throw Error(JSON.stringify(x));o.textContent=JSON.stringify(x,null,2);if(x.job_id){const t=setInterval(async()=>{try{const r=await fetch('/api/private-video/jobs/'+encodeURIComponent(x.job_id),{credentials:'same-origin'});const s=await r.json();o.textContent=JSON.stringify(s,null,2);if(['ready','failed'].includes(s.status)){clearInterval(t);b.disabled=false}}catch(err){clearInterval(t);o.textContent=String(err);b.disabled=false}},5000)}}catch(err){o.textContent=String(err);b.disabled=false}});</script></body></html>
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>استيراد الأفلام الخاصة | العز TV</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+*{box-sizing:border-box}body{background:radial-gradient(ellipse at 15% 0%,#44101a 0%,#101015 43%,#090a0e 100%);color:#f8fafc;margin:0;min-height:100vh}
+main{max-width:920px;margin:auto;padding:clamp(18px,4vw,42px)}
+header{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:30px}
+.brand{font-weight:850;font-size:23px;letter-spacing:-.6px}.brand span{color:#fb4d63}
+a{color:#ff8fa0;text-decoration:none}.muted{color:#b0b0bc;line-height:1.85}
+h1{font-size:clamp(24px,4vw,35px);margin:6px 0}h2{font-size:19px;margin:0 0 18px}
+.panel{background:#15151de8;border:1px solid #343441;border-radius:22px;padding:clamp(18px,3vw,28px);margin:20px 0;box-shadow:0 12px 40px #0004}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+label{display:block;margin:0 0 7px;color:#e4e4eb;font-size:13px;font-weight:700}
+input,textarea{display:block;width:100%;border:1px solid #454551;border-radius:12px;color:#fff;background:#24242e;padding:13px 14px;font:inherit;outline:none}
+input:focus,textarea:focus{border-color:#f65c74;box-shadow:0 0 0 3px #f65c7430}
+textarea{min-height:90px;resize:vertical}
+.full{grid-column:1/-1}
+button{background:linear-gradient(135deg,#ef334d,#af0a2d);border:none;border-radius:12px;color:white;padding:14px 24px;font-weight:800;font:inherit;cursor:pointer}
+button:disabled{opacity:.55;cursor:progress}
+.tag{border:1px solid #59404b;color:#ffb3bf;border-radius:30px;padding:6px 12px;font-size:12px}
+.status{padding:17px;border-radius:14px;background:#0b0e17;color:#d0d3db;border:1px solid #323544;white-space:pre-wrap;word-break:break-word;line-height:1.8;min-height:66px}
+.bar{height:11px;border-radius:12px;background:#343441;overflow:hidden;margin:14px 0}.bar>i{display:block;width:0;height:100%;background:linear-gradient(90deg,#ec2949,#fc8192);transition:width .3s}
+.result{display:none}.result a{display:inline-block;margin:8px 0;padding:12px 18px;border:1px solid #ee4362;border-radius:12px}
+.note{font-size:13px;color:#c4aebb;line-height:1.7}
+@media(max-width:650px){.grid{grid-template-columns:1fr}header{align-items:flex-start}.panel{border-radius:16px}}
+</style></head><body><main>
+<header><div class="brand">العز <span>TV</span> <span class="tag">استوديو خاص</span></div><a href="/studio/">العودة للإدارة</a></header>
+<h1>تحميل فيلم إلى مكتبتي الخاصة</h1>
+<p class="muted">ألصق رابط الفيديو المباشر MP4 أو M3U8 المصرّح باستضافته. الأداة تنزّل الفيلم كاملًا، وتتحقق من المدة، وترفعه إلى تخزين خاص، ثم تسجله في الأفلام كمسودة غير منشورة.</p>
+<section class="panel">
+<h2>بيانات الفيلم</h2>
+<form id="film-form">
+<div class="grid">
+<div class="full"><label for="source">رابط الفيلم المباشر HTTPS</label><input id="source" type="url" placeholder="https://example.com/movie/master.m3u8" required maxlength="2048" autocomplete="off"></div>
+<div><label for="title">اسم الفيلم</label><input id="title" placeholder="اسم الفيلم بالعربية" required minlength="2" maxlength="180"></div>
+<div><label for="duration">أقل مدة مقبولة بالدقائق</label><input id="duration" type="number" min="1" max="600" value="25" required></div>
+<div class="full"><label for="description">الوصف (اختياري)</label><textarea id="description" maxlength="1500" placeholder="ملخص الفيلم"></textarea></div>
+<div class="full"><label for="poster">رابط البوستر (اختياري)</label><input id="poster" type="url" maxlength="2048" placeholder="https://.../poster.jpg"></div>
+<div><label for="holder">صاحب الحقوق (اختياري)</label><input id="holder" maxlength="180"></div>
+<div><label for="license">مرجع التصريح (اختياري)</label><input id="license" maxlength="300"></div>
+</div>
+<p class="note">يجب أن يكون نطاق المصدر ضمن قائمة الخوادم المعتمدة في إعدادات Render. لا تعمل روابط صفحات المشاهدة أو الروابط التي تتطلب تجاوز حماية المصدر. الفيلم يبقى مسودة خاصة ولا يظهر لجميع العملاء.</p>
+<button type="submit" id="start">تنزيل الفيلم وحفظه في الداتا</button>
+</form></section>
+<section class="panel"><h2>حالة العملية</h2><div id="state" class="status" aria-live="polite">لا توجد عملية تنزيل حالية.</div><div class="bar"><i id="progress"></i></div>
+<div id="result" class="result"><p>تم إنشاء الفيلم الخاص بنجاح.</p><a id="play" href="#" target="_blank" rel="noopener noreferrer">فتح رابط الفيلم الخاص</a><div class="note">الرابط محمي بجلسة حسابك؛ لن يعمل في حساب آخر غير مصرح له. يمكن نسخ رابط المسار الخاص وتضمينه في تطبيقك بعد إضافة دعم جلسة الدخول.</div><p class="note" id="movieid"></p></div></section>
+</main><script>
+const el=id=>document.getElementById(id),form=el('film-form'),start=el('start'),status=el('state'),progress=el('progress'),result=el('result');
+let poller=null;
+const names={queued:'في الانتظار',downloading:'يجري تنزيل الفيلم',uploading:'يرفع الفيديو إلى التخزين الخاص',ready:'اكتمل الاستيراد',failed:'فشلت العملية'};
+form.addEventListener('submit',async event=>{
+ event.preventDefault();start.disabled=true;result.style.display='none';progress.style.width='0%';
+ const payload={source_url:el('source').value.trim(),title:el('title').value.trim(),description:el('description').value.trim(),poster_url:el('poster').value.trim(),min_minutes:Number(el('duration').value),rights_holder:el('holder').value.trim(),license_reference:el('license').value.trim()};
+ try{
+  const r=await fetch('/api/private-film/import',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify(payload)});
+  const response=await r.json();
+  if(!r.ok)throw Error(JSON.stringify(response));
+  status.textContent='تم تسجيل مهمة التنزيل.\nرقم العملية: '+response.job_id;
+  if(poller)clearInterval(poller);
+  const refresh=async()=>{
+   try{
+    const reply=await fetch(response.poll,{credentials:'same-origin'});
+    const j=await reply.json();
+    if(!reply.ok)throw Error(JSON.stringify(j));
+    const lines=[names[j.status]||j.status];
+    if(j.duration_seconds)lines.push('مدة الفيلم: '+Math.round(j.duration_seconds/60)+' دقيقة');
+    if(j.bytes)lines.push('حجم الملف: '+(j.bytes/1024/1024).toFixed(1)+' ميجابايت');
+    if(j.upload_percent!==undefined)lines.push('نسبة الرفع: '+j.upload_percent+'%');
+    if(j.error)lines.push('السبب: '+j.error);
+    status.textContent=lines.join('\n');
+    progress.style.width=(j.status==='ready'?100:(j.upload_percent||0))+'%';
+    if(j.status==='ready'){result.style.display='block';el('play').href=j.playback_path;el('movieid').textContent='معرّف الفيلم: '+j.movie_id;clearInterval(poller);start.disabled=false;}
+    if(j.status==='failed'){clearInterval(poller);start.disabled=false;}
+   }catch(e){status.textContent='تعذر تحديث حالة العملية: '+e.message;clearInterval(poller);start.disabled=false;}
+  };
+  await refresh();poller=setInterval(refresh,3500);
+ }catch(e){status.textContent='تعذر بدء الاستيراد: '+e.message;start.disabled=false;}
+});
+</script></body></html>
