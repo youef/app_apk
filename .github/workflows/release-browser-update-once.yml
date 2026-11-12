@@ -1,0 +1,29 @@
+name: Al Ezz TV — One-time browser-update-mode signed release
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-browser-update-once.yml'
+permissions:
+  contents: read
+  actions: write
+jobs:
+  request-signed-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify no forced updates and browser update modes
+        run: |
+          node tests/tv-manual-update-policy-smoke.cjs
+          node tests/tv-dynamic-update-smoke.cjs
+          node tests/tv-browser-update-modes-smoke.cjs
+      - name: Request signed stable APK build once
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run android-stable-release.yml --repo "$GITHUB_REPOSITORY" --ref main \
+            -f version_name=21.0.55 \
+            -f release_notes='خيارات التحديث: إيقاف أو يدوي أو فحص اختياري. تنزيل APK الرسمي عبر المتصفح بدل مدير التنزيلات العالق، وإلغاء التحديث الإجباري والتنبيهات المتكررة.'
+          echo "Requested one signed APK release only. Future builds remain manual."
