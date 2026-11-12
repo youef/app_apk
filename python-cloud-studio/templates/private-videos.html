@@ -91,7 +91,7 @@ async function loadLibrary(){
 }
 el('refresh').addEventListener('click',loadLibrary);
 loadLibrary();
-const names={queued:'في الانتظار',downloading:'يجري تنزيل الفيلم',uploading:'يرفع الفيديو إلى التخزين الخاص',ready:'اكتمل الاستيراد',failed:'فشلت العملية'};
+const names={queued:'في الانتظار',checking_source:'يجري التحقق من صلاحية رابط المصدر على Render',downloading:'يجري تنزيل الفيلم',uploading:'يرفع الفيديو إلى التخزين الخاص',ready:'اكتمل الاستيراد',failed:'فشلت العملية'};
 form.addEventListener('submit',async event=>{
  event.preventDefault();start.disabled=true;result.style.display='none';progress.style.width='0%';
  const payload={source_url:el('source').value.trim(),title:el('title').value.trim(),description:el('description').value.trim(),poster_url:el('poster').value.trim(),min_minutes:Number(el('duration').value),rights_holder:el('holder').value.trim(),license_reference:el('license').value.trim()};
