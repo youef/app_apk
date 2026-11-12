@@ -407,6 +407,10 @@ async function discover(){
   renderMedia();renderEpisodes();renderEmbeds();
   $("discovery-status").textContent=(data.title||"الصفحة")+" | HTTP "+(data.http_status??"غير معروف")+" | "+(data.notes||[]).join(" • ");
   if(data.status!=="parsed")toast("تعذر تحليل الصفحة بالكامل؛ راجع الحالة الموضحة");
+  if(data.status==="parsed"&&current.media.length===0&&current.episodes.length>0){
+   $("discovery-status").textContent+=" • لم يظهر مصدر في HTML، انتقل تلقائيًا للفحص المتعدد للمسلسل وحلقاته.";
+   await deepScan();
+  }
  }catch(e){$("discovery-status").textContent="فشل الفحص: "+e.message;toast("تعذر فحص صفحة الموقع")}
  finally{setBusy("discover-page",false)}
 }
