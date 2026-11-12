@@ -41,7 +41,14 @@
     }catch(_){return '';}
   }
   function normalizeMediaInput(value){return okPlayerUrl(value)||String(value||'').trim();}
-  function mediaBadge(ep){if(ep.verified)return ['✓ فيديو مباشر مُتحقق','ok'];if((ep.sources||[]).some(s=>s.kind==='embed'&&s.reachable&&s.url===ep.media_url))return ['◷ صفحة Embed متاحة (التشغيل غير مثبت)','wait'];if(ep.error)return ['✕ غير متحقق','fail'];return [ep.media_url?'◷ يحتاج فحصًا':'— بلا رابط','wait'];}
+  function mediaBadge(ep){
+    if(ep.verified)return ['✓ فيديو مباشر مُتحقق','ok'];
+    if(okPlayerUrl(ep.media_url))return ['◷ OK.ru — تحقق بالمعاينة على الجهاز','wait'];
+    if((ep.sources||[]).some(s=>s.kind==='embed'&&s.reachable&&s.url===ep.media_url))
+      return ['◷ صفحة Embed متاحة (التشغيل غير مثبت)','wait'];
+    if(ep.error)return ['✕ غير متحقق','fail'];
+    return [ep.media_url?'◷ يحتاج فحصًا':'— بلا رابط','wait'];
+  }
   function updateStatus(payload){
     app.catalogue=payload.catalogue || null;app.authenticated=!!payload.authenticated;
     app.demo=!!payload.demo;
@@ -103,7 +110,9 @@
     const list=make('ol');
     for(const source of sources){
       const row=make('li');
-      const label=source.verified?'صالح للتشغيل':source.reachable?'صفحة مشغّل متاحة':'لم يجتز الفحص';
+      const label=source.verified?'صالح للتشغيل':
+        okPlayerUrl(source.url)?'OK.ru: نتيجة فحص الخادم غير حاسمة — جرّب المعاينة':
+        source.reachable?'صفحة مشغّل متاحة':'لم يجتز الفحص';
       const copy=make('button','small-outline','نسخ الرابط');copy.type='button';
       copy.onclick=async()=>{
         try{await navigator.clipboard.writeText(source.url);toast('نُسخ الرابط.','success');}
@@ -210,6 +219,7 @@
     if(!url){toast('رابط معاينة OK.ru غير صالح.','error');return;}
     // Explicit user gesture only. Never test playback by downloading signed media.
     $('okPreviewFrame').src=url;
+    $('okPreviewOpen').href=url;
     openModal('okPreviewModal');
     $('okPreviewClose').focus();
   }
