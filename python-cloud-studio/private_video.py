@@ -60,6 +60,17 @@ class ImportInput(BaseModel):
 def set_job(job_id, **kwargs):
     with LOCK:
         JOBS[job_id]={**JOBS.get(job_id,{}),**kwargs}
+        snapshot=dict(JOBS[job_id])
+    # Private film jobs are periodically checkpointed to Supabase so an admin
+    # can see an interrupted/finished task after a container redeployment.
+    uid=snapshot.get("owner_uid")
+    if uid:
+        try:
+            from studio_jobs import save as save_studio_job
+            save_studio_job(job_id,uid,"film_import",snapshot,
+                            force=snapshot.get("status") in ("ready","failed"))
+        except Exception:
+            pass
 
 def worker(job_id, payload):
     try:
