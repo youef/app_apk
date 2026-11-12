@@ -105,7 +105,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{
 .good-text{color:var(--good)}.warn-text{color:var(--warn)}.bad-text{color:var(--accent)}
 .progress-track{background:var(--surface-2);border:1px solid var(--stroke);height:11px;border-radius:100px;overflow:hidden;margin:12px 0 6px}
 .progress-track>div{width:0%;height:100%;background:linear-gradient(90deg,#c72345,#ff6c87);transition:width .3s}
-.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.steps{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
 .step{padding:10px 5px;text-align:center;border-radius:9px;background:var(--surface-2);border:1px solid var(--stroke);font-size:10px;color:var(--muted)}
 .step.current{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
 .step.done{border-color:#4fbd9860;color:var(--good)}
@@ -178,8 +178,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{
           <div class="result-tab" id="panel-network" role="tabpanel"><div id="network-results" class="results"><div class="empty">اضغط «فحص Chromium المتقدم» لتحليل الشبكة.</div></div></div>
         </section>
         <section id="validate" class="panel" aria-labelledby="validate-title">
-          <div class="panel-head"><div class="panel-num">02</div><div><h2 id="validate-title">اختبار رابط الفيديو المباشر</h2><p>تحقق من الاستجابة، بنية البث، المسارات والمدة</p></div></div>
-          <div class="field"><label class="small-label" for="source">رابط MP4 أو M3U8</label><input id="source" type="url" dir="ltr" maxlength="2048" placeholder="https://cdn.example.com/video/master.m3u8" autocomplete="off"></div>
+          <div class="panel-head"><div class="panel-num">02</div><div><h2 id="validate-title">اختبار رابط الفيديو المباشر</h2><p>تحقق من استجابة المصدر، بنية البث، المسارات والمدة</p></div></div>
+          <div class="field"><label class="small-label" for="source">رابط MP4 أو M3U8 أو WebM أو MOV</label><input id="source" type="url" dir="ltr" maxlength="2048" placeholder="https://cdn.example.com/video/master.m3u8" autocomplete="off"></div>
           <div class="actions"><button type="button" class="btn primary" id="check-source">▶ فحص المصدر عبر Chromium وFFprobe</button><button type="button" class="btn secondary" id="copy-source">نسخ الرابط</button></div>
           <div id="probe-result" class="notice" style="margin-top:14px" role="status">اختر رابطًا من نتائج الاكتشاف أو ألصق مصدرًا مباشرًا للاختبار.</div>
         </section>
@@ -219,8 +219,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{
           <p class="hint" id="health-detail">يتم قراءة القدرات من الخدمة، وليس من بيانات مخزّنة في المتصفح.</p>
         </section>
         <section class="panel" aria-labelledby="job-title">
-          <div class="panel-head"><div class="panel-num">⇧</div><div><h2 id="job-title">متابعة عملية الاستيراد</h2><p>فحص المصدر، التنزيل، رفع الملف، الحفظ</p></div></div>
-          <div class="steps" id="stages"><div class="step" data-stage="checking_source">فحص المصدر</div><div class="step" data-stage="downloading">التنزيل</div><div class="step" data-stage="uploading">الرفع</div><div class="step" data-stage="ready">الحفظ</div></div>
+          <div class="panel-head"><div class="panel-num">⇧</div><div><h2 id="job-title">متابعة عملية الاستيراد</h2><p>فحص المصدر، التنزيل، التحويل عند الحاجة، الرفع والحفظ</p></div></div>
+          <div class="steps" id="stages"><div class="step" data-stage="checking_source">فحص المصدر</div><div class="step" data-stage="downloading">التنزيل</div><div class="step" data-stage="transcoding">التحويل</div><div class="step" data-stage="uploading">الرفع</div><div class="step" data-stage="ready">الحفظ</div></div>
           <div class="progress-track"><div id="progress"></div></div>
           <div style="display:flex;justify-content:space-between;gap:10px"><strong id="job-status" style="font-size:12px">لا توجد عملية حالية</strong><span id="job-percent" style="font-size:12px;color:var(--muted)">—</span></div>
           <div id="job-log" class="log" role="status">بعد بدء الاستيراد ستظهر مراحل التنفيذ هنا.</div>
@@ -247,8 +247,8 @@ const $=id=>document.getElementById(id);
 const safeText=(v,n=240)=>String(v??"").slice(0,n);
 const fmtBytes=n=>{const v=Number(n)||0;return v>1024*1024*1024?(v/1073741824).toFixed(2)+" GB":(v/1048576).toFixed(1)+" MB"};
 const current={media:[],episodes:[],embeds:[],network:[],library:[],timer:null,job:null};
-const stageOrder=["checking_source","downloading","uploading","ready"];
-const stageLabels={queued:"في قائمة الانتظار",checking_source:"فحص رابط المصدر",downloading:"جارٍ تنزيل الفيديو",uploading:"جارٍ رفع الملف إلى التخزين الخاص",ready:"اكتمل الحفظ",failed:"فشلت العملية"};
+const stageOrder=["checking_source","downloading","transcoding","uploading","ready"];
+const stageLabels={queued:"في قائمة الانتظار",checking_source:"فحص رابط المصدر",downloading:"جارٍ تنزيل الفيديو",transcoding:"تحويل الملف إلى MP4 باستخدام FFmpeg",uploading:"جارٍ رفع الملف إلى التخزين الخاص",ready:"اكتمل الحفظ",failed:"فشلت العملية"};
 const toast=(message)=>{const e=$("toast");e.textContent=message;e.classList.add("show");clearTimeout(toast.timer);toast.timer=setTimeout(()=>e.classList.remove("show"),4100)};
 const setBusy=(id,v)=>{const b=$(id);b.disabled=v;b.setAttribute("aria-busy",String(v))};
 const errorMessage=raw=>typeof raw==="string"?raw:(raw&&raw.detail?typeof raw.detail==="string"?raw.detail:JSON.stringify(raw.detail):JSON.stringify(raw||{}));
@@ -379,6 +379,7 @@ function jobPresentation(j){
  if(j.error)rows.push("سبب الفشل: "+safeText(j.error,450));
  if(j.status==="downloading")rows.push("النقل جارٍ عبر Python وFFmpeg؛ لا تتوفر نسبة دقيقة للتنزيل في هذه النسخة.");
  if(j.status==="uploading")rows.push("يُنقل الملف على دفعات إلى Supabase.");
+ if(j.status==="transcoding")rows.push("التنسيق الأصلي غير ملائم للنسخ إلى MP4؛ يجري التحويل إلى H.264/AAC، وقد يستغرق وقتًا أطول.");
  $("job-log").textContent=rows.join("\n");
  $("play").classList.toggle("hide",j.status!=="ready");
  if(j.status==="ready"&&j.playback_path)$("play").href=j.playback_path;
@@ -398,7 +399,7 @@ async function importFilm(event){
  event.preventDefault();
  const title=$("title").value.trim(),source_url=$("source").value.trim(),min_minutes=Number($("duration").value);
  if(title.length<2)return toast("اكتب اسم الفيلم قبل البدء");
- if(!cleanLink(source_url)||!/\.(mp4|m3u8)(\?|$)/i.test(source_url))return toast("اختر رابط MP4 أو M3U8 مباشرًا");
+ if(!cleanLink(source_url)||!/\.(mp4|m3u8|webm|m4v|mov|mkv)(\?|$)/i.test(source_url))return toast("اختر رابط فيديو مباشرًا بصيغة مدعومة");
  if(!(min_minutes>=1&&min_minutes<=600))return toast("حدد مدة صحيحة بين 1 و600 دقيقة");
  if(!$("rights").checked)return toast("يجب تأكيد إذن تنزيل وإعادة استضافة هذا الفيديو");
  const payload={source_url,title,min_minutes,description:$("description").value.trim(),poster_url:$("poster").value.trim(),rights_holder:$("holder").value.trim(),license_reference:$("license").value.trim()};
@@ -410,7 +411,7 @@ async function importFilm(event){
   $("job-log").textContent="تم قبول المهمة. يجري التحقق من المصدر...";
   $("job-state-stat").textContent="قيد التنفيذ";
   await pollJob(j.job_id);
-  if(current.job&&!["ready","failed"].includes($("job-status").textContent.toLowerCase()))current.timer=setInterval(()=>pollJob(j.job_id),3200);
+  if(current.job&&$("start").disabled)current.timer=setInterval(()=>pollJob(j.job_id),3200);
   $("job-title").scrollIntoView({behavior:"smooth",block:"center"});
  }catch(e){$("job-log").textContent="تعذر بدء الاستيراد: "+e.message;$("job-status").textContent="لم تبدأ";$("start").disabled=false;toast("لم يتم بدء الاستيراد")}
 }
@@ -450,7 +451,6 @@ async function refreshHealth(){
 $("discover-page").addEventListener("click",discover);
 $("browser-diagnose").addEventListener("click",browserDiagnose);
 $("check-source").addEventListener("click",checkSource);
-$("start").addEventListener("click",()=>{});
 $("film-form").addEventListener("submit",importFilm);
 $("refresh").addEventListener("click",loadLibrary);
 $("search-library").addEventListener("input",()=>renderLibrary(current.library));
