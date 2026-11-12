@@ -4,7 +4,8 @@
   const $ = id => document.getElementById(id);
   if (!$('smart-sync')) return;
   const state = {offset:0, limit:50, csrf:'', selected:new Map(), target:null,
-    busy:false, refreshing:false, signature:'', searchTimer:null, previousFocus:null};
+    busy:false, refreshing:false, signature:'', searchTimer:null, previousFocus:null,
+    authRequired:false, lastRefreshAt:0, activeChecks:0};
   const labels = {healthy:'سليم',broken:'معطوب',suspect:'يحتاج مراجعة',unchecked:'لم يُفحص',
     missing_source:'يحتاج مصدرًا',pending:'بانتظار الفحص',checking:'جارٍ الفحص',discovered:'تم اكتشاف الحلقات',reachable:'صفحة متاحة',
     direct:'فيديو مباشر',embed:'صفحة مشغل',page:'صفحة المصدر',source:'صفحة المصدر',original:'صفحة المصدر'};
@@ -39,9 +40,11 @@
     let result;
     try { result = await response.json(); } catch (_) { throw new Error('تعذّر الاتصال بعامل المزامنة.'); }
     if (!response.ok) {
+      if (response.status === 401) state.authRequired = true;
       if (response.status === 403) state.csrf = '';
       throw new Error(typeof result.detail === 'string' ? result.detail : 'تعذّر إكمال طلب المزامنة.');
     }
+    state.authRequired = false;
     return result;
   }
   function notice(message, error=false) {
@@ -67,6 +70,7 @@
     }
   }
   function renderStatus(data) {
+    state.activeChecks=Number(data.active_checks||0);
     const counts = data.counts || {};
     for (const [id, value] of [['autoTotal',counts.total],['autoHealthy',counts.healthy],
       ['autoBroken',(counts.broken||0)+(counts.suspect||0)],['autoMissing',counts.missing_source]]) {
@@ -160,12 +164,17 @@
   }
   async function refresh(force=false) {
     if (state.refreshing || document.hidden && !force) return;
+    if (state.authRequired && !force) return;
+    if (!force && location.hash !== '#smart-sync') return;
+    const now=Date.now();
+    if (!force && now-state.lastRefreshAt < (state.activeChecks ? 8000 : 25000)) return;
+    state.lastRefreshAt=now;
     state.refreshing = true;
     try {
       const query = new URLSearchParams({limit:state.limit,offset:state.offset,q:$('autoSearch').value.trim(),scope:$('autoScope').value});
       const results = await Promise.allSettled([api('status'),api('targets?'+query),api('events?limit=40')]);
       if (results[0].status === 'fulfilled') renderStatus(results[0].value);
-      else notice(results[0].reason.message, true);
+      else notice(state.authRequired ? 'انتهت جلسة الإدارة. سجّل الدخول من بوابة العز TV ثم أعد تحديث القسم.' : results[0].reason.message, true);
       if (results[1].status === 'fulfilled') renderTargets(results[1].value);
       if (results[2].status === 'fulfilled') renderEvents(results[2].value);
     } finally { state.refreshing = false; }
@@ -264,6 +273,8 @@
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});
   window.addEventListener('hashchange',()=>{if(location.hash==='#smart-sync')refresh(true);});
   // Let the existing studio establish its session first to avoid racing cookies.
-  setTimeout(()=>refresh(),1200);
-  setInterval(()=>{if(location.hash==='#smart-sync')refresh();},3000);
+  setTimeout(()=>{if(location.hash==='#smart-sync')refresh();},1200);
+  // Adaptive polling: 8s while checking, 25s at rest. Never retry after
+  // an auth failure until the user explicitly refreshes the dashboard.
+  setInterval(()=>{if(location.hash==='#smart-sync')refresh();},8000);
 })();
