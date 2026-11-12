@@ -648,6 +648,35 @@
    }
    const url=directStream(item.stream_url);
    if (!url || (type==="channel" && item.playback_mode!=="stream")) {announce("لا يتوفر رابط تشغيل صالح لهذا المحتوى");return;}
+   // Some third-party MP4 servers redirect to a promotional video instead of the requested episode.
+   // For the known affected host, verify the final URL before handing it to the video player.
+   // Do not bypass origin restrictions, and do not treat a CORS failure as proof of valid playback.
+   if (/^https:\/\/vid[0-9]+\.ylkqwsfghrt\.click\//i.test(url)) {
+     try {
+       const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+       const timeout = controller ? setTimeout(() => controller.abort(), 7000) : null;
+       let probe;
+       try {
+         probe = await fetch(url, {
+           method: "GET", redirect: "follow",
+           headers: { Range: "bytes=0-0" },
+           ...(controller ? {signal:controller.signal} : {})
+         });
+       } finally { if (timeout) clearTimeout(timeout); }
+       const finalUrl = new URL(probe.url);
+       const originalHost = new URL(url).hostname;
+       if (!probe.ok || finalUrl.hostname !== originalHost ||
+           /(?:alooytv\.com|archive\.org)/i.test(finalUrl.href) ||
+           !/(?:video\/|application\/octet-stream)/i.test(probe.headers.get("content-type") || "")) {
+         setPlayerError("مصدر الحلقة يحوّل إلى فيديو آخر أو لا يقدم فيديو صالحًا.");
+         announce("تم منع تشغيل فيديو بديل غير صحيح");
+         return;
+       }
+     } catch (_) {
+       announce("تعذر التحقق من مصدر الحلقة؛ لن يتم تشغيل فيديو بديل");
+       return;
+     }
+   }
    modalClose("modal");
    if (state.playback) stopPlayer();
    state.playback={item,type};
