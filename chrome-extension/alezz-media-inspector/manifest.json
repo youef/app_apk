@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Al Ezz TV - Local Page Inspector",
+  "version": "1.0.0",
+  "description": "Private, permission-based diagnostic of the active tab's media DOM, resource timing and cache counts. No cookie or token access.",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "action": {
+    "default_title": "العز TV | فحص التبويب",
+    "default_popup": "popup.html"
+  }
+}
