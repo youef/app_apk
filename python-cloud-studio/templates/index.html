@@ -20,6 +20,8 @@
   <script src="/static/autosync.js?v=studio-renewal1" defer></script>
   <link rel="stylesheet" href="/static/studio-next.css?v=2">
 <link rel="stylesheet" href="/static/studio-unified.css?v=20261108-v1">
+<link rel="stylesheet" href="/static/studio-quality.css?v=studio-v5-1">
+<script src="/static/studio-quality.js?v=studio-v5-1" defer></script>
 </head>
 <body>
   <div class="app-shell" id="app">
@@ -32,6 +34,7 @@
         <a class="nav-link" href="#episodes"><span class="nav-icon">▦</span><span>المواسم والحلقات</span></a>
         <a class="nav-link" href="#publish"><span class="nav-icon">⇧</span><span>الحفظ والنشر</span></a>
         <a class="nav-link" href="#smart-sync"><span class="nav-icon">⟳</span><span>المزامنة الذكية</span></a>
+        <a class="nav-link" href="#quality"><span class="nav-icon">◉</span><span>جودة المكتبة والإصلاح</span><span class="external">V5</span></a>
         <a class="nav-link" href="/studio/private-videos?v=20261113-2"><span class="nav-icon">▶</span><span>تحميل الأفلام واكتشاف المشغلات</span><span class="external">جديد</span></a>
         <a class="nav-link" href="/studio/sources"><span class="nav-icon">▣</span><span>مراجعة مصادر المسلسلات</span></a>
         <a class="nav-link" href="/studio/security"><span class="nav-icon">⬡</span><span>مركز أمان مواقعك</span><span class="external">جديد</span></a>
@@ -58,12 +61,64 @@
       <main class="page">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px;margin:0 0 18px;border:1px solid #66313f;border-radius:18px;background:linear-gradient(110deg,#431523,#1b1a23);color:#fff;flex-wrap:wrap" id="privateFilmPromo">
           <div><strong style="display:block;font-size:18px">أداة تحميل الأفلام واكتشاف المصادر الجديدة</strong><small style="display:block;opacity:.85;margin-top:6px">رابط صفحة موقع ← اكتشاف الفيديو والحلقات ← فحص المصدر ← استيراد خاص إلى Supabase</small></div>
-          <a href="/studio/private-videos?v=20261113-2" style="display:inline-block;background:#ce2644;color:#fff;text-decoration:none;padding:13px 20px;border-radius:12px;font-weight:700">فتح أداة الأفلام الجديدة</a>
+          <a href="/studio/private-videos?v=studio5-20261113" style="display:inline-block;background:#ce2644;color:#fff;text-decoration:none;padding:13px 20px;border-radius:12px;font-weight:700">فتح أداة الأفلام الجديدة</a>
         </div>
         <div class="studio-command-bar" aria-label="مركز التحكم السريع">
           <div class="command-copy"><strong>استوديو المحتوى</strong><small>إدارة الأفلام والمسلسلات</small></div>
           <div class="studio-command-actions"><span class="studio-edit-state" id="studioEditStatus" data-dirty="false" role="status" aria-live="polite">جاهز لإدارة المحتوى</span><button id="studioQuickSync" class="small-gold" type="button" disabled>✓ حفظ تعديلات الجلسة</button></div>
         </div>
+        <section id="quality" data-studio-page="quality" hidden aria-labelledby="qualityTitle">
+          <div id="qualityDashboard" class="quality-page">
+            <div class="quality-hero">
+              <div class="quality-kicker">AL EZZ TV • CONTENT QUALITY CENTER</div>
+              <h1 id="qualityTitle">مركز <em>جودة المكتبة</em> والتحسين</h1>
+              <p>راقب مصادر الفيديو المعطلة والمشكوك فيها، ومدد الحلقات والملصقات الناقصة، بأرقام حقيقية من Supabase. لا يغيّر هذا التقرير حالة أي محتوى دون مراجعتك.</p>
+              <div class="quality-hero-actions">
+                <button type="button" id="qualityRefresh" class="quality-btn primary">⟳ تحديث بيانات الجودة</button>
+                <a class="quality-btn" href="#smart-sync">◉ فحص وإصلاح المصادر</a>
+                <a class="quality-btn" href="/studio/private-videos?v=studio5-20261113">⇧ استيراد ملف خاص</a>
+              </div>
+              <div id="qualityStatus" class="quality-status" role="status" aria-live="polite">افتح القسم لتحديث حالة مكتبة العز TV من Supabase.</div>
+            </div>
+            <div class="quality-grid" aria-label="مؤشرات جودة مكتبة العز TV">
+              <div class="quality-metric"><span class="name">إجمالي الأفلام والمسلسلات</span><strong id="qualityWorks">—</strong><small>الأعمال المسجلة</small></div>
+              <div class="quality-metric danger"><span class="name">مصادر معطلة منشورة</span><strong id="qualityBroken">—</strong><small>Broken • تتطلب إصلاحًا</small></div>
+              <div class="quality-metric warning"><span class="name">مصادر مشكوك فيها</span><strong id="qualitySuspect">—</strong><small>Suspect • بانتظار التحقق</small></div>
+              <div class="quality-metric"><span class="name">مدد ناقصة أو غير منطقية</span><strong id="qualityMissing">—</strong><small>فيلم أو حلقة</small></div>
+            </div>
+            <div class="quality-columns">
+              <div>
+                <section class="quality-panel" aria-labelledby="quality-table-title">
+                  <h2 id="quality-table-title">توزيع المحتوى حسب النوع</h2>
+                  <p>تُعرض الحالات المسجلة في قاعدة البيانات، وليس نتيجة تشغيل الفيديو في اللحظة الحالية.</p>
+                  <div class="quality-table-wrap">
+                    <table class="quality-table">
+                      <thead><tr><th scope="col">النوع</th><th scope="col">المجموع</th><th scope="col">منشور</th><th scope="col">معطّل</th><th scope="col">مشكوك فيه</th><th scope="col">بلا ملصق</th></tr></thead>
+                      <tbody id="qualityTableBody"><tr><td colspan="6">جارٍ جلب بيانات الجودة…</td></tr></tbody>
+                    </table>
+                  </div>
+                </section>
+                <section class="quality-panel" aria-labelledby="quality-help-title">
+                  <h2 id="quality-help-title">إجراءات الإدارة</h2>
+                  <p>العمل المتعطل لا يُحذف. تُراجع مصادره، ثم يُعاد الاختبار، وتُنشر النسخة السليمة بعد التحقق.</p>
+                  <div class="quality-links">
+                    <a href="#smart-sync">فتح المزامنة الذكية</a>
+                    <a href="/admin/#movies" target="_blank" rel="noopener">تحرير الأفلام</a>
+                    <a href="/admin/series-quick.html" target="_blank" rel="noopener">تحرير الحلقات</a>
+                    <a href="/studio/private-videos?v=studio5-20261113">فحص الفيديو المباشر</a>
+                  </div>
+                  <span class="quality-note">النسخة العامة تُخفي حاليًا ملفات الأفلام والحلقات التي تحمل حالة Broken أو Suspect. إعادة الفحص من لوحة الإدارة لا تغيّر حقوق المحتوى.</span>
+                </section>
+              </div>
+              <aside class="quality-panel" aria-labelledby="quality-issues-title">
+                <h2 id="quality-issues-title">أولويات إصلاح المكتبة</h2>
+                <p>تتجدد هذه التوصيات حسب الحالات المسجلة في Supabase.</p>
+                <ol id="qualityIssueList" class="quality-issues"><li>جارٍ تحليل المشاكل…</li></ol>
+              </aside>
+            </div>
+          </div>
+        </section>
+
         <section id="import" data-studio-page="import" aria-labelledby="discoverTitle">
         <div class="heading-row"><div><div class="eyebrow"><span class="eyebrow-dot"></span> مكتبة العز TV</div><h1>اكتشف عملك <span>القادم</span></h1><p class="lead">ابحث عن فيلم أو مسلسل، وافحص روابطه قبل إضافته إلى المكتبة.</p></div><div class="heading-actions"><button class="outline-action" id="exportBatchBtn" hidden><span>↓</span> تصدير الدفعة JSON</button><button class="outline-action" id="exportBtn" disabled><span>↓</span> تصدير العمل JSON</button></div></div>
 
