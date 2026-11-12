@@ -2151,16 +2151,24 @@ public final class TVHomeActivity extends Activity {
         if("youtube".equals(kind(item))){openYouTube(item);return;}
         rememberDetailOrigin();
         content.removeAllViews();
-        heading(label(item),"channel".equals(kind(item))?("official_link".equals(value(item,"playback_mode"))?"↗ صفحة مشاهدة خارجية":"● قناة مباشرة"):"فيلم • مشاهدة مباشرة");
+        final boolean missingMovieSource="movie".equals(kind(item)) &&
+            !StreamQuality.isDirectUrl(value(item,"stream_url")) &&
+            !YouTubeLink.usable(value(item,"youtube_url"));
+        heading(label(item),"channel".equals(kind(item))?("official_link".equals(value(item,"playback_mode"))?"↗ صفحة مشاهدة خارجية":"● قناة مباشرة"):
+            missingMovieSource?"فيلم • البوستر متاح والتشغيل قريبًا":"فيلم • مشاهدة مباشرة");
         LinearLayout hero=row();content.addView(hero,space(-1,dp(240),7));
         CinemaPosterView poster=new CinemaPosterView(this);poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
         hero.addView(poster,new LinearLayout.LayoutParams(dp(190),dp(235)));
         String image=value(item,"poster_url");if(image.startsWith("https://"))PosterLoader.load(poster,image);
         LinearLayout info=column();hero.addView(info,new LinearLayout.LayoutParams(0,-1,1));
         info.addView(text(value(item,"description"),16,MUTED,false),space(-1,-2,9));
-        Button play=primaryButton("official_link".equals(value(item,"playback_mode"))?"↗ فتح صفحة المشاهدة":"▶ ابدأ المشاهدة");
+        Button play=primaryButton(missingMovieSource?"◌ قريبًا • المصدر قيد التحديث":
+            "official_link".equals(value(item,"playback_mode"))?"↗ فتح صفحة المشاهدة":"▶ ابدأ المشاهدة");
         info.addView(play,space(dp(260),dp(56),7));
-        play.setOnClickListener(new View.OnClickListener(){public void onClick(View v){play(item);}});
+        play.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            if(missingMovieSource) UnavailableVideoActivity.show(TVHomeActivity.this,"movie",label(item));
+            else play(item);
+        }});
         Button favorite=button(isFavorite(item)?"♥ إزالة من قائمتي":"♡ أضف إلى قائمتي");
         info.addView(favorite,space(dp(260),dp(50),7));
         favorite.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
@@ -2272,6 +2280,12 @@ public final class TVHomeActivity extends Activity {
         TextView subtitle=text("المواسم والحلقات  •  "+seasonNumbers.size()+" موسم  •  "+
             entries.size()+" حلقة",17,WHITE,true);
         content.addView(subtitle,space(-1,dp(40),6));
+        Button refreshEpisodes=button("↻ تحديث الحلقات من العز الآن");
+        refreshEpisodes.setContentDescription("جلب أحدث الحلقات وروابطها من قاعدة البيانات");
+        refreshEpisodes.setOnClickListener(new View.OnClickListener(){
+            public void onClick(View v){episodes(show);}
+        });
+        content.addView(refreshEpisodes,space(dp(290),dp(48),5));
         HorizontalScrollView seasonsScroll=new HorizontalScrollView(this);
         seasonsScroll.setHorizontalScrollBarEnabled(false);
         LinearLayout chips=row();
