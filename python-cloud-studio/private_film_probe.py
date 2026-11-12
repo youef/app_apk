@@ -33,7 +33,7 @@ def valid_public(url):
 def inspect(url):
     from private_film_import import safe_source
     url=safe_source(url)
-    out={"url":url,"http_ok":False,"browser_check":"not_checked","media_check":"not_checked","duration_seconds":None}
+    out={"url":url,"http_ok":False,"browser_check":"not_checked","media_check":"not_checked","duration_seconds":None,"failure_stage":None}
     with sync_playwright() as p:
         browser=p.chromium.launch(headless=True,args=["--no-sandbox"])
         try:
@@ -42,8 +42,11 @@ def inspect(url):
             out["http_status"]=response.status
             if response.status in (301,302,303,307,308):
                 raise ValueError("Source redirects instead of serving the media")
-            if response.status!=200 and response.status!=206:
-                raise ValueError("Source returned HTTP "+str(response.status))
+            if response.status not in (200,206):
+                out["failure_stage"]="manifest_or_media"
+                out["browser_check"]="blocked_by_origin"
+                out["error"]="خادم المصدر رفض طلب Render (HTTP "+str(response.status)+"). عمل الرابط على جوالك لا يعني السماح لخادم Render. راجع صلاحية الرابط وأذونات المصدر."
+                return out
             content=response.body()
             if len(content)>2_000_000:
                 raise ValueError("Manifest exceeds safe size")
@@ -62,7 +65,11 @@ def inspect(url):
                 valid_public(child)
                 small=context.request.get(child,timeout=16000,max_redirects=0,headers={"Range":"bytes=0-65535"})
                 if small.status not in (200,206):
-                    raise ValueError("First playlist/segment returned HTTP "+str(small.status))
+                    out["failure_stage"]="child_playlist_or_segment"
+                    out["first_child_status"]=small.status
+                    out["browser_check"]="blocked_by_origin"
+                    out["error"]="ملف M3U8 متاح ولكن المقطع أو القائمة التابعة مرفوضة من المصدر (HTTP "+str(small.status)+")."
+                    return out
                 sample=small.body()
                 if sample.lstrip().lower().startswith((b"<html",b"<!doctype")):
                     raise ValueError("Media segment returned HTML instead of video")
