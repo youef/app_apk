@@ -51,6 +51,7 @@ public final class AppUpdater {
     private long pausedSinceMs=0L;
     private JSONObject selected;
     private AlertDialog mandatoryDialog;
+    private AlertDialog availableDialog;
     private AlertDialog progressDialog;
     private ProgressBar progressBar;
     private TextView progressText;
@@ -60,12 +61,30 @@ public final class AppUpdater {
         this.activity=activity;
         this.preferences=activity.getSharedPreferences("alezz_stable_updates_v1",Context.MODE_PRIVATE);
     }
-    /** On first install APK prompts are disabled; viewers choose when to update. */
+    /** Viewer choice is independent from media/catalog synchronization. */
+    public String updateMode(){
+        String mode=preferences.getString("update_mode","");
+        if("off".equals(mode)||"manual".equals(mode)||"automatic".equals(mode))return mode;
+        return preferences.getBoolean("automatic_checks",false)?"automatic":"manual";
+    }
+    /** Old installations automatically migrate from the original checkbox. */
     public boolean automaticChecksEnabled(){
-        return preferences.getBoolean("automatic_checks",false);
+        return "automatic".equals(updateMode()) && preferences.getBoolean("automatic_checks",false);
     }
     public void setAutomaticChecksEnabled(boolean enabled){
-        preferences.edit().putBoolean("automatic_checks",enabled).apply();
+        setUpdateMode(enabled?"automatic":"manual");
+    }
+    public void setUpdateMode(String mode){
+        if(!"off".equals(mode)&&!"manual".equals(mode)&&!"automatic".equals(mode))
+            throw new IllegalArgumentException("Unsupported APK update preference");
+        preferences.edit().putString("update_mode",mode)
+            .putBoolean("automatic_checks","automatic".equals(mode)).apply();
+        if(!"automatic".equals(mode)){
+            if(availableDialog!=null){availableDialog.dismiss();availableDialog=null;}
+            if(mandatoryDialog!=null){mandatoryDialog.dismiss();mandatoryDialog=null;}
+            if(hasPendingDownload())cancelPendingDownload();
+            requiredUpdate=false;
+        }
     }
     public boolean hasPendingDownload(){
         return downloadId>0 || preferences.getLong("download_id",-1L)>0;
@@ -115,6 +134,10 @@ public final class AppUpdater {
     }
     /** Automatic checks are throttled. The settings action always checks afresh. */
     public void check(final boolean manual){
+        if("off".equals(updateMode())){
+            if(manual)say("تحديثات APK متوقفة. اختر «يدوي» من الإعدادات أولًا.");
+            return;
+        }
         if(!manual && !automaticChecksEnabled())return;
         if(!active||stopped||checking||downloading||verifying||prompting||installAfterPermission)return;
         if(downloadId>0){
@@ -165,7 +188,8 @@ public final class AppUpdater {
             final JSONObject release=feed;final String problem=error;
             handler.post(new Runnable(){public void run(){
                 checking=false;
-                if(stopped||!active||activity.isFinishing())return;
+                if(stopped||!active||activity.isFinishing() || "off".equals(updateMode()) ||
+                    (!manual && !automaticChecksEnabled()))return;
                 if(!problem.isEmpty()){
                     if(manual)say("تعذر فحص التحديث: "+problem);
                     return;
@@ -174,7 +198,8 @@ public final class AppUpdater {
                     if(manual)say("لم يصدر تحديث ثابت جديد بعد. سيظهر هنا بعد اكتمال بناء النسخة وتوقيعها.");
                 }else if(release.optInt("version_code",0)>installedVersionCode()){
                     selected=release;
-                    requiredUpdate=isRequired(release);
+                    // Remote "required" flags must not override a viewer's update preference.
+                    requiredUpdate=false;
                     showAvailable(manual);
                 }else if(manual){
                     say("نسختك محدّثة بالفعل: "+installedVersionName());
@@ -183,38 +208,59 @@ public final class AppUpdater {
         }});
     }
     private void showAvailable(boolean manual){
-        if(activity.isFinishing() || selected==null || downloading)return;
+        if(activity.isFinishing() || selected==null || downloading ||
+           "off".equals(updateMode()) || (!manual && !automaticChecksEnabled()))return;
+        final long now=System.currentTimeMillis();
         final int versionCode=selected.optInt("version_code",0);
-        if(!requiredUpdate && !manual && preferences.getInt("snoozed_version",-1)==versionCode &&
-            System.currentTimeMillis()<preferences.getLong("snoozed_until",0L))return;
+        if(!manual && (now-preferences.getLong("last_auto_prompt_at",0L)<7L*24L*60L*60L*1000L ||
+           (preferences.getInt("snoozed_version",-1)==versionCode &&
+           now<preferences.getLong("snoozed_until",0L))))return;
         final String version=selected.optString("version_name","جديد");
         String notes=selected.optString("notes","").trim();
         if(notes.length()>1600)notes=notes.substring(0,1600);
         prompting=true;
         AlertDialog.Builder builder=new AlertDialog.Builder(activity)
-            .setTitle(requiredUpdate?"تحديث إلزامي للعز TV":"تحديث جديد للعز TV")
+            .setTitle("تحديث اختياري للعز TV")
             .setMessage("الإصدار "+version+" متاح."+(notes.isEmpty()?"":"\n\n"+notes)+
-                "\n\nسيتم التحقق من الحزمة قبل فتح مثبت Android.")
-            .setPositiveButton("تنزيل وتثبيت التحديث",new android.content.DialogInterface.OnClickListener(){
-                public void onClick(android.content.DialogInterface d,int w){
-                    prompting=false;
-                    beginDownload();
-                }
-            });
-        if(!requiredUpdate)builder.setNegativeButton("لاحقًا",new android.content.DialogInterface.OnClickListener(){
-            public void onClick(android.content.DialogInterface d,int w){
+                "\n\nسيُفتح رابط APK الرسمي في متصفح التلفزيون، ثم تفتح ملفه من التنزيلات وتوافق على التثبيت. لا يُنزّل العز TV الملف داخليًا.")
+            .setPositiveButton("فتح APK في المتصفح",(d,w)->{
+                prompting=false;
+                openBrowserDownload();
+            })
+            .setNegativeButton("لاحقًا",(d,w)->{
                 preferences.edit().putInt("snoozed_version",versionCode)
-                    .putLong("snoozed_until",System.currentTimeMillis()+6L*60L*60L*1000L).apply();
-            }
-        });
+                    .putLong("snoozed_until",System.currentTimeMillis()+7L*24L*60L*60L*1000L).apply();
+            });
         AlertDialog dialog=builder.create();
-        dialog.setCancelable(!requiredUpdate);
-        if(requiredUpdate)mandatoryDialog=dialog;
+        availableDialog=dialog;
+        dialog.setCancelable(true);
         dialog.setOnDismissListener(d->{
             prompting=false;
-            if(mandatoryDialog==dialog)mandatoryDialog=null;
+            if(availableDialog==dialog)availableDialog=null;
         });
+        if(!manual)preferences.edit().putLong("last_auto_prompt_at",now).apply();
         dialog.show();
+    }
+    /** Browser owns the download; Android owns the installer. No DownloadManager pause loop. */
+    private void openBrowserDownload(){
+        if(selected==null)return;
+        final String url=selected.optString("download_url","");
+        if(!trustedUrl(url)){
+            say("رابط الإصدار غير موثوق؛ لم يُفتح التنزيل.");
+            return;
+        }
+        try{
+            Intent browser=new Intent(Intent.ACTION_VIEW,Uri.parse(url));
+            browser.addCategory(Intent.CATEGORY_BROWSABLE);
+            browser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            activity.startActivity(browser);
+            say("نزّل APK في المتصفح، ثم افتح الملف من التنزيلات واختر «تحديث». قد يلزم السماح بالتثبيت من المتصفح.");
+        }catch(Exception e){
+            Log.w(TAG,"No compatible TV browser for APK download",e);
+            new AlertDialog.Builder(activity).setTitle("لا يوجد متصفح متوافق")
+                .setMessage("ثبّت متصفحًا على التلفزيون، أو نزّل APK الرسمي من GitHub على جوالك وانقله إلى التلفزيون. لا يمكن تثبيت ملف بدون موافقة Android.")
+                .setPositiveButton("حسنًا",null).show();
+        }
     }
     /**
      * DownloadManager queries here only return downloads made by our package.
@@ -281,7 +327,7 @@ public final class AppUpdater {
                 !saved.optString("sha256","").matches("[0-9a-fA-F]{64}"))
                 throw new SecurityException("Stored update manifest is no longer valid");
             selected=saved;
-            requiredUpdate=isRequired(saved);
+            requiredUpdate=false;
             downloadId=id;downloading=true;
             handler.removeCallbacks(progress);
             handler.postDelayed(progress,500L);
@@ -585,7 +631,9 @@ public final class AppUpdater {
             cleanupManagedDownloads(-1L);
             cleanupTemporaryApks();
         }
-        restoreDownload();
+        // New versions use the browser. Clear any abandoned DownloadManager task
+        // created by older builds, without changing accounts or media preferences.
+        if(hasPendingDownload() && !verifying)cancelPendingDownload();
         if(installAfterPermission){
             installAfterPermission=false;
             if(Build.VERSION.SDK_INT<26||activity.getPackageManager().canRequestPackageInstalls())requestInstall();
