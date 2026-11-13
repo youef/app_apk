@@ -9,7 +9,7 @@
  if(!tables.aseel_episodes.fields.includes("source_id"))tables.aseel_episodes.fields.splice(1,0,"source_id");
  tables.aseel_home_collections={label:"صفوف الرئيسية",fields:["title_ar","slug","description","display_order","is_active"]};
  tables.aseel_home_collection_items={label:"محتويات الصفوف",fields:["collection_id","movie_id","series_id","channel_id","episode_id","display_order"]};
- Object.assign(names,{source_id:"مصدر الحقوق المرتبط",age_rating:"الفئة العمرية",display_order:"ترتيب الظهور",slug:"معرف الصف الإنجليزي",is_active:"تفعيل الصف",collection_id:"صف الرئيسية",movie_id:"الفيلم",series_id:"المسلسل",channel_id:"القناة",episode_id:"الحلقة"});
+ Object.assign(names,{source_id:"مصدر المحتوى المرتبط",age_rating:"الفئة العمرية",display_order:"ترتيب الظهور",slug:"معرف الصف الإنجليزي",is_active:"تفعيل الصف",collection_id:"صف الرئيسية",movie_id:"الفيلم",series_id:"المسلسل",channel_id:"القناة",episode_id:"الحلقة"});
  let sources=[],collections=[],movies=[],channels=[],episodes=[];
  const oldLoad=loadOptions;
  loadOptions=async function(){
@@ -41,10 +41,10 @@
   reports.forEach((r,i)=>{if(r.status!=="fulfilled")return;const list=r.value||[];
    if(i===4){shelves=list.filter(x=>x.is_active).length;return}
    total+=list.length;published+=list.filter(x=>x.status==="published").length;
-   pending+=list.filter(x=>x.rights_status==="pending").length;kids+=list.filter(x=>x.is_kids).length;
+   pending+=list.filter(x=>x.status!=="published").length;kids+=list.filter(x=>x.is_kids).length;
   });
   const target=$("dashboardKpis");target.replaceChildren();
-  for(const [name,count,icon] of [["كل المحتوى",total,"▣"],["منشور",published,"✓"],["حقوق غير موثقة",pending,"◈"],["الأطفال",kids,"★"],["صفوف نشطة",shelves,"✦"]]){
+  for(const [name,count,icon] of [["كل المحتوى",total,"▣"],["منشور",published,"✓"],["مسودات",pending,"◈"],["الأطفال",kids,"★"],["صفوف نشطة",shelves,"✦"]]){
    const card=document.createElement("article");card.className="kpi-card";const label=document.createElement("span");label.textContent=icon+" "+name;
    const number=document.createElement("strong");number.textContent=String(count);card.append(label,number);target.append(card);
   }
