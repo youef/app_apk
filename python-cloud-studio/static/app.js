@@ -305,7 +305,7 @@
   }
 
   let discoveryTimer, discoveryId, discoveryDone=-1, discoveryStream=null,
-      discoveryStreamFallbackId=null, discoveryEventTimer=null;
+      discoveryStreamFallbackId=null, discoveryEventTimer=null, lastTrackingMessage='';
   function closeDiscoveryStream(){
     if(discoveryStream){discoveryStream.close();discoveryStream=null;}
     if(discoveryEventTimer){clearTimeout(discoveryEventTimer);discoveryEventTimer=null;}
@@ -408,6 +408,11 @@
       try{
         const update=JSON.parse(event.data);
         if(update.delta)updateDiscoveryDelta(update.delta);
+        if(update.tracking && !update.tracking.queued &&
+           update.tracking.message && lastTrackingMessage!==update.tracking.message){
+          lastTrackingMessage=update.tracking.message;
+          toast(update.tracking.message,update.tracking.saved?'success':'error');
+        }
         if(update.scan)showDiscoveryProgress(update.scan);
       }catch(error){console.warn('Studio live snapshot parse failed',error);}
     });
@@ -510,7 +515,7 @@
     const result=await API('discover',{url,kind,scan_media:true,auto_track:$('autoTrack').checked,
       deep:$('deepScan').checked,metadata:$('autoMetadata').checked,fast});
     app.selected.clear();app.season=1;$('episodeSearch').value='';
-    discoveryDone=-1;
+    discoveryDone=-1;lastTrackingMessage='';
     updateStatus(result);
     showDiscoveryProgress(result.scan);
     activity(result.scan?.running?'بدأ فحص المشغلات. يمكنك متابعة التقدم هنا.':'تم تحميل بيانات العمل، ولم تظهر حلقات قابلة للفحص.','info');
