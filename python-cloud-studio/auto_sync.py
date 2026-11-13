@@ -734,8 +734,10 @@ class AutoSync:
             return
         if not any(source['kind']=='original' for source in self.queue.sources(table, identifier)):
             return
-        row=db.single(table,{'id':'eq.'+identifier,
-                             'select':'id,status,rights_status,rights_expires_at,stream_url,link_health_status,season_id'})
+        select_fields='id,status,rights_status,rights_expires_at,stream_url,link_health_status'
+        if table=='aseel_episodes':
+            select_fields+=',season_id'
+        row=db.single(table,{'id':'eq.'+identifier,'select':select_fields})
         if not row or row.get('status')!='draft' or row.get('rights_status')!='approved':
             return
         if row.get('link_health_status')!='healthy' or not row.get('stream_url'):
