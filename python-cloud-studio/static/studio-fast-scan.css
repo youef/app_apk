@@ -1,0 +1,22 @@
+/* Studio quick discovery: visible source-by-source within the same main editor. */
+.studio-fast-choice{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;margin:12px 0;border:1px solid #3c465d;border-radius:13px;background:linear-gradient(105deg,#171f2c,#211d29);color:#dfebf6;font-size:12px;line-height:1.7;cursor:pointer}
+.studio-fast-choice input{accent-color:#d3ab6e;width:18px;height:18px;flex-shrink:0;margin-top:4px}
+.studio-fast-choice b{display:block;color:#f3d49d;margin-bottom:2px}
+.studio-fast-choice small{color:#afbed1}
+.studio-fast-pill{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;border-radius:999px;background:#1d342f;border:1px solid #36745e;padding:6px 11px;color:#6de1ac;font-weight:800;font-size:11px}
+.studio-fast-pill::before{content:"";width:8px;height:8px;border-radius:100%;background:#67e4ac;box-shadow:0 0 0 4px #67e4ac20;animation:studiofastpulse 1.2s infinite}
+.studio-fast-pill.is-done::before{animation:none}
+.studio-fast-pill.is-off{color:#c1c7d1;background:#222631;border-color:#404758}
+.studio-fast-pill.is-off::before{background:#8a93a5;box-shadow:none;animation:none}
+@keyframes studiofastpulse{50%{opacity:.45}}
+.studio-fast-toolbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:12px 0}
+.studio-fast-toolbar button{min-height:37px;padding:8px 13px;font-size:12px}
+.studio-fast-summary{color:#b9c9d5;font-size:11px;margin-inline-start:auto}
+.studio-fast-stream{display:flex;flex-wrap:wrap;gap:8px;max-height:270px;overflow:auto;margin-top:11px}
+.studio-fast-card{border:1px solid #414657;border-radius:12px;padding:9px 12px;min-width:155px;max-width:300px;background:#131d29;display:grid;gap:3px}
+.studio-fast-card strong{color:#e3edf9;font-size:11px;overflow-wrap:anywhere}
+.studio-fast-card small{color:#a3b5cc;font-size:10px;overflow-wrap:anywhere}
+.studio-fast-card button{background:#2c313d;border:1px solid #454d61;color:#ebce9f;border-radius:8px;padding:6px 10px;font-size:11px;cursor:pointer}
+.studio-fast-hint{font-size:11px;color:#b8c4d4;line-height:1.8;margin:7px 0}
+@media(max-width:640px){.studio-fast-toolbar button{flex:1}.studio-fast-summary{width:100%}.studio-fast-card{width:100%;max-width:none}}
+@media(prefers-reduced-motion:reduce){.studio-fast-pill::before{animation:none}}
