@@ -1,8 +1,8 @@
 """Durable, UUID-addressed media maintenance for a single persistent Render service.
 
 The queue and history are committed before remote writes. Network failures use
-backoff; a crash releases a short task lease. Verified replacements and confirmed
-dead links change stream_url. Publication and rights are preserved.
+backoff; a crash releases a short task lease. Verified replacements change stream_url.
+Only already rights-approved drafts with a verified direct stream can auto-publish.
 """
 from __future__ import annotations
 
@@ -323,11 +323,13 @@ class AutoSync:
     def __init__(self, data_dir, db_factory=None, resolver_factory=None, clock=time.time):
         self.queue=QueueDB(Path(data_dir)/'autosync.sqlite3')
         self.clock=clock
-        # Keep the near-live policy even when Render retains older 24h/30m env vars.
-        self.interval=max(0.25,min(0.5,float(os.getenv('ALEZZ_AUTOSYNC_INTERVAL_HOURS','0.5'))))*3600
+        # Full source discovery every four hours by default. Signed URLs can
+        # trigger an earlier refresh; independent health checks stay frequent.
+        self.interval=max(0.25,min(24,float(os.getenv('ALEZZ_AUTOSYNC_INTERVAL_HOURS','4'))))*3600
         self.check_interval=min(self.interval,max(1,min(5,float(os.getenv('ALEZZ_AUTOSYNC_CHECK_MINUTES','5'))))*60)
         self.mode=os.getenv('ALEZZ_AUTOSYNC_MODE','auto')
         self.concurrency=max(1,min(5,int(os.getenv('ALEZZ_AUTOSYNC_CONCURRENCY','5'))))
+        self.auto_publish_approved=os.getenv('ALEZZ_AUTOSYNC_PUBLISH_APPROVED','1').lower() in ('1','true','yes')
         self.db_factory=db_factory or self._environment_db
         self.resolver_factory=resolver_factory or (lambda:MediaResolver(self.mode))
         self.stop_event=threading.Event();self.wake_event=threading.Event()
@@ -341,8 +343,8 @@ class AutoSync:
         self._reconcile_policy_schedule()
 
     def _reconcile_policy_schedule(self):
-        """Apply faster checks to existing persistent jobs without a burst."""
-        revision='rapid-check-5m-refresh-30m-draft-v1'
+        """Reconcile existing jobs without losing due work or source history."""
+        revision='health-5m-discovery-4h-authorized-publish-v1'
         if self.queue.get_setting('maintenance_policy')==revision:
             return
         now=self.clock()
@@ -413,6 +415,7 @@ class AutoSync:
             self.queue.event('metadata_retry',safe_error(exc),job['table_name'],job['target_id'])
             return {}
 
+    @property
     @property
     def enabled(self): return self.queue.get_setting('enabled',os.getenv('ALEZZ_AUTOSYNC_ENABLED','1')=='1')
 
@@ -712,23 +715,61 @@ class AutoSync:
         if job['dirty']:
             payload=json.loads(job['dirty'])
             db.patch(table,identifier,payload)
-            if (table=='aseel_episodes' and payload.get('stream_url') and
-                    payload.get('link_health_status')=='healthy' and payload.get('status')!='draft'):
-                self.publish_discovered_episode(db, identifier)
+            if (payload.get('stream_url') and payload.get('link_health_status')=='healthy'):
+                self.publish_approved_target(db,table,identifier)
+                if table=='aseel_episodes':
+                    self.publish_discovered_episode(db, identifier)
             with self.queue.db() as conn:
                 conn.execute('update auto_jobs set dirty=\'\',upload_at=0,data=json_patch(data,?) '
                              'where table_name=? and target_id=? and dirty=?',
                              (job['dirty'],table,identifier,job['dirty']))
 
+    def publish_approved_target(self, db, table, identifier):
+        """Publish *only* pre-approved drafts after a direct media probe succeeds.
+
+        The worker cannot approve rights, re-publish hidden content, or publish
+        an episode whose parent series is not already approved and public.
+        """
+        if not self.auto_publish_approved or table not in ('aseel_movies', 'aseel_episodes'):
+            return
+        if not any(source['kind']=='original' for source in self.queue.sources(table, identifier)):
+            return
+        row=db.single(table,{'id':'eq.'+identifier,
+                             'select':'id,status,rights_status,rights_expires_at,stream_url,link_health_status,season_id'})
+        if not row or row.get('status')!='draft' or row.get('rights_status')!='approved':
+            return
+        if row.get('link_health_status')!='healthy' or not row.get('stream_url'):
+            return
+        if stamp(row.get('rights_expires_at')) and stamp(row['rights_expires_at'])<=self.clock():
+            return
+        if table=='aseel_episodes':
+            season=db.single('aseel_seasons',{'id':'eq.'+str(row.get('season_id')),
+                                              'select':'series_id'})
+            if not season:
+                return
+            parent=db.single('aseel_series',{'id':'eq.'+season['series_id'],
+                                             'select':'status,rights_status,rights_expires_at'})
+            if not parent or parent.get('status')!='published' or parent.get('rights_status')!='approved':
+                return
+            if stamp(parent.get('rights_expires_at')) and stamp(parent['rights_expires_at'])<=self.clock():
+                return
+        result=db.req('PATCH',table,{'id':'eq.'+identifier,'status':'eq.draft',
+                                    'rights_status':'eq.approved','link_health_status':'eq.healthy',
+                                    'stream_url':'not.is.null'}, {'status':'published'})
+        if result:
+            self.queue.event('auto_published','نُشر المحتوى المعتمد بعد نجاح فحص الفيديو المباشر.',table,identifier)
+
     def publish_discovered_episode(self, db, identifier):
         parent=self.queue.get_setting('discovered-episode:'+identifier)
         if not parent or not self.queue.get_setting('publish-series:'+parent,False):
             return
-        series=db.single('aseel_series',{'id':'eq.'+parent,'select':'id,status'})
-        if not series or series.get('status')!='published':
+        series=db.single('aseel_series',{'id':'eq.'+parent,'select':'id,status,rights_status,rights_expires_at'})
+        if not series or series.get('status')!='published' or series.get('rights_status')!='approved':
+            return
+        if stamp(series.get('rights_expires_at')) and stamp(series['rights_expires_at'])<=self.clock():
             return
         changed=db.req('PATCH','aseel_episodes',{'id':'eq.'+identifier,
-                        'status':'eq.draft','link_health_status':'eq.healthy',
+                        'status':'eq.draft','rights_status':'eq.approved','link_health_status':'eq.healthy',
                         'stream_url':'not.is.null'}, {'status':'published'})
         if changed:
             self.queue.setting('discovered-episode:'+identifier,None)
