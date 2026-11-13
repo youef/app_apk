@@ -45,7 +45,7 @@
  <label>سنة الإنتاج<input id="impYear" type="number" min="1880" max="2100"></label>
  <label>المدة بالدقائق<input id="impDuration" type="number" min="1" max="99999"></label>
  <label>التصنيف<select id="impCategory"><option value="">بدون تصنيف</option></select></label>
- <label>مصدر الحقوق<select id="impSource"><option value="">غير محدد</option></select></label>
+ <label>مصدر المحتوى<select id="impSource"><option value="">غير محدد</option></select></label>
  <label>الفئة العمرية<select id="impAge"><option value="all">مناسب للجميع</option><option>7+</option><option>13+</option><option>16+</option><option>18+</option></select></label>
  <label>الجودة<select id="impQuality"><option>SD</option><option>HD</option><option>FHD</option><option>4K</option></select></label>
  <label>اللغة (ar/en/tr)<input id="impLanguage" value="ar" maxlength="3"></label>
@@ -57,13 +57,9 @@
  <label class="imp-wide">رابط يوتيوب رسمي (اختياري)<input id="impYouTube" type="url" placeholder="https://www.youtube.com/watch?v=..."></label>
  <label class="imp-wide">الجودات الإضافية JSON<textarea id="impVariants" rows="3" placeholder='[{"label":"HD","url":"https://example.com/movie.mp4"}]'>[]</textarea></label>
  <label class="imp-wide">صفحة الفيلم الأصلية<input id="impSourcePage" type="url" placeholder="https://example.com/page"></label>
- <label>حالة الترخيص<select id="impRights"><option value="pending">قيد المراجعة</option><option value="approved">تم التحقق من الحقوق</option><option value="rejected">مرفوض</option></select></label>
- <label>صاحب الحقوق<input id="impHolder"></label>
- <label class="imp-wide">رابط أو رقم وثيقة الترخيص<input id="impLicense" placeholder="رابط الوثيقة أو مرجع الترخيص"></label>
- <label>نهاية صلاحية الترخيص<input id="impExpires" type="date"></label>
  </div>
- <div class="imp-rights"><label class="imp-check"><input id="impRightsConfirmed" type="checkbox"> أؤكد أن لدي إذنًا فعليًا لعرض العمل وأن بيانات الترخيص صحيحة</label><label class="imp-check"><input id="impPlaybackConfirmed" type="checkbox"> تحققت يدويًا من التشغيل على الجهاز المطلوب (عند تعذّر الاختبار الآلي)</label></div>
- <div class="imp-actions"><button type="button" id="impDraft" class="primary">حفظ كمسودة</button><button type="button" id="impPublish" class="imp-publish">اعتماد ونشر</button><button type="button" id="impHide">إخفاء</button><button type="button" id="impCopy">نسخ JSON</button><button type="button" id="impDuplicate">إنشاء نسخة</button><button type="button" id="impReset">جديد</button></div>
+ <div class="imp-rights"><label class="imp-check"><input id="impPlaybackConfirmed" type="checkbox"> تحققت يدويًا من التشغيل على الجهاز المطلوب (عند تعذّر الاختبار الآلي)</label></div>
+ <div class="imp-actions"><button type="button" id="impDraft" class="primary">حفظ كمسودة</button><button type="button" id="impPublish" class="imp-publish">نشر</button><button type="button" id="impCopy">نسخ JSON</button><button type="button" id="impDuplicate">إنشاء نسخة</button><button type="button" id="impReset">جديد</button></div>
  </form>
  </div>
  <aside class="imp-aside">
@@ -75,14 +71,14 @@
  </section>
 <div class="workspace">
 <section class="panelCard"><div class="cardhead"><h2 id="collectionName">المحتوى</h2><button id="new" class="primary">إضافة جديد</button></div>
-<div class="tablewrap"><table><thead><tr><th>العنوان</th><th>الحالة</th><th>الترخيص</th><th>الإجراء</th></tr></thead><tbody id="rows"></tbody></table></div>
+<div class="tablewrap"><table><thead><tr><th>العنوان</th><th>الحالة</th><th>فحص الرابط</th><th>الإجراء</th></tr></thead><tbody id="rows"></tbody></table></div>
 </section>
 <section id="editor" class="panelCard hidden"><div class="cardhead"><h2 id="editorTitle">إضافة محتوى</h2><button id="cancel" class="ghost">إلغاء</button></div>
 <form id="editorForm"><div id="fields" class="formgrid"></div>
 <div class="actions"><button id="save" type="submit" class="primary">حفظ التغييرات</button><button id="testLink" type="button" class="ghost">فتح رابط التشغيل للتحقق</button></div></form>
 </section>
 </div>
-<p class="footer">العز TV — التراخيص والمسؤولية القانونية للمحتوى على ناشره. التحقق الآلي من الرابط لا يثبت ملكية الحقوق.</p></div></div>
+<p class="footer">العز TV — ظهور المحتوى المنشور لا يعني أن رابط تشغيله سليم. يمكن تحديث المصادر من الإدارة.</p></div></div>
 </section>
 <p id="status" role="status" aria-live="polite"></p></main>
 </body></html>
