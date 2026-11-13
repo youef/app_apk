@@ -26,7 +26,11 @@ from private_film_import import owner
 
 router = APIRouter()
 BUCKET = "aseel-video-uploads"
-MAX_FILE_BYTES = 10 * 1024 * 1024 * 1024  # The project's Storage plan may be lower.
+MAX_FILE_BYTES = 10 * 1024 * 1024 * 1024  # Upload UI limit independent of hosting plan.
+# The Al Ezz Supabase organization is currently on Free (50 MiB max per file).
+# Update this when changing the Supabase Storage global file limit / plan.
+STORAGE_UPLOAD_LIMIT_BYTES = min(MAX_FILE_BYTES, int(os.getenv(
+    "ALEZZ_STORAGE_MAX_FILE_BYTES", str(50 * 1024 * 1024))))
 MAX_ROWS = 60
 
 
@@ -143,13 +147,14 @@ def register(portal, template_path):
         _key()
         try:
             rows = portal.upstream("GET", "/rest/v1/aseel_uploaded_mp4", secret=True,
-                params={"select": "id,title,original_filename,size_bytes,public_url,created_at",
+                params={"select": "id,title,original_filename,size_bytes,public_url,created_at,media_kind,catalogue_target_id,series_id,season_number,episode_number",
                         "order": "created_at.desc", "limit": str(MAX_ROWS)})
         except (requests.RequestException, ValueError) as exc:
             raise HTTPException(503, "تعذّر قراءة ملفات الفيديو من Supabase") from exc
         series = portal.upstream("GET", "/rest/v1/aseel_series", secret=True,
             params={"select": "id,title_ar,status,poster_url", "order": "title_ar.asc", "limit": "500"})
-        return {"files": rows, "bucket": BUCKET, "series": series}
+        return {"files": rows, "bucket": BUCKET, "series": series,
+                "max_file_bytes": STORAGE_UPLOAD_LIMIT_BYTES}
 
     @router.post("/api/studio/video-upload/series")
     def create_series(body: NewSeries, request: Request):
@@ -195,6 +200,12 @@ def register(portal, template_path):
         _key()
         if not is_mp4(body.filename):
             raise HTTPException(422, "يمكن رفع ملفات MP4 فقط")
+        if body.size_bytes > STORAGE_UPLOAD_LIMIT_BYTES:
+            raise HTTPException(413,
+                "حجم الملف أكبر من الحد المسموح في إعدادات Supabase Storage للمشروع ("
+                + str(STORAGE_UPLOAD_LIMIT_BYTES // (1024 * 1024))
+                + " MB). تقسيم الملف إلى أجزاء لا يتجاوز حد حجم الملف الكامل."
+                " يلزم رفع حد التخزين بعد ترقية الباقة أو استخدام تخزين فيديو آخر.")
         if body.poster_url and not body.poster_url.startswith("https://"):
             raise HTTPException(422, "الملصق يجب أن يكون رابط HTTPS")
         if body.media_kind == "episode":
@@ -364,6 +375,7 @@ def _finish_link(portal, path: str, payload: dict, uploaded: dict):
             raise HTTPException(409, "تم استخدام رقم هذه الحلقة مسبقًا. الفيديو محفوظ في الملفات لكنه لم يحل محل الحلقة القديمة.")
         row = {"season_id": season_id, "number": episode_number, "title_ar": payload["title"],
                "stream_url": public_url, "description": payload.get("description") or None,
+               "poster_url": payload.get("poster_url") or None,
                "status": "draft", "rights_status": "pending"}
         _insert_catalogue(portal, "aseel_episodes", row, target_id)
 
