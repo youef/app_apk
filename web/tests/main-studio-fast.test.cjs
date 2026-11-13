@@ -25,11 +25,11 @@ test('main studio fast-scan bundle compiles and all live controls exist',()=>{
 });
 
 test('main studio opens live SSE stream and falls back to short polling',()=>{
- assert.match(script,/new EventSource\('\/api\/discovery-scan\/events\?scan_id='/);
+ assert.match(script,/new EventSource\(address\)/);
  assert.match(script,/addEventListener\('snapshot'/);
- assert.match(script,/if\(update\.delta\)updateDiscoveryDelta\(update\.delta\)/);
+ assert.match(script,/applyStudioStreamPacket\(JSON.parse\(event.data\)\)/);
  assert.match(script,/setTimeout\(\(\)=>pollDiscovery\(id\),1000\)/);
- assert.match(script,/showDiscoveryProgress\(update\.scan\)/);
+ assert.match(script,/if\(packet.scan\)showDiscoveryProgress\(packet.scan\)/);
  assert.match(server,/async def discovery_scan_events\(/);
  assert.match(server,/StreamingResponse\(generate\(\)/);
 });
