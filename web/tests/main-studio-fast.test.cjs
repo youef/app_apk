@@ -35,7 +35,7 @@ test('main studio opens live SSE stream and falls back to short polling',()=>{
 });
 
 test('fast scan has bounded first pass and keeps separate comprehensive mode',()=>{
- assert.match(script,/fast:\s*fast/);
+ assert.match(script,/,fast\}/);
  assert.match(server,/fast:\s*bool = True/);
  assert.match(server,/max_pages=3 if fast else 500/);
  assert.match(server,/max_seconds=8/);
