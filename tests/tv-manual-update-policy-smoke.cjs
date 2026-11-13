@@ -7,8 +7,8 @@ const up=read("app/src/main/java/sa/aseel/tv/AppUpdater.java");
 const home=read("app/src/main/java/sa/aseel/tv/TVHomeActivity.java");
 const feed=JSON.parse(read("data/android-update.json"));
 const workflow=read(".github/workflows/android-stable-release.yml");
-assert.match(up,/preferences\.getBoolean\("automatic_checks",false\)/,
-  "No automatic APK check unless explicitly enabled by the viewer");
+assert.match(up,/preferences\.getBoolean\("automatic_checks",true\)/,
+  "Automatic checks default on while respecting a viewer who selected off/manual");
 assert.match(up,/if\(!manual && !automaticChecksEnabled\(\)\)return;/,
   "Manual checks bypass the automatic preference while background checks respect it");
 assert.match(up,/public void setAutomaticChecksEnabled\(boolean enabled\)/);
@@ -28,8 +28,8 @@ assert.match(home,/appUpdater\.check\(false\)/,
   "Optional automatic update checks are still supported");
 assert.equal(feed.required,false,"Routine stable releases must be optional");
 assert.equal(feed.min_supported_version_code,0,"Newest release is not a mandatory minimum");
-assert.ok(!/^  push:$/m.test(workflow),"Publishing stable APK must require manual workflow dispatch");
+assert.ok(/^  push:$/m.test(workflow),"Native code changes must trigger signed optional updates");
 assert.match(workflow,/  workflow_dispatch:/);
 assert.match(workflow,/"required": False/);
 assert.match(workflow,/"min_supported_version_code": 0/);
-console.log("PASS: Android TV APK auto prompts disabled by default, manual check and stop-download supported");
+console.log("PASS: signed optional auto checks and manual/off modes verified");
