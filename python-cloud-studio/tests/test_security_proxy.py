@@ -7,7 +7,7 @@ import os
 import socket
 import unittest
 from unittest.mock import patch, MagicMock
-from security_proxy import audit_proxy_context, safe_status, try_proxy_get, _parse_one, _public_addrs
+from security_proxy import audit_proxy_context, safe_status, try_proxy_get, _parse_one, _public_addrs, _connect_fetch, Proxy
 
 
 class ProxyPoolTests(unittest.TestCase):
@@ -82,6 +82,30 @@ class ProxyPoolTests(unittest.TestCase):
         self.assertEqual(summary["approved_host_count"],2)
         self.assertNotIn("alice",str(summary))
         self.assertNotIn("SECRET",str(summary))
+
+    def test_connect_pins_public_target_ip_and_tls_to_hostname(self):
+        proxy=Proxy(host="proxy.example.net",port=3128,username="user",password="pass")
+        with patch("security_proxy._public_addrs", return_value=["93.184.215.14"]):
+            with patch("security_proxy.http.client.HTTPConnection") as http:
+                with patch("security_proxy.ssl.create_default_context") as sslcontext:
+                    connection=http.return_value
+                    reply=connection.getresponse.return_value
+                    reply.status=200
+                    reply.getheaders.return_value=[("Content-Type","text/html")]
+                    reply.read.return_value=b"<html>public</html>"
+                    result=_connect_fetch(proxy, "example.org", "198.51.100.3",
+                                          "/about", None, 1024, "test-agent")
+                    self.assertEqual(result[0],200)
+                    http.assert_called_once_with("93.184.215.14",3128,timeout=7)
+                    tunnel=connection.set_tunnel.call_args
+                    self.assertEqual(tunnel.args[0],"198.51.100.3")
+                    self.assertEqual(tunnel.kwargs["port"],443)
+                    self.assertIn("Proxy-Authorization",tunnel.kwargs["headers"])
+                    sslcontext.return_value.wrap_socket.assert_called_once()
+                    self.assertEqual(sslcontext.return_value.wrap_socket.call_args.kwargs["server_hostname"],"example.org")
+                    req=connection.request.call_args
+                    self.assertEqual(req.args,("GET","/about"))
+                    self.assertNotIn("Proxy-Authorization",req.kwargs["headers"])
 
     def test_http_connect_validation(self):
         self.assertEqual(_parse_one("http://user:pass@example.org:8080").port, 8080)
