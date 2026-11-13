@@ -395,8 +395,11 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
     from concurrent.futures import ThreadPoolExecutor, as_completed
     from urllib.parse import parse_qsl
     resume_progress=resume_progress or {}
-    seen_pages: set[str] = {final.rstrip('/')} | set(resume_progress.get('seen_pages',[])[:max_pages])
-    queued: list[str] = list(resume_progress.get('queued',[])[:max_pages])
+    # A fast first pass might inspect only three pages. Keep unvisited page
+    # links across batches so continuation does not silently discard season
+    # pagination when max_pages is small.
+    seen_pages: set[str] = {final.rstrip('/')} | set(resume_progress.get('seen_pages',[])[:5000])
+    queued: list[str] = list(resume_progress.get('queued',[])[:1200])
     episode_map: dict[tuple[int,int],Episode] = {}
     in_flight: set[str] = set()
     skipped_pages=0
@@ -442,7 +445,9 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
         nonlocal skipped_pages
         uri=absolutize(base,link)
         if not uri or urlsplit(uri).hostname != root_host or uri.rstrip('/') in seen_pages or uri in queued or uri in in_flight:return
-        if len(seen_pages)+len(queued)+len(in_flight)<max_pages:queued.append(uri)
+        # max_pages is a per-batch fetch budget, NOT the queue capacity.
+        # Previously pages > the fast budget were dropped permanently.
+        if len(queued)+len(in_flight)<1200:queued.append(uri)
         else:skipped_pages+=1
     def scan_doc(s: BeautifulSoup, base: str):
         for item in json_nodes(s):
