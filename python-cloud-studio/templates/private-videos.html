@@ -81,6 +81,28 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{
 .btn.secondary:hover{border-color:var(--accent)}
 .btn.wide{flex:1}
 .hint{margin:12px 0 0;color:var(--muted);font-size:11px;line-height:1.9}
+.live-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0 0;padding:13px 15px;border:1px solid var(--stroke);background:var(--surface-2);border-radius:14px}
+.live-indicator{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:850;color:var(--muted)}
+.live-indicator .live-dot{width:10px;height:10px;display:inline-block;background:var(--soft);border-radius:99px}
+.live-indicator.is-active{color:var(--good)}
+.live-indicator.is-active .live-dot{background:var(--good);box-shadow:0 0 0 4px #3dd6a325;animation:live-pulse 1.5s ease-in-out infinite}
+.live-indicator.is-done{color:var(--good)}
+.live-indicator.is-done .live-dot{background:var(--good)}
+@keyframes live-pulse{50%{opacity:.45;transform:scale(.76)}}
+.live-counts{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-inline-start:auto}
+.live-counts strong{color:var(--ink);font-weight:900}
+.live-export{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.live-export .btn{min-height:37px;padding:8px 13px;font-size:11px}
+.live-export .btn:disabled{opacity:.45}
+.live-feed{max-height:350px;overflow:auto;border:1px solid var(--stroke);border-radius:13px;padding:10px;background:var(--surface-2);display:grid;gap:7px;margin-top:9px}
+.live-feed:empty{display:none}
+.live-feed-item{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--surface);border:1px solid var(--stroke);border-radius:10px;padding:9px 12px;font-size:11px}
+.live-feed-item strong{display:block;color:var(--ink);font-size:11px;overflow-wrap:anywhere}
+.live-feed-item small{display:block;color:var(--muted);font-size:10px;overflow-wrap:anywhere}
+.live-progress{height:8px;border-radius:100px;overflow:hidden;background:var(--stroke);margin-top:10px}
+.live-progress>div{height:100%;width:0;background:linear-gradient(90deg,var(--accent-2),var(--good));transition:width .25s}
+@media(prefers-reduced-motion:reduce){.live-indicator.is-active .live-dot{animation:none}}
+
 .results{display:grid;gap:10px;margin-top:15px}
 .results:empty{display:none}
 .empty{border:1px dashed var(--stroke);border-radius:13px;padding:18px;color:var(--muted);font-size:12px;text-align:center}
@@ -167,7 +189,20 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{
           </div>
           <p class="hint">الفحص المتعدد يجرب BeautifulSoup ثم إعدادات JavaScript ثم yt-dlp ثم Chromium ويفحص روابط الحلقات واحدًا تلو الآخر، دون تجاوز DRM أو رفض الخادم.</p>
           <div id="discovery-status" class="mini-status" role="status">لم يبدأ فحص الصفحة.</div>
-          <div id="deep-progress" class="notice" style="margin-top:12px" role="status">الفحص الشامل: HTML ← إعدادات JS ← yt-dlp ← Chromium ← جميع صفحات الحلقات المكتشفة.</div>
+          <div id="deep-progress" class="notice" style="margin-top:12px" role="status">ابدأ الفحص لتظهر صفحات الحلقات والمشغلات فور اكتشافها؛ لا حاجة لانتظار اكتمال المسلسل.</div>
+          <div class="live-toolbar">
+            <div class="live-indicator" id="deep-live-indicator"><span class="live-dot"></span><span id="deep-live-label">في الانتظار</span></div>
+            <div class="live-counts"><span>الحلقات: <strong id="deep-checked">0 / 0</strong></span><span>فيديو: <strong id="deep-sources-count">0</strong></span><span>مشغلات مضمنة: <strong id="deep-embeds-count">0</strong></span></div>
+          </div>
+          <div class="live-progress" aria-label="تقدم فحص الحلقات" role="progressbar" id="deep-progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="deep-progressfill"></div></div>
+          <div class="live-export" aria-label="تصدير المشغلات المتاحة فورًا">
+            <button type="button" class="btn primary" id="deep-export-csv" disabled>↓ تصدير CSV الآن</button>
+            <button type="button" class="btn secondary" id="deep-export-json" disabled>↓ تصدير JSON الآن</button>
+            <button type="button" class="btn secondary" id="deep-copy-links" disabled>⧉ نسخ الروابط</button>
+          </div>
+          <details open><summary style="font-size:12px;font-weight:800;cursor:pointer;color:var(--ink)">آخر المشغلات المكتشفة لحظيًا</summary>
+            <div class="live-feed" id="deep-live-feed" aria-live="polite" aria-relevant="additions"><div class="empty" id="deep-live-empty">ستظهر الروابط الجديدة هنا مباشرة أثناء الفحص.</div></div>
+          </details>
           <div id="deep-methods" class="results" aria-label="نتائج محركات الفحص"></div>
           <div id="deep-episodes" class="results" aria-label="مصادر الحلقات بعد الفحص"></div>
           <details class="notice" style="margin-top:15px">
@@ -373,7 +408,128 @@ for(const tab of document.querySelectorAll(".segment button")){
 for(const anchor of document.querySelectorAll(".menu a[href^='#']")){
  anchor.addEventListener("click",()=>{for(const a of document.querySelectorAll(".menu a"))a.classList.remove("is-active");anchor.classList.add("is-active")});
 }
-const deepScanState={id:null,timer:null};
+const deepScanState={id:null,timer:null,stream:null,connecting:false,polling:false,lastRevision:-1,
+ result:null,lastFingerprint:"",seen:new Set(),finished:false};
+function liveRows(){
+ const result=deepScanState.result||{},rows=[],seen=new Set();
+ const push=(kind,source,episode,origin,engine)=>{
+  const value=cleanLink(source);if(!value)return;
+  const key=[kind,value,episode||""].join("|");if(seen.has(key))return;seen.add(key);
+  rows.push({kind,url:value,episode:episode||"",page_url:origin||"",engine:engine||"",verified:false});
+ };
+ for(const entry of result.media||[])push("direct",entry.url,entry.label||"",entry.page_url,entry.engine);
+ for(const ep of result.episodes||[]){
+  for(const entry of ep.sources||[])push("direct",entry.url,ep.title,ep.page_url,entry.engine);
+  for(const url of ep.embeds||[])push("iframe",url,ep.title,ep.page_url,"iframe");
+ }
+ for(const url of result.embeds||[])push("iframe",url,"",result.page_url||"","iframe");
+ return rows;
+}
+function liveExportEnabled(){
+ const count=liveRows().length;
+ for(const id of ["deep-export-csv","deep-export-json","deep-copy-links"])$(id).disabled=!count;
+ return count;
+}
+function csvSafe(value){
+ let raw=String(value??"");
+ if(/^[\s]*[=+\-@]/.test(raw))raw="'"+raw;
+ return '"'+raw.replace(/"/g,'""')+'"';
+}
+function exportDeepReport(format){
+ const rows=liveRows();if(!rows.length)return toast("لم يتم اكتشاف مشغلات قابلة للتصدير بعد");
+ let body,mime,ext;
+ if(format==="csv"){
+  const header=["النوع","الحلقة","رابط المصدر","صفحة الحلقة","المحرك","التحقق"];
+  body="\uFEFF"+[header,...rows.map(x=>[x.kind,x.episode,x.url,x.page_url,x.engine,"مرشح غير متحقق"])]
+     .map(line=>line.map(csvSafe).join(",")).join("\r\n");
+  mime="text/csv;charset=utf-8";ext="csv";
+ }else{
+  body=JSON.stringify({version:1,source:"Al Ezz TV Studio",status:deepScanState.finished?"finished":"scanning",
+   exported_at:new Date().toISOString(),verified:false,
+   note:"هذه روابط عامة مرشحة غير مؤكدة التشغيل أو حقوق إعادة الاستضافة.",
+   players:rows},null,2);
+  mime="application/json;charset=utf-8";ext="json";
+ }
+ const object=new Blob([body],{type:mime}),href=URL.createObjectURL(object);
+ const a=document.createElement("a");a.href=href;
+ a.download="alezz-players-"+new Date().toISOString().slice(0,19).replace(/[T:]/g,"-")+"."+ext;
+ document.body.appendChild(a);a.click();a.remove();
+ setTimeout(()=>URL.revokeObjectURL(href),1200);
+ toast("تم تصدير "+rows.length+" مصدرًا متاحًا حتى الآن");
+}
+async function copyLiveLinks(){
+ const values=[...new Set(liveRows().map(row=>row.url))];
+ if(!values.length)return toast("لا توجد روابط للنسخ");
+ try{await navigator.clipboard.writeText(values.join("\n"));toast("تم نسخ "+values.length+" رابطًا")}
+ catch{toast("تعذر النسخ التلقائي؛ استخدم تصدير JSON أو CSV")}
+}
+function renderLiveFeed(){
+ const container=$("deep-live-feed"),empty=$("deep-live-empty");
+ const rows=liveRows(),last=rows.slice(-100);
+ for(const row of last){
+  const key=row.kind+"|"+row.url+"|"+row.episode;
+  if(deepScanState.seen.has(key))continue;
+  deepScanState.seen.add(key);
+  if(empty&&empty.parentNode)empty.remove();
+  const item=document.createElement("div");item.className="live-feed-item";
+  const meta=document.createElement("div");meta.style.minWidth="0";
+  const strong=document.createElement("strong");strong.textContent=(row.episode||"الصفحة الرئيسية")+" · "+(row.kind==="direct"?"فيديو مباشر مرشح":"صفحة مشغّل");
+  const short=document.createElement("small");short.textContent=shortLink(row.url)+" · "+(row.engine||"");
+  meta.append(strong,short);item.append(meta);
+  const action=document.createElement("button");action.type="button";action.className="mini-action";
+  action.textContent=row.kind==="direct"?"اختيار":"فحص";
+  action.addEventListener("click",()=>{if(row.kind==="direct")chooseSource(row.url,row.episode);
+   else{$("page-url").value=row.url;$("page-url").scrollIntoView({behavior:"smooth"});}});
+  item.append(action);container.prepend(item);
+ }
+ while(container.children.length>100)container.lastElementChild.remove();
+ liveExportEnabled();
+}
+function applyLiveSnapshot(data){
+ if(!deepScanState.id||!data)return;
+ const revision=Number(data.revision||0);
+ if(revision&&revision<=deepScanState.lastRevision)return;
+ deepScanState.lastRevision=revision;
+ const progress=data.progress||{};
+ const total=Number(progress.episodes_total||0),done=Number(progress.episodes_checked||0);
+ const percentage=total?Math.max(0,Math.min(100,Math.round(100*done/total))):0;
+ $("deep-checked").textContent=done+" / "+total;
+ $("deep-progressfill").style.width=percentage+"%";
+ $("deep-progressbar").setAttribute("aria-valuenow",String(percentage));
+ $("deep-progress").textContent=(data.message||"فحص متواصل")+" • "+done+"/"+total+" حلقات";
+ if(data.result){
+  deepScanState.result=data.result;
+  const fingerprint=JSON.stringify([
+   (data.result.media||[]).map(x=>x.url),
+   (data.result.embeds||[]),
+   (data.result.methods||[]).length,
+   (data.result.episodes||[]).map(ep=>[(ep.sources||[]).length,(ep.embeds||[]).length,(ep.methods||[]).length])
+  ]);
+  if(deepScanState.lastFingerprint!==fingerprint){
+   deepScanState.lastFingerprint=fingerprint;
+   showDeepResults(data.result);
+   renderLiveFeed();
+  }
+ }
+ $("deep-sources-count").textContent=String((deepScanState.result?.media||[]).length);
+ $("deep-embeds-count").textContent=String((deepScanState.result?.embeds||[]).length);
+ const final=["complete","failed"].includes(data.status);
+ const indicator=$("deep-live-indicator");
+ indicator.classList.toggle("is-active",!final);
+ indicator.classList.toggle("is-done",data.status==="complete");
+ $("deep-live-label").textContent=final?(data.status==="complete"?"اكتمل الفحص":"توقف الفحص"):"LIVE • اكتشاف مباشر";
+ if(final){
+  deepScanState.finished=true;
+  stopDeepScan();sessionStorage.removeItem("alezz-live-scan");
+  deepScanState.id=null;setBusy("deep-scan",false);
+  $("deep-progress").className="notice "+(data.status==="complete"?"success":"error");
+  $("deep-progress").textContent=data.status==="complete"?
+   "اكتمل الفحص؛ يمكنك تصدير جميع الروابط المرصودة أو فحصها.":
+   "توقف الفحص: "+(data.message||"تحقق من المحركات")+". النتائج الجزئية متاحة للتصدير.";
+  if(data.status==="complete")toast("اكتمل الفحص؛ الروابط متاحة للتصدير");
+ }
+}
+
 function deepMethods(result){
  const methods=Array.isArray(result.methods)?result.methods:[];
  clearResult("deep-methods",methods.length?"":"لم تظهر مراحل فحص بعد.");
@@ -423,49 +579,82 @@ function showDeepResults(result){
 }
 function stopDeepScan(){
  if(deepScanState.timer){clearInterval(deepScanState.timer);deepScanState.timer=null}
+ if(deepScanState.stream){deepScanState.stream.close();deepScanState.stream=null}
+ deepScanState.connecting=false;
 }
 async function pollDeepScan(){
- if(!deepScanState.id)return;
+ if(!deepScanState.id||deepScanState.polling)return;
+ deepScanState.polling=true;
  try{
   const response=await api("/api/private-film/deep-scan/"+encodeURIComponent(deepScanState.id));
-  const progress=response.progress||{};
-  const totals=(progress.episodes_total||0)?(" • فُحصت "+(progress.episodes_checked||0)+" من "+progress.episodes_total+" حلقات"):"";
-  $("deep-progress").textContent="المرحلة: "+(response.stage||"تجهيز")+" — "+(response.message||"فحص المصادر")+totals;
-  if(response.status==="complete"){
-   stopDeepScan();deepScanState.id=null;setBusy("deep-scan",false);
-   showDeepResults(response.result||{});
-   $("deep-progress").className="notice success";
-   $("deep-progress").textContent="اكتمل الفحص متعدد المحركات. المصادر مرشحة ويجب اختبارها قبل الاستيراد.";
-   toast("اكتمل فحص صفحات المسلسل والحلقات");
-  }else if(response.status==="failed"){
-   stopDeepScan();deepScanState.id=null;setBusy("deep-scan",false);
-   $("deep-progress").className="notice error";
-   $("deep-progress").textContent="تعذر إكمال الفحص: "+(response.message||response.error||"خطأ غير معروف");
-  }
+  applyLiveSnapshot(response);
  }catch(error){
-  stopDeepScan();deepScanState.id=null;setBusy("deep-scan",false);
   $("deep-progress").className="notice error";
-  $("deep-progress").textContent="تعذر متابعة الفحص: "+error.message;
- }
+  $("deep-progress").textContent="تعذر جلب التحديثات: "+error.message;
+  if(/401|403|جلسة/.test(error.message)){
+   stopDeepScan();setBusy("deep-scan",false);deepScanState.id=null;
+  }
+ }finally{deepScanState.polling=false}
+}
+function fallbackLivePoll(){
+ if(!deepScanState.id||deepScanState.timer)return;
+ if(deepScanState.stream){deepScanState.stream.close();deepScanState.stream=null}
+ $("deep-live-label").textContent="مباشر • تحديث سريع";
+ pollDeepScan();
+ deepScanState.timer=setInterval(pollDeepScan,1400);
+}
+function connectLiveEvents(){
+ if(!deepScanState.id)return;
+ if(typeof EventSource==="undefined")return fallbackLivePoll();
+ let received=false;
+ const id=deepScanState.id;
+ const eventStream=new EventSource("/api/private-film/deep-scan/"+encodeURIComponent(id)+"/events");
+ deepScanState.stream=eventStream;
+ eventStream.addEventListener("snapshot",e=>{
+  if(deepScanState.id!==id)return;
+  received=true;
+  try{applyLiveSnapshot(JSON.parse(e.data))}catch(error){console.warn("Malformed live snapshot",error)}
+ });
+ eventStream.onerror=()=>{
+  if(deepScanState.id!==id)return;
+  fallbackLivePoll();
+ };
+ // Some older Render builds lack the SSE endpoint. Switch to compatible
+ // short polling without delaying the initial source/episode display.
+ setTimeout(()=>{if(deepScanState.id===id&&!received)fallbackLivePoll()},4500);
 }
 async function deepScan(){
  const url=$("page-url").value.trim();
  if(!cleanLink(url))return toast("أدخل رابط صفحة HTTPS صحيحًا");
- stopDeepScan();setBusy("deep-scan",true);
- $("deep-progress").className="notice";$("deep-progress").textContent="يجري إنشاء مهمة فحص متعددة المحركات...";
+ if(deepScanState.id)return toast("يوجد فحص مباشر قيد التنفيذ");
+ stopDeepScan();deepScanState.result=null;deepScanState.lastRevision=-1;
+ deepScanState.lastFingerprint="";deepScanState.seen.clear();deepScanState.finished=false;
+ current.media=[];current.episodes=[];current.embeds=[];
+ renderMedia();renderEpisodes();renderEmbeds();
+ $("deep-live-feed").replaceChildren();
+ const placeholder=document.createElement("div");placeholder.className="empty";
+ placeholder.textContent="ستظهر الروابط الجديدة هنا مباشرة أثناء الفحص.";
+ $("deep-live-feed").appendChild(placeholder);
+ for(const id of ["deep-export-csv","deep-export-json","deep-copy-links"])$(id).disabled=true;
+ setBusy("deep-scan",true);
+ $("deep-progress").className="notice";
+ $("deep-progress").textContent="جارٍ تشغيل الفحص اللحظي وفتح صفحات الحلقات بالتوازي...";
+ $("deep-live-label").textContent="بدء الفحص المباشر";
  clearResult("deep-methods","");
  clearResult("deep-episodes","");
  try{
-  const result=await post("/api/private-film/deep-scan",{page_url:url,max_episodes:12});
-  deepScanState.id=result.job_id;
-  await pollDeepScan();
-  if(deepScanState.id)deepScanState.timer=setInterval(pollDeepScan,3200);
+  const response=await post("/api/private-film/deep-scan",{page_url:url,max_episodes:12});
+  deepScanState.id=response.job_id;
+  sessionStorage.setItem("alezz-live-scan",response.job_id);
+  connectLiveEvents();
+  pollDeepScan();
  }catch(error){
   setBusy("deep-scan",false);
   $("deep-progress").className="notice error";
   $("deep-progress").textContent="تعذر بدء الفحص: "+error.message;
  }
 }
+
 async function discover(){
  const url=$("page-url").value.trim();if(!cleanLink(url))return toast("أدخل رابط صفحة HTTPS صحيحًا");
  setBusy("discover-page",true);$("discovery-status").textContent="جارٍ قراءة HTML العام من الخادم...";
@@ -611,6 +800,16 @@ async function refreshHealth(){
  }
 }
 $("deep-scan").addEventListener("click",deepScan);
+$("deep-export-csv").addEventListener("click",()=>exportDeepReport("csv"));
+$("deep-export-json").addEventListener("click",()=>exportDeepReport("json"));
+$("deep-copy-links").addEventListener("click",copyLiveLinks);
+try{
+ const savedScan=sessionStorage.getItem("alezz-live-scan");
+ if(savedScan){
+  deepScanState.id=savedScan;setBusy("deep-scan",true);
+  connectLiveEvents();pollDeepScan();
+ }
+}catch{} 
 $("parse-chrome-report").addEventListener("click",readLocalChromeReport);
 $("discover-page").addEventListener("click",discover);
 $("browser-diagnose").addEventListener("click",browserDiagnose);
