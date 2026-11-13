@@ -1,7 +1,14 @@
 name: Al Ezz TV — Stable signed release and in-app updates
-# Signed updates are issued on demand, not for every GitHub push.
-# This prevents a new mandatory APK prompt whenever source code changes.
+# Native source changes create a signed optional update automatically.
+# Media/catalogue edits update live from Supabase and do not rebuild APKs.
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - '.github/workflows/android-stable-release.yml'
   workflow_dispatch:
     inputs:
       version_name:
@@ -90,9 +97,12 @@ jobs:
           REQUESTED_VERSION: ${{ inputs.version_name }}
         run: |
           set -euo pipefail
-          if [[ -z "$REQUESTED_VERSION" ]]; then REQUESTED_VERSION="21.0.$GITHUB_RUN_NUMBER"; fi
-          [[ "$REQUESTED_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Invalid version name"; exit 1; }
+          # Always use a higher version code than the last signed release.
+          CURRENT_CODE="$(python3 -c 'import json; print(int(json.load(open("data/android-update.json")).get("version_code",0)))')"
           VERSION_CODE=$(( 300000 + GITHUB_RUN_NUMBER ))
+          if (( VERSION_CODE <= CURRENT_CODE )); then VERSION_CODE=$(( CURRENT_CODE + 1 )); fi
+          if [[ -z "$REQUESTED_VERSION" ]]; then REQUESTED_VERSION="21.0.$((VERSION_CODE - 300000))"; fi
+          [[ "$REQUESTED_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Invalid version name"; exit 1; }
           echo "ORG_GRADLE_PROJECT_ezzApplicationId=sa.alezz.tv" >> "$GITHUB_ENV"
           echo "ORG_GRADLE_PROJECT_ezzVersionCode=$VERSION_CODE" >> "$GITHUB_ENV"
           echo "ORG_GRADLE_PROJECT_ezzVersionName=$REQUESTED_VERSION" >> "$GITHUB_ENV"
