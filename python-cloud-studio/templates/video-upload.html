@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101118">
+  <meta name="robots" content="noindex, nofollow">
+  <title>رفع فيديو MP4 | استديو العز TV</title>
+  <link rel="icon" type="image/svg+xml" href="/static/studio-icon.svg">
+  <link rel="stylesheet" href="/static/video-upload.css?v=1">
+  <script defer src="/static/video-upload.js?v=1"></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="header">
+      <a class="brand" href="/studio/" aria-label="استديو العز"><span class="mark">ع<small>TV</small></span><span>العز <b>TV</b><small>استديو المحتوى</small></span></a>
+      <nav class="links" aria-label="روابط الاستديو">
+        <a href="/studio/">الاستديو الرئيسي</a>
+        <a href="/admin/#movies">إدارة الأفلام</a>
+        <a href="/admin/series-quick.html">الحلقات</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="eyebrow">مكتبتك الخاصة • Supabase Storage</div>
+        <h1>رفع فيديوهات <span>MP4</span></h1>
+        <p>ارفع فيديو من جهازك مباشرة إلى تخزين العز TV، ثم انسخ رابط MP4 المباشر واستخدمه في رابط تشغيل الفيلم أو الحلقة داخل التطبيق.</p>
+        <div class="steps"><span><b>1</b> اختيار الملف</span><span><b>2</b> الرفع والتحقق</span><span><b>3</b> نسخ الرابط</span></div>
+      </section>
+
+      <section class="panel upload-panel" aria-labelledby="upload-heading">
+        <div class="panel-title"><div><h2 id="upload-heading">فيديو جديد</h2><p>ملف MP4 أصلي — لا يتم تحويل الصيغ الأخرى تلقائيًا.</p></div><span class="pill">رفع مجزأ 6 MB</span></div>
+        <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="اختر أو اسحب ملف MP4">
+          <span class="upload-symbol" aria-hidden="true">⇧</span>
+          <strong>اضغط لاختيار الفيديو أو اسحبه هنا</strong>
+          <span>MP4 فقط • من الجوال أو الكمبيوتر • لا يمر الملف بخادم Render</span>
+          <input id="file" type="file" accept=".mp4,video/mp4" hidden>
+        </div>
+        <div id="chosen" class="chosen" hidden><span aria-hidden="true">🎞</span><div class="chosen-text"><strong id="file-name"></strong><small id="file-size"></small></div><button id="change-file" type="button" class="quiet">تغيير الملف</button></div>
+
+        <label class="field" for="video-title"><span>عنوان الفيديو في سجل الملفات</span><input id="video-title" type="text" maxlength="180" placeholder="مثال: الحلقة الأولى" autocomplete="off"></label>
+        <div class="actions">
+          <button id="upload" class="primary" type="button" disabled>رفع إلى الداتا</button>
+          <button id="pause" class="secondary" type="button" hidden>إيقاف مؤقت</button>
+        </div>
+        <div class="progress-area" id="progress-area" hidden>
+          <div class="progress-head"><strong id="progress-label">جاري التجهيز...</strong><b id="percent">0%</b></div>
+          <progress id="progress" value="0" max="100" aria-label="نسبة رفع الفيديو"></progress>
+          <div class="progress-foot"><span id="bytes">0 MB / 0 MB</span><span id="progress-note">يُستأنف الرفع تلقائيًا عند انقطاع الشبكة المؤقت.</span></div>
+        </div>
+        <p class="feedback" id="feedback" role="status" aria-live="polite">سجّل الدخول بحساب مسؤول العز لرفع الملفات.</p>
+      </section>
+
+      <section class="panel result-panel" id="result" hidden aria-label="رابط الفيديو بعد الرفع">
+        <div class="success-heading"><span class="check">✓</span><div><h2>تم رفع الفيديو بنجاح</h2><p>هذا رابط MP4 مباشر وثابت، ويمكن نسخه إلى بيانات الفيلم أو الحلقة.</p></div></div>
+        <label for="result-url">رابط الفيديو المباشر</label>
+        <div class="url-row"><input id="result-url" type="url" dir="ltr" readonly><button id="copy-result" type="button" class="primary">نسخ الرابط</button></div>
+        <div class="result-links"><a id="open-result" href="#" target="_blank" rel="noopener noreferrer">اختبار رابط MP4</a><a href="/admin/#movies">إضافة إلى فيلم</a><a href="/admin/series-quick.html">إضافة إلى حلقة</a></div>
+        <video id="preview" controls playsinline preload="metadata"></video>
+      </section>
+
+      <section class="panel library-panel">
+        <div class="panel-title"><div><h2>الفيديوهات المرفوعة</h2><p>الملفات المكتملة والمسجلة في قاعدة البيانات؛ لا تُنشر تلقائيًا للمشاهدين.</p></div><button id="refresh" type="button" class="secondary">تحديث القائمة</button></div>
+        <div id="library-status" class="muted">جاري تحميل المكتبة...</div>
+        <div class="library" id="library"></div>
+      </section>
+      <p class="footnote">تنبيه: الروابط عامة لكل من يملكها. ارفع فقط الفيديوهات التي تملك حق نشرها. حدود حجم الملفات وسعة التخزين يحددها اشتراك Supabase. وللتوافق الأفضل مع التلفزيونات استخدم H.264 للفيديو وAAC للصوت.</p>
+    </main>
+  </div>
+</body>
+</html>
