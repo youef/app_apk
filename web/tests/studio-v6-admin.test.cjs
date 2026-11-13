@@ -47,6 +47,6 @@ test('failed episode retry, stop and scan checkpoint restore are admin operation
 test('exported source URLs remain unverified unless independently checked',()=>{
  assert.match(js,/function exportStudioPlayers\(format\)/);
  assert.match(js,/function studioExportCsvField\(value\)/);
- assert.match(js,/row\.verified\?'اجتاز الفحص'/);
+ assert.match(js,/x\.verified\?'اجتاز الفحص'/);
  assert.match(js,/لم تُكتشف أي روابط عامة للتصدير بعد/);
 });
