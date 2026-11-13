@@ -18,6 +18,6 @@ assert(p.indexOf("instance.on(Hls.Events.MEDIA_ATTACHED")<p.indexOf("instance.lo
   "HLS must load manifest only after media attachment");
 assert(/js\/player\.js\?v=[a-z0-9][\w.-]+/i.test(html),"iOS player cache-bust missing");
 assert(css.includes(".player.needs-user-play .player__center"),"portrait/landscape tap button missing");
-assert(sw.includes("alezz-shell-member-privacy-") && sw.includes('request.mode === "navigate"'),"ServiceWorker must invalidate the old cache without caching private viewer HTML");
+assert(/var CACHE = "alezz-shell-[^"]+"/.test(sw) && sw.includes('request.mode === "navigate"') && sw.includes("caches.delete(name)"),"ServiceWorker must invalidate the old cache without caching private viewer HTML");
 assert(!html.includes("js/offline.js"),"Offline downloads should stay removed");
 console.log("PASS: Safari user gesture, stale error guard, native HLS, bounded alternatives, cache refresh");
