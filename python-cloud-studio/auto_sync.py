@@ -325,7 +325,9 @@ class AutoSync:
         self.clock=clock
         # Full source discovery every four hours by default. Signed URLs can
         # trigger an earlier refresh; independent health checks stay frequent.
-        self.interval=max(0.25,min(24,float(os.getenv('ALEZZ_AUTOSYNC_INTERVAL_HOURS','4'))))*3600
+        # A separate key prevents pre-existing Render deployments that still
+        # retain the former 0.5-hour variable from overriding the new policy.
+        self.interval=max(0.25,min(24,float(os.getenv('ALEZZ_AUTOSYNC_SOURCE_INTERVAL_HOURS','4'))))*3600
         self.check_interval=min(self.interval,max(1,min(5,float(os.getenv('ALEZZ_AUTOSYNC_CHECK_MINUTES','5'))))*60)
         self.mode=os.getenv('ALEZZ_AUTOSYNC_MODE','auto')
         self.concurrency=max(1,min(5,int(os.getenv('ALEZZ_AUTOSYNC_CONCURRENCY','5'))))
