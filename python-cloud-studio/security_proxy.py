@@ -113,7 +113,8 @@ def safe_status():
     pool, allowed = settings()
     from security_free_proxies import status as free_status
     free = free_status()
-    using_free = os.environ.get("ALEZZ_SECURITY_FREE_PROXY_ENABLED", "1") == "1"
+    using_free = (os.environ.get("ALEZZ_SECURITY_FREE_PROXY_ENABLED", "1") == "1" and
+                  os.environ.get("ALEZZ_SECURITY_PROXY_ENABLED", "1") == "1")
     return {
         "configured": len(pool) or (free["working"] if using_free else 0),
         "approved_host_count": len(allowed),
@@ -129,7 +130,8 @@ def audit_proxy_context(host):
     configured, allowed = settings(resolve_free=False)
     approved = host.lower().rstrip(".") in allowed
     free_enabled = os.environ.get("ALEZZ_SECURITY_FREE_PROXY_ENABLED", "1") == "1"
-    use_free = approved and free_enabled and not configured
+    use_free = (approved and free_enabled and not configured and
+                os.environ.get("ALEZZ_SECURITY_PROXY_ENABLED", "1") == "1")
     pool = configured
     if use_free:
         pool, _ = settings(resolve_free=True)
