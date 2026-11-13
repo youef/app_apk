@@ -658,7 +658,7 @@ class DiscoverForm(BaseModel):
     scan_media: bool = True
     force_refresh: bool = False
     auto_track: bool = False
-    fast: bool = True
+    fast: bool = False
 
 
 @app.post('/api/discover')
