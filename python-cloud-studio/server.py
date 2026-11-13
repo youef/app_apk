@@ -317,16 +317,27 @@ class DiscoverySourceClient(SourceClient):
 
 
 def discover_full(source: str, kind: str='auto', deep: bool=True, enrich_metadata: bool=True,
-                  resume_progress:dict|None=None,progress_hook=None) -> Catalogue:
+                  resume_progress:dict|None=None,progress_hook=None, *, fast:bool=False) -> Catalogue:
     source=public_url(source)
     client=DiscoverySourceClient(source)
+    if fast:
+        # Quick first pass: display the catalogue before expensive metadata
+        # enrichment or pagination across hundreds of external pages.
+        client.retries=1
+        client.timeout=6
+        client.deadline=time.monotonic()+20
     try:
         cat=pull_html(source,client,kind,max_seasons=500,
-                      max_episodes=5000,max_pages=500,resume_progress=resume_progress,progress_hook=progress_hook)
+                      max_episodes=5000,max_pages=3 if fast else 500,
+                      resume_progress=resume_progress,progress_hook=progress_hook)
     finally:
         client.session.close()
     if kind!='auto':cat.kind=kind
     cat.source_pages=list(dict.fromkeys([source,cat.url,*cat.source_pages]))
+    if fast:
+        if any('حد الصفحات' in message for message in cat.discovery_warnings):
+            cat.discovery_warnings.append('الفحص السريع يعرض الدفعة الأولى فقط؛ استخدم الوضع الشامل للصفحات المتبقية.')
+        return cat
     if enrich_metadata:
         enrich(cat,include_episodes=True)
     if deep and cat.kind=='series' and cat.episodes:
@@ -505,7 +516,8 @@ def _scan_media_entry(cat: Catalogue, entry):
     try:
         # HTTP checks run concurrently. Browser extraction is a controlled
         # fallback and can take longer on source sites that throttle access.
-        resolver = MediaResolver(mode=AUTOSYNC.mode, timeout=9, max_pages=5)
+        resolver = MediaResolver(mode=AUTOSYNC.mode, timeout=5, max_pages=3,
+                                 workers=3, max_seconds=8)
         embed_pages = [item['url'] for item in candidates if item.get('kind') == 'embed' and item.get('url')]
         checked, errors = resolver.resolve([*pages, *embed_pages], existing=candidates)
         playable = next((item for item in checked
@@ -558,6 +570,8 @@ def scan_catalogue(state: UserState, cat: Catalogue, progress: dict):
                     entry.verified = playable is not None
                     entry.error = error
                     progress['done'] += 1
+                    progress['revision'] += 1
+                    progress['last_result'] = asdict(entry)
                     progress['verified'] += int(entry.verified)
                     progress['sources_found'] += sum(
                         item.get('kind') == 'direct' for item in checked)
@@ -575,11 +589,14 @@ def scan_catalogue(state: UserState, cat: Catalogue, progress: dict):
                     progress['error'] = safe_error(exc)
                 finally:
                     progress['running'] = False
+                    progress['revision'] += 1
 
 
 def start_catalogue_scan(state: UserState, cat: Catalogue):
     total = len(cat.episodes) if cat.kind == 'series' else 1
-    progress = {'id':secrets.token_hex(8),'running':bool(total),'done':0,'total':total,'verified':0,'sources_found':0,'workers':0,'error':''}
+    progress = {'id':secrets.token_hex(8),'running':bool(total),'done':0,'total':total,
+                'verified':0,'sources_found':0,'workers':0,'error':'',
+                'revision':0,'started_at':time.time(),'first_batch_target_seconds':30}
     state.scan = progress
     state.scan_catalogue = cat
     if total: _discovery_scans.submit(scan_catalogue,state,cat,progress)
@@ -591,10 +608,42 @@ async def discovery_scan(request: Request):
     with state.lock:
         progress = scan_status(state)
         if progress:
-            # Include incremental snapshots so the client shows verified links
-            # and episode status while the concurrent workers are still running.
+            # Compatibility endpoint for browsers without EventSource.
             return {'scan':dict(progress),'summary':get_summary(state)}
     return {'scan':None}
+
+
+@app.get('/api/discovery-scan/events')
+async def discovery_scan_events(request: Request, scan_id: str):
+    """Stream each completed episode without copying the entire catalogue."""
+    _, state=find_state(request)
+    with state.lock:
+        progress=scan_status(state)
+        if not progress or progress.get('id')!=scan_id:
+            raise HTTPException(404,'الفحص غير موجود في هذه الجلسة')
+
+    async def generate():
+        revision=-1
+        while not await request.is_disconnected():
+            with state.lock:
+                current=scan_status(state)
+                if not current or current.get('id')!=scan_id:
+                    break
+                current_revision=int(current.get('revision',0))
+                if revision!=current_revision:
+                    packet={'scan':{key:value for key,value in current.items() if key!='last_result'},
+                            'delta':current.get('last_result') if current_revision>0 else None}
+                else:
+                    packet=None
+            if packet is not None:
+                revision=current_revision
+                yield ('event: snapshot\ndata: '+
+                       json.dumps(packet,ensure_ascii=False,separators=(',',':'))+'\n\n')
+            if not current.get('running'):break
+            await asyncio.sleep(0.35)
+    return StreamingResponse(generate(),media_type='text/event-stream',
+                             headers={'Cache-Control':'private, no-store, no-transform',
+                                      'X-Accel-Buffering':'no','X-Content-Type-Options':'nosniff'})
 
 
 class DiscoverForm(BaseModel):
@@ -605,6 +654,7 @@ class DiscoverForm(BaseModel):
     scan_media: bool = True
     force_refresh: bool = False
     auto_track: bool = False
+    fast: bool = True
 
 
 @app.post('/api/discover')
@@ -620,7 +670,8 @@ async def discover(request: Request, data: DiscoverForm):
             episodes=[Episode(**row) for row in cached.pop('episodes',[])]
             cat=Catalogue(**cached,episodes=episodes)
         else:
-            cat = await run_in_threadpool(lambda: discover_full(source, data.kind, deep=data.deep, enrich_metadata=data.metadata))
+            cat = await run_in_threadpool(lambda: discover_full(
+                source, data.kind, deep=data.deep, enrich_metadata=data.metadata, fast=data.fast))
         cat.source_pages=list(dict.fromkeys([source,cat.url,*cat.source_pages]))
         LIBRARY.remember_discovery(cat)
         tracking = None
