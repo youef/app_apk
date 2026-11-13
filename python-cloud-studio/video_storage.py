@@ -36,6 +36,7 @@ class StorageProvider:
     public_base_url: str
     quota_bytes: int
     max_file_bytes: int
+    priority: int = 50
 
     @property
     def ready(self):
@@ -74,7 +75,7 @@ def _env(name, suffix, default=""):
     return os.getenv("ALEZZ_" + name.upper() + "_" + suffix, default).strip()
 
 
-def providers() -> dict[str, StorageProvider]:
+def providers(portal=None) -> dict[str, StorageProvider]:
     configs = {}
     for name in VALID_IDS:
         region = _env(name, "REGION", "auto" if name == "r2" else "")
@@ -96,6 +97,25 @@ def providers() -> dict[str, StorageProvider]:
                                       (20 if name == "oracle" else 10) * GIB),
             max_file_bytes=_positive_int(_env(name, "MAX_FILE_BYTES"), 50 * GIB),
         )
+    if portal is not None:
+        # Database configuration has precedence. Disabled/untested entries
+        # intentionally override any stale environment-based configuration.
+        import video_storage_settings
+        for name, row in video_storage_settings.configs(portal).items():
+            if name not in VALID_IDS:
+                continue
+            if row.get("enabled") and row.get("health_status") == "healthy":
+                configs[name] = video_storage_settings.live_provider(row)
+                configs[name] = StorageProvider(
+                    **{**vars(configs[name]), "priority": int(row.get("priority") or 50)})
+            else:
+                configs[name] = StorageProvider(
+                    name=name, label=PROVIDER_INFO[name][0], endpoint="",
+                    region="", bucket="", access_id="", secret="",
+                    public_base_url="", quota_bytes=int(row.get("quota_bytes") or 10 * GIB),
+                    max_file_bytes=int(row.get("max_file_bytes") or 50 * GIB),
+                    priority=int(row.get("priority") or 50),
+                )
     return configs
 
 
@@ -119,23 +139,28 @@ def summary(portal):
         "file_count": usage.get("supabase", {}).get("file_count", 0),
         "details": "ملفات صغيرة فقط؛ الباقة المجانية ترفض الملف الأكبر من 50 MB",
     }]
-    for name, provider in providers().items():
+    for name, provider in providers(portal).items():
         entries.append({
             "id": name, "label": provider.label, "ready": provider.ready,
             "max_file_bytes": provider.max_file_bytes,
             "quota_bytes": provider.quota_bytes, "used_bytes": usage.get(name, {}).get("used_bytes", 0),
             "file_count": usage.get(name, {}).get("file_count", 0),
-            "details": "جاهز للاستخدام" if provider.ready else "بانتظار إنشاء الحساب وربط مفاتيح الوصول",
+            "priority": provider.priority,
+            "details": "جاهز للاستخدام" if provider.ready else "بانتظار تفعيل المركز واختبار الاتصال",
             "signup_url": PROVIDER_INFO[name][1],
         })
     return entries
 
 
-def choose(portal, size_bytes: int, preference: str = "auto"):
+def choose(portal, size_bytes: int, preference: str = "auto", exclude=()):
+    import video_storage_settings
+    policy = video_storage_settings.distribution(portal)
     summaries = summary(portal)
     candidates = [
-        p for p in summaries if p["ready"] and p["max_file_bytes"] >= size_bytes
+        p for p in summaries if p["ready"] and p["id"] not in exclude
+        and p["max_file_bytes"] >= size_bytes
         and p["quota_bytes"] >= p["used_bytes"] + size_bytes
+        and (p["id"] != "supabase" or policy["fallback_supabase"] or preference == "supabase")
     ]
     if preference != "auto":
         selected = next((x for x in candidates if x["id"] == preference), None)
@@ -149,17 +174,22 @@ def choose(portal, size_bytes: int, preference: str = "auto"):
         # Evenly spread across connected services by utilization, while
         # preferring R2 at equal utilization, then B2, then Oracle.
         rank = {"r2": 0, "b2": 1, "oracle": 2}
+        if policy["mode"] == "priority":
+            return min(external, key=lambda p: (
+                p.get("priority", 50),
+                (p["used_bytes"] + size_bytes) / max(1, p["quota_bytes"]),
+                rank.get(p["id"], 10),
+            ))["id"]
         return min(external, key=lambda p: (
             (p["used_bytes"] + size_bytes) / max(1, p["quota_bytes"]),
-            rank.get(p["id"], 10),
+            p.get("priority", 50), rank.get(p["id"], 10),
         ))["id"]
     fallback = next((p for p in candidates if p["id"] == "supabase"), None)
     if fallback:
         return "supabase"
     raise ValueError(
-        "لا يتوفر مركز تخزين مفعّل بمساحة كافية لهذا الفيديو. "
-        "Supabase المجاني يقبل حتى 50 MB للملف؛ "
-        "اربط R2 أو B2 أو Oracle من إعدادات Render لمواصلة رفع الملفات الكبيرة.")
+        "لا يوجد مركز مفعّل بسعة متاحة تكفي لهذا الفيديو. "
+        "افتح إعدادات التخزين داخل صفحة رفع العز وأضف حساب R2 أو B2 أو Oracle.")
 
 
 def start_multipart(provider: StorageProvider, path: str):
