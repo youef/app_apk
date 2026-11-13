@@ -783,37 +783,55 @@ async def discovery_scan(request: Request):
 
 
 @app.get('/api/discovery-scan/events')
-async def discovery_scan_events(request: Request, scan_id: str):
-    """Stream each completed episode without copying the entire catalogue."""
-    _, state=find_state(request)
+async def discovery_scan_events(request: Request, scan_id: str, after: int=0):
+    """Replay missed episode deltas, then push live snapshots in order.
+
+    Every event has a monotonic id. A client behind the 400-event ring
+    receives a full resync rather than losing unobserved episodes.
+    """
+    _,state=find_state(request)
+    if not 0<=after<=10_000_000:raise HTTPException(422,"Invalid cursor")
     with state.lock:
-        progress=scan_status(state)
-        if not progress or progress.get('id')!=scan_id:
-            raise HTTPException(404,'الفحص غير موجود في هذه الجلسة')
+        current=state.scan
+        if not current or current.get("id")!=scan_id or state.catalogue is not state.scan_catalogue:
+            raise HTTPException(404,"الفحص غير موجود في هذه الجلسة")
 
     async def generate():
-        revision=-1
+        cursor=after
+        idle_at=time.monotonic()
         while not await request.is_disconnected():
             with state.lock:
-                current=scan_status(state)
-                if not current or current.get('id')!=scan_id:
-                    break
-                current_revision=int(current.get('revision',0))
-                if revision!=current_revision:
-                    packet={'scan':{key:value for key,value in current.items() if key!='last_result'},
-                            'delta':current.get('last_result') if current_revision>0 else None,
-                            'tracking':dict(state.tracking) if state.tracking else None}
+                current=state.scan
+                if not current or current.get("id")!=scan_id:break
+                events=list(current.get("events") or [])
+                latest=int(current.get("seq",0))
+                missed=bool(events and cursor<events[0]["seq"]-1)
+                if cursor==0 or missed:
+                    packet={"seq":latest,"kind":"resync","scan":_scan_public(current),
+                            "catalogue":asdict(state.catalogue),
+                            "tracking":dict(state.tracking) if state.tracking else None}
+                    batches=[packet]
                 else:
-                    packet=None
-            if packet is not None:
-                revision=current_revision
-                yield ('event: snapshot\ndata: '+
-                       json.dumps(packet,ensure_ascii=False,separators=(',',':'))+'\n\n')
-            if not current.get('running'):break
-            await asyncio.sleep(0.35)
-    return StreamingResponse(generate(),media_type='text/event-stream',
-                             headers={'Cache-Control':'private, no-store, no-transform',
-                                      'X-Accel-Buffering':'no','X-Content-Type-Options':'nosniff'})
+                    batches=[{"seq":event["seq"],"kind":event["kind"],
+                              "delta":event.get("delta"),
+                              "scan":_scan_public(current),
+                              "tracking":dict(state.tracking) if state.tracking else None}
+                             for event in events if event["seq"]>cursor]
+                active=bool(current.get("running"))
+            if batches:
+                for packet in batches:
+                    cursor=packet["seq"]
+                    yield ("id: "+str(cursor)+"\nevent: snapshot\ndata: "+
+                           json.dumps(packet,ensure_ascii=False,separators=(",",":"))+"\n\n")
+                idle_at=time.monotonic()
+            if not active:break
+            if time.monotonic()-idle_at>=14:
+                yield ": keepalive\n\n"
+                idle_at=time.monotonic()
+            await asyncio.sleep(.25)
+    return StreamingResponse(generate(),media_type="text/event-stream",
+        headers={"Cache-Control":"private, no-store, no-transform",
+                 "X-Accel-Buffering":"no","X-Content-Type-Options":"nosniff"})
 
 
 class DiscoverForm(BaseModel):
@@ -835,13 +853,20 @@ async def discover(request: Request, data: DiscoverForm):
     try:
         source = public_url(data.url)
         cached = None if data.force_refresh else LIBRARY.cached_discovery(source)
+        crawl_checkpoint={}
         if cached and (data.kind=='auto' or data.kind==cached['kind']):
             cached=dict(cached)
             episodes=[Episode(**row) for row in cached.pop('episodes',[])]
             cat=Catalogue(**cached,episodes=episodes)
         else:
+            crawl_checkpoint={}
+            def capture_crawl(snapshot):
+                if isinstance(snapshot,dict):
+                    crawl_checkpoint.clear()
+                    crawl_checkpoint.update(deepcopy(snapshot))
             cat = await run_in_threadpool(lambda: discover_full(
-                source, data.kind, deep=data.deep, enrich_metadata=data.metadata, fast=data.fast))
+                source, data.kind, deep=data.deep, enrich_metadata=data.metadata,
+                fast=data.fast, progress_hook=capture_crawl if data.fast and data.deep else None))
         cat.source_pages=list(dict.fromkeys([source,cat.url,*cat.source_pages]))
         LIBRARY.remember_discovery(cat)
         tracking = None
@@ -888,7 +913,9 @@ async def discover(request: Request, data: DiscoverForm):
             state.catalogue, state.catalogues, state.batch_errors = cat, [cat], []
             state.current_index, state.demo = 0, False
             if not data.auto_track or state.db is None:state.tracking=tracking
-            if data.scan_media: start_catalogue_scan(state,cat)
+            if data.scan_media:
+                start_catalogue_scan(state,cat,owner_uid=_portal_scan_uid(request),
+                    crawl_checkpoint=crawl_checkpoint if data.fast and data.deep else None)
         return {**get_summary(state),'tracking':tracking}
     except SourceConnectionError as exc:
         raise HTTPException(502, str(exc)) from None
