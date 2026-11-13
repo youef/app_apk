@@ -83,3 +83,25 @@ def load(scan_id,owner_id):
         return row
     except (ValueError,requests.RequestException):
         return None
+
+
+def recent(owner_id,limit=15):
+    """Only rows belonging to the verified active portal administrator."""
+    if not _UID.fullmatch(str(owner_id)):return []
+    target=_connection()
+    if not target:return []
+    url,headers=target
+    try:
+        with requests.Session() as session:
+            session.trust_env=False
+            response=session.get(url,params={
+                "owner_id":"eq."+owner_id,
+                "expires_at":"gt."+time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime()),
+                "select":"scan_id,source_url,scan_status,progress,created_at,updated_at",
+                "order":"updated_at.desc","limit":str(max(1,min(int(limit),25)))
+            },headers=headers,timeout=(4,9),allow_redirects=False)
+            if response.status_code!=200:return []
+            rows=response.json()
+        return rows if isinstance(rows,list) else []
+    except (ValueError,requests.RequestException):
+        return []
