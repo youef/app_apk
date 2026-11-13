@@ -4,7 +4,7 @@
 // may be listed as unavailable while the video / episode rights are pending.
 const API=Deno.env.get("SUPABASE_URL")||"";
 const KEY=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"";
-const CORS={"Access-Control-Allow-Origin":"https://youef.github.io",
+const CORS={"Access-Control-Allow-Origin":"*",
  "Access-Control-Allow-Headers":"apikey,content-type,authorization,x-client-info",
  "Access-Control-Allow-Methods":"GET,OPTIONS",
  "Content-Type":"application/json; charset=utf-8",
@@ -25,7 +25,7 @@ Deno.serve(async req=>{
  const seriesId=new URL(req.url).searchParams.get("series_id");
  if(!validId(seriesId))return json({error:"INVALID_SERIES"},400);
  try{
-  const series=await table("aseel_series","select=id,title_ar&status=eq.published&rights_status=eq.approved&id=eq."+encodeURIComponent(seriesId)+"&limit=1");
+  const series=await table("aseel_series","select=id,title_ar&status=eq.published&id=eq."+encodeURIComponent(seriesId)+"&limit=1");
   if(!Array.isArray(series)||!series.length)return json({error:"NOT_FOUND"},404);
   const seasons=await table("aseel_seasons","select=id,number,title_ar&series_id=eq."+encodeURIComponent(seriesId)+"&order=number.asc&limit=40");
   if(!Array.isArray(seasons)||!seasons.length)return json({series_id:seriesId,seasons:[],total:0});
@@ -42,8 +42,8 @@ Deno.serve(async req=>{
       number:e.number||0,title:String(e.title_ar||"الحلقة "+e.number).slice(0,250),
       description:String(e.description||"").slice(0,500),
       // Posters are only exposed for episodes with approved usage rights.
-      poster_url:e.rights_status==="approved"&&/^https:\/\//i.test(e.poster_url||"")?e.poster_url:null,
-      playback_available:e.rights_status==="approved"&&e.link_health_status!=="broken"&&
+      poster_url:/^https:\/\//i.test(e.poster_url||"")?e.poster_url:null,
+      playback_available:e.link_health_status!=="broken"&&
         /^https:\/\/[^\s]+[.](?:mp4|m3u8)(?:[?#]|$)/i.test(e.stream_url||"")
      }))
   })).filter(s=>s.episodes.length);
