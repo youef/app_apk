@@ -633,22 +633,12 @@ class AutoSync:
             if source['url'] in allowed and source['url']!=selected:
                 variants.append(dict(url=source['url'],label=source['label'] or urlsplit(source['url']).hostname,
                                      kind=source['kind'],page_url=source['page_url']))
-        # Never leave a published item without an original page, or after three
-        # consecutive independent failures of every playable source. Retain the
-        # source history so an editor can review and restore it later.
-        missing_original=not pages
-        should_draft=missing_original or (failures>=3 and not good and not primary_embed_reachable and not uncertain_ok_primary)
-        if missing_original:
-            error='المصدر الأصلي مفقود؛ حُفظ العمل مسودة حتى مراجعة مصادره'
+        # Health checks report failure but never silently change a published item to draft.
+        if not pages:
+            error='المصدر الأصلي غير متاح؛ يرجى تحديث المشغل'
         payload=dict(link_health_status=status,link_health_reason=error or None,
                      link_health_checked_at=iso(now),link_health_failures=failures,link_health_url=selected or None)
         if extracted:payload.update(self.metadata_patch(job,pages))
-        if should_draft and saved.get('status')=='published':
-            payload['status']='draft'
-            self.queue.event('auto_draft',
-                             'نُقل إلى مسودة: المصدر الأصلي مفقود' if missing_original else
-                             'نُقل إلى مسودة بعد 3 فحوص متتالية دون مصدر صالح',
-                             table,identifier)
         if remove_primary or good:
             payload['stream_url']=selected or None
         if good:
@@ -734,14 +724,12 @@ class AutoSync:
         parent=self.queue.get_setting('discovered-episode:'+identifier)
         if not parent or not self.queue.get_setting('publish-series:'+parent,False):
             return
-        series=db.single('aseel_series',{'id':'eq.'+parent,'select':'id,status,rights_status,license_reference'})
-        if not series or series.get('status')!='published' or series.get('rights_status')!='approved':
+        series=db.single('aseel_series',{'id':'eq.'+parent,'select':'id,status'})
+        if not series or series.get('status')!='published':
             return
         changed=db.req('PATCH','aseel_episodes',{'id':'eq.'+identifier,
-                       'status':'eq.draft','rights_status':'eq.pending','link_health_status':'eq.healthy',
-                       'stream_url':'not.is.null'},
-                       {'status':'published','rights_status':'approved',
-                        'license_reference':series.get('license_reference') or ''})
+                        'status':'eq.draft','link_health_status':'eq.healthy',
+                        'stream_url':'not.is.null'}, {'status':'published'})
         if changed:
             self.queue.setting('discovered-episode:'+identifier,None)
             self.queue.event('episode_published','نُشرت الحلقة الجديدة بعد التحقق من رابطها.', 'aseel_episodes',identifier)
@@ -752,19 +740,9 @@ class AutoSync:
         pages=[s['url'] for s in self.queue.sources(table,identifier) if s['kind']=='original']
         if not pages:
             now=self.clock()
-            saved=json.loads(job['data'])
-            reason='مصدر المسلسل الأصلي مفقود؛ نُقل إلى المسودات'
-            to_draft=saved.get('status')=='published'
+            reason='مصدر المسلسل الأصلي مفقود؛ النشر لا يتغير تلقائيًا'
             self.queue.update(table,identifier,next_check=now+self.interval,next_refresh=now+self.interval,
-                              last_check=now,status='missing_source',error=reason,
-                              **(dict(dirty=json.dumps({'status':'draft'},ensure_ascii=False),
-                                      upload_at=now) if to_draft else {}))
-            if to_draft:
-                self.queue.event('auto_draft',reason,table,identifier)
-                with self.queue.db() as conn:
-                    pending=dict(conn.execute('select * from auto_jobs where table_name=? and target_id=?',
-                                              (table,identifier)).fetchone())
-                self.flush(pending)
+                              last_check=now,status='missing_source',error=reason)
             return
         found_episodes=False
         metadata={}
@@ -809,20 +787,14 @@ class AutoSync:
         now=self.clock()
         failures=0 if found_episodes else job['failures']+1
         retry=now+(self.interval if found_episodes else min(self.check_interval,60*2**min(failures-1,6)))
-        auto_draft=(not found_episodes and failures>=3 and
-                    json.loads(job['data']).get('status')=='published')
         pending=json.loads(job['dirty'] or '{}')
         pending.update(metadata)
-        if auto_draft:pending['status']='draft'
         self.queue.update(table,identifier,next_check=retry,next_refresh=retry,
                           last_check=now,last_refresh=now,failures=failures,checkpoint='{}',
                           status='discovered' if found_episodes else 'broken' if failures>=3 else 'suspect',
                           error='' if found_episodes else 'لم تظهر صفحات حلقات في المصدر.',
                           **(dict(dirty=json.dumps(pending,ensure_ascii=False),
                                   upload_at=now) if pending else {}))
-        if auto_draft:
-            self.queue.event('auto_draft','نُقل المسلسل إلى مسودة بعد 3 محاولات لم تُرجع حلقات',
-                             table,identifier)
         with self.queue.db() as conn:
             updated=dict(conn.execute('select * from auto_jobs where table_name=? and target_id=?',
                                       (table,identifier)).fetchone())
