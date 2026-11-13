@@ -692,10 +692,16 @@ async def discover(request: Request, data: DiscoverForm):
                             result = store(captured,db,publish=False,rights=False,capture_merge=True)
                             AUTOSYNC.remember_saved(captured,result,capture=True,refresh=True)
                         with state.lock:
-                            state.tracking={'saved':True,'queued':False,'message':'حُفظ العمل كمسودة في قاعدة البيانات وأُضيف للمزامنة.'}
+                            if not data.fast or state.tracking is tracking:
+                                state.tracking={'saved':True,'queued':False,'message':'حُفظ العمل كمسودة في قاعدة البيانات وأُضيف للمزامنة.'}
+                                if state.scan and state.scan_catalogue is cat:
+                                    state.scan['revision']=int(state.scan.get('revision',0))+1
                     except Exception as exc:
                         with state.lock:
-                            state.tracking={'saved':False,'queued':False,'message':'فشل الحفظ التلقائي: '+safe_error(exc)}
+                            if not data.fast or state.tracking is tracking:
+                                state.tracking={'saved':False,'queued':False,'message':'فشل الحفظ التلقائي: '+safe_error(exc)}
+                                if state.scan and state.scan_catalogue is cat:
+                                    state.scan['revision']=int(state.scan.get('revision',0))+1
                         if not data.fast:
                             raise
                 if data.fast:
@@ -715,7 +721,7 @@ async def discover(request: Request, data: DiscoverForm):
         with state.lock:
             state.catalogue, state.catalogues, state.batch_errors = cat, [cat], []
             state.current_index, state.demo = 0, False
-            if not data.auto_track:state.tracking=None
+            if not data.auto_track or state.db is None:state.tracking=tracking
             if data.scan_media: start_catalogue_scan(state,cat)
         return {**get_summary(state),'tracking':tracking}
     except SourceConnectionError as exc:
