@@ -5,10 +5,18 @@
   const CHUNK = 6 * 1024 * 1024; // Required by Supabase Storage's TUS implementation.
   const state = {file: null, ticket: null, uploadUrl: '', controller: null,
                  running: false, paused: false, uploaded: false, series: [],
-                 maxFileBytes: 50 * 1024 * 1024, episodeItems: []};
+                 maxFileBytes: 50 * 1024 * 1024, episodeItems: [],
+                 storageProviders: [], completedParts: []};
   const kind = () => document.querySelector('input[name="media-kind"]:checked').value;
   const selectedSeries = () => $('series-select').value === 'new' ? '' : $('series-select').value;
-  const tooLarge = () => !!state.file && state.file.size > state.maxFileBytes;
+  const preferred = () => $('storage-preference').value || 'auto';
+  function eligibleProviders(bytes) {
+    const list = state.storageProviders.filter(p =>
+      p.ready && bytes <= p.max_file_bytes &&
+      (p.quota_bytes - p.used_bytes) >= bytes);
+    return preferred() === 'auto' ? list : list.filter(p => p.id === preferred());
+  }
+  const tooLarge = () => !!state.file && !eligibleProviders(state.file.size).length;
   const mb = bytes => (Number(bytes || 0) / (1024 * 1024)).toFixed(1) + ' MB';
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -81,7 +89,8 @@
     try { await validMp4(file); }
     catch (e) { message(e.message, 'error'); return; }
     state.file = file;
-    state.ticket = null; state.uploadUrl = ''; state.uploaded = false; state.paused = false;
+    state.ticket = null; state.uploadUrl = ''; state.uploaded = false;
+    state.completedParts = []; state.paused = false;
     $('result').hidden = true;
     $('progress-area').hidden = true;
     $('chosen').hidden = false;
@@ -90,8 +99,8 @@
     $('video-title').value = file.name.replace(/\.mp4$/i, '').slice(0, 180);
     if (tooLarge()) {
       $('size-notice').classList.add('warn');
-      message('حجم الفيديو ' + mb(file.size) + ' أكبر من الحد الحالي (' +
-        mb(state.maxFileBytes) + ') في Supabase. يتطلب فيديو بهذا الحجم ترقية التخزين أو اختيار ملف أصغر.', 'error');
+      message('لا يوجد مركز متصل بمساحة وحد حجم يكفي ' + mb(file.size) +
+        '. اربط R2 أو B2 أو Oracle من Render أو اختر فيديو أصغر.', 'error');
     } else {
       $('size-notice').classList.remove('warn');
       message('الفيديو جاهز للرفع. اختر النوع والعنوان ثم اضغط «رفع إلى الداتا».');
@@ -205,7 +214,12 @@
 
   async function finish() {
     displayProgress(state.file.size, state.file.size, 'جاري التحقق والحفظ في قاعدة البيانات...');
-    const data = await api('POST', '/finish', {receipt: state.ticket.receipt});
+    const ticket = state.ticket;
+    const data = ticket.mode === 's3_multipart'
+      ? await api('POST', '/finish-multipart', {
+          receipt: ticket.receipt, parts: state.completedParts
+        })
+      : await api('POST', '/finish', {receipt: ticket.receipt});
     const row = data.file || {};
     if (!row.public_url) throw new Error('فشل استلام الرابط المباشر من قاعدة البيانات.');
     $('result-url').value = row.public_url;
@@ -246,8 +260,8 @@
       if (!state.ticket) {
         displayProgress(0, state.file.size, 'جاري تجهيز رابط الرفع الآمن...');
         if (tooLarge()) {
-          throw new Error('الملف يتجاوز الحد الحالي (' + mb(state.maxFileBytes) + ') في Supabase. '
-            + 'الرفع المجزأ لا يتجاوز الحد الأقصى لحجم الملف.');
+          throw new Error('لا يوجد مركز تخزين مفعّل يقبل حجم الملف (' +
+            mb(state.file.size) + '). تحتاج ربط حساب خارجي أو زيادة الحصة.');
         }
         const episode = kind() === 'episode';
         const season = Number($('season-number').value);
@@ -259,6 +273,7 @@
         state.ticket = await api('POST', '/start', {
           filename: state.file.name, title, size_bytes: state.file.size,
           media_kind: kind(),
+          storage_preference: preferred(),
           description: $('video-description').value.trim(),
           poster_url: $('video-poster').value.trim(),
           series_id: episode ? selectedSeries() : null,
@@ -268,7 +283,8 @@
       }
       if (state.paused) return;
       if (!state.uploaded) {
-        const done = await uploadChunks();
+        const done = state.ticket.mode === 's3_multipart'
+          ? await uploadS3Parts() : await uploadChunks();
         if (!done) return;
         state.uploaded = true;
       }
@@ -307,8 +323,10 @@
         ? ((state.series.find(s => s.id === item.series_id) || {}).title_ar || 'مسلسل') +
           ' · الموسم ' + item.season_number + ' · الحلقة ' + item.episode_number
         : item.media_kind === 'movie' ? 'فيلم' : 'ملف سابق';
+      const center = (state.storageProviders.find(p => p.id ===
+        (item.storage_provider || 'supabase')) || {}).label || item.storage_provider || 'Supabase';
       meta.append(make('strong', item.title || item.original_filename),
-                  make('small', related + ' · ' + mb(item.size_bytes) + ' · ' +
+                  make('small', related + ' · ' + center + ' · ' + mb(item.size_bytes) + ' · ' +
                     new Date(item.created_at).toLocaleString('ar-SA')));
       const actions = make('div', null, 'library-actions');
       const copy = make('button', 'نسخ MP4');
@@ -327,10 +345,14 @@
   async function refreshLibrary() {
     try {
       const data = await api('GET', '');
+      if (Array.isArray(data.storage_providers)) {
+        updateStorageProviders(data.storage_providers);
+      }
       if (Number.isFinite(data.max_file_bytes) && data.max_file_bytes > 0) {
         state.maxFileBytes = data.max_file_bytes;
-        $('size-notice').textContent = 'حد الفيديو الحالي في Supabase: ' +
-          mb(state.maxFileBytes) + ' لكل ملف. الملفات الأكبر تتطلب ترقية باقة Supabase وتعديل إعدادات التخزين.';
+        $('size-notice').textContent =
+          'Supabase المجاني: حتى ' + mb(state.maxFileBytes) +
+          ' للملف. الفيديوهات الأكبر تتوزع على المراكز الخارجية المربوطة والمفعّلة.';
       }
       populateSeries(Array.isArray(data.series) ? data.series : []);
       renderLibrary(Array.isArray(data.files) ? data.files : []);
@@ -341,6 +363,97 @@
     }
   }
 
+
+  function updateStorageProviders(providers) {
+    state.storageProviders = providers;
+    const select = $('storage-preference');
+    const current = select.value;
+    select.replaceChildren();
+    const auto = document.createElement('option');
+    auto.value = 'auto';
+    auto.textContent = 'توزيع تلقائي — أفضل مركز متاح';
+    select.append(auto);
+    const container = $('storage-centers');
+    container.replaceChildren();
+    providers.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.disabled = !p.ready;
+      opt.textContent = p.label + (p.ready ? ' — متصل' : ' — غير مفعّل');
+      select.append(opt);
+      const row = make('div', null, 'storage-center' + (p.ready ? ' online' : ' offline'));
+      const label = make('strong', p.label);
+      const quota = mb(p.quota_bytes);
+      const usage = mb(p.used_bytes);
+      const details = make('small', p.ready
+        ? 'جاهز • مستعمل ' + usage + ' من ' + quota +
+          ' • حد الملف ' + mb(p.max_file_bytes)
+        : 'بانتظار إنشاء الحساب وربط مفاتيح الوصول');
+      row.append(label, details);
+      if (!p.ready && p.signup_url) {
+        const signup = make('a', 'إعداد حساب المركز');
+        signup.href = p.signup_url;
+        signup.target = '_blank';
+        signup.rel = 'noopener noreferrer';
+        row.append(signup);
+      }
+      container.append(row);
+    });
+    if (current && [...select.options].some(opt => opt.value === current && !opt.disabled)) {
+      select.value = current;
+    }
+    buttons();
+  }
+
+  async function uploadS3Parts() {
+    const ticket = state.ticket;
+    const size = ticket.chunk_bytes || 24 * 1024 * 1024;
+    const total = Math.ceil(state.file.size / size);
+    const done = new Map(state.completedParts.map(part => [part.part_number, part.etag]));
+    displayProgress([...done.keys()].reduce((totalBytes, i) =>
+      totalBytes + Math.min(size, state.file.size - ((i - 1) * size)), 0),
+      state.file.size, 'متابعة رفع الفيديو إلى ' + ticket.provider_label + '...');
+    for (let i = 1; i <= total; i++) {
+      if (state.paused) return false;
+      if (done.has(i)) continue;
+      const start = (i - 1) * size;
+      const end = Math.min(start + size, state.file.size);
+      let attempt = 0;
+      while (true) {
+        if (state.paused) return false;
+        try {
+          const signed = await api('POST', '/part-url', {
+            receipt: ticket.receipt, part_number: i
+          });
+          state.controller = new AbortController();
+          const response = await fetch(signed.upload_url, {
+            method: 'PUT', mode: 'cors', credentials: 'omit',
+            body: state.file.slice(start, end),
+            signal: state.controller.signal
+          });
+          if (!response.ok) throw await responseError(response);
+          const etag = response.headers.get('ETag');
+          if (!etag) {
+            throw new Error('لم يُرجع مركز التخزين ETag. فعّل CORS وExposeHeaders: ETag في إعدادات الحاوية.');
+          }
+          done.set(i, etag);
+          state.completedParts = [...done.entries()].map(([number, value]) => ({
+            part_number: number, etag: value
+          })).sort((a, b) => a.part_number - b.part_number);
+          displayProgress(end, state.file.size,
+            'جاري الرفع إلى ' + ticket.provider_label + ' • الجزء ' + i + '/' + total);
+          break;
+        } catch (error) {
+          if (state.paused) return false;
+          if (error.status && [400, 401, 403, 404, 409, 413, 422].includes(error.status)) throw error;
+          if (++attempt > 4) throw error;
+          message('جاري إعادة محاولة الجزء ' + i + ' (' + attempt + '/4)...');
+          await sleep(Math.min(1000 * (2 ** attempt), 10000));
+        }
+      }
+    }
+    return true;
+  }
 
   function populateSeries(series) {
     const select = $('series-select');
@@ -408,12 +521,27 @@
       state.ticket = null;
       state.uploadUrl = '';
       state.uploaded = false;
+      state.completedParts = [];
       $('progress-area').hidden = true;
     }
     if (series) switchSeries();
     buttons();
   }
 
+  $('storage-preference').addEventListener('change', () => {
+    if (state.running) return;
+    state.ticket = null;
+    state.uploadUrl = '';
+    state.uploaded = false;
+    state.completedParts = [];
+    $('progress-area').hidden = true;
+    if (tooLarge()) {
+      message('المركز المختار لا يقبل هذا الحجم أو ليس مفعّلًا. اختر التوزيع التلقائي.', 'error');
+    } else {
+      message('تم اختيار مركز التخزين. أكمل رفع الفيديو.');
+    }
+    buttons();
+  });
   $('series-select').addEventListener('change', switchSeries);
   document.querySelectorAll('input[name="media-kind"]').forEach(input => {
     input.addEventListener('change', switchKind);
