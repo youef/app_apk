@@ -25,7 +25,7 @@ test("YouTube stays in the application",!youtube.includes("LegacyYoutubeBridge.o
 test("KitKat attempts official embedded player without outside apps",youtube.includes("web=new WebView(this)")&&youtube.includes("web.loadDataWithBaseURL("));
 test("license-approved media can open in ExoPlayer",home.includes('licensed_stream_approved')&&home.includes('licensed_stream_url')&&home.includes('new Intent(this,CinemaPlayerActivity.class)'));
 test("embedded playback starts only on playing event",youtube.includes("alezzvideo://playing")&&youtube.includes("videoPlaying=true"));
-test("catalog still filters approved movie/channel rights",catalog.includes('!"approved".equals(item.optString("rights_status"'));
+test("catalog visibility depends on published status",catalog.includes('"published".equals(item.optString("status",""))') && !catalog.includes('!"approved".equals(item.optString("rights_status"'));
 test("source probe requires https",probe.includes('https'));
 test("source probe detects html responses",probe.includes('contentType.contains("text/html")'));
 test("source probe reports 403/404",probe.includes("code==401||code==403")&&probe.includes("code==404||code==410"));
