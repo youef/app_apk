@@ -63,7 +63,7 @@
    }
    currentId=row?.id||null;
    $("impEditing").textContent=currentId?"تعديل سجل محفوظ":"إضافة جديدة";
-   $("impRightsConfirmed").checked=false;$("impPlaybackConfirmed").checked=false;
+   $("impPlaybackConfirmed").checked=false;
    clearPlayer();updatePreview();
  }
  function clearPlayer(){
