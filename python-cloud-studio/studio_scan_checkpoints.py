@@ -102,6 +102,14 @@ def recent(owner_id,limit=15):
             },headers=headers,timeout=(4,9),allow_redirects=False)
             if response.status_code!=200:return []
             rows=response.json()
-        return rows if isinstance(rows,list) else []
+        if not isinstance(rows,list):return []
+        result=[]
+        for row in rows:
+            if not isinstance(row,dict):continue
+            progress=row.get("progress") or {}
+            row["progress"]={k:progress.get(k) for k in
+                ("done","total","verified","sources_found","seq") if k in progress}
+            result.append(row)
+        return result
     except (ValueError,requests.RequestException):
         return []
