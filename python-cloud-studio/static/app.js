@@ -101,9 +101,11 @@
     if(cat)renderContent();
     if(payload.capture && payload.capture.catalogue_url===cat?.url)
       connectEpisodeBatch(payload.capture);
-    else if(!app.browserCaptureRunning){
+    else{
+      // A different selected work must not display a previous show's scan.
       closeEpisodeBatchConnection();
       episodeBatchJob=null;episodeBatchRevision=0;
+      app.browserCaptureRunning=false;
       $('episodeBatchPanel').hidden=true;
       $('edgeCaptureBtn').textContent='⚡ اكتشاف روابط الحلقات تلقائيًا';
     }
