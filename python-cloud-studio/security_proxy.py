@@ -141,7 +141,11 @@ def _connect_fetch(proxy, target_host, target_ip, path, origin, max_bytes, user_
             if proxy.username:
                 credential = (proxy.username + ":" + proxy.password).encode("utf-8")
                 tunnel_headers["Proxy-Authorization"] = "Basic " + base64.b64encode(credential).decode("ascii")
-            connection.set_tunnel(authority, headers=tunnel_headers)
+            connection.set_tunnel(
+                "[" + target_ip + "]" if ":" in target_ip else target_ip,
+                port=443,
+                headers=tunnel_headers,
+            )
             connection.connect()
             # SSL validates the PUBLIC site hostname, not its pinned IP address.
             connection.sock = ssl.create_default_context().wrap_socket(
