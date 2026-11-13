@@ -62,3 +62,19 @@
 .studio-fast-card.is-embedded{border-color:#4c6480}
 #studioScanTimer{font-variant-numeric:tabular-nums;color:#f9d193}
 @media(max-width:650px){.studio-v6-controls>button{flex:1;min-width:44%}.studio-v6-checkpoint{width:100%}.studio-v6-filter select{flex:1}.studio-v6-history-row{align-items:flex-start;flex-direction:column}}
+
+
+/* V6 source diagnostics and mobile-friendly scan command center */
+.studio-fast-card{position:relative;transition:border-color .15s ease,transform .15s ease;box-shadow:0 7px 20px #050b135c}
+.studio-fast-card.is-verified{border-color:#32846c;background:linear-gradient(145deg,#102b25,#131d29)}
+.studio-fast-card.is-invalid{border-color:#9d4d50;background:linear-gradient(145deg,#321d25,#171b27)}
+.studio-fast-card.is-embedded{border-color:#5a5682;background:linear-gradient(145deg,#22243a,#141c29)}
+.studio-fast-card .studio-v6-source-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:5px}
+.studio-fast-card .studio-v6-source-actions button{min-height:34px;flex:1}
+#studioRemainingPages:not(:empty){display:inline-flex;border:1px solid #c1945790;color:#f4c788;background:#c1945714;border-radius:999px;padding:6px 10px}
+.studio-v6-filter{align-items:center;gap:8px;flex-wrap:wrap}
+.studio-v6-filter select{max-width:100%;min-height:39px}
+@media(max-width:600px){.studio-fast-stream{max-height:440px;display:grid;grid-template-columns:1fr;gap:9px}
+  .studio-v6-filter select{flex:1;min-width:180px}
+  .studio-fast-toolbar{gap:7px}
+  #studioScanTimer{font-variant-numeric:tabular-nums}}
