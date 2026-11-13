@@ -5,6 +5,8 @@ authentication, DRM, geo rules, or third-party download restrictions.
 """
 from __future__ import annotations
 
+import asyncio
+import copy
 import json
 import re
 import secrets
@@ -12,10 +14,12 @@ import subprocess
 import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urljoin, urlsplit
 import requests
 from bs4 import BeautifulSoup
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from private_page_discovery import discover_page, validate_page
@@ -31,6 +35,10 @@ MAX_GLOBAL_MEDIA=90
 MAX_EMBEDS=48
 MAX_IFRAME_BROWSERS=4
 ACTIVE_STATES={"queued","scanning"}
+FINISHED_STATES={"complete","failed"}
+BROWSER_SLOTS=threading.BoundedSemaphore(2)
+JOURNAL_POOL=ThreadPoolExecutor(max_workers=1, thread_name_prefix="alezz-deep-scan-journal")
+MAX_SCAN_SECONDS=180
 URL_IN_SCRIPT=re.compile(r'https:\\?/\\?/[^"' + "'"+r'\s<>\\]{6,900}?\.(?:mp4|m3u8|m4v|webm|mov|mkv)(?:\?[^"' + "'" +r'\s<>\\]*)?',re.I)
 
 class DeepScanInput(BaseModel):
@@ -38,19 +46,39 @@ class DeepScanInput(BaseModel):
     max_episodes:int=Field(default=12,ge=1,le=12)
 
 def snapshot(job_id,**fields):
+    """Publish a consistent revision immediately; journal only from a worker.
+
+    A slow Supabase write must never delay browser updates or source discovery.
+    Signed URLs are kept in live memory and are not persisted in the job journal.
+    """
     with LOCK:
-        if job_id not in JOBS:
+        job=JOBS.get(job_id)
+        if not job or job.get("status") in FINISHED_STATES:
             return
-        JOBS[job_id].update(fields)
-        snapshot_data=dict(JOBS[job_id])
-    uid=snapshot_data.get("owner_id")
+        for key,value in fields.items():
+            job[key]=copy.deepcopy(value) if key in ("result","progress") else value
+        job["revision"]=int(job.get("revision",0))+1
+        job["updated_at"]=time.time()
+        state={key:copy.deepcopy(value) for key,value in job.items()
+               if key not in ("result",)}
+        uid=job.get("owner_id")
     if uid:
         try:
             from studio_jobs import save as save_studio_job
-            save_studio_job(job_id,uid,"deep_scan",snapshot_data,
-                            force=snapshot_data.get("status") in ("complete","failed"))
-        except Exception:
+            JOURNAL_POOL.submit(save_studio_job,job_id,uid,"deep_scan",state,
+                                force=state.get("status") in FINISHED_STATES)
+        except RuntimeError:
             pass
+
+
+def view_job(job_id, uid):
+    with LOCK:
+        job=JOBS.get(job_id)
+        if not job or job.get("owner_id")!=uid:
+            return None
+        record=copy.deepcopy(job)
+    record.pop("owner_id",None)
+    return record
 
 def admissible(url):
     try:
@@ -134,6 +162,15 @@ def yt_dlp_metadata(page_url,result):
     return {"state":"ok","found":found}
 
 def browser_metadata(page_url,result):
+    if not BROWSER_SLOTS.acquire(timeout=4):
+        return {"state":"browser_busy","found":0}
+    try:
+        return _browser_metadata(page_url,result)
+    finally:
+        BROWSER_SLOTS.release()
+
+
+def _browser_metadata(page_url,result):
     try:
         report=diagnose(page_url)
         found=0
@@ -158,96 +195,166 @@ def attempt(func,*args):
 
 
 def run_scan(job_id,url,max_episodes):
+    """Release each discovered candidate before other episodes finish.
+
+    Two episode workers and one root-page worker run concurrently. Jobs are
+    bounded and all outbound addresses retain existing public HTTPS/SSRF checks.
+    Neither discovery nor streaming claims that an unverified link will play.
+    """
+    deadline=time.monotonic()+MAX_SCAN_SECONDS
     result={"media":[],"embeds":[],"episodes":[],"methods":[],"notes":[],"page_title":""}
-    iframe_browser_count=0
+    counters={"completed":0,"total":0}
+    iframe_budget=threading.BoundedSemaphore(MAX_IFRAME_BROWSERS)
+
+    def publish(stage,message,*,status="scanning"):
+        with LOCK:
+            snapshot(job_id,status=status,stage=stage,message=message,
+                     result=result,progress={
+                         "episodes_checked":counters["completed"],
+                         "episodes_total":counters["total"],
+                         "media_found":len(result["media"]),
+                         "embeds_found":len(result["embeds"]),
+                     })
+
+    def publish_root(root,stage,text):
+        with LOCK:
+            result["methods"]=copy.deepcopy(root["methods"])
+            for item in root["media"]:
+                add_source(result,item.get("url"),item.get("engine","root"),
+                           item.get("label","مصدر رئيسي"),url)
+            publish(stage,text)
+
+    def scan_root():
+        root={"media":[],"methods":copy.deepcopy(result["methods"])}
+        if time.monotonic()<deadline:
+            state=attempt(inline_config,url,root)
+            root["methods"].append({"engine":"inline_config",**state})
+            publish_root(root,"root_script","تم تحليل إعدادات الصفحة العامة")
+        if time.monotonic()<deadline and not root["media"]:
+            state=attempt(yt_dlp_metadata,url,root)
+            root["methods"].append({"engine":"yt_dlp",**state})
+            publish_root(root,"root_extractor","اكتملت محاولة yt-dlp للصفحة")
+        if time.monotonic()<deadline and not root["media"]:
+            state=attempt(browser_metadata,url,root)
+            root["methods"].append({"engine":"chromium",**state})
+            publish_root(root,"root_browser","اكتمل فحص شبكة Chromium للصفحة")
+
+    def publish_episode(index,ep,stage,*,finished=False):
+        with LOCK:
+            result["episodes"][index]=copy.deepcopy(ep)
+            for item in ep.get("sources",[]):
+                add_source(result,item["url"],item.get("engine","episode"),
+                           ep["title"],ep["page_url"],item.get("verified",False))
+            for embedded in ep.get("embeds",[]):
+                if embedded not in result["embeds"] and len(result["embeds"])<MAX_EMBEDS:
+                    result["embeds"].append(embedded)
+            if finished:counters["completed"]+=1
+            publish("episodes",f"حلقة {index+1}/{counters['total']}: {stage}")
+
+    def scan_episode(index,base):
+        ep=copy.deepcopy(base)
+        scoped={"media":[]}
+
+        def stage_publish(label):
+            ep["sources"]=copy.deepcopy(scoped["media"][:MAX_MEDIA_PER_EPISODE])
+            publish_episode(index,ep,label)
+
+        try:
+            if time.monotonic()>=deadline:
+                ep["methods"].append({"engine":"deadline","state":"timeout"})
+                stage_publish("انتهت المهلة")
+                return
+            page=ep["page_url"]
+            item=discover_page(page)
+            ep["embeds"]=list(dict.fromkeys(item.get("embeds",[])))[:8]
+            for candidate in item.get("media",[])[:MAX_MEDIA_PER_EPISODE]:
+                add_source(scoped,candidate.get("url"),"html",ep["title"],page)
+            ep["methods"].append({"engine":"html","status":item.get("status","unavailable"),
+                                  "found":len(scoped["media"])})
+            stage_publish("قراءة صفحة الحلقة")
+            if item.get("http_status") in (401,403):
+                ep["methods"].append({"engine":"permission","state":"blocked"})
+                return
+
+            if time.monotonic()<deadline:
+                state=attempt(inline_config,page,scoped)
+                ep["methods"].append({"engine":"inline_config",**state})
+                stage_publish("إعدادات JavaScript")
+
+            if not scoped["media"] and time.monotonic()<deadline:
+                state=attempt(yt_dlp_metadata,page,scoped)
+                ep["methods"].append({"engine":"yt_dlp",**state})
+                stage_publish("نتيجة yt-dlp")
+
+            if not scoped["media"] and time.monotonic()<deadline:
+                state=attempt(browser_metadata,page,scoped)
+                ep["methods"].append({"engine":"chromium",**state})
+                stage_publish("شبكة Chromium")
+
+            for embed_url in ep["embeds"][:2]:
+                if scoped["media"] or time.monotonic()>=deadline:break
+                if embed_url==page:continue
+                embedded=attempt(discover_page,embed_url)
+                for candidate in embedded.get("media",[])[:MAX_MEDIA_PER_EPISODE]:
+                    add_source(scoped,candidate.get("url"),"iframe_html",ep["title"],embed_url)
+                ep["methods"].append({"engine":"iframe_html",
+                                      "state":embedded.get("status","engine_failed"),
+                                      "found":len(scoped["media"])})
+                stage_publish("صفحة المشغل المضمّن")
+                if embedded.get("http_status") in (401,403):continue
+                if not scoped["media"] and time.monotonic()<deadline:
+                    state=attempt(inline_config,embed_url,scoped)
+                    ep["methods"].append({"engine":"iframe_script",**state})
+                    stage_publish("إعدادات المشغل المضمّن")
+                if (not scoped["media"] and time.monotonic()<deadline
+                        and iframe_budget.acquire(blocking=False)):
+                    state=attempt(browser_metadata,embed_url,scoped)
+                    ep["methods"].append({"engine":"iframe_chromium",**state})
+                    stage_publish("Chromium للمشغل المضمّن")
+        except Exception as error:
+            ep["methods"].append({"engine":"episode","state":"failed",
+                                  "error":type(error).__name__})
+        finally:
+            stage_publish("اكتمل فحص الحلقة")
+            publish_episode(index,ep,"اكتمل فحص الحلقة",finished=True)
+
     try:
-        steps=["html","inline_config","yt_dlp","chromium","episodes"]
-        def update(stage,text):
-            snapshot(job_id,status="scanning",stage=stage,message=text)
-        update("html","قراءة صفحة العمل وقائمة الحلقات")
+        publish("html","اكتشاف حلقات العمل والمصادر المباشرة")
         public=discover_page(url)
-        result["page_title"]=public.get("title","")
-        result["embeds"]=list(dict.fromkeys(public.get("embeds",[])))[:MAX_EMBEDS]
-        result["episodes"]=[{"title":x["title"],"page_url":x["page_url"],
-                             "sources":[],"embeds":[],"methods":[]} for x in public.get("episodes",[])[:max_episodes]]
-        for src in public.get("media",[]):
-            add_source(result,src.get("url"),"html","مصدر ظاهر في HTML",url)
-        result["methods"].append({"engine":"html","status":public.get("status"),
-                                  "found":len(result["media"]),"episodes":len(result["episodes"])})
+        with LOCK:
+            result["page_title"]=public.get("title","")
+            result["embeds"]=list(dict.fromkeys(public.get("embeds",[])))[:MAX_EMBEDS]
+            result["episodes"]=[
+                {"title":x["title"],"page_url":x["page_url"],
+                 "sources":[],"embeds":[],"methods":[]}
+                for x in public.get("episodes",[])[:max_episodes]]
+            counters["total"]=len(result["episodes"])
+            for item in public.get("media",[]):
+                add_source(result,item.get("url"),"html","مصدر ظاهر في HTML",url)
+            result["methods"].append({
+                "engine":"html","status":public.get("status"),
+                "found":len(result["media"]),"episodes":counters["total"]})
+            publish("html","تم اكتشاف "+str(counters["total"])+" حلقات؛ تظهر النتائج فور وصولها")
         if public.get("http_status") in (401,403):
-            result["notes"].append("خادم المصدر رفض الوصول؛ لم تُستخدم وسائل لتجاوز المنع.")
-            snapshot(job_id,status="complete",stage="complete",result=result)
-            return
-        update("inline_config","فحص إعدادات JavaScript العامة")
-        status=attempt(inline_config,url,result)
-        result["methods"].append({"engine":"inline_config",**status})
-        update("yt_dlp","استخراج بيانات المصدر العامة بواسطة yt-dlp")
-        status=attempt(yt_dlp_metadata,url,result)
-        result["methods"].append({"engine":"yt_dlp",**status})
-        update("chromium","تشغيل Chromium ورصد ملفات الفيديو")
-        status=attempt(browser_metadata,url,result)
-        result["methods"].append({"engine":"chromium",**status})
-        # Episode sources are distinct from main show page. Scan every public episode.
-        for index,ep in enumerate(result["episodes"]):
-            update("episodes",f"فحص الحلقة {index+1} من {len(result['episodes'])}")
-            scoped={"media":[]}
-            try:
-                item=discover_page(ep["page_url"])
-                ep["embeds"]=list(dict.fromkeys(item.get("embeds",[])))[:8]
-                for iframe_url in ep["embeds"]:
-                    if iframe_url not in result["embeds"] and len(result["embeds"])<MAX_EMBEDS:
-                        result["embeds"].append(iframe_url)
-                for source in item.get("media",[])[:MAX_MEDIA_PER_EPISODE]:
-                    add_source(scoped,source.get("url"),"html",ep["title"],ep["page_url"])
-                ep["methods"].append({"engine":"html","status":item.get("status","unavailable"),
-                                       "found":len(scoped["media"])})
-                # Do not probe further if the source page explicitly refused access.
-                if item.get("http_status") not in (401,403):
-                    status=attempt(inline_config,ep["page_url"],scoped)
-                    ep["methods"].append({"engine":"inline_config",**status})
-                    if not scoped["media"]:
-                        status=attempt(yt_dlp_metadata,ep["page_url"],scoped)
-                        ep["methods"].append({"engine":"yt_dlp",**status})
-                    if not scoped["media"]:
-                        status=attempt(browser_metadata,ep["page_url"],scoped)
-                        ep["methods"].append({"engine":"chromium",**status})
-                    # Some pages only declare public iframe players. The
-                    # previous implementation ignored these URLs entirely,
-                    # so a series could show episodes while showing 0 players.
-                    # Read only two public iframe documents per episode, and
-                    # run up to four extra Chromium checks for the entire job.
-                    for embed_url in ep["embeds"][:2]:
-                        if scoped["media"]:break
-                        if embed_url == ep["page_url"]:continue
-                        embedded=attempt(discover_page,embed_url)
-                        for candidate in embedded.get("media",[])[:MAX_MEDIA_PER_EPISODE]:
-                            add_source(scoped,candidate.get("url"),"iframe_html",ep["title"],embed_url)
-                        ep["methods"].append({"engine":"iframe_html",
-                            "status":embedded.get("status","engine_failed"),
-                            "found":len(scoped["media"])})
-                        if embedded.get("http_status") in (401,403):continue
-                        if not scoped["media"]:
-                            status=attempt(inline_config,embed_url,scoped)
-                            ep["methods"].append({"engine":"iframe_script",**status})
-                        if not scoped["media"] and iframe_browser_count<MAX_IFRAME_BROWSERS:
-                            iframe_browser_count+=1
-                            status=attempt(browser_metadata,embed_url,scoped)
-                            ep["methods"].append({"engine":"iframe_chromium",**status})
-                ep["sources"]=scoped["media"][:MAX_MEDIA_PER_EPISODE]
-                for src in ep["sources"]:
-                    add_source(result,src["url"],src["engine"],ep["title"],ep["page_url"],src["verified"])
-            except (OSError,ValueError) as error:
-                ep["methods"].append({"engine":"episode","status":"failed","error":type(error).__name__})
-            snapshot(job_id,progress={"episodes_checked":index+1,
-                                      "episodes_total":len(result["episodes"]),
-                                      "media_found":len(result["media"])})
+            result["notes"].append("رفض خادم المصدر الوصول من Render؛ لم تتم محاولة تجاوز المنع.")
+        else:
+            with ThreadPoolExecutor(max_workers=3,thread_name_prefix="alezz-live-scan") as pool:
+                futures=[pool.submit(scan_root)]
+                for index,ep in enumerate(list(result["episodes"])):
+                    futures.append(pool.submit(scan_episode,index,ep))
+                for task in as_completed(futures):
+                    try:task.result()
+                    except Exception as exc:
+                        with LOCK:
+                            result["notes"].append("تعذر إتمام إحدى طرق الفحص: "+type(exc).__name__)
+                            publish("episodes","تعذّر أحد المحركات، وتستمر النتائج المتاحة")
         if not result["media"]:
-            result["notes"].append("لم تكشف الأدوات مصدر فيديو عامًا؛ الروابط قد تكون ديناميكية أو محمية أو غير متاحة لـ Render.")
-        result["notes"].append("المصادر المكتشفة مرشّحة ولم تثبت قابليتها للتنزيل. يجب فحصها والترخيص قبل الاستيراد.")
-        snapshot(job_id,status="complete",stage="complete",result=result,message="اكتمل الفحص")
+            result["notes"].append("لم تظهر ملفات فيديو عامة قابلة للوصول؛ بعض المواقع تتطلب تصريحًا من مزودها.")
+        result["notes"].append("الروابط المرصودة مرشحة وغير مثبتة التشغيل؛ اختبرها قبل الاستيراد.")
+        publish("complete","اكتمل الفحص، والروابط المكتشفة متاحة للتصدير",status="complete")
     except Exception as error:
-        snapshot(job_id,status="failed",stage="error",
-                 error=type(error).__name__,message="تعذر إتمام الفحص. راجع المراحل المسجلة.")
+        result["notes"].append("تعذّر إتمام الفحص: "+type(error).__name__)
+        publish("failed","تعذّر إتمام الفحص؛ النتائج الجزئية محفوظة في الجلسة",status="failed")
 
 def register(portal):
     @router.post("/api/private-film/deep-scan",status_code=202)
@@ -269,22 +376,43 @@ def register(portal):
             JOBS[job_id]={"status":"queued","stage":"queued","created_at":int(time.time()),
                          "owner_id":uid,"progress":{"episodes_checked":0,"episodes_total":0,
                                                    "media_found":0}}
-        from studio_jobs import save as save_studio_job
-        durable=save_studio_job(job_id,uid,"deep_scan",dict(JOBS[job_id]),force=True)
-        threading.Thread(target=run_scan,args=(job_id,url,data.max_episodes),daemon=True).start()
-        return {"job_id":job_id,"job_tracking":"persistent" if durable else "memory-only",
-                "poll":"/api/private-film/deep-scan/"+job_id}
+        # Do not block the initial response on an external database request.
+        # The scan worker journals progress asynchronously.
+        threading.Thread(target=run_scan,args=(job_id,url,data.max_episodes),daemon=True,
+                         name="alezz-live-scan").start()
+        return {"job_id":job_id,"job_tracking":"async-journal",
+                "poll":"/api/private-film/deep-scan/"+job_id,
+                "events":"/api/private-film/deep-scan/"+job_id+"/events"}
 
     @router.get("/api/private-film/deep-scan/{job_id}")
     def status(job_id:str,request:Request):
         uid=owner(request,portal)
-        with LOCK:
-            job=dict(JOBS.get(job_id) or {})
-        if not job:
+        job=view_job(job_id,uid)
+        if job is None:
             from studio_jobs import restore as restore_studio_job
             job=restore_studio_job(job_id,uid,"deep_scan")
-            if not job:raise HTTPException(404,"فحص غير موجود")
-            return job
-        if job.get("owner_id")!=uid:raise HTTPException(404,"فحص غير موجود")
-        job.pop("owner_id",None)
+            if job is None:raise HTTPException(404,"فحص غير موجود")
         return job
+
+    @router.get("/api/private-film/deep-scan/{job_id}/events")
+    async def events(job_id:str,request:Request):
+        """SSE: push the latest admin-only snapshot immediately on each revision."""
+        uid=owner(request,portal)
+        if view_job(job_id,uid) is None:
+            raise HTTPException(404,"فحص غير موجود")
+
+        async def generate():
+            revision=-1
+            while not await request.is_disconnected():
+                record=view_job(job_id,uid)
+                if record is None:break
+                current=int(record.get("revision",0))
+                if current!=revision:
+                    revision=current
+                    yield ("id: "+str(current)+"\nevent: snapshot\ndata: "+
+                           json.dumps(record,ensure_ascii=False,separators=(",",":"))+"\n\n")
+                if record.get("status") in FINISHED_STATES:break
+                await asyncio.sleep(0.55)
+        return StreamingResponse(generate(),media_type="text/event-stream",
+                headers={"Cache-Control":"private, no-store, no-transform",
+                         "X-Accel-Buffering":"no","X-Content-Type-Options":"nosniff"})
