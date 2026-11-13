@@ -44,7 +44,8 @@ class AuditTransport:
 
     def summary(self):
         return {
-            "mode": "proxy" if self.used_proxy else "direct",
+            "mode": ("proxy" if self.used_proxy else
+                     "unavailable" if self.approved and self.pool and self.attempts else "direct"),
             "configured": len(self.pool),
             "approved": self.approved,
             "selected": ("Proxy " + str(self.active + 1)) if self.used_proxy and self.active is not None else None,
