@@ -14,14 +14,14 @@
   <title>العز TV | استوديو الاستيراد الذكي</title>
   <link rel="stylesheet" href="/static/style.css?v=studio-auto-media1">
   <link rel="stylesheet" href="/static/studio-pro.css?v=studio-okru-preview2">
-  <script src="/static/app.js?v=episode-auto-10x45-20261113-v3" defer></script>
+  <script src="/static/app.js?v=studio-v6-admin-replay-20261113" defer></script>
   <script src="/static/studio-pro.js?v=studio-capture2" defer></script>
   <link rel="stylesheet" href="/static/autosync.css?v=autosync2">
   <script src="/static/autosync.js?v=studio-renewal1" defer></script>
   <link rel="stylesheet" href="/static/studio-next.css?v=2">
 <link rel="stylesheet" href="/static/studio-unified.css?v=20261108-v1">
 <link rel="stylesheet" href="/static/studio-quality.css?v=studio-v5-1">
-<link rel="stylesheet" href="/static/studio-fast-scan.css?v=episode-auto-10x45-20261113-v3">
+<link rel="stylesheet" href="/static/studio-fast-scan.css?v=studio-v6-admin-replay-20261113">
 <link rel="stylesheet" href="/static/studio-v5-theme.css?v=studio-v5-20261113">
 <script src="/static/studio-quality.js?v=studio-v5-1" defer></script>
 </head>
@@ -148,9 +148,30 @@
               <button type="button" class="small-outline" id="studioExportPlayersJson" disabled>↓ تصدير JSON الآن</button>
               <button type="button" class="small-outline" id="studioCopyPlayers" disabled>⧉ نسخ المصادر</button>
               <span class="studio-fast-summary" id="studioLiveCounts">لا توجد مصادر بعد</span>
+              <span class="studio-fast-summary" id="studioScanTimer">00:00</span>
+            </div>
+            <div class="studio-v6-controls">
+              <button type="button" class="small-outline" id="studioStopScan" hidden>■ إيقاف الفحص</button>
+              <button type="button" class="small-gold" id="studioResumeScan" hidden>▶ استكمال الفحص المحفوظ</button>
+              <button type="button" class="small-outline" id="studioRetryFailed" hidden>↻ إعادة فحص المتعطلين</button>
+              <button type="button" class="small-outline" id="studioScanHistoryBtn">▤ سجل عمليات الإدارة</button>
+              <span id="studioCheckpointStatus" class="studio-v6-checkpoint" role="status">حفظ التقدم: لم يبدأ</span>
+            </div>
+            <div class="studio-v6-filter"><label for="studioPlayerFilter">حالة المصادر</label>
+              <select id="studioPlayerFilter" aria-label="فلترة المصادر">
+                <option value="all">جميع المشغلات</option>
+                <option value="verified">اجتاز الفحص</option>
+                <option value="unverified">بحاجة للتحقق</option>
+                <option value="embed">صفحات مشغّل</option>
+              </select>
+              <button type="button" class="small-outline" id="studioShowAllSources">عرض كل المصادر</button>
             </div>
             <p class="studio-fast-hint">المصادر المرشحة ليست مضمونة التشغيل؛ تُعرض حالتها الفعلية ويجب التحقق منها قبل اعتماد النشر. يمكنك تصدير النتائج أثناء استمرار الفحص.</p>
             <div class="live-media-links studio-fast-stream" id="liveMediaLinks" aria-live="polite" aria-relevant="additions"></div>
+            <details class="studio-v6-history" id="studioScanHistory" hidden>
+              <summary>سجل فحوص المسؤول الأخيرة</summary>
+              <div id="studioScanHistoryEntries" class="studio-v6-history-list">لا توجد سجلات محملة.</div>
+            </details>
           </section>
           <div id="activity" class="activity" role="status" aria-live="polite"><span class="activity-ico">✦</span><span id="activityText">جاهز للبحث عن عمل جديد.</span></div>
           <details class="discovery-tools" id="discoveryTools"><summary>خيارات الاستيراد</summary>
