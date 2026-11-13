@@ -479,7 +479,8 @@
 
   let discoveryTimer, discoveryId, discoveryDone=-1, discoveryStream=null,
       discoveryStreamFallbackId=null, discoveryEventTimer=null, lastTrackingMessage='',
-      discoveryLastSeq=0, studioRecoverableId=null, studioShowAll=false, studioScanStarted=0;
+      discoveryLastSeq=0, studioRecoverableId=null, studioShowAll=false, studioScanStarted=0,
+      studioScanFinishedAt=0;
   function closeDiscoveryStream(){
     if(discoveryStream){discoveryStream.close();discoveryStream=null;}
     if(discoveryEventTimer){clearTimeout(discoveryEventTimer);discoveryEventTimer=null;}
@@ -559,7 +560,7 @@
       filter==='embed'&&x.kind==='embed');
     const sorted=[...filtered].sort((a,b)=>Number(b.verified)-Number(a.verified));
     container.replaceChildren();
-    for(const row of (studioShowAll?sorted:sorted.slice(0,18))){
+    for(const row of (studioShowAll?sorted.slice(0,400):sorted.slice(0,18))){
       const panel=make('div','studio-fast-card'+(row.verified?' is-verified':
                                   row.kind==='embed'?' is-embedded':row.error?' is-invalid':''));
       panel.append(make('strong','',row.episode),
@@ -580,7 +581,8 @@
       }
       panel.append(actions);container.append(panel);
     }
-    $('studioShowAllSources').textContent=studioShowAll?'عرض المختصر (18)':'عرض الكل ('+filtered.length+')';
+    $('studioShowAllSources').textContent=studioShowAll?
+      'عرض المختصر (18)':'عرض المزيد ('+Math.min(filtered.length,400)+')';
     $('studioShowAllSources').disabled=filtered.length<=18;
   }
 
@@ -752,7 +754,8 @@
   function updateScanClock(){
     const clock=$('studioScanTimer');
     if(!clock)return;
-    const elapsed=studioScanStarted?Math.max(0,Math.floor((Date.now()-studioScanStarted)/1000)):0;
+    const end=studioScanFinishedAt||Date.now();
+    const elapsed=studioScanStarted?Math.max(0,Math.floor((end-studioScanStarted)/1000)):0;
     const minutes=Math.floor(elapsed/60),seconds=elapsed%60;
     clock.textContent=String(minutes).padStart(2,'0')+':'+String(seconds).padStart(2,'0');
   }
@@ -803,7 +806,11 @@
     const pill=$('studioLivePill');
     pill.classList.toggle('is-done',!scan.running);
     pill.classList.toggle('is-off',!scan.running && !scan.done);
-    pill.textContent=scan.running?'● LIVE · فحص متوازٍ':'✓ نتائج الفحص متاحة';
+    pill.textContent=scan.running?'● LIVE · فحص متوازٍ':
+      scan.stop_requested?'■ تم إيقاف الفحص':'✓ نتائج الفحص متاحة';
+    if(scan.running)studioScanFinishedAt=0;
+    else if(!studioScanFinishedAt)studioScanFinishedAt=Date.now();
+    if(scan.stop_requested&&!scan.running&&scan.done<scan.total)studioRecoverableId=scan.id;
     $('studioStopScan').hidden=!scan.running;
     $('studioResumeScan').hidden=!studioRecoverableId;
     const cat=app.catalogue;
@@ -861,7 +868,8 @@
     const result=await API('discover',{url,kind,scan_media:true,auto_track:$('autoTrack').checked,
       deep:$('deepScan').checked,metadata:$('autoMetadata').checked,fast});
     app.selected.clear();app.season=1;$('episodeSearch').value='';
-    discoveryDone=-1;discoveryLastSeq=0;lastTrackingMessage='';studioRecoverableId=null;
+    discoveryDone=-1;discoveryLastSeq=0;lastTrackingMessage='';
+    studioRecoverableId=null;studioScanStarted=0;studioScanFinishedAt=0;
     updateStatus(result);
     showDiscoveryProgress(result.scan);
     activity(result.scan?.running?'بدأ فحص المشغلات. يمكنك متابعة التقدم هنا.':'تم تحميل بيانات العمل، ولم تظهر حلقات قابلة للفحص.','info');
