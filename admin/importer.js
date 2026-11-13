@@ -260,7 +260,7 @@
  }
  async function listSaved(){
    if(!jwt)return;
-   const data=await request("aseel_movies?select=id,title_ar,status,rights_status,stream_url,youtube_url,source_page_url,updated_at&order=updated_at.desc&limit=200");
+   const data=await request("aseel_movies?select=id,title_ar,status,stream_url,youtube_url,source_page_url,updated_at&order=updated_at.desc&limit=200");
    saved=data||[];renderSaved();
  }
  function renderSaved(){
