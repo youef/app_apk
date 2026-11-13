@@ -148,6 +148,7 @@
               <button type="button" class="small-outline" id="studioExportPlayersJson" disabled>↓ تصدير JSON الآن</button>
               <button type="button" class="small-outline" id="studioCopyPlayers" disabled>⧉ نسخ المصادر</button>
               <span class="studio-fast-summary" id="studioLiveCounts">لا توجد مصادر بعد</span>
+              <span class="studio-fast-summary" id="studioRemainingPages" aria-live="polite"></span>
               <span class="studio-fast-summary" id="studioScanTimer">00:00</span>
             </div>
             <div class="studio-v6-controls">
@@ -163,6 +164,11 @@
                 <option value="verified">اجتاز الفحص</option>
                 <option value="unverified">بحاجة للتحقق</option>
                 <option value="embed">صفحات مشغّل</option>
+                <option value="hls">قوائم HLS (M3U8)</option>
+                <option value="mp4">فيديو MP4</option>
+                <option value="blocked">رفض وصول 403</option>
+                <option value="expired">روابط منتهية</option>
+                <option value="missing">مصادر غير موجودة 404</option>
               </select>
               <button type="button" class="small-outline" id="studioShowAllSources">عرض كل المصادر</button>
             </div>
