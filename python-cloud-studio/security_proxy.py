@@ -138,7 +138,7 @@ def audit_proxy_context(host):
     choice = int.from_bytes(hashlib.sha256(host.encode("utf-8")).digest()[:4], "big") % len(pool) if pool else 0
     context = AuditTransport(host, pool, choice, approved,
                              free_source=use_free,
-                             requires_proxy=(use_free and os.environ.get("ALEZZ_SECURITY_FREE_PROXY_REQUIRE", "0") == "1")))
+                             requires_proxy=(use_free and os.environ.get("ALEZZ_SECURITY_FREE_PROXY_REQUIRE", "0") == "1"))
     token = _CONTEXT.set(context)
     try:
         yield context
