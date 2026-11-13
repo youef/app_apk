@@ -74,7 +74,7 @@
    return url && /\.(?:mp4|m3u8)(?:[?#]|$)/i.test(url) ? url : "";
  }
  function officialNavigation(item,type) {
-   return type === "channel" && item && item.status==="published" && (item.rights_status==="pending"||item.rights_status==="approved") &&
+   return type === "channel" && item && item.status==="published" && 
      item.playback_mode==="official_link" && !item.stream_url && !item.youtube_url &&
      /^https:\/\//i.test(safeUrl(item.official_url));
  }
@@ -82,7 +82,7 @@
    if (officialNavigation(item,type)) return true;
    if (!item || !(directStream(item.stream_url)||youtubeId(item.youtube_url)))return false;
    if (type === "channel" && !["stream","youtube_embed"].includes(item.playback_mode||"stream"))return false;
-   return item.status === "published" && item.rights_status === "approved";
+   return item.status === "published" && item.link_health_status !== "broken";
  }
  function el(tag, className, text) {
    const node = document.createElement(tag);
@@ -177,8 +177,8 @@
        // Keep published movie/series cards visible even when an individual media
        // link is pending. Playback eligibility is checked separately at click time.
        state[field] = field === "movies" || field === "series" ?
-         items.filter(x => x.status === "published" && x.rights_status === "approved") :
-         field === "channels" ? items.filter(x => playable(x,"channel")) : items;
+         items.filter(x => x.status === "published") :
+         field === "channels" ? items.filter(x => x.status === "published") : items;
      }
      else { state[field] = []; errors.push(field); }
    });
@@ -561,9 +561,9 @@
    const buttons=el("div","detail-buttons");
    if (type!=="series") {
      const isOfficial=officialNavigation(item,type);
-     const pendingMovie=type==="movie" && !playable(item,type);
+     const pendingMovie=!playable(item,type) && !isOfficial;
      buttons.append(detailButton(pendingMovie?"◌  قريبًا — تحديث المصدر":isOfficial?"↗  فتح صفحة المشاهدة الخارجية":type==="channel"?"◉  شاهد الآن":"▶  تشغيل الآن",pendingMovie?"btn-outline":"btn-primary",()=>{
-       if(pendingMovie) announce("الفيلم موجود في المكتبة؛ رابط الفيديو قيد التحديث وسيُفعّل عند توفر مصدر صالح.");
+       if(pendingMovie) announce("المحتوى منشور؛ المشغل غير متاح حاليًا وسيُفعّل عند توفر مصدر صالح.");
        else if(isOfficial) window.open(safeUrl(item.official_url),"_blank","noopener,noreferrer");
        else startPlayer(item,type);
      }));
@@ -608,7 +608,7 @@
          const b=el(ready?"button":"div","episode"+(ready?"":" episode--pending"));
          b.append(el("span","",ep.number+". "+(ep.title_ar||("الحلقة "+ep.number))));
          b.append(el("small","",ready?(ep.duration_minutes?ep.duration_minutes+" دقيقة":"▶ مشاهدة"):
-           ep.rights_status==="approved"?"قريبًا — تحديث مصدر الحلقة":"بانتظار اعتماد حقوق العرض"));
+           "قريبًا — تحديث مصدر الحلقة"));
          if (ready) b.onclick=()=>startPlayer(ep,"episode");
          else b.setAttribute("aria-label","الحلقة "+ep.number+" محفوظة؛ التشغيل غير متاح حاليًا");
          list.append(b);
