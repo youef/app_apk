@@ -2,13 +2,45 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const app = {csrf:'', catalogue:null, batch:[],currentIndex:0, authenticated:false, demo:false, busy:false, scanning:false, season:1, selected:new Set(), categoryList:[]};
-  const API = async (route, data) => {
+  let studioRecovery=null;
+  async function recoverStudioSession(){
+    // A valid portal login survives Render deploys, while the in-memory
+    // Studio CSRF can be lost. Only one request may renew the Studio cookie.
+    if(studioRecovery)return studioRecovery;
+    studioRecovery=(async()=>{
+      const response=await fetch('/api/init',{
+        method:'GET',credentials:'same-origin',cache:'no-store',
+        headers:{'Accept':'application/json'}
+      });
+      if(!response.ok)throw new Error('تعذّر استعادة جلسة الاستوديو. افتح /account/admin للتحقق من دخول المسؤول.');
+      const snapshot=await response.json();
+      if(!snapshot.csrf)throw new Error('فشل استعادة رمز حماية الجلسة.');
+      app.csrf=snapshot.csrf;
+      if(app.catalogue&&!snapshot.catalogue){
+        activity('تم تجديد جلسة الاستوديو. قد تحتاج إعادة اكتشاف العمل بعد إعادة تشغيل الخادم.','info');
+      }
+      return snapshot;
+    })();
+    try{return await studioRecovery;}
+    finally{studioRecovery=null;}
+  }
+  const API = async (route, data, retried=false) => {
     const request = data === undefined ? {method:'GET'} : {method:'POST',body:JSON.stringify(data)};
     const response = await fetch('/api/' + route, {credentials:'same-origin',cache:'no-store',...request,
       headers: data === undefined ? {'Accept':'application/json'} : {'Accept':'application/json','Content-Type':'application/json','X-CSRF-Token':app.csrf}});
     let result;
-    try{result = await response.json();} catch(_){throw new Error('تعذّر قراءة استجابة خادم Python.');}
-    if(!response.ok) throw new Error(typeof result.detail === 'string' ? result.detail : 'حدث خطأ في الطلب: ' + response.status);
+    try{result=await response.json();}
+    catch(_){throw new Error('تعذّر قراءة استجابة خادم Python.');}
+    if(!response.ok){
+      const detail=typeof result.detail==='string'?result.detail:'حدث خطأ في الطلب: '+response.status;
+      const lostSession=response.status===401 ||
+        (response.status===403&&/رمز الحماية|csrf/i.test(detail));
+      if(!retried&&route!=='init'&&lostSession){
+        await recoverStudioSession();
+        return API(route,data,true);
+      }
+      throw new Error(detail);
+    }
     return result;
   };
   function toast(message, type='info'){
@@ -491,7 +523,14 @@
     try {
       const result=await API('discovery-scan');
       if(discoveryId!==id)return;
-      if(result.scan?.id!==id)return;
+      if(result.scan?.id!==id){
+        closeDiscoveryStream();
+        clearTimeout(discoveryTimer);
+        discoveryId=null;
+        app.scanning=false;
+        activity('تمت استعادة جلسة الإدارة؛ أُعيد تشغيل الخادم أثناء الفحص. يمكنك إعادة الاكتشاف دون تسجيل دخول.','info');
+        return;
+      }
       if(result.summary && (result.scan.done!==discoveryDone || !result.scan.running)){
         updateDiscoveryMedia(result.summary);
         discoveryDone=result.scan.done;
