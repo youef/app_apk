@@ -20,6 +20,7 @@ import requests
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+from typing import Literal
 
 from private_film_import import owner
 
@@ -33,6 +34,18 @@ class StartUpload(BaseModel):
     filename: str = Field(min_length=5, max_length=220)
     title: str = Field(min_length=1, max_length=180)
     size_bytes: int = Field(gt=0, le=MAX_FILE_BYTES)
+    media_kind: Literal["movie", "episode"]
+    description: str = Field(default="", max_length=1500)
+    poster_url: str = Field(default="", max_length=2048)
+    series_id: uuid.UUID | None = None
+    season_number: int | None = Field(default=None, ge=1, le=99)
+    episode_number: int | None = Field(default=None, ge=1, le=9999)
+
+
+class NewSeries(BaseModel):
+    title: str = Field(min_length=2, max_length=180)
+    description: str = Field(default="", max_length=1500)
+    poster_url: str = Field(default="", max_length=2048)
 
 
 class FinishUpload(BaseModel):
@@ -76,9 +89,15 @@ def _decode_receipt(receipt: str, user_id: str) -> dict:
                 or not isinstance(payload.get("size"), int) or payload["size"] <= 0
                 or not isinstance(payload.get("path"), str)
                 or not payload["path"].startswith("uploads/")
-                or not payload["path"].endswith(".mp4")):
+                or not payload["path"].endswith(".mp4")
+                or payload.get("kind") not in ("movie", "episode")):
             raise ValueError("expired or invalid")
         uuid.UUID(payload["path"].split("/")[-1][:-4])
+        if payload["kind"] == "episode":
+            uuid.UUID(payload["series_id"])
+            if not (1 <= int(payload["season"]) <= 99 and
+                    1 <= int(payload["episode"]) <= 9999):
+                raise ValueError("bad episode coordinates")
         return payload
     except (ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError) as exc:
         raise HTTPException(403, "انتهى تصريح الرفع أو أنه غير صالح؛ ابدأ رفعًا جديدًا") from exc
@@ -106,7 +125,7 @@ def _record(portal, path: str):
     rows = portal.upstream(
         "GET", "/rest/v1/aseel_uploaded_mp4", secret=True,
         params={"storage_path": "eq." + path,
-                "select": "id,title,original_filename,storage_path,size_bytes,public_url,created_at",
+                "select": "id,title,original_filename,storage_path,size_bytes,public_url,created_at,media_kind,catalogue_target_id,series_id,season_number,episode_number",
                 "limit": "1"},
     )
     return rows[0] if rows else None
@@ -128,7 +147,47 @@ def register(portal, template_path):
                         "order": "created_at.desc", "limit": str(MAX_ROWS)})
         except (requests.RequestException, ValueError) as exc:
             raise HTTPException(503, "تعذّر قراءة ملفات الفيديو من Supabase") from exc
-        return {"files": rows, "bucket": BUCKET}
+        series = portal.upstream("GET", "/rest/v1/aseel_series", secret=True,
+            params={"select": "id,title_ar,status,poster_url", "order": "title_ar.asc", "limit": "500"})
+        return {"files": rows, "bucket": BUCKET, "series": series}
+
+    @router.post("/api/studio/video-upload/series")
+    def create_series(body: NewSeries, request: Request):
+        _admin(request, portal, mutation=True)
+        if body.poster_url and not body.poster_url.startswith("https://"):
+            raise HTTPException(422, "ملصق المسلسل يجب أن يكون رابط HTTPS")
+        row = {"title_ar": body.title.strip(), "status": "draft",
+               "description": body.description.strip() or None,
+               "poster_url": body.poster_url.strip() or None}
+        try:
+            created = portal.upstream("POST", "/rest/v1/aseel_series",
+                                      secret=True, prefer="return=representation", json=row)
+            return {"series": created[0]}
+        except requests.RequestException as exc:
+            raise HTTPException(503, "فشل إنشاء المسلسل في الداتا") from exc
+
+    @router.get("/api/studio/video-upload/series/{series_id}/episodes")
+    def list_episodes(series_id: uuid.UUID, request: Request):
+        _admin(request, portal)
+        try:
+            seasons = portal.upstream("GET", "/rest/v1/aseel_seasons", secret=True,
+                params={"series_id": "eq." + str(series_id), "select": "id,number",
+                        "order": "number.asc", "limit": "100"})
+            if not seasons:
+                return {"episodes": []}
+            season_ids = ",".join(row["id"] for row in seasons)
+            eps = portal.upstream("GET", "/rest/v1/aseel_episodes", secret=True,
+                params={"season_id": "in.(" + season_ids + ")",
+                        "select": "id,season_id,number,title_ar,status,stream_url",
+                        "order": "number.asc", "limit": "2000"})
+            numbers = {item["id"]: item["number"] for item in seasons}
+            return {"episodes": sorted([
+                {"id": e["id"], "season": numbers.get(e["season_id"], 0),
+                 "episode": e["number"], "title": e["title_ar"],
+                 "status": e["status"], "has_video": bool(e.get("stream_url"))}
+                for e in eps], key=lambda e: (e["season"], e["episode"]))}
+        except requests.RequestException as exc:
+            raise HTTPException(503, "تعذّر قراءة حلقات المسلسل") from exc
 
     @router.post("/api/studio/video-upload/start")
     def start_upload(body: StartUpload, request: Request):
@@ -136,6 +195,17 @@ def register(portal, template_path):
         _key()
         if not is_mp4(body.filename):
             raise HTTPException(422, "يمكن رفع ملفات MP4 فقط")
+        if body.poster_url and not body.poster_url.startswith("https://"):
+            raise HTTPException(422, "الملصق يجب أن يكون رابط HTTPS")
+        if body.media_kind == "episode":
+            if not body.series_id or not body.season_number or not body.episode_number:
+                raise HTTPException(422, "اختر مسلسلًا وموسمًا ورقم حلقة قبل الرفع")
+            series = portal.upstream("GET", "/rest/v1/aseel_series", secret=True,
+                params={"id": "eq." + str(body.series_id), "select": "id", "limit": "1"})
+            if not series:
+                raise HTTPException(404, "المسلسل غير موجود")
+            _ensure_episode_available(portal, str(body.series_id),
+                                      body.season_number, body.episode_number)
         # A unique path prevents accidental overwrite or CDN cache collisions.
         path = "uploads/" + datetime.now(timezone.utc).strftime("%Y/%m/") + str(uuid.uuid4()) + ".mp4"
         try:
@@ -151,7 +221,11 @@ def register(portal, template_path):
             raise HTTPException(502, "تعذّر إصدار تصريح رفع إلى Supabase Storage") from exc
         payload = {"uid": user_id, "title": body.title.strip(),
                    "filename": body.filename, "size": body.size_bytes,
-                   "path": path, "exp": int(time.time()) + 2 * 3600}
+                   "path": path, "exp": int(time.time()) + 24 * 3600,
+                   "kind": body.media_kind, "description": body.description.strip(),
+                   "poster_url": body.poster_url.strip(),
+                   "series_id": str(body.series_id) if body.series_id else None,
+                   "season": body.season_number, "episode": body.episode_number}
         host = portal.db_url.replace(".supabase.co", ".storage.supabase.co")
         return {"bucket": BUCKET, "path": path, "token": token,
                 "tus_endpoint": host + "/storage/v1/upload/resumable",
@@ -180,8 +254,15 @@ def register(portal, template_path):
             raise HTTPException(422, "فشل التحقق من حجم الفيديو أو صيغته MP4 داخل التخزين")
         try:
             existing = _record(portal, path)
+            if existing and existing.get("catalogue_target_id"):
+                return {"file": existing, "saved": True, "catalogue": {
+                    "kind": existing["media_kind"],
+                    "id": existing["catalogue_target_id"],
+                    "series_id": existing.get("series_id"),
+                    "season_number": existing.get("season_number"),
+                    "episode_number": existing.get("episode_number")}}
             if existing:
-                return {"file": existing, "saved": True}
+                return _finish_link(portal, path, payload, existing)
             row = {"title": payload["title"], "original_filename": payload["filename"],
                    "storage_bucket": BUCKET, "storage_path": path,
                    "size_bytes": real_size, "uploaded_by": user_id,
@@ -190,10 +271,110 @@ def register(portal, template_path):
                                     secret=True, prefer="return=representation", json=row)
             if not saved:
                 raise ValueError("The database did not return the saved video")
-            return {"file": saved[0], "saved": True}
+            return _finish_link(portal, path, payload, saved[0])
         except requests.RequestException as exc:
             # The MP4 is already safely stored. Do not delete a completed upload
             # because saving optional catalogue metadata temporarily failed.
             raise HTTPException(503, "الفيديو مرفوع، لكن فشل حفظ بياناته. أعد المحاولة دون إعادة الرفع") from exc
         except ValueError as exc:
             raise HTTPException(503, "تعذّر تأكيد حفظ الفيديو في الداتا") from exc
+
+
+def _ensure_episode_available(portal, series_id: str, season_number: int, episode_number: int):
+    seasons = portal.upstream("GET", "/rest/v1/aseel_seasons", secret=True,
+        params={"series_id": "eq." + series_id, "number": "eq." + str(season_number),
+                "select": "id", "limit": "1"})
+    if not seasons:
+        return None
+    season_id = seasons[0]["id"]
+    episodes = portal.upstream("GET", "/rest/v1/aseel_episodes", secret=True,
+        params={"season_id": "eq." + season_id, "number": "eq." + str(episode_number),
+                "select": "id", "limit": "1"})
+    if episodes:
+        raise HTTPException(409, "الحلقة موجودة مسبقًا في هذا الموسم؛ اختر رقمًا آخر. لن يتم استبدالها تلقائيًا.")
+    return season_id
+
+
+def _insert_catalogue(portal, table: str, row: dict, catalogue_id: str):
+    """Use a path-derived UUID for idempotent retries after transient network failures."""
+    endpoint = "/rest/v1/" + table
+    existing = portal.upstream("GET", endpoint, secret=True,
+        params={"id": "eq." + catalogue_id, "select": "id,stream_url", "limit": "1"})
+    if existing:
+        if existing[0]["stream_url"] != row["stream_url"]:
+            raise HTTPException(409, "السجل مرتبط برابط فيديو آخر")
+        return catalogue_id
+    try:
+        portal.upstream("POST", endpoint, secret=True,
+                        prefer="return=minimal", json={"id": catalogue_id, **row})
+    except requests.HTTPError as exc:
+        if exc.response is not None and exc.response.status_code == 409:
+            existing = portal.upstream("GET", endpoint, secret=True,
+                params={"id": "eq." + catalogue_id, "select": "id,stream_url", "limit": "1"})
+            if existing and existing[0]["stream_url"] == row["stream_url"]:
+                return catalogue_id
+        raise
+    return catalogue_id
+
+
+def _get_or_create_season(portal, series_id: str, season_number: int):
+    rows = portal.upstream("GET", "/rest/v1/aseel_seasons", secret=True,
+        params={"series_id": "eq." + series_id, "number": "eq." + str(season_number),
+                "select": "id", "limit": "1"})
+    if rows:
+        return rows[0]["id"]
+    try:
+        created = portal.upstream("POST", "/rest/v1/aseel_seasons", secret=True,
+            prefer="return=representation", json={"series_id": series_id, "number": season_number,
+            "title_ar": "الموسم " + str(season_number)})
+        return created[0]["id"]
+    except requests.HTTPError as exc:
+        if exc.response is not None and exc.response.status_code == 409:
+            rows = portal.upstream("GET", "/rest/v1/aseel_seasons", secret=True,
+                params={"series_id": "eq." + series_id, "number": "eq." + str(season_number),
+                        "select": "id", "limit": "1"})
+            if rows:
+                return rows[0]["id"]
+        raise
+
+
+def _finish_link(portal, path: str, payload: dict, uploaded: dict):
+    public_url = _public_url(portal, path)
+    kind = payload["kind"]
+    target_id = str(uuid.uuid5(uuid.NAMESPACE_URL, "alezz-upload:" + path))
+    series_id = None
+    season_number = None
+    episode_number = None
+    if kind == "movie":
+        row = {"title_ar": payload["title"], "stream_url": public_url,
+               "description": payload.get("description") or None,
+               "poster_url": payload.get("poster_url") or None,
+               "status": "draft", "rights_status": "pending"}
+        _insert_catalogue(portal, "aseel_movies", row, target_id)
+    else:
+        series_id = payload["series_id"]
+        season_number, episode_number = int(payload["season"]), int(payload["episode"])
+        season_id = _get_or_create_season(portal, series_id, season_number)
+        # If a concurrent admin created the episode, surface a conflict rather
+        # than silently overwrite or attach this MP4 to the wrong episode.
+        prior = portal.upstream("GET", "/rest/v1/aseel_episodes", secret=True,
+            params={"season_id": "eq." + season_id, "number": "eq." + str(episode_number),
+                    "select": "id,stream_url", "limit": "1"})
+        if prior and prior[0]["id"] != target_id:
+            raise HTTPException(409, "تم استخدام رقم هذه الحلقة مسبقًا. الفيديو محفوظ في الملفات لكنه لم يحل محل الحلقة القديمة.")
+        row = {"season_id": season_id, "number": episode_number, "title_ar": payload["title"],
+               "stream_url": public_url, "description": payload.get("description") or None,
+               "status": "draft", "rights_status": "pending"}
+        _insert_catalogue(portal, "aseel_episodes", row, target_id)
+
+    updated = portal.upstream("PATCH", "/rest/v1/aseel_uploaded_mp4", secret=True,
+        params={"storage_path": "eq." + path, "catalogue_target_id": "is.null"},
+        prefer="return=representation",
+        json={"media_kind": kind, "catalogue_target_id": target_id, "series_id": series_id,
+              "season_number": season_number, "episode_number": episode_number})
+    record = updated[0] if updated else _record(portal, path)
+    if not record or record.get("catalogue_target_id") != target_id:
+        raise HTTPException(503, "الفيديو محفوظ وتم ربطه بالمكتبة، لكن تعذر تأكيد سجل الرفع. أعد المحاولة.")
+    return {"file": record, "saved": True,
+            "catalogue": {"kind": kind, "id": target_id, "series_id": series_id,
+                          "season_number": season_number, "episode_number": episode_number}}
