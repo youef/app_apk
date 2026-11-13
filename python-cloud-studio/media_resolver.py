@@ -352,14 +352,20 @@ class MediaResolver:
             return list(pool.map(probe, merge_sources(sources)))
 
     def resolve(self, pages: list[str], existing=()) -> tuple[list[dict], list[str]]:
-        """HTTP first; conditional browser fallback includes all-expired candidates."""
+        """Discover public candidates fast; reserve browser time for JS players."""
         deadline = time.monotonic()+self.max_seconds
-        candidates, errors = self._http(pages, deadline=deadline)
-        checked = self.check(merge_sources(existing, candidates), deadline=deadline)
-        if self.mode == 'headless' or self.mode == 'auto' and not any(x.get('verified') for x in checked):
-            # Leave time to verify captured candidates within the same budget.
+        browser_enabled = self.mode in ('auto','headless')
+        # Previously HTTP extraction + media probes exhausted the same budget,
+        # leaving Chromium ~0 seconds. Reserve 8-10s for browser-only players.
+        reserve = min(10, max(2, self.max_seconds*.5)) if browser_enabled else 0
+        http_deadline = deadline-reserve if browser_enabled else deadline
+        candidates, errors = self._http(pages, deadline=http_deadline)
+        checked = self.check(merge_sources(existing, candidates), deadline=http_deadline)
+        need_browser = browser_enabled and (self.mode=='headless' or
+                                            not any(x.get('verified') for x in checked))
+        if need_browser and time.monotonic() < deadline:
             previous = {x['url'] for x in checked}
-            browser_sources, browser_errors = self._browser(pages, deadline=deadline-min(10,self.max_seconds/3),
+            browser_sources, browser_errors = self._browser(pages, deadline=deadline,
                                                            known=previous)
             errors.extend(browser_errors)
             new = [x for x in browser_sources if x.get('url') not in previous]
