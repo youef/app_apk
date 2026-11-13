@@ -85,8 +85,8 @@ def _parse_one(raw):
 def settings(*, resolve_free=False):
     urls = os.environ.get("ALEZZ_SECURITY_PROXY_URLS", "")
     allow = os.environ.get("ALEZZ_SECURITY_PROXY_ALLOWED_HOSTS", "")
-    entries = [line.strip() for line in re.split(r"[,;\\n]+", urls) if line.strip()]
-    hosts = frozenset(x.strip().lower().rstrip(".") for x in re.split(r"[,;\\n]+", allow)
+    entries = [line.strip() for line in re.split(r"[,;\n]+", urls) if line.strip()]
+    hosts = frozenset(x.strip().lower().rstrip(".") for x in re.split(r"[,;\n]+", allow)
                       if x.strip())
     # Default free mode is scoped ONLY to this service, never arbitrary public websites.
     free_enabled = os.environ.get("ALEZZ_SECURITY_FREE_PROXY_ENABLED", "1") == "1"
