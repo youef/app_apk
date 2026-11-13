@@ -1094,7 +1094,7 @@ public final class TVHomeActivity extends Activity {
             ArrayList<JSONObject> kids=new ArrayList<JSONObject>();
             for(JSONObject x:movies)if(kidsDirect(x))kids.add(x);
             for(JSONObject x:series)if(x.optBoolean("is_kids",false) &&
-                "approved".equals(value(x,"rights_status")) && kidsAgeAllowed(value(x,"age_rating")))kids.add(x);
+                "published".equals(value(x,"status")) && kidsAgeAllowed(value(x,"age_rating")))kids.add(x);
             for(JSONObject x:channels)if(kidsDirect(x))kids.add(x);
             sectionSearchBar("ابحث في عالم الأطفال",kids);
             grid("محتوى أطفال ملائم للشاشة",kids);
