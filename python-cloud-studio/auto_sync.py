@@ -759,6 +759,8 @@ class AutoSync:
                                     'rights_status':'eq.approved','link_health_status':'eq.healthy',
                                     'stream_url':'not.is.null'}, {'status':'published'})
         if result:
+            if table=='aseel_episodes':
+                self.queue.setting('discovered-episode:'+identifier,None)
             self.queue.event('auto_published','نُشر المحتوى المعتمد بعد نجاح فحص الفيديو المباشر.',table,identifier)
 
     def publish_discovered_episode(self, db, identifier):
