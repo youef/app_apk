@@ -178,9 +178,16 @@ def extract_candidates(body: str, base: str, *, now: float | None = None) -> tup
             if isinstance(node, list): stack.extend((x, depth+1) for x in node[:128]); continue
             if not isinstance(node, dict): continue
             label = node.get('label') or node.get('quality') or node.get('name') or ''
+            declared_type = str(node.get('type') or node.get('mimeType') or '').lower()
+            media_context = declared_type.startswith(('video/','application/vnd.apple.',
+                                                     'application/x-mpegurl'))
             for key, value in node.items():
-                if key in ('contentUrl', 'file', 'src', 'source', 'hls', 'mp4', 'manifest', 'playlist'):
+                if key in ('contentUrl', 'file', 'hls', 'mp4', 'manifest', 'playlist'):
                     add(value, label, direct_hint=True)
+                elif key in ('src', 'source'):
+                    # Generic JSON "src" often means a poster, not a video.
+                    # Require media type or a known video extension.
+                    add(value, label, direct_hint=media_context)
                 elif key == 'url':
                     add(value, label)
                 elif key in ('embedUrl', 'iframe', 'player_url'):
