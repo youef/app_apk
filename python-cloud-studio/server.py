@@ -874,6 +874,20 @@ async def studio_scan_resume(request:Request,data:ScanControl):
     with state.lock:
         if state.scan and state.scan.get("running"):
             raise HTTPException(409,"يوجد فحص نشط؛ أوقفه قبل استعادة مهمة أخرى")
+        if (state.scan and state.scan.get("id")==data.scan_id
+                and state.catalogue is state.scan_catalogue):
+            # No database round trip needed to resume a just-stopped scan.
+            cat=state.catalogue
+            original=state.scan
+            checkpoint=original.get("crawl_checkpoint") if original.get("crawl_running") else None
+            start_catalogue_scan(state,cat,owner_uid=uid,
+                crawl_checkpoint=checkpoint,
+                resume={"id":data.scan_id,
+                        "completed_keys":list(original.get("completed_keys",[])),
+                        "seq":int(original.get("seq",0)),
+                        "revision":int(original.get("revision",0))})
+            return {"summary":get_summary(state),"resumed":True,
+                    "pending":max(0,state.scan["total"]-state.scan["done"])}
     record=await run_in_threadpool(load_scan_checkpoint,data.scan_id,uid)
     if not record:raise HTTPException(404,"Checkpoint expired or not found")
     if record.get("scan_status")=="cancelled":
