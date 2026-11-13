@@ -207,6 +207,14 @@ def extract_candidates(body: str, base: str, *, now: float | None = None) -> tup
             except (ValueError, RecursionError): pass
         for match in re.finditer(r'''["']((?:https://|//|/)[^"'<>\s]+?\.(?:m3u8|mp4|m4v|webm)(?:\?[^"'<>\s]*)?)["']''', text, re.I):
             add(match.group(1).replace('\\u0026', '&'))
+        # Popular public players use extensionless signed URLs in inline config
+        # (file: "...", streamUrl: "...", hlsUrl: "..."). Record them as
+        # unverified candidates; actual bytes determine playability.
+        for match in re.finditer(
+            r'''(?:\b(?:file|streamUrl|hlsUrl|videoUrl|playlistUrl|contentUrl)\b)\s*[:=]\s*["'](?P<url>(?:https://|//)[^"'<> \t\r\n]{8,1500})["']''',
+            text, re.I
+        ):
+            add(match.group('url').replace('\\u0026','&'),direct_hint=True)
     return merge_sources(sources), pages[:12]
 
 
@@ -325,7 +333,6 @@ class MediaResolver:
                 return row
             client = self._client(deadline)
             try:
-                row = dict(item)
                 if supported_source_kind(row.get('url','')) == 'embed':
                     row['kind'] = 'embed'
                 try:
@@ -336,7 +343,8 @@ class MediaResolver:
                                    error='صفحة مشغل متاحة؛ لم يتم إثبات تشغيل الفيديو')
                     else:
                         ok, error = client.media_verified(row['url'])
-                        row.update(verified=bool(ok), error='' if ok else safe_error(error))
+                        row.update(verified=bool(ok),reachable=bool(ok),
+                                   error='' if ok else safe_error(error))
                 except Exception as exc: row.update(verified=False, reachable=False, error=safe_error(exc))
                 row['checked_at'] = time.time()
                 if row.get('kind') != 'embed':
