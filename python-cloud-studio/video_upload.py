@@ -19,6 +19,7 @@ from urllib.parse import parse_qs, quote, urlsplit
 import requests
 from botocore.exceptions import BotoCoreError, ClientError
 import video_storage
+import video_storage_settings
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -70,6 +71,32 @@ class MultipartPart(BaseModel):
 
 class CompleteMultipartRequest(FinishUpload):
     parts: list[MultipartPart] = Field(min_length=1, max_length=10000)
+
+
+class ProviderConfigBody(BaseModel):
+    account_id: str = Field(default="", max_length=100)
+    endpoint: str = Field(default="", max_length=500)
+    region: str = Field(default="", max_length=90)
+    bucket: str = Field(min_length=3, max_length=63)
+    public_base_url: str = Field(min_length=9, max_length=1024)
+    access_key_id: str = Field(default="", max_length=256)
+    secret_access_key: str = Field(default="", max_length=4096)
+    quota_gb: float = Field(default=10, gt=0, le=100000)
+    max_file_gb: float = Field(default=50, gt=0, le=5120)
+    priority: int = Field(default=50, ge=1, le=100)
+
+
+class DistributionBody(BaseModel):
+    mode: Literal["balanced", "priority"] = "balanced"
+    fallback_supabase: bool = True
+
+
+class EnableBody(BaseModel):
+    enabled: bool
+
+
+class SetupCorsBody(BaseModel):
+    create_bucket: bool = False
 
 
 def is_mp4(filename: str) -> bool:
@@ -173,6 +200,90 @@ def register(portal, template_path):
                 "max_file_bytes": STORAGE_UPLOAD_LIMIT_BYTES,
                 "storage_providers": video_storage.summary(portal)}
 
+    @router.get("/api/studio/video-upload/settings")
+    def get_storage_settings(request: Request):
+        _admin(request, portal)
+        try:
+            stored = video_storage_settings.configs(portal)
+            return {
+                "providers": [video_storage_settings.public_config(stored[name])
+                              if name in stored else {
+                                  "provider_id": name, "enabled": False,
+                                  "health_status": "unconfigured",
+                                  "has_access_key": False, "has_secret_key": False,
+                              } for name in video_storage_settings.VALID_PROVIDERS],
+                "distribution": video_storage_settings.distribution(portal),
+            }
+        except (requests.RequestException, ValueError) as exc:
+            raise HTTPException(503, "تعذّر تحميل إعدادات التخزين") from exc
+
+    @router.post("/api/studio/video-upload/settings")
+    def update_storage_settings(body: DistributionBody, request: Request):
+        _admin(request, portal, mutation=True)
+        try:
+            return video_storage_settings.save_distribution(
+                portal, body.mode, body.fallback_supabase)
+        except requests.RequestException as exc:
+            raise HTTPException(503, "تعذّر حفظ سياسة توزيع الفيديوهات") from exc
+
+    @router.post("/api/studio/video-upload/providers/{name}")
+    def save_storage_provider(name: Literal["r2", "b2", "oracle"],
+                              body: ProviderConfigBody, request: Request):
+        _admin(request, portal, mutation=True)
+        try:
+            return {"provider": video_storage_settings.save(
+                portal, name, body.model_dump())}
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        except requests.RequestException as exc:
+            raise HTTPException(503, "تعذّر حفظ إعدادات المركز") from exc
+
+    @router.post("/api/studio/video-upload/providers/{name}/test")
+    def test_storage_provider(name: Literal["r2", "b2", "oracle"], request: Request):
+        _admin(request, portal, mutation=True)
+        try:
+            return video_storage_settings.test_connection(
+                portal, name, str(request.base_url).rstrip("/"))
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        except requests.RequestException as exc:
+            raise HTTPException(503, "تعذّر فحص المركز بسبب اتصال الداتا") from exc
+
+    @router.post("/api/studio/video-upload/providers/{name}/setup")
+    def setup_storage_provider(name: Literal["r2", "b2", "oracle"],
+                               body: SetupCorsBody, request: Request):
+        _admin(request, portal, mutation=True)
+        try:
+            return video_storage_settings.configure_bucket_cors(
+                portal, name, str(request.base_url).rstrip("/"),
+                create_bucket=body.create_bucket)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        except (ClientError, BotoCoreError) as exc:
+            raise HTTPException(422,
+                "لم تسمح صلاحيات المفتاح بتهيئة الحاوية أو CORS. أنشئ الحاوية"
+                " أو عدّل CORS من لوحة المزود باستخدام الإعدادات المقترحة.") from exc
+
+    @router.post("/api/studio/video-upload/providers/{name}/enable")
+    def enable_storage_provider(name: Literal["r2", "b2", "oracle"],
+                                body: EnableBody, request: Request):
+        _admin(request, portal, mutation=True)
+        try:
+            return video_storage_settings.set_active(portal, name, body.enabled)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        except requests.RequestException as exc:
+            raise HTTPException(503, "تعذّر تغيير حالة المركز") from exc
+
+    @router.post("/api/studio/video-upload/providers/{name}/disconnect")
+    def disconnect_storage_provider(name: Literal["r2", "b2", "oracle"],
+                                    request: Request):
+        _admin(request, portal, mutation=True)
+        try:
+            return video_storage_settings.remove(portal, name)
+        except requests.RequestException as exc:
+            raise HTTPException(503, "تعذّر إزالة بيانات الربط") from exc
+
     @router.post("/api/studio/video-upload/series")
     def create_series(body: NewSeries, request: Request):
         _admin(request, portal, mutation=True)
@@ -243,20 +354,35 @@ def register(portal, template_path):
                    "season": body.season_number, "episode": body.episode_number,
                    "storage_provider": selected}
         if selected != "supabase":
-            provider = video_storage.providers()[selected]
-            try:
-                upload_id = video_storage.start_multipart(provider, path)
-            except (BotoCoreError, ClientError, ValueError) as exc:
-                raise HTTPException(502, "تعذر بدء الرفع في " + provider.label +
-                    ". تأكد من بيانات الربط وصلاحيات الكتابة في الحاوية.") from exc
-            payload["upload_id"] = upload_id
-            return {
-                "mode": "s3_multipart", "storage_provider": selected,
-                "provider_label": provider.label,
-                "receipt": _encode_receipt(payload),
-                "chunk_bytes": video_storage.PART_BYTES,
-                "public_url": provider.public_url(path),
-            }
+            failures = set()
+            while selected != "supabase":
+                provider = video_storage.providers(portal)[selected]
+                try:
+                    upload_id = video_storage.start_multipart(provider, path)
+                except (BotoCoreError, ClientError, ValueError) as exc:
+                    failures.add(selected)
+                    if body.storage_preference != "auto":
+                        raise HTTPException(502,
+                            "فشل إنشاء جلسة الرفع لدى المركز المحدد. "
+                            "اختبر الاتصال من إعداداته أو اختر التوزيع التلقائي.") from exc
+                    try:
+                        selected = video_storage.choose(
+                            portal, body.size_bytes, "auto", exclude=failures)
+                    except ValueError as choice_exc:
+                        raise HTTPException(502,
+                            "فشل بدء الرفع لدى المراكز المتاحة. "
+                            "افحص مفاتيحها وصلاحياتها من صفحة الإعدادات.") from choice_exc
+                    payload["storage_provider"] = selected
+                    continue
+                payload["storage_provider"] = selected
+                payload["upload_id"] = upload_id
+                return {
+                    "mode": "s3_multipart", "storage_provider": selected,
+                    "provider_label": provider.label,
+                    "receipt": _encode_receipt(payload),
+                    "chunk_bytes": video_storage.PART_BYTES,
+                    "public_url": provider.public_url(path),
+                }
         if body.size_bytes > STORAGE_UPLOAD_LIMIT_BYTES:
             raise HTTPException(413, "حجم الملف يتجاوز حد Supabase الحالي؛ اختر أحد مراكز التخزين الخارجية.")
         try:
