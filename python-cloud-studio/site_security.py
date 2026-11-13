@@ -131,7 +131,11 @@ class PublicAdapter(HTTPAdapter):
 def safe_get(host, path="/", *, origin=None, max_bytes=MAX_BYTES):
     if not path.startswith("/") or path.startswith("//") or any(c in path for c in "\r\n"):
         raise ValueError("مسار غير صالح")
-    public_addresses(host)
+    addresses = public_addresses(host)
+    from security_proxy import try_proxy_get
+    proxied = try_proxy_get(host, path, origin, max_bytes, AGENT, addresses)
+    if proxied is not None:
+        return proxied
     with requests.Session() as client:
         client.trust_env = False
         client.mount("https://", PublicAdapter(pool_connections=1, pool_maxsize=1))
@@ -199,6 +203,15 @@ def classify_access(status, headers, body):
 
 
 def audit(host):
+    """Perform a complete read-only audit using a stable approved egress path."""
+    from security_proxy import audit_proxy_context
+    with audit_proxy_context(host) as context:
+        report = _audit_impl(host)
+        report["proxy"] = context.summary()
+        return report
+
+
+def _audit_impl(host):
     """Bounded GET requests, HTTPS only; no form submissions."""
     public_addresses(host)
     results = []
@@ -212,9 +225,10 @@ def audit(host):
     try:
         status, headers, body = safe_get(host, "/")
     except (ValueError, requests.RequestException, OSError) as exc:
-        add("high", "تعذّر الاتصال الآمن بالموقع",
-            "تعذّر إتمام طلب HTTPS موثوق من خادم Render.",
-            "تحقق من DNS، شهادة TLS، إعدادات الجدار الناري وتوفر الموقع.",
+        meta["scan_complete"] = False
+        add("info", "تعذّر الاتصال الآمن بالموقع",
+            "تعذّر إتمام طلب HTTPS موثوق من خادم الفحص. قد يكون البروكسي غير متاح إن كان مفعّلًا.",
+            "تحقق من DNS، شهادة TLS، توفر الموقع وإعدادات ALEZZ_SECURITY_PROXY_URLS للمواقع المصرح بها.",
             type(exc).__name__)
         return finish(meta, results)
     meta["http_status"] = status
@@ -594,6 +608,12 @@ def register(portal):
         _restore_cloud()
     except (ValueError, requests.RequestException, OSError):
         pass
+    @router.get("/api/security/proxies")
+    def proxy_status(request: Request):
+        require_admin(request, portal)
+        from security_proxy import safe_status
+        return safe_status()
+
     @router.get("/studio/security", include_in_schema=False)
     def page(request: Request):
         require_admin(request, portal)
