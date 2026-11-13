@@ -49,6 +49,38 @@ class FreeProxyTests(unittest.TestCase):
                 fetch.assert_not_called()
             self.assertFalse(context.approved)
 
+    def test_approved_hosts_split_preserves_letter_n(self):
+        with patch.dict(os.environ, {
+            "ALEZZ_SECURITY_PROXY_ALLOWED_HOSTS":"example.org;app-apk-oquy.onrender.com"
+        }):
+            _, allowed=settings()
+            self.assertIn("app-apk-oquy.onrender.com",allowed)
+            self.assertEqual(len(allowed),2)
+
+    def test_global_proxy_disable_never_fetches_community_pool(self):
+        with patch.dict(os.environ,{"ALEZZ_SECURITY_PROXY_ENABLED":"0"}):
+            with patch("security_free_proxies.working_pool") as working:
+                with audit_proxy_context("app-apk-oquy.onrender.com") as ctx:
+                    working.assert_not_called()
+                    self.assertIsNone(try_proxy_get(
+                        "app-apk-oquy.onrender.com","/",None,1024,"test",
+                        ["93.184.215.14"]))
+                    self.assertFalse(ctx.free_source)
+
+    def test_github_raw_http_206_parsed_without_using_user_urls(self):
+        from security_free_proxies import _fetch_candidates
+        payload=b"93.184.215.14:8080\n10.0.0.1:8080\n"
+        calls=[]
+        def fake_get(host,path,*,max_bytes=0):
+            calls.append((host,path))
+            return 206,{"Content-Type":"text/plain; charset=utf-8"},payload
+        with patch.dict(sys.modules,{"site_security":types.SimpleNamespace(safe_get=fake_get)}):
+            proxies,source_count=_fetch_candidates()
+        self.assertEqual(source_count,2)
+        self.assertEqual(proxies,(Proxy("93.184.215.14",8080),))
+        self.assertEqual(len(calls),2)
+        self.assertTrue(all(host=="raw.githubusercontent.com" for host,_ in calls))
+
     def test_only_tls_verified_candidates_enter_pool(self):
         valid=Proxy("93.184.215.14",8080)
         bad=Proxy("93.184.215.15",3128)
