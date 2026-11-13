@@ -7,8 +7,8 @@
   <meta name="robots" content="noindex, nofollow">
   <title>رفع فيديو MP4 | استديو العز TV</title>
   <link rel="icon" type="image/svg+xml" href="/static/studio-icon.svg">
-  <link rel="stylesheet" href="/static/video-upload.css?v=2">
-  <script defer src="/static/video-upload.js?v=2"></script>
+  <link rel="stylesheet" href="/static/video-upload.css?v=3">
+  <script defer src="/static/video-upload.js?v=3"></script>
 </head>
 <body>
   <div class="shell">
@@ -23,14 +23,14 @@
 
     <main>
       <section class="hero">
-        <div class="eyebrow">مكتبتك الخاصة • Supabase Storage</div>
+        <div class="eyebrow">مكتبتك الخاصة • تخزين موزّع متعدد المراكز</div>
         <h1>رفع فيديوهات <span>MP4</span></h1>
-        <p>ارفع فيديو من جهازك مباشرة إلى تخزين العز TV، ثم انسخ رابط MP4 المباشر واستخدمه في رابط تشغيل الفيلم أو الحلقة داخل التطبيق.</p>
+        <p>ارفع الفيلم أو حلقة المسلسل إلى أفضل مركز تخزين متصل تلقائيًا، مع حفظ الرابط واسم المركز في قاعدة بيانات العز.</p>
         <div class="steps"><span><b>1</b> اختيار الملف</span><span><b>2</b> الرفع والتحقق</span><span><b>3</b> نسخ الرابط</span></div>
       </section>
 
       <section class="panel upload-panel" aria-labelledby="upload-heading">
-        <div class="panel-title"><div><h2 id="upload-heading">فيديو جديد</h2><p>ملف MP4 أصلي — لا يتم تحويل الصيغ الأخرى تلقائيًا.</p></div><span class="pill">رفع مجزأ 6 MB</span></div>
+        <div class="panel-title"><div><h2 id="upload-heading">فيديو جديد</h2><p>ملف MP4 أصلي — لا يتم تحويل الصيغ الأخرى تلقائيًا.</p></div><span class="pill">رفع مجزأ واستكمال عند الانقطاع</span></div>
         <div class="kind-title">نوع المحتوى</div>
         <div class="kind-picker" role="radiogroup" aria-label="نوع المحتوى">
           <label class="kind-option"><input name="media-kind" type="radio" value="movie" checked><span><b>🎬 فيلم</b><small>فيديو واحد مرتبط بالفيلم</small></span></label>
@@ -55,11 +55,18 @@
             <div id="series-episodes" class="episode-list" aria-live="polite"></div>
           </div>
         </div>
-        <div class="storage-notice" id="size-notice" role="status">ملفات Supabase في الباقة المجانية: بحد أقصى 50 MB للملف. الملفات الأكبر تحتاج رفع حد التخزين عبر باقة مناسبة.</div>
+        <div class="storage-options">
+          <label class="field" for="storage-preference"><span>مركز تخزين الفيديو</span>
+            <select id="storage-preference"><option value="auto">توزيع تلقائي — أفضل مركز متاح</option></select>
+          </label>
+          <div id="storage-centers" class="storage-centers" aria-live="polite"></div>
+          <small class="storage-caption">تُرفع الأجزاء مباشرة من جهازك إلى المركز المختار دون المرور بسيرفر Render، وتُحفظ معلومات المركز والرابط في قاعدة بيانات العز.</small>
+        </div>
+        <div class="storage-notice" id="size-notice" role="status">الرفع المجاني إلى Supabase محدود بـ50 MB للملف. يمكن رفع الملفات الأكبر إلى مركز خارجي بعد ربط حسابه وتفعيل مساحة التخزين العامة.</div>
         <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="اختر أو اسحب ملف MP4">
           <span class="upload-symbol" aria-hidden="true">⇧</span>
           <strong>اضغط لاختيار الفيديو أو اسحبه هنا</strong>
-          <span>MP4 فقط • من الجوال أو الكمبيوتر • لا يمر الملف بخادم Render</span>
+          <span>MP4 فقط • من الجوال أو الكمبيوتر • يتوزّع على المراكز المفعّلة</span>
           <input id="file" type="file" accept=".mp4,video/mp4" hidden>
         </div>
         <div id="chosen" class="chosen" hidden><span aria-hidden="true">🎞</span><div class="chosen-text"><strong id="file-name"></strong><small id="file-size"></small></div><button id="change-file" type="button" class="quiet">تغيير الملف</button></div>
