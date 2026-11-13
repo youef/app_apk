@@ -390,6 +390,13 @@
           ' • حد الملف ' + mb(p.max_file_bytes)
         : 'بانتظار إنشاء الحساب وربط مفاتيح الوصول');
       row.append(label, details);
+      const edit = make('button', p.ready ? 'إدارة المركز' : 'إعداد المركز');
+      edit.type = 'button';
+      edit.className = 'quiet';
+      edit.addEventListener('click', () => {
+        if (window.AlEzzStorage) window.AlEzzStorage.open(p.id);
+      });
+      row.append(edit);
       if (!p.ready && p.signup_url) {
         const signup = make('a', 'إعداد حساب المركز');
         signup.href = p.signup_url;
@@ -528,6 +535,10 @@
     buttons();
   }
 
+  $('open-provider-settings').addEventListener('click', () => {
+    if (window.AlEzzStorage) window.AlEzzStorage.open();
+  });
+  window.addEventListener('alezz-storage-updated', refreshLibrary);
   $('storage-preference').addEventListener('change', () => {
     if (state.running) return;
     state.ticket = null;
