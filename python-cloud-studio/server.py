@@ -10,7 +10,7 @@ import asyncio
 from copy import deepcopy
 from ipaddress import ip_address
 from contextlib import asynccontextmanager
-from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
+from concurrent.futures import ThreadPoolExecutor, FIRST_COMPLETED, wait, wait, FIRST_COMPLETED
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 import io
@@ -45,6 +45,7 @@ from media_resolver import MediaResolver, read_public_html, safe_error, supporte
 from title_cleaner import content_title
 from launch import studio_revision
 from member_portal import Portal
+from studio_scan_checkpoints import save as save_scan_checkpoint, load as load_scan_checkpoint, available as scan_checkpoint_available
 
 BASE = Path(__file__).resolve().parent
 STUDIO_REVISION = studio_revision()
@@ -148,6 +149,7 @@ class UserState:
     demo: bool = False
     scan: dict | None = None
     scan_catalogue: Catalogue | None = None
+    scan_owner_uid: str | None = None
     capture: dict | None = None
     tracking: dict | None = None
     last_used: float = field(default_factory=time.monotonic)
@@ -198,8 +200,69 @@ def current_catalogue(state: UserState) -> Catalogue:
     return state.catalogue
 
 
+SCAN_EVENTS_LIMIT=400
+SCAN_SAVERS=ThreadPoolExecutor(max_workers=1,thread_name_prefix="studio-v6-checkpoint")
+
+def _scan_public(progress):
+    """Small, never expose server-only owner IDs, queued events or crawler URLs."""
+    if not progress:return None
+    hidden={"events","last_result","completed_keys","owner_id","crawl_checkpoint",
+            "last_checkpoint_at","checkpoint_inflight"}
+    return {key:value for key,value in progress.items() if key not in hidden}
+
+def _scan_key(episode,kind):
+    return "movie" if kind=="movie" else f"{episode.season}:{episode.number}"
+
+def _portal_scan_uid(request):
+    """Use the same server-validated admin session as the parent portal."""
+    token=request.cookies.get("alezz_member","")
+    if not token:return None
+    try:
+        found=portal.admin_sessions.get(token)
+        if not found:return None
+        record=found[0]
+        if record[1]!="admin" or record[2]<=time.monotonic():return None
+        uid=str(record[0])
+        return uid if portal.admin_active(uid) else None
+    except (ValueError,TypeError,IndexError,KeyError):
+        return None
+
+def _emit_scan_event(state,progress,kind,delta=None):
+    """Caller holds the state lock; bounded replay prevents missed SSE deltas."""
+    progress["seq"]=int(progress.get("seq",0))+1
+    progress["revision"]=progress["seq"]
+    event={"seq":progress["seq"],"kind":kind}
+    if delta is not None:event["delta"]=delta
+    events=progress.setdefault("events",[])
+    events.append(event)
+    if len(events)>SCAN_EVENTS_LIMIT:del events[:len(events)-SCAN_EVENTS_LIMIT]
+    return event
+
+def _schedule_scan_checkpoint(state,cat,progress,*,force=False):
+    """Queue a private snapshot without blocking a scan worker on Supabase."""
+    owner=progress.get("owner_id")
+    if not owner or not scan_checkpoint_available():return
+    now=time.monotonic()
+    if not force and now-progress.get("last_checkpoint_at",0)<5:return
+    progress["last_checkpoint_at"]=now
+    job_id=progress["id"]
+    progress_snapshot=_scan_public(progress)
+    record=asdict(cat)
+    completed=list(progress.get("completed_keys",[]))
+    status="completed" if not progress.get("running") else "scanning"
+    def persist():
+        ok=save_scan_checkpoint(job_id,owner,cat.url,record,progress_snapshot,
+                                completed,status=status)
+        with state.lock:
+            if state.scan is progress and state.scan_catalogue is cat:
+                progress["checkpoint_saved"]=bool(ok)
+                progress["checkpoint_checked_at"]=time.time()
+                # Inform connected admin clients of checkpoint success/failure.
+                _emit_scan_event(state,progress,"checkpoint",{"saved":bool(ok)})
+    SCAN_SAVERS.submit(persist)
+
 def scan_status(state: UserState) -> dict | None:
-    return dict(state.scan) if state.scan_catalogue is state.catalogue and state.scan else None
+    return _scan_public(state.scan) if state.scan_catalogue is state.catalogue and state.scan else None
 
 
 def get_summary(state: UserState) -> dict:
@@ -625,7 +688,7 @@ async def discovery_scan(request: Request):
         progress = scan_status(state)
         if progress:
             # Compatibility endpoint for browsers without EventSource.
-            return {'scan':dict(progress),'summary':get_summary(state)}
+            return {'scan':progress,'summary':get_summary(state)}
     return {'scan':None}
 
 
