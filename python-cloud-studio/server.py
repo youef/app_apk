@@ -148,6 +148,7 @@ class UserState:
     demo: bool = False
     scan: dict | None = None
     scan_catalogue: Catalogue | None = None
+    tracking: dict | None = None
     last_used: float = field(default_factory=time.monotonic)
     lock: Any = field(default_factory=threading.RLock)
     save_lock: Any = field(default_factory=threading.Lock)
@@ -211,7 +212,8 @@ def get_summary(state: UserState) -> dict:
                                 year=c.year,poster_url=c.poster_url,original_title=c.original_title,
                                 verified=sum(ep.verified for ep in c.episodes) if c.kind=='series' else int(c.verified))
                            for i,c in enumerate(state.catalogues)],
-                    batch_errors=state.batch_errors[:25],current_index=state.current_index)
+                    batch_errors=state.batch_errors[:25],current_index=state.current_index,
+                    tracking=dict(state.tracking) if state.tracking else None)
 
 
 @app.get('/')
@@ -438,6 +440,7 @@ async def library_load(request:Request,body:LibraryLoadForm):
 
 
 _discovery_scans = ThreadPoolExecutor(max_workers=2, thread_name_prefix='studio-scan')
+_discovery_save_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='studio-fast-save')
 
 
 class TitleSearchForm(BaseModel):
@@ -632,7 +635,8 @@ async def discovery_scan_events(request: Request, scan_id: str):
                 current_revision=int(current.get('revision',0))
                 if revision!=current_revision:
                     packet={'scan':{key:value for key,value in current.items() if key!='last_result'},
-                            'delta':current.get('last_result') if current_revision>0 else None}
+                            'delta':current.get('last_result') if current_revision>0 else None,
+                            'tracking':dict(state.tracking) if state.tracking else None}
                 else:
                     packet=None
             if packet is not None:
@@ -680,18 +684,38 @@ async def discover(request: Request, data: DiscoverForm):
                 tracking = {'saved':False,'message':'سجّل دخول المسؤول لتفعيل التجديد الدائم لهذا العمل.'}
             else:
                 db = state.db
+                # Snapshot before the concurrent player scan mutates sources.
+                captured = deepcopy(cat) if data.fast else cat
                 def track():
-                    with state.save_lock, _capture_write_lock:
-                        result = store(cat,db,publish=False,rights=False,capture_merge=True)
-                        AUTOSYNC.remember_saved(cat,result,capture=True,refresh=True)
-                try:
-                    await run_in_threadpool(track)
-                    tracking = {'saved':True,'message':'أُضيف العمل إلى طابور الفحص والتجديد التلقائي.'}
-                except Exception as exc:
-                    tracking = {'saved':False,'message':'تعذّر تفعيل التجديد: '+safe_error(exc)}
+                    try:
+                        with state.save_lock, _capture_write_lock:
+                            result = store(captured,db,publish=False,rights=False,capture_merge=True)
+                            AUTOSYNC.remember_saved(captured,result,capture=True,refresh=True)
+                        with state.lock:
+                            state.tracking={'saved':True,'queued':False,'message':'حُفظ العمل كمسودة في قاعدة البيانات وأُضيف للمزامنة.'}
+                    except Exception as exc:
+                        with state.lock:
+                            state.tracking={'saved':False,'queued':False,'message':'فشل الحفظ التلقائي: '+safe_error(exc)}
+                        if not data.fast:
+                            raise
+                if data.fast:
+                    # Fast discovery must not block the first visible results
+                    # on inserting many episodes over Supabase REST requests.
+                    tracking={'saved':False,'queued':True,
+                              'message':'ظهرت الحلقات؛ يجري حفظ المسودة في الخلفية. راجع حالة الحفظ قبل النشر.'}
+                    with state.lock:state.tracking=tracking
+                    _discovery_save_pool.submit(track)
+                else:
+                    try:
+                        await run_in_threadpool(track)
+                        with state.lock:tracking=state.tracking
+                    except Exception as exc:
+                        tracking={'saved':False,'message':'تعذّر تفعيل التجديد: '+safe_error(exc)}
+                        with state.lock:state.tracking=tracking
         with state.lock:
             state.catalogue, state.catalogues, state.batch_errors = cat, [cat], []
             state.current_index, state.demo = 0, False
+            if not data.auto_track:state.tracking=None
             if data.scan_media: start_catalogue_scan(state,cat)
         return {**get_summary(state),'tracking':tracking}
     except SourceConnectionError as exc:
