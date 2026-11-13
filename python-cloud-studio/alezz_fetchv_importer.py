@@ -190,8 +190,13 @@ class SourceClient:
         raise ValueError("Too many redirects")
 
     def media_verified(self, url: str) -> tuple[bool, str]:
-        if not MEDIA_EXT.search(url):
-            return False, "Unsupported: media must be MP4/WebM/M4V/HLS/DASH"
+        # Signed video endpoints often have no filename extension. A public
+        # HTTPS URL may be probed, but verification still requires actual
+        # HLS playlist/segment bytes or MP4/WebM container magic.
+        try:
+            public_url(url)
+        except (ValueError, TypeError, AttributeError):
+            return False, "Unsupported or nonpublic video URL"
         try:
             # A 200 response or a MIME type alone is not proof of playable media.
             for depth in range(3):
