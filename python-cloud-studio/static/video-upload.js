@@ -4,7 +4,11 @@
   const $ = id => document.getElementById(id);
   const CHUNK = 6 * 1024 * 1024; // Required by Supabase Storage's TUS implementation.
   const state = {file: null, ticket: null, uploadUrl: '', controller: null,
-                 running: false, paused: false, uploaded: false};
+                 running: false, paused: false, uploaded: false, series: [],
+                 maxFileBytes: 50 * 1024 * 1024, episodeItems: []};
+  const kind = () => document.querySelector('input[name="media-kind"]:checked').value;
+  const selectedSeries = () => $('series-select').value === 'new' ? '' : $('series-select').value;
+  const tooLarge = () => !!state.file && state.file.size > state.maxFileBytes;
   const mb = bytes => (Number(bytes || 0) / (1024 * 1024)).toFixed(1) + ' MB';
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -47,7 +51,12 @@
   }
 
   function buttons() {
-    $('upload').disabled = !state.file || state.running;
+    $('upload').disabled = !state.file || state.running || tooLarge() ||
+      (kind() === 'episode' && !selectedSeries());
+    document.querySelectorAll('input[name="media-kind"]').forEach(input => {
+      input.disabled = state.running;
+    });
+    $('series-select').disabled = state.running;
     $('upload').textContent = state.uploaded ? 'تأكيد حفظ الفيديو' :
       state.ticket ? 'متابعة رفع الفيديو' : 'رفع إلى الداتا';
     $('pause').hidden = !state.running;
@@ -79,7 +88,14 @@
     $('file-name').textContent = file.name;
     $('file-size').textContent = mb(file.size);
     $('video-title').value = file.name.replace(/\.mp4$/i, '').slice(0, 180);
-    message('الفيديو جاهز للرفع. يمكنك تعديل العنوان ثم الضغط على «رفع إلى الداتا».');
+    if (tooLarge()) {
+      $('size-notice').classList.add('warn');
+      message('حجم الفيديو ' + mb(file.size) + ' أكبر من الحد الحالي (' +
+        mb(state.maxFileBytes) + ') في Supabase. يتطلب فيديو بهذا الحجم ترقية التخزين أو اختيار ملف أصغر.', 'error');
+    } else {
+      $('size-notice').classList.remove('warn');
+      message('الفيديو جاهز للرفع. اختر النوع والعنوان ثم اضغط «رفع إلى الداتا».');
+    }
     buttons();
   }
 
@@ -105,7 +121,13 @@
       const data = await response.json();
       detail = data.message || data.error || data.detail || '';
     } catch (_) { detail = await response.text().catch(() => ''); }
-    return new Error('فشل التخزين (' + response.status + '): ' + String(detail).slice(0, 240));
+    const err = new Error(response.status === 413
+      ? 'حجم الفيديو يتجاوز حد الملف في Supabase Storage (الباقة المجانية 50 MB). '
+        + 'لا يمكن تجاوز هذا الحد بتقسيم الرفع. زد Global file size limit بعد ترقية الباقة '
+        + 'أو استخدم استضافة فيديو تدعم ملفات أكبر.'
+      : 'فشل التخزين (' + response.status + '): ' + (String(detail).slice(0, 240) || 'لم يقدّم الخادم تفاصيل أخرى.'));
+    err.status = response.status;
+    return err;
   }
 
   async function createUpload() {
@@ -168,6 +190,9 @@
         displayProgress(offset, state.file.size, 'جاري رفع الفيديو إلى Supabase...');
       } catch (error) {
         if (state.paused) return false;
+        // Deterministic failures are not connectivity hiccups; do not
+        // burn bandwidth or repeat a 413 response five times.
+        if (error.status && [400, 401, 403, 404, 409, 413, 422].includes(error.status)) throw error;
         if (++failures > 5) throw error;
         message('انقطع الاتصال مؤقتًا؛ محاولة استئناف الجزء الأخير (' + failures + '/5).');
         await sleep(Math.min(1000 * (2 ** failures), 10000));
@@ -188,7 +213,23 @@
     $('preview').src = row.public_url;
     $('result').hidden = false;
     state.ticket = null; state.uploadUrl = ''; state.uploaded = false;
-    message('تم حفظ الفيديو في Supabase، والرابط جاهز للإضافة إلى تطبيق العز.', 'success');
+    const linked = data.catalogue || {};
+    $('catalogue-summary').textContent = linked.kind === 'episode'
+      ? 'تم ربط الحلقة بالموسم ' + linked.season_number + '، الحلقة ' + linked.episode_number +
+        ' داخل المسلسل كمسودة. يمكنك رفع الحلقة التالية.'
+      : 'تم إنشاء الفيلم وربط رابط MP4 مباشرة في قاعدة بيانات العز كمسودة.';
+    message('تم حفظ الفيديو وربطه بالمكتبة كمسودة بنجاح.', 'success');
+    const previousKind = kind();
+    state.file = null;
+    $('chosen').hidden = true;
+    $('file').value = '';
+    $('video-title').value = '';
+    if (previousKind === 'episode') {
+      const number = $('episode-number');
+      number.value = String(Math.min(9999, Number(number.value) + 1));
+      await refreshEpisodes();
+    }
+    buttons();
     $('result').scrollIntoView({behavior: 'smooth', block: 'start'});
     refreshLibrary();
   }
@@ -204,8 +245,25 @@
     try {
       if (!state.ticket) {
         displayProgress(0, state.file.size, 'جاري تجهيز رابط الرفع الآمن...');
+        if (tooLarge()) {
+          throw new Error('الملف يتجاوز الحد الحالي (' + mb(state.maxFileBytes) + ') في Supabase. '
+            + 'الرفع المجزأ لا يتجاوز الحد الأقصى لحجم الملف.');
+        }
+        const episode = kind() === 'episode';
+        const season = Number($('season-number').value);
+        const number = Number($('episode-number').value);
+        if (episode && (!selectedSeries() || !Number.isInteger(season) || season < 1 ||
+                        season > 99 || !Number.isInteger(number) || number < 1 || number > 9999)) {
+          throw new Error('اختر مسلسلًا موجودًا وحدد رقم الموسم والحلقة بشكل صحيح.');
+        }
         state.ticket = await api('POST', '/start', {
-          filename: state.file.name, title, size_bytes: state.file.size
+          filename: state.file.name, title, size_bytes: state.file.size,
+          media_kind: kind(),
+          description: $('video-description').value.trim(),
+          poster_url: $('video-poster').value.trim(),
+          series_id: episode ? selectedSeries() : null,
+          season_number: episode ? season : null,
+          episode_number: episode ? number : null
         });
       }
       if (state.paused) return;
@@ -245,8 +303,12 @@
       const row = make('article', null, 'library-item');
       const icon = make('span', '▶', 'media-icon');
       const meta = make('div', null, 'library-meta');
+      const related = item.media_kind === 'episode'
+        ? ((state.series.find(s => s.id === item.series_id) || {}).title_ar || 'مسلسل') +
+          ' · الموسم ' + item.season_number + ' · الحلقة ' + item.episode_number
+        : item.media_kind === 'movie' ? 'فيلم' : 'ملف سابق';
       meta.append(make('strong', item.title || item.original_filename),
-                  make('small', mb(item.size_bytes) + ' · ' +
+                  make('small', related + ' · ' + mb(item.size_bytes) + ' · ' +
                     new Date(item.created_at).toLocaleString('ar-SA')));
       const actions = make('div', null, 'library-actions');
       const copy = make('button', 'نسخ MP4');
@@ -265,12 +327,123 @@
   async function refreshLibrary() {
     try {
       const data = await api('GET', '');
+      if (Number.isFinite(data.max_file_bytes) && data.max_file_bytes > 0) {
+        state.maxFileBytes = data.max_file_bytes;
+        $('size-notice').textContent = 'حد الفيديو الحالي في Supabase: ' +
+          mb(state.maxFileBytes) + ' لكل ملف. الملفات الأكبر تتطلب ترقية باقة Supabase وتعديل إعدادات التخزين.';
+      }
+      populateSeries(Array.isArray(data.series) ? data.series : []);
       renderLibrary(Array.isArray(data.files) ? data.files : []);
+      buttons();
     } catch (error) {
       $('library-status').textContent = error.message;
       if (!state.file) message('للوصول للرفع، سجل دخول مسؤول في العز TV ثم افتح هذه الصفحة.', 'error');
     }
   }
+
+
+  function populateSeries(series) {
+    const select = $('series-select');
+    const previous = select.value;
+    state.series = series;
+    select.replaceChildren();
+    const create = document.createElement('option');
+    create.value = 'new'; create.textContent = '+ إنشاء مسلسل جديد';
+    select.append(create);
+    series.forEach(item => {
+      const option = document.createElement('option');
+      option.value = item.id;
+      option.textContent = item.title_ar + ' (' +
+        (item.status === 'published' ? 'منشور' : 'مسودة') + ')';
+      select.append(option);
+    });
+    if (previous && [...select.options].some(x => x.value === previous)) select.value = previous;
+    switchSeries();
+  }
+
+  function switchSeries() {
+    const id = selectedSeries();
+    $('new-series-panel').hidden = !!id;
+    $('episode-panel').hidden = !id;
+    if (id) refreshEpisodes();
+    buttons();
+  }
+
+  async function refreshEpisodes() {
+    const id = selectedSeries();
+    const container = $('series-episodes');
+    container.replaceChildren();
+    if (!id) return;
+    try {
+      const response = await api('GET', '/series/' + encodeURIComponent(id) + '/episodes');
+      if (id !== selectedSeries()) return;
+      state.episodeItems = response.episodes || [];
+      container.append(make('strong', state.episodeItems.length
+        ? 'الحلقات الموجودة في هذا المسلسل:' : 'لا توجد حلقات بعد. ارفع الحلقة الأولى.'));
+      const items = state.episodeItems.slice(-60);
+      items.forEach(e => {
+        container.append(make('span',
+          'م' + e.season + ' • ح' + e.episode + ' • ' + e.title,
+          'episode-chip'));
+      });
+      if (items.length) {
+        const currentSeason = Number($('season-number').value);
+        const currentNumber = Number($('episode-number').value);
+        if (state.episodeItems.some(e => e.season === currentSeason && e.episode === currentNumber)) {
+          message('رقم هذه الحلقة موجود بالفعل. اختر رقم حلقة غير مستخدم.', 'error');
+        }
+      }
+    } catch (error) {
+      container.append(make('span', 'تعذّر جلب الحلقات: ' + error.message));
+    }
+  }
+
+  function switchKind() {
+    const series = kind() === 'episode';
+    $('series-panel').hidden = !series;
+    $('video-title-label').textContent = series ? 'اسم الحلقة' : 'اسم الفيلم';
+    $('video-description-label').textContent = series ? 'وصف الحلقة (اختياري)' : 'وصف الفيلم (اختياري)';
+    $('video-poster').parentElement.hidden = series;
+    if (!state.running) {
+      state.ticket = null;
+      state.uploadUrl = '';
+      state.uploaded = false;
+      $('progress-area').hidden = true;
+    }
+    if (series) switchSeries();
+    buttons();
+  }
+
+  $('series-select').addEventListener('change', switchSeries);
+  document.querySelectorAll('input[name="media-kind"]').forEach(input => {
+    input.addEventListener('change', switchKind);
+  });
+  $('season-number').addEventListener('change', refreshEpisodes);
+  $('episode-number').addEventListener('change', refreshEpisodes);
+  $('create-series').addEventListener('click', async () => {
+    const button = $('create-series');
+    const title = $('series-title').value.trim();
+    if (title.length < 2) {
+      message('اكتب اسم المسلسل أولًا.', 'error'); return;
+    }
+    const poster = $('series-poster').value.trim();
+    if (poster && !/^https:\/\/[^ ]+$/i.test(poster)) {
+      message('اكتب رابط HTTPS صالحًا للبوستر.', 'error'); return;
+    }
+    button.disabled = true;
+    try {
+      const data = await api('POST', '/series', {
+        title, description: $('series-description').value.trim(), poster_url: poster
+      });
+      if (!data.series || !data.series.id) throw new Error('لم يتم استلام رقم المسلسل.');
+      populateSeries([...state.series, data.series]);
+      $('series-select').value = data.series.id;
+      switchSeries();
+      message('تم إنشاء المسلسل كمسودة. اختر الموسم ورقم الحلقة وارفع الفيديو الأول.', 'success');
+    } catch (error) {
+      message('تعذّر إنشاء المسلسل: ' + error.message, 'error');
+    } finally { button.disabled = false; }
+  });
 
   $('dropzone').addEventListener('click', () => { if (!state.running) $('file').click(); });
   $('dropzone').addEventListener('keydown', event => {
@@ -295,6 +468,7 @@
   });
   $('copy-result').addEventListener('click', () => clipboard($('result-url').value));
   $('refresh').addEventListener('click', refreshLibrary);
+  switchKind();
   buttons();
   refreshLibrary();
 })();
