@@ -612,54 +612,83 @@ def _scan_media_entry(cat: Catalogue, entry, force_browser:bool=False):
 
 
 def _extend_catalogue(state: UserState, cat: Catalogue, progress: dict, checkpoint: dict):
-    """Continue slow season pagination separately; update admin as pages arrive.
+    """Continue paginated seasons in bounded chunks without delaying quick results.
 
-    This is a bounded continuation of public HTTPS metadata, not an attempt
-    to bypass access restrictions. Never replace existing scanned episodes.
+    A 30-second quick pass only examines a few pages; the remaining public
+    pagination queue is retained. Run several bounded continuation chunks, and
+    checkpoint unfinished work so an administrator can resume later.
     """
-    client=DiscoverySourceClient(cat.url)
-    client.timeout=6
-    client.retries=1
-    client.deadline=time.monotonic()+85
+    started=time.monotonic()
+    overall_deadline=started+170
+    snapshot=deepcopy(checkpoint or {})
+    chunks=0
     try:
-        def on_progress(snapshot):
-            if not isinstance(snapshot,dict):return
-            rows=snapshot.get("episodes",[])
-            if not isinstance(rows,list):return
+        while chunks<6 and time.monotonic()<overall_deadline:
             with state.lock:
                 if state.scan is not progress or state.catalogue is not cat or progress.get("stop_requested"):
-                    raise InterruptedError("Scan cancelled or replaced")
-                known={(ep.season,ep.number) for ep in cat.episodes}
-                added=[]
-                for row in rows[:5000]:
-                    if not isinstance(row,dict):continue
-                    try: ep=Episode(**row)
-                    except (ValueError,TypeError):continue
-                    key=(ep.season,ep.number)
-                    if key in known:continue
-                    known.add(key)
-                    cat.episodes.append(ep)
-                    added.append(asdict(ep))
-                progress["crawl_pages"]=len(snapshot.get("seen_pages",[]))
-                progress["crawl_checkpoint"]=deepcopy(snapshot)
-                if added:
-                    progress["total"]=len(cat.episodes)
-                    _emit_scan_event(state,progress,"episodes_added",{"episodes":added})
-                    _schedule_scan_checkpoint(state,cat,progress)
-        pull_html(cat.url,client,cat.kind,max_pages=42,max_episodes=5000,
-                  resume_progress=checkpoint,progress_hook=on_progress)
-    except (InterruptedError,TimeoutError):
-        pass
-    except Exception as exc:
+                    break
+            client=DiscoverySourceClient(cat.url)
+            client.timeout=5
+            client.retries=1
+            client.deadline=min(overall_deadline,time.monotonic()+34)
+            def on_progress(updated):
+                if not isinstance(updated,dict):return
+                rows=updated.get("episodes",[])
+                if not isinstance(rows,list):return
+                with state.lock:
+                    if state.scan is not progress or state.catalogue is not cat or progress.get("stop_requested"):
+                        raise InterruptedError("Scan stopped or replaced")
+                    known={(ep.season,ep.number) for ep in cat.episodes}
+                    added=[]
+                    for row in rows[:5000]:
+                        if not isinstance(row,dict):continue
+                        try:ep=Episode(**row)
+                        except (ValueError,TypeError):continue
+                        key=(ep.season,ep.number)
+                        if key in known:continue
+                        known.add(key)
+                        cat.episodes.append(ep)
+                        added.append(asdict(ep))
+                    progress["crawl_pages"]=len(updated.get("seen_pages",[]))
+                    progress["crawl_checkpoint"]=deepcopy(updated)
+                    progress["remaining_pages"]=len(updated.get("queued",[]))
+                    if added:
+                        cat.episodes.sort(key=lambda ep:(ep.season,ep.number))
+                        progress["total"]=len(cat.episodes)
+                        _emit_scan_event(state,progress,"episodes_added",{"episodes":added})
+                        _schedule_scan_checkpoint(state,cat,progress)
+            try:
+                # Count pages PER chunk; pending links remain in the snapshot.
+                pull_html(cat.url,client,cat.kind,max_pages=42,max_episodes=5000,
+                          resume_progress=snapshot,progress_hook=on_progress)
+            except (InterruptedError,TimeoutError):
+                pass
+            except Exception as exc:
+                with state.lock:
+                    if state.scan is progress:progress["crawl_error"]=safe_error(exc)
+                break
+            finally:
+                client.session.close()
+            with state.lock:
+                if state.scan is not progress or progress.get("stop_requested"):break
+                latest=progress.get("crawl_checkpoint") or snapshot
+                pending=list(latest.get("queued",[]))
+                progress["remaining_pages"]=len(pending)
+                snapshot=deepcopy(latest)
+                chunks+=1
+                if not pending:break
         with state.lock:
             if state.scan is progress:
-                progress["crawl_error"]=safe_error(exc)
+                pending=len((progress.get("crawl_checkpoint") or {}).get("queued",[]))
+                progress["crawl_paused"]=bool(pending and not progress.get("stop_requested"))
+                progress["remaining_pages"]=pending
     finally:
-        client.session.close()
         with state.lock:
             if state.scan is progress:
                 progress["crawl_running"]=False
-                _emit_scan_event(state,progress,"crawl_completed")
+                _emit_scan_event(state,progress,"crawl_completed",
+                                 {"remaining_pages":progress.get("remaining_pages",0),
+                                  "paused":bool(progress.get("crawl_paused"))})
                 _schedule_scan_checkpoint(state,cat,progress)
 
 
@@ -879,7 +908,9 @@ async def studio_scan_resume(request:Request,data:ScanControl):
             # No database round trip needed to resume a just-stopped scan.
             cat=state.catalogue
             original=state.scan
-            checkpoint=original.get("crawl_checkpoint") if original.get("crawl_running") else None
+            saved_crawl=original.get("crawl_checkpoint") or {}
+            checkpoint=saved_crawl if (original.get("crawl_running") or
+                           saved_crawl.get("queued") or original.get("crawl_paused")) else None
             start_catalogue_scan(state,cat,owner_uid=uid,
                 crawl_checkpoint=checkpoint,
                 resume={"id":data.scan_id,
