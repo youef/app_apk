@@ -17,6 +17,8 @@ from datetime import datetime, timezone
 from urllib.parse import parse_qs, quote, urlsplit
 
 import requests
+from botocore.exceptions import BotoCoreError, ClientError
+import video_storage
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -26,7 +28,7 @@ from private_film_import import owner
 
 router = APIRouter()
 BUCKET = "aseel-video-uploads"
-MAX_FILE_BYTES = 10 * 1024 * 1024 * 1024  # Upload UI limit independent of hosting plan.
+MAX_FILE_BYTES = 50 * 1024 * 1024 * 1024  # Upload UI limit independent of hosting plan.
 # The Al Ezz Supabase organization is currently on Free (50 MiB max per file).
 # Update this when changing the Supabase Storage global file limit / plan.
 STORAGE_UPLOAD_LIMIT_BYTES = min(MAX_FILE_BYTES, int(os.getenv(
@@ -39,6 +41,7 @@ class StartUpload(BaseModel):
     title: str = Field(min_length=1, max_length=180)
     size_bytes: int = Field(gt=0, le=MAX_FILE_BYTES)
     media_kind: Literal["movie", "episode"]
+    storage_preference: Literal["auto", "supabase", "r2", "b2", "oracle"] = "auto"
     description: str = Field(default="", max_length=1500)
     poster_url: str = Field(default="", max_length=2048)
     series_id: uuid.UUID | None = None
@@ -54,6 +57,19 @@ class NewSeries(BaseModel):
 
 class FinishUpload(BaseModel):
     receipt: str = Field(min_length=30, max_length=4096)
+
+
+class PartUrlRequest(FinishUpload):
+    part_number: int = Field(ge=1, le=10000)
+
+
+class MultipartPart(BaseModel):
+    part_number: int = Field(ge=1, le=10000)
+    etag: str = Field(min_length=3, max_length=128)
+
+
+class CompleteMultipartRequest(FinishUpload):
+    parts: list[MultipartPart] = Field(min_length=1, max_length=10000)
 
 
 def is_mp4(filename: str) -> bool:
@@ -129,7 +145,7 @@ def _record(portal, path: str):
     rows = portal.upstream(
         "GET", "/rest/v1/aseel_uploaded_mp4", secret=True,
         params={"storage_path": "eq." + path,
-                "select": "id,title,original_filename,storage_path,size_bytes,public_url,created_at,media_kind,catalogue_target_id,series_id,season_number,episode_number",
+                "select": "id,title,original_filename,storage_path,size_bytes,public_url,created_at,storage_provider,media_kind,catalogue_target_id,series_id,season_number,episode_number",
                 "limit": "1"},
     )
     return rows[0] if rows else None
@@ -147,14 +163,15 @@ def register(portal, template_path):
         _key()
         try:
             rows = portal.upstream("GET", "/rest/v1/aseel_uploaded_mp4", secret=True,
-                params={"select": "id,title,original_filename,size_bytes,public_url,created_at,media_kind,catalogue_target_id,series_id,season_number,episode_number",
+                params={"select": "id,title,original_filename,size_bytes,public_url,created_at,storage_provider,media_kind,catalogue_target_id,series_id,season_number,episode_number",
                         "order": "created_at.desc", "limit": str(MAX_ROWS)})
         except (requests.RequestException, ValueError) as exc:
             raise HTTPException(503, "تعذّر قراءة ملفات الفيديو من Supabase") from exc
         series = portal.upstream("GET", "/rest/v1/aseel_series", secret=True,
             params={"select": "id,title_ar,status,poster_url", "order": "title_ar.asc", "limit": "500"})
         return {"files": rows, "bucket": BUCKET, "series": series,
-                "max_file_bytes": STORAGE_UPLOAD_LIMIT_BYTES}
+                "max_file_bytes": STORAGE_UPLOAD_LIMIT_BYTES,
+                "storage_providers": video_storage.summary(portal)}
 
     @router.post("/api/studio/video-upload/series")
     def create_series(body: NewSeries, request: Request):
@@ -200,12 +217,6 @@ def register(portal, template_path):
         _key()
         if not is_mp4(body.filename):
             raise HTTPException(422, "يمكن رفع ملفات MP4 فقط")
-        if body.size_bytes > STORAGE_UPLOAD_LIMIT_BYTES:
-            raise HTTPException(413,
-                "حجم الملف أكبر من الحد المسموح في إعدادات Supabase Storage للمشروع ("
-                + str(STORAGE_UPLOAD_LIMIT_BYTES // (1024 * 1024))
-                + " MB). تقسيم الملف إلى أجزاء لا يتجاوز حد حجم الملف الكامل."
-                " يلزم رفع حد التخزين بعد ترقية الباقة أو استخدام تخزين فيديو آخر.")
         if body.poster_url and not body.poster_url.startswith("https://"):
             raise HTTPException(422, "الملصق يجب أن يكون رابط HTTPS")
         if body.media_kind == "episode":
@@ -220,6 +231,35 @@ def register(portal, template_path):
         # A unique path prevents accidental overwrite or CDN cache collisions.
         path = "uploads/" + datetime.now(timezone.utc).strftime("%Y/%m/") + str(uuid.uuid4()) + ".mp4"
         try:
+            selected = video_storage.choose(portal, body.size_bytes, body.storage_preference)
+        except ValueError as exc:
+            raise HTTPException(413, str(exc)) from exc
+        payload = {"uid": user_id, "title": body.title.strip(),
+                   "filename": body.filename, "size": body.size_bytes,
+                   "path": path, "exp": int(time.time()) + 24 * 3600,
+                   "kind": body.media_kind, "description": body.description.strip(),
+                   "poster_url": body.poster_url.strip(),
+                   "series_id": str(body.series_id) if body.series_id else None,
+                   "season": body.season_number, "episode": body.episode_number,
+                   "storage_provider": selected}
+        if selected != "supabase":
+            provider = video_storage.providers()[selected]
+            try:
+                upload_id = video_storage.start_multipart(provider, path)
+            except (BotoCoreError, ClientError, ValueError) as exc:
+                raise HTTPException(502, "تعذر بدء الرفع في " + provider.label +
+                    ". تأكد من بيانات الربط وصلاحيات الكتابة في الحاوية.") from exc
+            payload["upload_id"] = upload_id
+            return {
+                "mode": "s3_multipart", "storage_provider": selected,
+                "provider_label": provider.label,
+                "receipt": _encode_receipt(payload),
+                "chunk_bytes": video_storage.PART_BYTES,
+                "public_url": provider.public_url(path),
+            }
+        if body.size_bytes > STORAGE_UPLOAD_LIMIT_BYTES:
+            raise HTTPException(413, "حجم الملف يتجاوز حد Supabase الحالي؛ اختر أحد مراكز التخزين الخارجية.")
+        try:
             signed = portal.upstream(
                 "POST", "/storage/v1/object/upload/sign/" + BUCKET + "/" + path,
                 secret=True, json={},
@@ -230,23 +270,107 @@ def register(portal, template_path):
                 raise ValueError("Supabase returned no signed upload token")
         except (requests.RequestException, ValueError) as exc:
             raise HTTPException(502, "تعذّر إصدار تصريح رفع إلى Supabase Storage") from exc
-        payload = {"uid": user_id, "title": body.title.strip(),
-                   "filename": body.filename, "size": body.size_bytes,
-                   "path": path, "exp": int(time.time()) + 24 * 3600,
-                   "kind": body.media_kind, "description": body.description.strip(),
-                   "poster_url": body.poster_url.strip(),
-                   "series_id": str(body.series_id) if body.series_id else None,
-                   "season": body.season_number, "episode": body.episode_number}
         host = portal.db_url.replace(".supabase.co", ".storage.supabase.co")
-        return {"bucket": BUCKET, "path": path, "token": token,
+        return {"mode": "supabase_tus", "storage_provider": "supabase",
+                "bucket": BUCKET, "path": path, "token": token,
                 "tus_endpoint": host + "/storage/v1/upload/resumable",
                 "public_key": portal.public_key,  # A publishable key, never a service key.
                 "receipt": _encode_receipt(payload), "chunk_bytes": 6 * 1024 * 1024}
+
+    @router.post("/api/studio/video-upload/part-url")
+    def get_part_url(body: PartUrlRequest, request: Request):
+        user_id = _admin(request, portal, mutation=True)
+        payload = _decode_receipt(body.receipt, user_id)
+        name = payload.get("storage_provider")
+        if name not in video_storage.VALID_IDS:
+            raise HTTPException(422, "الملف لا يستخدم التخزين الخارجي")
+        provider = video_storage.providers()[name]
+        if not provider.ready:
+            raise HTTPException(503, "مركز التخزين غير متاح")
+        parts_count = (payload["size"] + video_storage.PART_BYTES - 1) // video_storage.PART_BYTES
+        if body.part_number > parts_count:
+            raise HTTPException(422, "رقم جزء الفيديو خارج العدد المتوقع")
+        try:
+            url = video_storage.presign_part(provider, payload["path"],
+                                             payload["upload_id"], body.part_number)
+            return {"upload_url": url, "expires_in": 600}
+        except (ClientError, BotoCoreError) as exc:
+            raise HTTPException(503, "تعذر توقيع رابط الجزء لدى مركز التخزين") from exc
+
+    @router.post("/api/studio/video-upload/finish-multipart")
+    def finish_multipart(body: CompleteMultipartRequest, request: Request):
+        user_id = _admin(request, portal, mutation=True)
+        payload = _decode_receipt(body.receipt, user_id)
+        name = payload.get("storage_provider")
+        if name not in video_storage.VALID_IDS:
+            raise HTTPException(422, "الملف لا يستخدم التخزين الخارجي")
+        provider = video_storage.providers()[name]
+        if not provider.ready:
+            raise HTTPException(503, "مركز التخزين غير متاح")
+        path = payload["path"]
+        expected = (payload["size"] + video_storage.PART_BYTES - 1) // video_storage.PART_BYTES
+        ordered = sorted(body.parts, key=lambda p: p.part_number)
+        if len(ordered) != expected or any(
+            item.part_number != i + 1 or
+            any(c in item.etag for c in ("\r", "\n", "/", " ", "<", ">"))
+            for i, item in enumerate(ordered)
+        ):
+            raise HTTPException(422, "أجزاء الفيديو غير مكتملة أو لا تطابق ترتيب الرفع")
+        try:
+            existing = _record(portal, path)
+            if existing and existing.get("catalogue_target_id"):
+                return {"file": existing, "saved": True, "catalogue": {
+                    "kind": existing["media_kind"],
+                    "id": existing["catalogue_target_id"],
+                    "series_id": existing.get("series_id"),
+                    "season_number": existing.get("season_number"),
+                    "episode_number": existing.get("episode_number")}}
+            try:
+                info = video_storage.head_object(provider, path)
+            except ClientError:
+                info = None
+            if not info:
+                parts = [{"PartNumber": item.part_number, "ETag": item.etag}
+                         for item in ordered]
+                video_storage.finish_multipart(provider, path, payload["upload_id"], parts)
+                info = video_storage.head_object(provider, path)
+            if int(info.get("ContentLength") or 0) != payload["size"]:
+                raise HTTPException(422, "حجم الملف المخزن لا يطابق حجم ملف الفيديو الأصلي")
+            if existing:
+                return _finish_link(portal, path, payload, existing)
+            row = {"title": payload["title"], "original_filename": payload["filename"],
+                   "storage_bucket": provider.bucket, "storage_path": path,
+                   "storage_provider": name, "size_bytes": payload["size"],
+                   "uploaded_by": user_id, "public_url": provider.public_url(path)}
+            saved = portal.upstream("POST", "/rest/v1/aseel_uploaded_mp4", secret=True,
+                                    prefer="return=representation", json=row)
+            if not saved:
+                raise HTTPException(503, "اكتمل رفع الملف ولم تتأكد كتابة بياناته")
+            return _finish_link(portal, path, payload, saved[0])
+        except (ClientError, BotoCoreError, requests.RequestException, ValueError) as exc:
+            raise HTTPException(503, "الفيديو محفوظ أو قيد الإكمال، لكن تعذّر ربطه؛ "
+                                     "أعد تأكيد الرفع دون رفع الملف من البداية") from exc
+
+    @router.post("/api/studio/video-upload/abort-multipart")
+    def abort_multipart(body: FinishUpload, request: Request):
+        user_id = _admin(request, portal, mutation=True)
+        payload = _decode_receipt(body.receipt, user_id)
+        name = payload.get("storage_provider")
+        if name not in video_storage.VALID_IDS:
+            raise HTTPException(422, "الملف لا يستخدم التخزين الخارجي")
+        provider = video_storage.providers()[name]
+        try:
+            video_storage.abort_multipart(provider, payload["path"], payload["upload_id"])
+        except (ClientError, BotoCoreError) as exc:
+            raise HTTPException(503, "تعذر إلغاء جلسة الرفع؛ يمكن وضع قاعدة حذف الأجزاء غير المكتملة في الحاوية") from exc
+        return {"cancelled": True}
 
     @router.post("/api/studio/video-upload/finish")
     def finish_upload(body: FinishUpload, request: Request):
         user_id = _admin(request, portal, mutation=True)
         payload = _decode_receipt(body.receipt, user_id)
+        if payload.get("storage_provider") != "supabase":
+            raise HTTPException(422, "هذا الملف مرفوع إلى مركز تخزين خارجي؛ استخدم إكمال رفع الأجزاء")
         path = payload["path"]
         try:
             info = portal.upstream(
@@ -350,7 +474,7 @@ def _get_or_create_season(portal, series_id: str, season_number: int):
 
 
 def _finish_link(portal, path: str, payload: dict, uploaded: dict):
-    public_url = _public_url(portal, path)
+    public_url = uploaded.get("public_url") or _public_url(portal, path)
     kind = payload["kind"]
     target_id = str(uuid.uuid5(uuid.NAMESPACE_URL, "alezz-upload:" + path))
     series_id = None
