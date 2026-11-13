@@ -244,7 +244,7 @@
 
     // Publication decides visibility. Broken/missing streams remain visible as
     // unavailable content; the player must assess playback separately.
-    var channels = (raw.channels || []).filter(visibleMedia)    }).map(function (r) {
+    var channels = (raw.channels || []).filter(visibleMedia).map(function (r) {
       var item = base("channel", r);
       item.live = true;
       item.playback = r.playback_mode;
