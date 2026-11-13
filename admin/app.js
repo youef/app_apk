@@ -3,16 +3,16 @@ const cfg=window.ASEEL_CONFIG;
 const api=cfg.url+"/rest/v1/";
 const tables={
  aseel_youtube_videos:{label:"مقاطع أطفال يوتيوب",fields:["title_ar","youtube_url","channel_name","language_code","topic","age_rating","sort_order","status","is_kids","source_page_url"]},
- aseel_movies:{label:"الأفلام",fields:["title_ar","title_original","description","poster_url","backdrop_url","release_year","category_id","source_id","source_page_url","display_order","duration_minutes","language_code","country_code","is_kids","quality","stream_url","youtube_url","stream_variants","status","rights_status","rights_holder","license_reference","rights_expires_at","featured"]},
- aseel_series:{label:"المسلسلات",fields:["title_ar","title_original","description","poster_url","backdrop_url","release_year","category_id","language_code","country_code","is_kids","quality","status","rights_status","rights_holder","license_reference","rights_expires_at","featured"]},
+ aseel_movies:{label:"الأفلام",fields:["title_ar","title_original","description","poster_url","backdrop_url","release_year","category_id","source_id","source_page_url","display_order","duration_minutes","language_code","country_code","is_kids","quality","stream_url","youtube_url","stream_variants","status",,,,"featured"]},
+ aseel_series:{label:"المسلسلات",fields:["title_ar","title_original","description","poster_url","backdrop_url","release_year","category_id","language_code","country_code","is_kids","quality","status",,,,"featured"]},
  aseel_seasons:{label:"المواسم",fields:["series_id","number","title_ar"]},
- aseel_episodes:{label:"الحلقات",fields:["season_id","number","title_ar","description","poster_url","duration_minutes","stream_url","youtube_url","stream_variants","status","rights_status","license_reference","rights_expires_at"]},
- aseel_channels:{label:"القنوات",fields:["title_ar","description","poster_url","official_url","playback_mode","stream_url","youtube_url","stream_variants","category_id","language_code","country_code","is_kids","status","rights_status","rights_holder","license_reference","rights_expires_at"]},
+ aseel_episodes:{label:"الحلقات",fields:["season_id","number","title_ar","description","poster_url","duration_minutes","stream_url","youtube_url","stream_variants","status",,]},
+ aseel_channels:{label:"القنوات",fields:["title_ar","description","poster_url","official_url","playback_mode","stream_url","youtube_url","stream_variants","category_id","language_code","country_code","is_kids","status",,,]},
  aseel_categories:{label:"التصنيفات",fields:["name_ar","sort_order","published"]},
- aseel_content_sources:{label:"مصادر الحقوق",fields:["title","source_url","rights_contact","license_reference","verified"]},
+ aseel_content_sources:{label:"مصادر المحتوى",fields:["title","source_url","rights_contact","license_reference","verified"]},
  aseel_settings:{label:"إعدادات التطبيق",fields:["key","value","is_public"]}
 };
-const names={channel_name:"القناة الرسمية",topic:"نوع المقطع",age_rating:"الفئة العمرية",title_ar:"العنوان العربي",title_original:"العنوان الأصلي",description:"الوصف",poster_url:"رابط البوستر HTTPS",backdrop_url:"رابط الخلفية",release_year:"سنة الإنتاج",category_id:"التصنيف",duration_minutes:"المدة بالدقائق",language_code:"اللغة (ar/en/tr)",country_code:"الدولة (رمز مثل US/TR)",is_kids:"محتوى مخصص للأطفال",quality:"الجودة",stream_url:"رابط تشغيل MP4/HLS مباشر",youtube_url:"رابط فيديو يوتيوب رسمي (اختياري)",stream_variants:"جودات إضافية (JSON: label + url)",official_url:"رابط مشاهدة الجهة الرسمية HTTPS",playback_mode:"طريقة عرض القناة",status:"النشر",rights_status:"حالة الترخيص",rights_holder:"صاحب الحقوق",license_reference:"رابط أو رقم وثيقة الترخيص",rights_expires_at:"نهاية صلاحية الترخيص",featured:"مميز",series_id:"المسلسل",season_id:"الموسم",number:"الترتيب",name_ar:"اسم التصنيف",sort_order:"الترتيب",published:"منشور",title:"العنوان",source_url:"رابط المصدر",source_id:"مصدر الحقوق المرتبط",source_page_url:"رابط صفحة الاستخراج الأصلية HTTPS",display_order:"ترتيب الظهور",rights_contact:"التواصل مع صاحب الحقوق",verified:"تم التحقق",key:"مفتاح الإعداد",value:"قيمة الإعداد بصيغة JSON",is_public:"إعداد عام"};
+const names={channel_name:"القناة الرسمية",topic:"نوع المقطع",age_rating:"الفئة العمرية",title_ar:"العنوان العربي",title_original:"العنوان الأصلي",description:"الوصف",poster_url:"رابط البوستر HTTPS",backdrop_url:"رابط الخلفية",release_year:"سنة الإنتاج",category_id:"التصنيف",duration_minutes:"المدة بالدقائق",language_code:"اللغة (ar/en/tr)",country_code:"الدولة (رمز مثل US/TR)",is_kids:"محتوى مخصص للأطفال",quality:"الجودة",stream_url:"رابط تشغيل MP4/HLS مباشر",youtube_url:"رابط فيديو يوتيوب رسمي (اختياري)",stream_variants:"جودات إضافية (JSON: label + url)",official_url:"رابط مشاهدة الجهة الرسمية HTTPS",playback_mode:"طريقة عرض القناة",status:"النشر",rights_status:"حالة الترخيص",rights_holder:"صاحب الحقوق",license_reference:"رابط أو رقم وثيقة الترخيص",rights_expires_at:"نهاية صلاحية الترخيص",featured:"مميز",series_id:"المسلسل",season_id:"الموسم",number:"الترتيب",name_ar:"اسم التصنيف",sort_order:"الترتيب",published:"منشور",title:"العنوان",source_url:"رابط المصدر",source_id:"مصدر المحتوى المرتبط",source_page_url:"رابط صفحة الاستخراج الأصلية HTTPS",display_order:"ترتيب الظهور",rights_contact:"التواصل مع صاحب الحقوق",verified:"تم التحقق",key:"مفتاح الإعداد",value:"قيمة الإعداد بصيغة JSON",is_public:"إعداد عام"};
 const $=id=>document.getElementById(id);
 let jwt="",userId="",table="aseel_movies",editing=null,rows=[],cats=[],shows=[],seasons=[],sources=[];
 let timeout;
@@ -90,7 +90,7 @@ function renderRows(){
   const status=document.createElement("td");
   const tag=document.createElement("span");tag.className="tag"+(row.status==="published"?" ok":"");
   tag.textContent=row.status||((row.published||row.verified)?"معتمد":"—");status.append(tag);
-  const rights=document.createElement("td");rights.textContent=row.rights_status||row.license_reference||"—";
+  const rights=document.createElement("td");rights.textContent=row.link_health_status||row.source_page_url||"—";
   const act=document.createElement("td");act.className="row-actions";
   const edit=document.createElement("button");edit.textContent="تعديل";edit.onclick=()=>openEditor(row);
   const del=document.createElement("button");del.textContent="حذف";del.onclick=()=>remove(row);
@@ -99,8 +99,7 @@ function renderRows(){
 }
 function optionList(key){
  if(key==="playback_mode")return [["stream","بث مباشر HTTPS MP4/HLS داخل التطبيق"],["official_link","رابط المصدر الرسمي (فتح موقع الجهة)"]];
- if(key==="status")return [["draft","مسودة"],["published","منشور"],["hidden","مخفي"]];
- if(key==="rights_status")return [["pending","قيد المراجعة"],["approved","تم التحقق من الحقوق"],["rejected","مرفوض"]];
+ if(key==="status")return [["draft","مسودة"],["published","منشور"]];
  if(key==="quality")return [["SD","SD"],["HD","HD"],["FHD","FHD"],["4K","4K"]];
  if(key==="topic")return [["letters","الحروف"],["numbers","الأرقام"],["animals","الحيوانات"],["colors","الألوان والأشكال"],["stories","القصص"],["songs","أناشيد وحركة"],["science","العلوم"]];
  if(key==="age_rating")return [["all","مناسب للجميع"],["7+","7+"],["13+","13+"]];
@@ -187,20 +186,13 @@ $("editorForm").addEventListener("submit",async ev=>{
   else val=val||null;
   payload[key]=val;
  }
- if(!["aseel_youtube_videos","aseel_channels"].includes(table)&&payload.status==="published"&&payload.rights_status!=="approved")
-   return show("اعتمد الحقوق أولًا قبل النشر",true);
- if(!["aseel_youtube_videos","aseel_channels"].includes(table)&&payload.status==="published"&&!payload.license_reference)
-   return show("وثيقة الترخيص مطلوبة للنشر",true);
  if(table==="aseel_channels"){
     if(!payload.title_ar || !payload.poster_url || !payload.category_id)
       return show("لإضافة قناة أدخل العنوان، صورة HTTPS، والتصنيف",true);
     if(!payload.poster_url.startsWith("https://"))
       return show("صورة القناة يجب أن تكون برابط HTTPS",true);
-    // Rights metadata is optional. A pending value does not assert a licence.
-    if(!payload.rights_status)payload.rights_status="pending";
     if(payload.playback_mode==="official_link"){
-      try { const u=new URL(payload.official_url||""); if(u.protocol!=="https:")throw Error(); }
-      catch(_) {return show("أدخل رابط مشاهدة رسمي HTTPS صالحًا",true);}
+      if(payload.official_url){try{const u=new URL(payload.official_url);if(u.protocol!=="https:")throw Error();}catch(_){return show("رابط المشاهدة يجب أن يكون HTTPS",true);}}
       payload.stream_url=null;
       payload.youtube_url=null;
       payload.stream_variants=[];
@@ -213,7 +205,6 @@ $("editorForm").addEventListener("submit",async ev=>{
  if(payload.country_code)payload.country_code=payload.country_code.toUpperCase();
  if(payload.language_code && !/^[a-zA-Z]{2,3}$/.test(payload.language_code))return show("رمز اللغة غير صحيح",true);
  if(payload.language_code)payload.language_code=payload.language_code.toLowerCase();
- if(!["aseel_youtube_videos","aseel_channels"].includes(table)&&payload.is_kids && payload.status==="published" && payload.rights_status!=="approved")return show("يتطلب نشر محتوى أطفال اعتماد الحقوق أولًا",true);
  const youtubeId = value => {
   try{
    const u=new URL(String(value||""));
@@ -255,10 +246,6 @@ $("editorForm").addEventListener("submit",async ev=>{
    return show("أدخل رابط يوتيوب رسمي صالحًا: watch أو shorts أو live أو youtu.be",true);
  if(payload.stream_url && !isPlayableSource(payload.stream_url))
    return show("ضع MP4/HLS أو Embed معتمدًا في خانة التشغيل، ويوتيوب في حقله",true);
- if(["aseel_movies","aseel_episodes","aseel_channels"].includes(table) && payload.status==="published" &&
-    payload.playback_mode!=="official_link" &&
-    !isPlayableSource(payload.stream_url) && !youtubeId(payload.youtube_url))
-   return show("يلزم MP4/HLS أو Embed معتمد أو رابط يوتيوب رسمي",true);
  if(Array.isArray(payload.stream_variants) && payload.stream_variants.some(v=>!isPlayableSource(v.url)))
    return show("روابط المصادر الإضافية يجب أن تكون MP4/HLS أو Embed معتمدًا",true);
  try{
@@ -293,5 +280,5 @@ $("testLink").onclick=()=>{
  }
  if(!url||!url.startsWith("https://"))return show("أدخل رابط تشغيل HTTPS صالحًا أولًا",true);
  window.open(url,"_blank","noopener,noreferrer");
- show("فُتح الرابط للفحص اليدوي. فتح الرابط لا يثبت الحقوق أو توافق التلفزيون.");
+ show("فُتح الرابط للفحص اليدوي. فتح الرابط لا يضمن توافق التشغيل مع التلفزيون.");
 };
