@@ -13,3 +13,6 @@ dnspython==2.9.2
 
 # Server-side S3 API signer for multi-provider resumable multipart uploads
 boto3>=1.36,<2
+
+# Encrypt cloud storage credentials at rest in service-role-only Supabase tables
+cryptography>=44,<47
