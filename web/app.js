@@ -576,7 +576,7 @@
      data.append(heading,holder);
      loadEpisodes(item,holder);
    }
-   const hint=el("p","detail-sub","تخضع المشاهدة لتوفر المصدر وحقوق البث.");
+   const hint=el("p","detail-sub","قد تتأخر إتاحة المشاهدة حتى يتوفر رابط تشغيل صالح.");
    hint.style.marginTop="20px";data.append(hint);body.append(data);
    modalOpen("modal");
    if (push!==false) {
@@ -598,8 +598,7 @@
      holder.append(list);
      const display=async()=>{
        list.replaceChildren(el("p","detail-desc","جارٍ تحميل الحلقات..."));
-       // Keep every published episode in the list, even while its streaming
-       // rights are pending. Rights review must not look like deleted content.
+       // Show all published episode metadata, even when a playback link is unavailable.
        const episodes=(await api("aseel_episodes","select=*&season_id=eq."+encodeURIComponent(picker.value)+"&order=number.asc&limit=100") || []).filter(x => x.status==="published");
        list.replaceChildren();
        if (!episodes.length) {list.append(el("p","detail-desc","لا توجد حلقات محفوظة ومنشورة في هذا الموسم."));return;}
