@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex, nofollow">
   <title>رفع فيديو MP4 | استديو العز TV</title>
   <link rel="icon" type="image/svg+xml" href="/static/studio-icon.svg">
-  <link rel="stylesheet" href="/static/video-upload.css?v=3">
+  <link rel="stylesheet" href="/static/video-upload.css?v=4">
   <script defer src="/static/video-upload.js?v=3"></script>
 </head>
 <body>
@@ -27,6 +27,73 @@
         <h1>رفع فيديوهات <span>MP4</span></h1>
         <p>ارفع الفيلم أو حلقة المسلسل إلى أفضل مركز تخزين متصل تلقائيًا، مع حفظ الرابط واسم المركز في قاعدة بيانات العز.</p>
         <div class="steps"><span><b>1</b> اختيار الملف</span><span><b>2</b> الرفع والتحقق</span><span><b>3</b> نسخ الرابط</span></div>
+      </section>
+
+
+      <section class="panel provider-settings-panel" id="provider-settings">
+        <div class="panel-title">
+          <div>
+            <h2>إعدادات مراكز التخزين</h2>
+            <p>أنشئ حسابًا في المركز، ثم اربطه وافحصه وفعّله من هذه الصفحة. مفاتيح الدخول مشفّرة ولا تظهر مرة أخرى.</p>
+          </div>
+          <button id="settings-toggle" type="button" class="secondary" aria-controls="settings-body" aria-expanded="false">إعداد المراكز <span aria-hidden="true">⚙</span></button>
+        </div>
+        <div id="settings-body" hidden>
+          <div class="setup-explain">
+            <strong>إعداد لمرة واحدة فقط</strong>
+            <span>١ — أنشئ حسابًا بمركز التخزين. ٢ — جهّز مفاتيح API والحاوية. ٣ — احفظ البيانات هنا. ٤ — اضغط تهيئة CORS، ثم فحص الاتصال، ثم تفعيل المركز.</span>
+            <small>إنشاء حسابات المزوّدين وتأكيد البريد وأي تفعيل للفوترة يتم من مواقعهم. لا تضع كلمة مرور حسابك هنا؛ استخدم مفاتيح S3 فقط.</small>
+          </div>
+          <div class="settings-policy">
+            <label class="field" for="distribution-mode"><span>طريقة توزيع الفيديوهات تلقائيًا</span>
+              <select id="distribution-mode">
+                <option value="balanced">توزيع حسب السعة المتبقية (موصى به)</option>
+                <option value="priority">حسب أولوية المراكز</option>
+              </select>
+            </label>
+            <label class="check-field"><input type="checkbox" id="fallback-supabase" checked><span>استخدم Supabase احتياطيًا للملفات الصغيرة عند عدم توفر المراكز الخارجية</span></label>
+            <button id="save-distribution" type="button" class="secondary">حفظ إعدادات التوزيع</button>
+          </div>
+          <div class="settings-tabs" role="group" aria-label="اختيار مركز التخزين">
+            <button type="button" class="settings-tab selected" data-settings-provider="r2">Cloudflare R2</button>
+            <button type="button" class="settings-tab" data-settings-provider="b2">Backblaze B2</button>
+            <button type="button" class="settings-tab" data-settings-provider="oracle">Oracle Cloud</button>
+          </div>
+          <div class="provider-form-area">
+            <div class="settings-top">
+              <div><strong id="settings-provider-title">Cloudflare R2</strong><span id="settings-provider-status">غير متصل</span></div>
+              <a id="settings-signup" href="https://dash.cloudflare.com/" rel="noopener noreferrer" target="_blank">إنشاء حساب المركز</a>
+            </div>
+            <div class="settings-form-grid">
+              <label class="field" id="settings-account-wrap" for="settings-account-id"><span>Account ID — معرّف حساب R2</span><input id="settings-account-id" type="text" autocomplete="off" placeholder="32 حرفًا من لوحة R2"></label>
+              <label class="field" id="settings-region-wrap" for="settings-region"><span>Region — المنطقة</span><input id="settings-region" type="text" autocomplete="off" placeholder="us-west-004"></label>
+              <label class="field" id="settings-endpoint-wrap" for="settings-endpoint"><span>Endpoint — رابط S3</span><input id="settings-endpoint" type="url" dir="ltr" autocomplete="off" placeholder="https://..."></label>
+              <label class="field" for="settings-bucket"><span>Bucket — اسم الحاوية</span><input id="settings-bucket" autocomplete="off" type="text" placeholder="alezz-videos"></label>
+              <label class="field" for="settings-public-url"><span>رابط القراءة العام للملفات / نطاق الفيديو</span><input id="settings-public-url" type="url" dir="ltr" autocomplete="off" placeholder="https://videos.example.com"></label>
+              <label class="field" for="settings-access"><span>Access Key ID — مفتاح S3</span><input id="settings-access" type="password" autocomplete="new-password" placeholder="أدخل مفتاح API، وليس كلمة مرور الحساب"></label>
+              <label class="field" for="settings-secret"><span>Secret Access Key — المفتاح السري</span><input id="settings-secret" type="password" autocomplete="new-password" placeholder="سري — يُحفظ مشفرًا"></label>
+              <label class="field" for="settings-quota"><span>الحصة التي تريد تخصيصها للمركز (GB)</span><input id="settings-quota" type="number" min="0.1" step="0.1" value="10"></label>
+              <label class="field" for="settings-max-file"><span>أقصى حجم ملف يسمح به المركز (GB)</span><input id="settings-max-file" type="number" min="0.01" step="0.01" value="50"></label>
+              <label class="field" for="settings-priority"><span>الأولوية (1 أعلى أولوية)</span><input id="settings-priority" type="number" min="1" max="100" value="50"></label>
+            </div>
+            <small class="settings-hint" id="settings-hint">R2: أدخل Account ID، وسيُولّد رابط S3 تلقائيًا. تحتاج أيضًا لتفعيل رابط الفيديو العام من لوحة R2.</small>
+            <div class="provider-actions">
+              <button id="save-provider" type="button" class="primary">حفظ المفاتيح والإعدادات</button>
+              <button id="setup-provider" type="button" class="secondary">تهيئة حاوية / CORS</button>
+              <button id="test-provider" type="button" class="secondary">فحص اتصال المركز</button>
+              <button id="enable-provider" type="button" class="secondary">تفعيل المركز</button>
+              <button id="disconnect-provider" type="button" class="quiet">فصل المركز وحذف مفاتيحه</button>
+            </div>
+            <label class="check-field"><input id="create-bucket" type="checkbox"><span>أنشئ الحاوية تلقائيًا إذا لم تكن موجودة (يلزم صلاحية إنشاء حاوية)</span></label>
+            <div id="settings-feedback" class="feedback" aria-live="polite" role="status">اختر أحد المراكز وأدخل مفاتيحه لربطه بالتوزيع التلقائي.</div>
+            <details class="cors-help"><summary>إعداد CORS يدويًا إذا رفض المركز التهيئة التلقائية</summary>
+              <p>انسخ هذه السياسة إلى إعدادات CORS في حاوية التخزين. يتعين السماح لـ ETag حتى يكتمل الرفع المجزأ.</p>
+              <pre id="cors-policy" dir="ltr"></pre>
+              <button id="copy-cors" type="button" class="secondary">نسخ CORS</button>
+            </details>
+            <p class="settings-warning">الفحص يختبر صلاحيات إنشاء وإلغاء رفع تجريبي وCORS؛ لا يضمن صلاحية نطاق القراءة العام حتى تجربة ملف فعلي. فصل المركز لا يحذف ملفات الفيديو الموجودة لديه. الحدود المعروضة تقديرية ولا تشمل الملفات خارج الاستديو.</p>
+          </div>
+        </div>
       </section>
 
       <section class="panel upload-panel" aria-labelledby="upload-heading">
