@@ -548,24 +548,42 @@
       toast('بدأت إعادة فحص الحلقة '+number+' فقط.','success');
     });
   }
+  function studioSourceDiagnostics(row){
+    const message=String(row.error||'').toLowerCase();
+    const link=String(row.url||'').toLowerCase().split('?')[0];
+    const kind=row.kind==='embed'?'embed':/\.m3u8$/.test(link)?'hls':
+      /\.(?:mp4|m4v|mov|webm)$/.test(link)?'mp4':'other';
+    const status=row.verified?'verified':
+      /(?:^|\D)403(?:\D|$)|forbidden|access denied|مرفوض|رفض|permission/.test(message)?'blocked':
+      /(?:^|\D)404(?:\D|$)|not found|غير موجود/.test(message)?'missing':
+      /expired|expire|signature|انتهت|منتهي/.test(message)?'expired':
+      row.error?'failed':'unverified';
+    const label=status==='verified'?'اجتاز الفحص':status==='blocked'?'رفض المصدر 403':
+      status==='missing'?'الصفحة غير موجودة 404':status==='expired'?'الرابط منتهي':
+      status==='failed'?'تعذر التحقق':kind==='embed'?'صفحة مشغّل':'بحاجة للفحص';
+    return {kind,status,label};
+  }
   function updateStudioLiveCards(){
     const rows=studioPlayerRows(),container=$('liveMediaLinks');
     const direct=rows.filter(x=>x.kind==='direct'),verified=direct.filter(x=>x.verified);
     $('studioLiveCounts').textContent=direct.length+' فيديو مرشح · '+verified.length+' مجتاز · '+(rows.length-direct.length)+' صفحة مشغّل';
     for(const id of ['studioExportPlayersCsv','studioExportPlayersJson','studioCopyPlayers'])$(id).disabled=!rows.length;
     const filter=$('studioPlayerFilter').value;
-    const filtered=rows.filter(x=>filter==='all'||
-      filter==='verified'&&x.verified||
-      filter==='unverified'&&!x.verified&&x.kind!=='embed'||
-      filter==='embed'&&x.kind==='embed');
+    const filtered=rows.filter(x=>{
+      const details=studioSourceDiagnostics(x);
+      return filter==='all'||filter==='verified'&&x.verified||
+        filter==='unverified'&&!x.verified&&details.kind!=='embed'||
+        filter==='embed'&&details.kind==='embed'||
+        filter===details.kind||filter===details.status;
+    });
     const sorted=[...filtered].sort((a,b)=>Number(b.verified)-Number(a.verified));
     container.replaceChildren();
     for(const row of (studioShowAll?sorted.slice(0,400):sorted.slice(0,18))){
+      const diagnosis=studioSourceDiagnostics(row);
       const panel=make('div','studio-fast-card'+(row.verified?' is-verified':
-                                  row.kind==='embed'?' is-embedded':row.error?' is-invalid':''));
+                                  diagnosis.kind==='embed'?' is-embedded':row.error?' is-invalid':''));
       panel.append(make('strong','',row.episode),
-        make('small','',row.kind==='direct'?(row.verified?'✓ اجتاز الفحص المبدئي':'◷ يحتاج اختبار التشغيل'):
-              '◷ صفحة مشغّل مضمّنة'));
+        make('small','',diagnosis.kind.toUpperCase()+' · '+diagnosis.label));
       try{const uri=new URL(row.url);panel.append(make('small','',uri.hostname+uri.pathname.slice(0,65)));}
       catch(_){panel.append(make('small','',row.url.slice(0,75)));}
       if(row.error)panel.append(make('small','',row.error.slice(0,100)));
@@ -810,7 +828,13 @@
       scan.stop_requested?'■ تم إيقاف الفحص':'✓ نتائج الفحص متاحة';
     if(scan.running)studioScanFinishedAt=0;
     else if(!studioScanFinishedAt)studioScanFinishedAt=Date.now();
-    if(scan.stop_requested&&!scan.running&&scan.done<scan.total)studioRecoverableId=scan.id;
+    if(!scan.running && (scan.crawl_paused || Number(scan.remaining_pages||0)>0 ||
+        scan.stop_requested&&scan.done<scan.total))studioRecoverableId=scan.id;
+    const remaining=Math.max(0,Number(scan.remaining_pages||0));
+    $('studioRemainingPages').textContent=remaining ?
+      '◷ '+remaining+' صفحة موسم محفوظة للاستكمال':'';
+    if(!scan.running && scan.crawl_paused)
+      $('discoveryProgressLabel').textContent='انتهت الدفعة الحالية؛ يمكن استكمال بقية صفحات المواسم';
     $('studioStopScan').hidden=!scan.running;
     $('studioResumeScan').hidden=!studioRecoverableId;
     const cat=app.catalogue;
