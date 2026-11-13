@@ -145,16 +145,20 @@
     const container=make('details','media-sources');
     const sources=item.sources||[];
     const urls=[...new Set([item.page_url||item.url,...(item.source_pages||[])].filter(Boolean))];
-    container.append(make('summary','',sources.length+' مشغّل أو رابط مكتشف'));
+    const directCount=sources.filter(x=>x.kind==='direct').length;
+    const embedCount=sources.filter(x=>x.kind==='embed').length;
+    container.append(make('summary','',sources.length+' مصدر مكتشف · '+directCount+
+      ' رابط فيديو · '+embedCount+' مشغّل مضمّن'));
     for(const url of urls){
       container.append(make('small','','صفحة المصدر'),make('code','',url));
     }
     const list=make('ol');
     for(const source of sources){
       const row=make('li');
-      const label=source.verified?'صالح للتشغيل':
-        okPlayerUrl(source.url)?'OK.ru: نتيجة فحص الخادم غير حاسمة — جرّب المعاينة':
-        source.reachable?'صفحة مشغّل متاحة':'لم يجتز الفحص';
+      const label=source.verified?'✓ فيديو اجتاز فحص البايتات':
+        okPlayerUrl(source.url)?'OK.ru: اختبار الخادم غير حاسم — جرّب المعاينة':
+        source.kind==='embed'?'صفحة مشغّل مكتشفة — لا تعني فيديو مباشر':
+        source.checked_at?'رابط فيديو محتمل لم يجتز الاختبار':'رابط فيديو مكتشف — بانتظار الاختبار';
       const copy=make('button','small-outline','نسخ الرابط');copy.type='button';
       copy.onclick=async()=>{
         try{await navigator.clipboard.writeText(source.url);toast('نُسخ الرابط.','success');}
@@ -552,7 +556,7 @@
     const message=String(row.error||'').toLowerCase();
     const link=String(row.url||'').toLowerCase().split('?')[0];
     const kind=row.kind==='embed'?'embed':/\.m3u8$/.test(link)?'hls':
-      /\.(?:mp4|m4v|mov|webm)$/.test(link)?'mp4':'other';
+      /\.(?:mp4|m4v|mov|webm)$/.test(link)?'mp4':'direct';
     const status=row.verified?'verified':
       /(?:^|\D)403(?:\D|$)|forbidden|access denied|مرفوض|رفض|permission/.test(message)?'blocked':
       /(?:^|\D)404(?:\D|$)|not found|غير موجود/.test(message)?'missing':
@@ -566,7 +570,9 @@
   function updateStudioLiveCards(){
     const rows=studioPlayerRows(),container=$('liveMediaLinks');
     const direct=rows.filter(x=>x.kind==='direct'),verified=direct.filter(x=>x.verified);
-    $('studioLiveCounts').textContent=direct.length+' فيديو مرشح · '+verified.length+' مجتاز · '+(rows.length-direct.length)+' صفحة مشغّل';
+    const embedCount=rows.filter(x=>x.kind==='embed').length;
+    $('studioLiveCounts').textContent=rows.length+' مشغّل/مصدر مكتشف · '+
+      direct.length+' روابط فيديو · '+embedCount+' صفحات مشغّل · '+verified.length+' اجتاز الفحص';
     for(const id of ['studioExportPlayersCsv','studioExportPlayersJson','studioCopyPlayers'])$(id).disabled=!rows.length;
     const filter=$('studioPlayerFilter').value;
     const filtered=rows.filter(x=>{
@@ -820,7 +826,10 @@
     const bar=$('discoveryProgressBar');
     bar.max=Math.max(1,scan.total);bar.value=scan.done;
     $('discoveryProgressLabel').textContent=scan.running?'⚡ فحص مباشر: تظهر المشغلات فور اكتشافها':'اكتمل فحص المصادر المتاحة';
-    $('discoveryProgressCount').textContent=scan.done+' / '+scan.total+' مفحوصة · '+scan.verified+' فيديو متحقق · '+(scan.sources_found||0)+' مصدر محتمل';
+    $('discoveryProgressCount').textContent=scan.done+' / '+scan.total+
+      ' حلقة مفحوصة · '+(scan.players_found||0)+' مشغّل مكتشف ('+
+      (scan.sources_found||0)+' فيديو + '+(scan.embeds_found||0)+' صفحة مشغّل) · '+
+      (scan.sources_checked||0)+' رابط اختُبر · '+scan.verified+' حلقة اجتازت الفحص';
     $('discoveryReview').hidden=false;
     const pill=$('studioLivePill');
     pill.classList.toggle('is-done',!scan.running);
