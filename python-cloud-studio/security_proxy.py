@@ -41,12 +41,15 @@ class AuditTransport:
     attempts: int = 0
     network_failures: int = 0
     used_proxy: bool = False
+    free_source: bool = False
+    requires_proxy: bool = False
 
     def summary(self):
         return {
             "mode": ("proxy" if self.used_proxy else
                      "unavailable" if self.approved and self.pool and self.attempts else "direct"),
             "configured": len(self.pool),
+            "free_source": self.free_source,
             "approved": self.approved,
             "selected": ("Proxy " + str(self.active + 1)) if self.used_proxy and self.active is not None else None,
             "attempts": self.attempts,
@@ -79,39 +82,60 @@ def _parse_one(raw):
     return Proxy(host=host, port=p.port, username=user, password=password)
 
 
-def settings():
+def settings(*, resolve_free=False):
     urls = os.environ.get("ALEZZ_SECURITY_PROXY_URLS", "")
     allow = os.environ.get("ALEZZ_SECURITY_PROXY_ALLOWED_HOSTS", "")
-    entries = [line.strip() for line in re.split(r"[,;\n]+", urls) if line.strip()]
-    hosts = frozenset(x.strip().lower().rstrip(".") for x in re.split(r"[,;\n]+", allow)
+    entries = [line.strip() for line in re.split(r"[,;\\n]+", urls) if line.strip()]
+    hosts = frozenset(x.strip().lower().rstrip(".") for x in re.split(r"[,;\\n]+", allow)
                       if x.strip())
-    # Invalid records are not used. No credentials or URL text is logged.
-    pool = []
+    # Default free mode is scoped ONLY to this service, never arbitrary public websites.
+    free_enabled = os.environ.get("ALEZZ_SECURITY_FREE_PROXY_ENABLED", "1") == "1"
+    if free_enabled and not hosts:
+        hosts = frozenset(("app-apk-oquy.onrender.com",))
+    manual = []
     for entry in entries[:MAX_PROXIES]:
         try:
-            pool.append(_parse_one(entry))
+            manual.append(_parse_one(entry))
         except (ValueError, OverflowError, TypeError):
             continue
     enabled = os.environ.get("ALEZZ_SECURITY_PROXY_ENABLED", "1") == "1"
-    return tuple(pool) if enabled else (), hosts
+    if not enabled:
+        return (), hosts
+    if manual:
+        return tuple(manual), hosts
+    if free_enabled and resolve_free and hosts:
+        from security_free_proxies import working_pool
+        return tuple(working_pool()), hosts
+    return (), hosts
 
 
 def safe_status():
     pool, allowed = settings()
+    from security_free_proxies import status as free_status
+    free = free_status()
+    using_free = os.environ.get("ALEZZ_SECURITY_FREE_PROXY_ENABLED", "1") == "1"
     return {
-        "configured": len(pool),
+        "configured": len(pool) or (free["working"] if using_free else 0),
         "approved_host_count": len(allowed),
-        "enabled": bool(pool and allowed),
-        "note": "Set ALEZZ_SECURITY_PROXY_URLS and ALEZZ_SECURITY_PROXY_ALLOWED_HOSTS in Render secrets. Proxy credentials are never returned.",
+        "enabled": bool(allowed and (pool or (using_free and free["working"]))),
+        "free_enabled": using_free,
+        "community": free,
+        "note": "Free proxy lists are cached and checked against example.com; service domain enabled by default. Other domains require ALEZZ_SECURITY_PROXY_ALLOWED_HOSTS.",
     }
 
 
 @contextmanager
 def audit_proxy_context(host):
-    pool, allowed = settings()
+    configured, allowed = settings(resolve_free=False)
     approved = host.lower().rstrip(".") in allowed
+    free_enabled = os.environ.get("ALEZZ_SECURITY_FREE_PROXY_ENABLED", "1") == "1"
+    use_free = approved and free_enabled and not configured
+    pool = configured
+    if use_free:
+        pool, _ = settings(resolve_free=True)
     choice = int.from_bytes(hashlib.sha256(host.encode("utf-8")).digest()[:4], "big") % len(pool) if pool else 0
-    context = AuditTransport(host, pool, choice, approved)
+    context = AuditTransport(host, pool, choice, approved,
+                             free_source=use_free, requires_proxy=use_free)
     token = _CONTEXT.set(context)
     try:
         yield context
@@ -129,14 +153,14 @@ def _public_addrs(host, port):
     return addresses
 
 
-def _connect_fetch(proxy, target_host, target_ip, path, origin, max_bytes, user_agent):
+def _connect_fetch(proxy, target_host, target_ip, path, origin, max_bytes, user_agent, timeout=7):
     # Connect to the validated proxy IP, avoiding proxy DNS re-resolution.
     addresses = _public_addrs(proxy.host, proxy.port)
     connection = None
     last_error = None
     for proxy_ip in addresses[:2]:
         try:
-            connection = http.client.HTTPConnection(proxy_ip, proxy.port, timeout=7)
+            connection = http.client.HTTPConnection(proxy_ip, proxy.port, timeout=timeout)
             authority = ("[" + target_ip + "]" if ":" in target_ip else target_ip) + ":443"
             tunnel_headers = {"Host": authority}
             if proxy.username:
@@ -185,7 +209,11 @@ def try_proxy_get(host, path, origin, max_bytes, user_agent, target_addresses):
     then fail closed (never silently switch to a different unapproved path).
     """
     context = _CONTEXT.get()
-    if context is None or context.host != host or not context.approved or not context.pool:
+    if context is None or context.host != host or not context.approved:
+        return None
+    if not context.pool:
+        if context.requires_proxy:
+            raise OSError("No verified community HTTP CONNECT proxy available")
         return None
 
     public_ips = [ip for ip in target_addresses if ipaddress.ip_address(ip).is_global]
