@@ -12,7 +12,7 @@
   var SELECT = {
     categories: "id,name_ar,sort_order,published",
     movies: "id,title_ar,title_original,description,poster_url,backdrop_url,release_year,category_id,duration_minutes,quality,stream_url,stream_variants,subtitle_url,subtitle_language_code,link_health_status,is_kids,age_rating,featured,display_order,status,rights_status,rights_holder,license_reference,youtube_url,country_code,language_code,genre_tags,auto_tags",
-    series: "id,title_ar,title_original,description,poster_url,backdrop_url,release_year,category_id,quality,is_kids,age_rating,featured,display_order,status,rights_status,rights_holder,license_reference,country_code,language_code,genre_tags,auto_tags",
+    series: "id,title_ar,title_original,description,poster_url,backdrop_url,release_year,category_id,quality,is_kids,age_rating,featured,display_order,status,country_code,language_code,genre_tags,auto_tags",
     seasons: "id,series_id,number,title_ar",
     episodes: "id,season_id,number,title_ar,description,poster_url,duration_minutes,stream_url,stream_variants,youtube_url,status,link_health_status,rights_status,genre_tags,auto_tags,source_page_url",
     channels: "id,title_ar,description,poster_url,stream_url,official_url,category_id,is_kids,country_code,language_code,youtube_url,playback_mode,status,rights_status,link_health_status,age_rating,display_order,genre_tags,auto_tags",
@@ -172,11 +172,7 @@
         subtitleTrack: row.subtitle_url || "",
         subtitleLanguage: row.subtitle_language_code || "",
         youtubeId: yt,
-        rights: {
-          status: row.rights_status || null,
-          holder: row.rights_holder || null,
-          reference: row.license_reference || null
-        },
+        rights: { status: null, holder: null, reference: null },
         order: row.display_order || 0
       };
     }
@@ -288,7 +284,7 @@
 
     // Keep series with published episodes visible. A stale primary-source
     // health flag must not erase all of the series' alternative players.
-    var playableSeries = series.filter(function (s) { return s.episodeCount > 0; });
+    var playableSeries = series; // Published series appear even before episodes are ready.
     var all = movies.concat(playableSeries, channels, youtube);
 
     var byKey = {};
@@ -334,7 +330,7 @@
     loadedAt: null,
     failedTables: [],
 
-    // Read the latest rights-approved playback sources, bypassing stale catalogue
+    // Read the latest published playback sources, bypassing stale catalogue
     // snapshots. The upstream signer must be refreshed by its authorised provider.
     freshPlayback: function (kind, id) {
       var name = kind === "movie" ? "movies" : kind === "episode" ? "episodes" : "";
