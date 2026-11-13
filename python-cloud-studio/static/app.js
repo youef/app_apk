@@ -841,9 +841,11 @@
     const cat=app.catalogue;
     $('studioRetryFailed').hidden=scan.running||!cat||
       !(cat.kind==='series'?cat.episodes.some(ep=>!ep.verified):!cat.verified);
-    $('studioCheckpointStatus').textContent=scan.checkpoint_saved===true?
+    $('studioCheckpointStatus').textContent=scan.checkpoint_available===false?
+      'الحفظ المستمر غير متاح: يلزم دخول مسؤول وخادم Supabase مهيأ':
+      scan.checkpoint_saved===true?
       '✓ نتائج محفوظة في Supabase':scan.checkpoint_saved===false?
-      'تعذّر حفظ آخر نقطة؛ الفحص مستمر':
+      'تعذّر حفظ آخر نقطة؛ الفحص مستمر ويمكن تصدير النتائج':
       '◷ جاري حفظ تقدم الفحص';
     $('studioCheckpointStatus').classList.toggle('is-saved',scan.checkpoint_saved===true);
     $('studioCheckpointStatus').classList.toggle('is-error',scan.checkpoint_saved===false);
