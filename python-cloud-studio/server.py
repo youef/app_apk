@@ -100,6 +100,9 @@ app.include_router(deep_discovery_router)
 from studio_quality import router as studio_quality_router, register as register_studio_quality
 register_studio_quality(portal)
 app.include_router(studio_quality_router)
+from video_upload import router as video_upload_router, register as register_video_upload
+register_video_upload(portal, BASE / 'templates' / 'video-upload.html')
+app.include_router(video_upload_router)
 from site_security import router as security_center_router, register as register_security_center
 register_security_center(portal)
 app.include_router(security_center_router)
