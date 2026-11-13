@@ -242,17 +242,9 @@
       s.episodeCount = s.seasons.reduce(function (n, season) { return n + season.episodes.length; }, 0);
     });
 
-    // Published direct streams require a verified HLS/MP4/DASH source; approved
-    // external viewing pages are separately marked and never passed to HLS.
-    var channels = (raw.channels || []).filter(function (r) {
-      if (r.status !== "published") return false;
-      if (r.playback_mode === "official_link")
-        return r.rights_status === "approved" &&
-          /^https:\/\/(?:[^\s/]+\.)?qanwatlive\.com\//i.test(r.official_url || "");
-      return r.playback_mode === "stream" && r.rights_status === "approved" &&
-        r.link_health_status === "healthy" &&
-        !!(r.stream_url && /^https:\/\/[^\s]+\.(m3u8|mp4|mpd)(\?[^\s]*)?$/i.test(r.stream_url));
-    }).map(function (r) {
+    // Publication decides visibility. Broken/missing streams remain visible as
+    // unavailable content; the player must assess playback separately.
+    var channels = (raw.channels || []).filter(visibleMedia)    }).map(function (r) {
       var item = base("channel", r);
       item.live = true;
       item.playback = r.playback_mode;
@@ -353,7 +345,7 @@
         id: "eq." + id, limit: 1
       }).then(function (rows) {
         var row = Array.isArray(rows) && rows[0];
-        if (!row || row.status !== "published" || row.rights_status !== "approved") return null;
+        if (!row || row.status !== "published") return null;
         // Do not turn a suspect/broken source into a verified result. Return
         // the saved alternatives for the first-party player to try normally.
         return { stream: row.stream_url || "", variants: Array.isArray(row.stream_variants) ? row.stream_variants : [],
