@@ -912,6 +912,32 @@ async def studio_scan_stop(request:Request,data:ScanControl):
         _emit_scan_event(state,state.scan,"stop_requested")
         return {"stopping":True,"scan":scan_status(state)}
 
+class ScanEpisodeControl(ScanControl):
+    season: int = Field(ge=1,le=200)
+    number: int = Field(ge=1,le=10000)
+
+@app.post("/api/discovery-scan/retry-episode")
+async def studio_scan_retry_episode(request:Request,data:ScanEpisodeControl):
+    state=protected(request)
+    with state.lock:
+        if not state.scan or state.scan.get("id")!=data.scan_id:
+            raise HTTPException(404,"الفحص غير موجود")
+        if state.scan.get("running"):
+            raise HTTPException(409,"انتظر اكتمال الفحص الحالي")
+        cat=current_catalogue(state)
+        if cat.kind!="series":
+            raise HTTPException(422,"الفحص الفردي مخصص للحلقات")
+        target=next((x for x in cat.episodes
+                     if x.season==data.season and x.number==data.number),None)
+        if target is None:
+            raise HTTPException(404,"الحلقة غير موجودة")
+        retained=[_scan_key(x,cat.kind) for x in cat.episodes if x is not target]
+        start_catalogue_scan(state,cat,owner_uid=_portal_scan_uid(request),
+                             resume={"completed_keys":retained})
+        return {"retry":True,"summary":get_summary(state),
+                "episode":{"season":target.season,"number":target.number}}
+
+
 @app.post("/api/discovery-scan/retry-failed")
 async def studio_scan_retry_failed(request:Request,data:ScanControl):
     state=protected(request)
