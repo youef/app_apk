@@ -25,6 +25,8 @@ services:
         value: auto
       - key: ALEZZ_AUTOSYNC_INTERVAL_HOURS
         value: "4"
+      - key: ALEZZ_AUTOSYNC_SOURCE_INTERVAL_HOURS
+        value: "4"
       - key: ALEZZ_AUTOSYNC_CHECK_MINUTES
         value: "5"
       - key: ALEZZ_AUTOSYNC_CONCURRENCY
