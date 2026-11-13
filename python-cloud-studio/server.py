@@ -624,22 +624,31 @@ def _scan_media_entry(cat: Catalogue, entry, force_browser:bool=False):
         candidates.append({'url': entry.media_url,
                            'kind': supported_source_kind(entry.media_url) or 'direct',
                            'page_url': page})
-    pages = list(dict.fromkeys(url for url in [page, *entry.source_pages]
-                               if url and (cat.kind == 'movie' or url.rstrip('/') != cat.url.rstrip('/'))))
+    embed_pages = [item['url'] for item in candidates if item.get('kind') == 'embed' and item.get('url')]
+    # Prioritize player frames over unrelated source-page links. A series
+    # episode with the same URL as the work page must still be inspected.
+    pages = list(dict.fromkeys(url for url in [page, *embed_pages, *entry.source_pages]
+                               if url and (cat.kind == 'movie' or url.rstrip('/') != cat.url.rstrip('/')
+                                           or url == page)))
     checked, playable, error = candidates, None, ''
     try:
-        # HTTP checks run concurrently. Browser extraction is a controlled
-        # fallback and can take longer on source sites that throttle access.
-        resolver = MediaResolver(mode='auto' if force_browser else AUTOSYNC.mode,
-                                 timeout=5,max_pages=3,workers=3,max_seconds=8)
-        embed_pages = [item['url'] for item in candidates if item.get('kind') == 'embed' and item.get('url')]
-        checked, errors = resolver.resolve([*pages, *embed_pages], existing=candidates)
+        # 18s bounded budget lets public Chromium discover JS-created media
+        # after the quick HTTP pass. Five pages include ordinary iframe frames.
+        # Auth/DRM/403 restrictions are not bypassed.
+        budget = max(8, min(24, int(os.getenv('ALEZZ_STUDIO_SCAN_SECONDS', '18'))))
+        resolver = MediaResolver(mode='auto' if force_browser or AUTOSYNC.mode == 'auto' else AUTOSYNC.mode,
+                                 timeout=5,max_pages=5,workers=3,max_seconds=budget)
+        checked, errors = resolver.resolve(pages, existing=candidates)
         playable = next((item for item in checked
                          if item.get('verified') and item.get('kind') == 'direct'), None)
         embedded = any(item.get('kind') == 'embed' and item.get('reachable')
                        and item.get('url') == entry.media_url for item in checked)
         if not playable and not embedded:
-            error = '; '.join(errors[:2]) or 'لم يُعثر على رابط مباشر اجتاز الفحص.'
+            direct_candidates=sum(row.get('kind')=='direct' for row in checked)
+            error = ('اكتُشف '+str(direct_candidates)+' رابط فيديو محتمل لكنه لم يجتز فحص التشغيل. '
+                     if direct_candidates else 'لم يُعثر على رابط مباشر عام. ') + (
+                        '; '.join(errors[:2]) if errors else
+                        'قد يحتاج المصدر مشغّل JavaScript أو يرفض الطلب من الخادم.')
     except Exception as exc:
         error = safe_error(exc)
     return entry, checked, pages, playable, error
@@ -773,8 +782,12 @@ def scan_catalogue(state: UserState, cat: Catalogue, progress: dict):
                         progress["total"]=len(cat.episodes) if cat.kind=="series" else 1
                         progress["verified"]=sum(bool(x.verified) for x in
                                                   (cat.episodes if cat.kind=="series" else [cat]))
-                        progress["sources_found"]=sum(sum(x.get("kind")=="direct" for x in item.sources)
-                            for item in (cat.episodes if cat.kind=="series" else [cat]))
+                        all_sources=[x for item in (cat.episodes if cat.kind=="series" else [cat])
+                                     for x in item.sources]
+                        progress["sources_found"]=sum(x.get("kind")=="direct" for x in all_sources)
+                        progress["embeds_found"]=sum(x.get("kind")=="embed" for x in all_sources)
+                        progress["players_found"]=len(all_sources)
+                        progress["sources_checked"]=sum("checked_at" in x for x in all_sources)
                         if entry.verified:
                             errors_in_row=0
                         else:
@@ -810,6 +823,10 @@ def start_catalogue_scan(state: UserState, cat: Catalogue, *,
         "verified":sum(bool(x.verified) for x in (cat.episodes if cat.kind=="series" else [cat])),
         "sources_found":sum(sum(y.get("kind")=="direct" for y in x.sources)
            for x in (cat.episodes if cat.kind=="series" else [cat])),
+        "embeds_found":sum(sum(y.get("kind")=="embed" for y in x.sources)
+           for x in (cat.episodes if cat.kind=="series" else [cat])),
+        "players_found":sum(len(x.sources) for x in (cat.episodes if cat.kind=="series" else [cat])),
+        "sources_checked":0,
         "workers":5,"adaptive_workers":5,"error":"",
         "revision":int((resume or {}).get("revision",0)),
         "seq":int((resume or {}).get("seq",0)),
