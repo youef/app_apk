@@ -614,6 +614,12 @@ def register(portal):
         from security_proxy import safe_status
         return safe_status()
 
+    @router.post("/api/security/proxies/community-refresh")
+    def community_proxy_refresh(request: Request):
+        require_admin(request, portal, write=True)
+        from security_free_proxies import refresh
+        return refresh(force=True)
+
     @router.get("/studio/security", include_in_schema=False)
     def page(request: Request):
         require_admin(request, portal)
