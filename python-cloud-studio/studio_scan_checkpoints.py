@@ -6,10 +6,12 @@ available through publishable/anon credentials. Never persist cookies, browser
 headers, media bytes or authentication tokens outside authorized source URLs.
 """
 from __future__ import annotations
+import base64
 import json
 import os
 import re
 import time
+import zlib
 from urllib.parse import urlsplit
 import requests
 
@@ -17,6 +19,36 @@ TABLE="aseel_studio_scan_checkpoints"
 _SCAN_ID=re.compile(r"^[0-9a-f]{16}$")
 _UID=re.compile(r"^[0-9a-fA-F-]{36}$")
 MAX_SNAPSHOT_BYTES=2_000_000
+MAX_UNPACKED_BYTES=10_000_000
+
+def _pack_catalogue(data):
+    """Compact large series scans without truncating individual episodes."""
+    raw=json.dumps(data,ensure_ascii=False,separators=(",",":")).encode("utf-8")
+    if len(raw)<350_000:
+        return data
+    compressed=zlib.compress(raw,level=6)
+    return {"_codec":"zlib-json-v1",
+            "data":base64.b64encode(compressed).decode("ascii"),
+            "original_bytes":len(raw)}
+
+def _unpack_catalogue(data):
+    if not isinstance(data,dict):
+        return None
+    if data.get("_codec")!="zlib-json-v1":
+        return data
+    try:
+        compressed=base64.b64decode(data.get("data",""),validate=True)
+        if len(compressed)>MAX_SNAPSHOT_BYTES:
+            return None
+        stream=zlib.decompressobj()
+        output=stream.decompress(compressed,MAX_UNPACKED_BYTES+1)
+        if len(output)>MAX_UNPACKED_BYTES or not stream.eof:
+            return None
+        result=json.loads(output)
+        return result if isinstance(result,dict) else None
+    except (ValueError,TypeError,zlib.error):
+        return None
+
 
 def _connection():
     key=os.getenv("ALEZZ_SUPABASE_SECRET_KEY") or os.getenv("ALEZZ_SUPABASE_SERVICE_ROLE_KEY")
@@ -40,7 +72,7 @@ def save(scan_id,owner_id,source_url,catalogue,progress,completed,*,status="scan
     target=_connection()
     if not target:return False
     payload={"scan_id":scan_id,"owner_id":owner_id,
-             "source_url":source_url,"payload":catalogue,"progress":progress,
+             "source_url":source_url,"payload":_pack_catalogue(catalogue),"progress":progress,
              "completed":list(completed),"scan_status":status,
              "updated_at":time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime()),
              "expires_at":time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime(time.time()+86400))}
@@ -77,8 +109,10 @@ def load(scan_id,owner_id):
             rows=response.json()
         if not isinstance(rows,list) or not rows:return None
         row=rows[0]
-        if not isinstance(row.get("payload"),dict) or not isinstance(row.get("progress"),dict):
+        payload=_unpack_catalogue(row.get("payload"))
+        if payload is None or not isinstance(row.get("progress"),dict):
             return None
+        row["payload"]=payload
         if not isinstance(row.get("completed"),list):row["completed"]=[]
         return row
     except (ValueError,requests.RequestException):
