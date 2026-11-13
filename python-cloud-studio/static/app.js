@@ -304,7 +304,129 @@
     });
   }
 
-  let discoveryTimer, discoveryId, discoveryDone=-1;
+  let discoveryTimer, discoveryId, discoveryDone=-1, discoveryStream=null,
+      discoveryStreamFallbackId=null, discoveryEventTimer=null;
+  function closeDiscoveryStream(){
+    if(discoveryStream){discoveryStream.close();discoveryStream=null;}
+    if(discoveryEventTimer){clearTimeout(discoveryEventTimer);discoveryEventTimer=null;}
+  }
+  function studioPlayerRows(){
+    if(!app.catalogue)return [];
+    const entries=app.catalogue.kind==='series'?app.catalogue.episodes:[app.catalogue];
+    const rows=[], seen=new Set();
+    for(const entry of entries){
+      const episode=app.catalogue.kind==='series'?'S'+entry.season+'E'+entry.number+' · '+entry.title:entry.title;
+      const sources=[...(Array.isArray(entry.sources)?entry.sources:[])];
+      if(entry.media_url&&!sources.some(x=>x.url===entry.media_url)){
+        sources.push({url:entry.media_url,kind:'direct',verified:Boolean(entry.verified),page_url:entry.page_url});
+      }
+      for(const row of sources){
+        if(typeof row.url!=='string'||!row.url.startsWith('https://'))continue;
+        const key=episode+'|'+row.url;
+        if(seen.has(key))continue;
+        seen.add(key);
+        rows.push({episode,url:row.url,kind:row.kind||'unknown',
+          verified:Boolean(row.verified),page_url:row.page_url||entry.page_url||''});
+      }
+    }
+    return rows;
+  }
+  function studioExportCsvField(value){
+    let str=String(value??'');
+    if(/^[\s]*[=+\-@]/.test(str))str="'"+str;
+    return '"'+str.replace(/"/g,'""')+'"';
+  }
+  function exportStudioPlayers(format){
+    const rows=studioPlayerRows();
+    if(!rows.length){toast('لم تُكتشف أي روابط عامة للتصدير بعد.','info');return;}
+    let output,type,extension;
+    if(format==='csv'){
+      const data=[['الحلقة','الرابط','النوع','التحقق','صفحة المصدر'],
+        ...rows.map(x=>[x.episode,x.url,x.kind,x.verified?'اجتاز الفحص':'مرشح غير متحقق',x.page_url])];
+      output='\uFEFF'+data.map(line=>line.map(studioExportCsvField).join(',')).join('\r\n');
+      type='text/csv;charset=utf-8';extension='csv';
+    }else{
+      output=JSON.stringify({version:1,tool:'Al Ezz TV Main Studio',
+        stage:app.scanning?'scanning':'review',exported_at:new Date().toISOString(),
+        note:'لا يُعد الرابط صالحًا للتشغيل أو إعادة النشر حتى يجتاز الفحص ويُراجع الترخيص.',
+        players:rows},null,2);
+      type='application/json;charset=utf-8';extension='json';
+    }
+    const blob=new Blob([output],{type}),url=URL.createObjectURL(blob),link=document.createElement('a');
+    link.href=url;link.download='al-ezz-studio-players-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.'+extension;
+    document.body.append(link);link.click();link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    toast('تم تصدير '+rows.length+' رابطًا متاحًا حتى اللحظة.','success');
+  }
+  async function copyStudioPlayerLinks(){
+    const urls=[...new Set(studioPlayerRows().map(x=>x.url))];
+    if(!urls.length)return toast('لا توجد روابط متاحة للنسخ بعد.','info');
+    try{await navigator.clipboard.writeText(urls.join('\n'));toast('تم نسخ '+urls.length+' رابطًا.','success');}
+    catch(_){toast('تعذّر النسخ؛ استخدم تصدير JSON أو CSV.','error');}
+  }
+  function updateStudioLiveCards(){
+    const rows=studioPlayerRows(),container=$('liveMediaLinks');
+    const direct=rows.filter(x=>x.kind==='direct'),verified=direct.filter(x=>x.verified);
+    $('studioLiveCounts').textContent=direct.length+' فيديو مرشح · '+verified.length+' مجتاز · '+(rows.length-direct.length)+' صفحة/مشغل';
+    for(const id of ['studioExportPlayersCsv','studioExportPlayersJson','studioCopyPlayers'])$(id).disabled=!rows.length;
+    container.replaceChildren();
+    for(const row of [...rows].sort((a,b)=>Number(b.verified)-Number(a.verified)).slice(0,18)){
+      const panel=make('div','studio-fast-card');
+      panel.append(make('strong','',row.episode),
+        make('small','',row.kind==='direct'?(row.verified?'✓ اجتاز الفحص المبدئي':'◷ يحتاج اختبار التشغيل'):'◷ صفحة مشغّل مضمّنة'));
+      try{const uri=new URL(row.url);panel.append(make('small','',uri.hostname+uri.pathname.slice(0,62)));}
+      catch(_){panel.append(make('small','',row.url.slice(0,75)));}
+      const copy=make('button','','نسخ الرابط');copy.type='button';
+      copy.onclick=()=>navigator.clipboard.writeText(row.url).then(()=>toast('تم النسخ','success')).catch(()=>toast('تعذّر النسخ','error'));
+      panel.append(copy);container.append(panel);
+    }
+  }
+  function updateDiscoveryDelta(delta){
+    if(!delta||!app.catalogue)return;
+    const keys=['media_url','sources','source_pages','verified','error'];
+    if(app.catalogue.kind==='series'){
+      const entry=app.catalogue.episodes.find(ep=>ep.season===delta.season&&ep.number===delta.number);
+      if(!entry)return;
+      for(const key of keys)if(Object.hasOwn(delta,key))entry[key]=delta[key];
+      if(entry.season===app.season)renderEpisodes();
+    }else{
+      for(const key of keys)if(Object.hasOwn(delta,key))app.catalogue[key]=delta[key];
+      rowField('movieMediaUrl',app.catalogue.media_url);
+      $('movieMediaStatus').textContent=mediaBadge(app.catalogue)[0];
+      $('movieSources').replaceChildren(mediaSources(app.catalogue));
+    }
+    redrawStats();
+  }
+  function connectDiscoveryStream(id){
+    if(!id||discoveryStream||discoveryStreamFallbackId===id||typeof EventSource==='undefined')return false;
+    let received=false;
+    const stream=new EventSource('/api/discovery-scan/events?scan_id='+encodeURIComponent(id));
+    discoveryStream=stream;
+    stream.addEventListener('snapshot',event=>{
+      if(discoveryId!==id)return;
+      received=true;
+      try{
+        const update=JSON.parse(event.data);
+        if(update.delta)updateDiscoveryDelta(update.delta);
+        if(update.scan)showDiscoveryProgress(update.scan);
+      }catch(error){console.warn('Studio live snapshot parse failed',error);}
+    });
+    stream.onerror=()=>{
+      if(discoveryId!==id)return;
+      discoveryStreamFallbackId=id;
+      closeDiscoveryStream();
+      clearTimeout(discoveryTimer);
+      discoveryTimer=setTimeout(()=>pollDiscovery(id),1000);
+    };
+    discoveryEventTimer=setTimeout(()=>{
+      if(discoveryId===id&&!received){
+        discoveryStreamFallbackId=id;closeDiscoveryStream();
+        discoveryTimer=setTimeout(()=>pollDiscovery(id),1000);
+      }
+    },4500);
+    return true;
+  }
+
   function updateDiscoveryMedia(payload){
     if(!payload?.catalogue || payload.catalogue.url!==app.catalogue?.url)return;
     const fresh=payload.catalogue;
@@ -326,7 +448,9 @@
   }
   function showDiscoveryProgress(scan){
     clearTimeout(discoveryTimer);
-    if(discoveryId!==scan?.id)discoveryDone=-1;
+    if(discoveryId!==scan?.id){
+      discoveryDone=-1;closeDiscoveryStream();discoveryStreamFallbackId=null;
+    }
     discoveryId=scan?.id;
     app.scanning=!!scan?.running;
     $('workspace').inert=false;
@@ -342,26 +466,21 @@
     if(!scan)return;
     const bar=$('discoveryProgressBar');
     bar.max=Math.max(1,scan.total);bar.value=scan.done;
-    $('discoveryProgressLabel').textContent=scan.running?'فحص متوازٍ وتلقائي للمصادر':'اكتمل فحص المصادر المتاحة';
+    $('discoveryProgressLabel').textContent=scan.running?'⚡ فحص مباشر: تظهر المشغلات فور اكتشافها':'اكتمل فحص المصادر المتاحة';
     $('discoveryProgressCount').textContent=scan.done+' / '+scan.total+' مفحوصة · '+scan.verified+' فيديو متحقق · '+(scan.sources_found||0)+' مصدر محتمل';
     $('discoveryReview').hidden=false;
-    const list=$('liveMediaLinks');
-    if(list && app.catalogue){
-      const entries=app.catalogue.kind==='series'?app.catalogue.episodes:[app.catalogue];
-      const found=entries.flatMap((item,index)=>(item.sources||[])
-        .filter(src=>src.kind==='direct'&&src.verified&&src.url)
-        .map(src=>({title:(item.title||app.catalogue.title||'العمل')+' · '+(index+1),url:src.url}))).slice(0,5);
-      list.replaceChildren();
-      if(found.length){
-        list.append(make('strong','','روابط فيديو مباشرة اجتازت فحص المصدر'));
-        found.forEach(item=>{
-          const link=make('a','live-source-link',item.title);
-          link.href=item.url;link.target='_blank';link.rel='noopener noreferrer';
-          list.append(link);
-        });
-      }
+    const pill=$('studioLivePill');
+    pill.classList.toggle('is-done',!scan.running);
+    pill.classList.toggle('is-off',!scan.running && !scan.done);
+    pill.textContent=scan.running?'● LIVE · فحص متوازٍ':'✓ نتائج الفحص متاحة';
+    updateStudioLiveCards();
+    if(scan.running){
+      if(!connectDiscoveryStream(scan.id)&&!discoveryStream)
+        discoveryTimer=setTimeout(()=>pollDiscovery(scan.id),1150);
+    }else{
+      closeDiscoveryStream();
+      if(scan.error)activity(scan.error,'error');
     }
-    if(scan.running) discoveryTimer=setTimeout(()=>pollDiscovery(scan.id),900);
   }
   async function pollDiscovery(id){
     try {
@@ -387,8 +506,9 @@
   }
   async function discoverWork(url, kind){
     activity('جارٍ اكتشاف البيانات والمواسم وصفحات الحلقات…','loading');
+    const fast=$('studioFastMode').checked;
     const result=await API('discover',{url,kind,scan_media:true,auto_track:$('autoTrack').checked,
-      deep:$('deepScan').checked,metadata:$('autoMetadata').checked});
+      deep:$('deepScan').checked,metadata:$('autoMetadata').checked,fast});
     app.selected.clear();app.season=1;$('episodeSearch').value='';
     discoveryDone=-1;
     updateStatus(result);
@@ -520,6 +640,9 @@
     $('discoveryForm').onsubmit=event=>{event.preventDefault();startDiscover(false);};
     $('discoveryReview').onclick=()=>location.hash='library';$('demoBtn').onclick=()=>startDiscover(true);
     $('discoverBatchBtn').onclick=importBatch;$('scanListingBtn').onclick=scanListing;$('saveBatchBtn').onclick=saveBatch;
+    $('studioExportPlayersCsv').onclick=()=>exportStudioPlayers('csv');
+    $('studioExportPlayersJson').onclick=()=>exportStudioPlayers('json');
+    $('studioCopyPlayers').onclick=copyStudioPlayerLinks;
     $('exportBatchBtn').onclick=()=>{window.location.href='/api/export-batch';};
     $('exportBtn').onclick=()=>{if(!app.catalogue)return;window.location.href='/api/export';};
     $('toastCenterBtn').onclick=()=>toast('يمكنك الاطلاع على حالة الاستيراد في الشريط أسفل قسم الاكتشاف.');
