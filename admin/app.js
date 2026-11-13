@@ -104,7 +104,7 @@ function optionList(key){
  if(key==="topic")return [["letters","الحروف"],["numbers","الأرقام"],["animals","الحيوانات"],["colors","الألوان والأشكال"],["stories","القصص"],["songs","أناشيد وحركة"],["science","العلوم"]];
  if(key==="age_rating")return [["all","مناسب للجميع"],["7+","7+"],["13+","13+"]];
  if(key==="category_id")return [["","اختر تصنيفًا"],...cats.map(x=>[x.id,x.name_ar])];
- if(key==="source_id")return [["","— اختر مصدر الحقوق —"],...sources.map(x=>[x.id,x.title+(x.verified?" ✓ موثق":" · بانتظار التوثيق")])];
+ if(key==="source_id")return [["","— اختر مصدر المحتوى —"],...sources.map(x=>[x.id,x.title+(x.verified?" ✓ تم فحص المصدر":" · غير مفحوص")])];
  if(key==="series_id")return [["","اختر مسلسلًا"],...shows.map(x=>[x.id,x.title_ar])];
  if(key==="season_id")return [["","اختر موسمًا"],...seasons.map(x=>[x.id,"الموسم "+x.number+" — "+(shows.find(s=>s.id===x.series_id)?.title_ar||"")])];
  return null;
