@@ -238,40 +238,44 @@ async def series_review_page():
 
 
 def _connect_portal_admin_studio(request: Request, state: UserState) -> bool:
-    """Bridge an already-authorized portal administrator to server-only Supabase.
+    """Rebind an authorized portal session to the Studio after redeploy.
 
-    The portal middleware guards all /api routes. We independently validate
-    the opaque admin session and active admin status before creating this client.
-    We do not persist user passwords or expose service keys in HTTP responses.
+    Only a server-validated administrator may use the server-side Supabase
+    secret. Never trust browser claims or expose the key in API responses.
     """
-    with state.lock:
-        if state.db is not None:
-            return True
     token=request.cookies.get("alezz_member","")
     if not token:
         return False
     found=portal.admin_sessions.get(token)
     if not found:
         return False
-    session, _renewed, _check_role = found
-    if session[1]!="admin" or session[2] <= time.monotonic():
+    session, _renewed, _check_role=found
+    if session[1]!="admin" or session[2]<=time.monotonic():
         return False
     uid=session[0]
+    with state.lock:
+        existing=state.db
+        if existing is not None and getattr(existing,"trusted_admin_uid","")==uid:
+            return True
     if not portal.admin_active(uid):
         return False
     secret=(os.getenv("ALEZZ_SUPABASE_SECRET_KEY") or
             os.getenv("ALEZZ_SUPABASE_SERVICE_ROLE_KEY") or "")
     if not secret:
-        return False
+        # Keep the manual admin login as fallback if the service secret is
+        # unconfigured. Never silently overwrite a working user JWT with None.
+        return existing is not None
     db=Supabase(os.getenv("ALEZZ_SUPABASE_URL",DEFAULT_DB_URL),secret,
                 trusted_admin_uid=uid)
     with state.lock:
-        if state.db is None:
-            state.db=db
-        else:
+        if state.db is not None and getattr(state.db,"trusted_admin_uid","")==uid:
             db.session.close()
+        else:
+            # Replace stale short-lived JWT sessions with the portal-verified,
+            # server-only client. Leave the old client open for any save already
+            # running; the object is discarded after that request completes.
+            state.db=db
     return True
-
 
 @app.get('/api/init')
 async def init(request: Request):
