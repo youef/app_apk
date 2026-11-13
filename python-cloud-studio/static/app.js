@@ -600,29 +600,69 @@
     }
     redrawStats();
   }
+  function applyStudioCatalogueSnapshot(snapshot){
+    if(!snapshot||!app.catalogue||snapshot.url!==app.catalogue.url)return;
+    if(snapshot.kind==='series'){
+      const existing=new Map(app.catalogue.episodes.map(ep=>[ep.season+':'+ep.number,ep]));
+      for(const row of snapshot.episodes||[]){
+        const key=row.season+':'+row.number;
+        const previous=existing.get(key);
+        if(previous)Object.assign(previous,row);
+        else app.catalogue.episodes.push(row);
+      }
+      renderSeasons();
+    }else{
+      const fields=['media_url','sources','source_pages','verified','error'];
+      for(const key of fields)app.catalogue[key]=snapshot[key];
+      rowField('movieMediaUrl',snapshot.media_url);
+      $('movieSources').replaceChildren(mediaSources(app.catalogue));
+    }
+    redrawStats();updateStudioLiveCards();
+  }
+  function applyStudioStreamPacket(packet){
+    if(!packet||!app.catalogue)return;
+    const seq=Number(packet.seq||0);
+    if(seq && seq<=discoveryLastSeq)return;
+    if(packet.kind==='resync' && packet.catalogue){
+      applyStudioCatalogueSnapshot(packet.catalogue);
+    }else if(packet.kind==='episodes_added'){
+      const added=packet.delta?.episodes||[];
+      const known=new Set(app.catalogue.kind==='series'?
+        app.catalogue.episodes.map(ep=>ep.season+':'+ep.number):[]);
+      let changed=false;
+      for(const ep of added){
+        if(!ep||!Number(ep.number)||!Number(ep.season))continue;
+        const key=ep.season+':'+ep.number;
+        if(known.has(key))continue;
+        known.add(key);app.catalogue.episodes.push(ep);changed=true;
+      }
+      if(changed){renderSeasons();redrawStats();updateStudioLiveCards();}
+    }else if(packet.kind==='episode'&&packet.delta){
+      updateDiscoveryDelta(packet.delta);
+    }
+    if(packet.tracking && !packet.tracking.queued &&
+       packet.tracking.message && lastTrackingMessage!==packet.tracking.message){
+      lastTrackingMessage=packet.tracking.message;
+      toast(packet.tracking.message,packet.tracking.saved?'success':'error');
+    }
+    if(seq)discoveryLastSeq=Math.max(discoveryLastSeq,seq);
+    if(packet.scan)showDiscoveryProgress(packet.scan);
+  }
   function connectDiscoveryStream(id){
     if(!id||discoveryStream||discoveryStreamFallbackId===id||typeof EventSource==='undefined')return false;
     let received=false;
-    const stream=new EventSource('/api/discovery-scan/events?scan_id='+encodeURIComponent(id));
+    const address='/api/discovery-scan/events?scan_id='+encodeURIComponent(id)+'&after='+discoveryLastSeq;
+    const stream=new EventSource(address);
     discoveryStream=stream;
     stream.addEventListener('snapshot',event=>{
       if(discoveryId!==id)return;
       received=true;
-      try{
-        const update=JSON.parse(event.data);
-        if(update.delta)updateDiscoveryDelta(update.delta);
-        if(update.tracking && !update.tracking.queued &&
-           update.tracking.message && lastTrackingMessage!==update.tracking.message){
-          lastTrackingMessage=update.tracking.message;
-          toast(update.tracking.message,update.tracking.saved?'success':'error');
-        }
-        if(update.scan)showDiscoveryProgress(update.scan);
-      }catch(error){console.warn('Studio live snapshot parse failed',error);}
+      try{applyStudioStreamPacket(JSON.parse(event.data))}
+      catch(error){console.warn('Studio live update failed',error);}
     });
     stream.onerror=()=>{
       if(discoveryId!==id)return;
-      discoveryStreamFallbackId=id;
-      closeDiscoveryStream();
+      discoveryStreamFallbackId=id;closeDiscoveryStream();
       clearTimeout(discoveryTimer);
       discoveryTimer=setTimeout(()=>pollDiscovery(id),1000);
     };
@@ -657,9 +697,11 @@
   function showDiscoveryProgress(scan){
     clearTimeout(discoveryTimer);
     if(discoveryId!==scan?.id){
-      discoveryDone=-1;closeDiscoveryStream();discoveryStreamFallbackId=null;
+      discoveryDone=-1;discoveryLastSeq=0;closeDiscoveryStream();
+      discoveryStreamFallbackId=null;
     }
     discoveryId=scan?.id;
+    if(scan?.id)try{sessionStorage.setItem('alezz:main-scan',scan.id)}catch{}
     app.scanning=!!scan?.running;
     $('workspace').inert=false;
     // Metadata can be reviewed while media is checked. Avoid racing link edits
@@ -681,6 +723,18 @@
     pill.classList.toggle('is-done',!scan.running);
     pill.classList.toggle('is-off',!scan.running && !scan.done);
     pill.textContent=scan.running?'● LIVE · فحص متوازٍ':'✓ نتائج الفحص متاحة';
+    $('studioStopScan').hidden=!scan.running;
+    $('studioResumeScan').hidden=!studioRecoverableId;
+    const cat=app.catalogue;
+    $('studioRetryFailed').hidden=scan.running||!cat||
+      !(cat.kind==='series'?cat.episodes.some(ep=>!ep.verified):!cat.verified);
+    $('studioCheckpointStatus').textContent=scan.checkpoint_saved===true?
+      '✓ نتائج محفوظة في Supabase':scan.checkpoint_saved===false?
+      'تعذّر حفظ آخر نقطة؛ الفحص مستمر':
+      '◷ جاري حفظ تقدم الفحص';
+    $('studioCheckpointStatus').classList.toggle('is-saved',scan.checkpoint_saved===true);
+    $('studioCheckpointStatus').classList.toggle('is-error',scan.checkpoint_saved===false);
+    studioScanStarted=Number(scan.started_at||0)*1000 || studioScanStarted || Date.now();
     updateStudioLiveCards();
     if(scan.running){
       if(!connectDiscoveryStream(scan.id)&&!discoveryStream)
@@ -702,9 +756,10 @@
         activity('تمت استعادة جلسة الإدارة؛ أُعيد تشغيل الخادم أثناء الفحص. يمكنك إعادة الاكتشاف دون تسجيل دخول.','info');
         return;
       }
-      if(result.summary && (result.scan.done!==discoveryDone || !result.scan.running)){
+      if(result.summary && (result.scan.revision!==discoveryDone || !result.scan.running)){
         updateDiscoveryMedia(result.summary);
-        discoveryDone=result.scan.done;
+        discoveryDone=result.scan.revision;
+        discoveryLastSeq=Math.max(discoveryLastSeq,Number(result.scan.seq||0));
       }
       showDiscoveryProgress(result.scan);
       if(result.summary && !result.scan.running){
@@ -725,7 +780,7 @@
     const result=await API('discover',{url,kind,scan_media:true,auto_track:$('autoTrack').checked,
       deep:$('deepScan').checked,metadata:$('autoMetadata').checked,fast});
     app.selected.clear();app.season=1;$('episodeSearch').value='';
-    discoveryDone=-1;lastTrackingMessage='';
+    discoveryDone=-1;discoveryLastSeq=0;lastTrackingMessage='';studioRecoverableId=null;
     updateStatus(result);
     showDiscoveryProgress(result.scan);
     activity(result.scan?.running?'بدأ فحص المشغلات. يمكنك متابعة التقدم هنا.':'تم تحميل بيانات العمل، ولم تظهر حلقات قابلة للفحص.','info');
