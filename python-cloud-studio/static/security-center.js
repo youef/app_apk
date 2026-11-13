@@ -6,6 +6,15 @@ function toast(t,bad=false){const e=$("toast");e.textContent=t;e.hidden=false;e.
 async function api(path,body){const method=body===undefined?"GET":"POST",r=await fetch(path,{method,credentials:"same-origin",headers:method==="GET"?{"accept":"application/json"}:{"content-type":"application/json","x-csrf-token":csrf},body:body===undefined?undefined:JSON.stringify(body),cache:"no-store"});if(!(r.headers.get("content-type")||"").includes("json"))throw Error("انتهت جلسة الدخول؛ سجّل دخول المسؤول.");const d=await r.json();if(!r.ok)throw Error(d.detail||"تعذّر تنفيذ العملية");return d}
 async function action(fn){try{await fn()}catch(e){toast(e.message||"حدث خطأ",true)}}
 async function refresh(){sites=(await api("/api/security/sites")).sites;drawSites();}
+async function refreshProxyStatus(){
+  const status=await api("/api/security/proxies");
+  $("proxyStatus").textContent=status.enabled?
+    "✓ مهيّأ "+status.configured+" بروكسي • النطاقات المعتمدة: "+status.approved_host_count+
+    " • لا نغيّر مسار الاتصال بعد حظر الموقع":
+    "غير مفعّل حاليًا • البروكسيات المهيأة: "+status.configured+
+    " • النطاقات المعتمدة: "+status.approved_host_count+
+    " • الإعداد يتطلب متغيري ALEZZ_SECURITY_PROXY_URLS وALEZZ_SECURITY_PROXY_ALLOWED_HOSTS.";
+}
 function drawSites(){const root=$("sites");root.replaceChildren();$("totalSites").textContent=sites.length;$("verifiedSites").textContent=sites.length;$("scannedSites").textContent=sites.filter(s=>s.latest).length;const pick=$("importSite");const current=pick.value;pick.replaceChildren(n("option",null,"اختر موقعًا"));pick.firstChild.value="";sites.forEach(s=>{const o=n("option",null,s.host);o.value=s.id;pick.append(o)});if(sites.some(s=>s.id===current))pick.value=current;
 if(!sites.length){root.append(n("div","empty","لم تضف أي موقع بعد."));return}
 sites.forEach(s=>{const card=n("article","site-card"),head=n("div","site-top");head.append(n("strong",null,s.host),n("span","pill good","✓ جاهز للفحص"));card.append(head);
@@ -20,6 +29,14 @@ controls.append(b("حذف",()=>action(async()=>{if(!confirm("حذف الموقع
 card.append(controls);root.append(card)})}
 const levels={critical:"حرجة",high:"عالية",medium:"متوسطة",low:"منخفضة",info:"معلومة"};
 async function showReport(id){const r=await api("/api/security/report/"+encodeURIComponent(id));report=r.report;active=id;$("reportSection").hidden=false;$("reportMeta").textContent=report.host+" • "+r.created_at;
+const proxied=report.proxy||null;
+$("proxyReport").textContent=proxied?
+  "الاتصال: "+(proxied.mode==="proxy"?"بروكسي معتمد":"اتصال مباشر")+
+  (proxied.selected?" ("+proxied.selected+")":"")+
+  " • عدد البروكسيات المهيأة: "+(proxied.configured||0)+
+  " • محاولات البروكسي: "+(proxied.attempts||0)+
+  " • تعذرات الشبكة: "+(proxied.network_failures||0)+
+  " • لا يُعاد الفحص عبر بروكسي بديل عند حظر الموقع.":"";
 const access=$("accessWarning");
 access.hidden=!report.access_status||report.access_status==="reachable";
 if(!access.hidden){
@@ -138,6 +155,7 @@ function drawCatalog(){const root=$("coverage");root.replaceChildren();catalog.f
 integrations.forEach(([name,description])=>{const item=n("div","tool-card");item.append(n("b",null,name),n("p",null,description));$("toolCards").append(item)});drawCatalog();
 $("addForm").onsubmit=e=>{e.preventDefault();action(async()=>{$("addButton").disabled=true;try{let data=await api("/api/security/sites",{url:$("siteUrl").value.trim()});toast("أُضيف "+data.host+"، بدأ الفحص الآمن مباشرة");$("siteUrl").value="";await api("/api/security/scan",{site_id:data.id});await refresh()}finally{$("addButton").disabled=false}})};
 $("refreshButton").onclick=()=>action(refresh);
+$("proxyRefresh").onclick=()=>action(refreshProxyStatus);
 $("importForm").onsubmit=e=>{e.preventDefault();action(async()=>{
   const file=$("importFile").files[0],site_id=$("importSite").value,tool=$("importTool").value;
   if(!site_id)throw Error("اختر موقعًا من قائمتك");
@@ -150,6 +168,6 @@ $("importForm").onsubmit=e=>{e.preventDefault();action(async()=>{
 })};
 
 $("exportButton").onclick=()=>{if(!report)return;const url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:"application/json"}));const a=n("a");a.href=url;a.download="alezz-security-"+report.host+"-"+new Date().toISOString().slice(0,10)+".json";a.click();setTimeout(()=>URL.revokeObjectURL(url),2000)};
-action(async()=>{csrf=(await api("/api/security/session")).csrf;await refresh()});
+action(async()=>{csrf=(await api("/api/security/session")).csrf;await refresh();await refreshProxyStatus()});
 setInterval(()=>{if(sites.some(s=>s.job?.state==="running"))action(refresh)},9000);
 })();
