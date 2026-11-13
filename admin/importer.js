@@ -10,8 +10,7 @@
   backdrop_url:"impBackdrop",release_year:"impYear",duration_minutes:"impDuration",category_id:"impCategory",
   source_id:"impSource",age_rating:"impAge",quality:"impQuality",language_code:"impLanguage",
   country_code:"impCountry",display_order:"impOrder",is_kids:"impKids",featured:"impFeatured",
-  stream_url:"impStream",youtube_url:"impYouTube",stream_variants:"impVariants",source_page_url:"impSourcePage",
-  rights_status:"impRights",rights_holder:"impHolder",license_reference:"impLicense",rights_expires_at:"impExpires"
+  stream_url:"impStream",youtube_url:"impYouTube",stream_variants:"impVariants",source_page_url:"impSourcePage"
  };
  const vals=()=>Object.fromEntries(Object.entries(F).map(([key,id])=>[key,$(id).type==="checkbox"?$(id).checked:$(id).value.trim()]));
  const msg=(text,isError=false)=>{const el=$("impMessage");el.textContent=text;el.classList.toggle("error",isError)};
@@ -44,14 +43,13 @@
   p.title_ar=p.title_ar.slice(0,250);
   p.country_code=p.country_code?p.country_code.toUpperCase():null;
   p.language_code=p.language_code?p.language_code.toLowerCase():"ar";
-  for(const k of ["source_id","category_id","poster_url","backdrop_url","stream_url","youtube_url","source_page_url","rights_holder","license_reference","title_original","description"])p[k]=p[k]||null;
+  for(const k of ["source_id","category_id","poster_url","backdrop_url","stream_url","youtube_url","source_page_url","title_original","description"])p[k]=p[k]||null;
   for(const k of ["release_year","duration_minutes"])p[k]=p[k]?Number(p[k]):null;
   p.display_order=p.display_order?Number(p.display_order):0;
   try{p.stream_variants=JSON.parse(p.stream_variants||"[]");}catch{throw Error("الجودات الإضافية JSON غير صالح");}
   if(!Array.isArray(p.stream_variants))throw Error("الجودات الإضافية يجب أن تكون مصفوفة");
   p.age_rating=p.age_rating||"all";p.quality=p.quality||"SD";
   if(p.youtube_url)p.youtube_url="https://www.youtube.com/watch?v="+youtubeId(p.youtube_url);
-  p.rights_expires_at=p.rights_expires_at?new Date(p.rights_expires_at+"T23:59:59").toISOString():null;
   const errors=errorsFor(p);if(errors.length)throw Error(errors.join("، "));
   return p;
  }
@@ -60,7 +58,7 @@
      let value=row?.[key];
      if(key==="stream_variants")value=JSON.stringify(value||[],null,2);
      if(key==="rights_expires_at"&&value)value=String(value).slice(0,10);
-     if(value===undefined||value===null)value=key==="language_code"?"ar":key==="age_rating"?"all":key==="quality"?"SD":key==="rights_status"?"pending":key==="display_order"?0:"";
+     if(value===undefined||value===null)value=key==="language_code"?"ar":key==="age_rating"?"all":key==="quality"?"SD":key==="display_order"?0:"";
      val(key,value);
    }
    currentId=row?.id||null;
@@ -273,7 +271,7 @@
     const div=document.createElement("div");div.className="imp-saved-row";
     const head=document.createElement("div");head.className="imp-saved-title";
     const title=document.createElement("strong");title.textContent=row.title_ar;
-    const sub=document.createElement("small");sub.textContent=(row.status==="published"?"منشور":row.status==="hidden"?"مخفي":"مسودة")+" • "+(row.rights_status==="approved"?"حقوق معتمدة":"مراجعة الحقوق");
+    const sub=document.createElement("small");sub.textContent=(row.status==="published"?"منشور":"مسودة");
     head.append(title,sub);div.append(head);
     const edit=document.createElement("button");edit.type="button";edit.textContent="تعديل";edit.onclick=()=>loadSaved(row.id);
     div.append(edit);box.append(div);
@@ -330,14 +328,7 @@
    if(!jwt)return msg("يجب تسجيل دخول مسؤول معتمد",true);
    if(busy)return;
    let p;try{p=payload();}catch(e){return msg(e.message,true);}
-   if(mode==="published"){
-      if(p.rights_status!=="approved"||!p.license_reference||!p.rights_holder)return msg("لنشر الفيلم: اعتمد الحقوق، وأدخل صاحب الحقوق ووثيقة الترخيص.",true);
-      if(!$("impRightsConfirmed").checked)return msg("أكّد أن لديك حق عرض الفيلم قبل نشره.",true);
-      if(!p.stream_url&&!p.youtube_url)return msg("يلزم رابط MP4/HLS أو يوتيوب رسمي قبل النشر.",true);
-      if(p.rights_expires_at&&new Date(p.rights_expires_at)<=new Date())return msg("لا يمكن نشر فيلم انتهت رخصته. يمكن حفظه كمسودة أو إخفاؤه.",true);
-      if(!playbackOK&&!$("impPlaybackConfirmed").checked)return msg("اختبر التشغيل أو أكّد الاختبار اليدوي قبل النشر.",true);
-      if(!window.confirm("هل تؤكد نشر هذا الفيلم للجمهور بعد التحقق من الترخيص والتشغيل؟"))return;
-   }
+   if(mode==="published" && !window.confirm("هل تريد نشر هذا الفيلم للجمهور؟"))return;
    p.status=mode;p.imported_at=new Date().toISOString();
    busy=true;$("impDraft").disabled=true;$("impPublish").disabled=true;
    try{
@@ -392,7 +383,7 @@
      apply({title_ar:"زهرة — نموذج فيديو تجريبي",title_original:"Flower (CC0 Sample)",
        description:"فيديو قصير للتجربة والمعاينة قبل النشر. لا تتم إضافته إلى القاعدة تلقائيًا.",
        stream_url:"https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
-       language_code:"und",quality:"HD",rights_status:"pending",
+       language_code:"und",quality:"HD",
        featured:false,is_kids:false,stream_variants:[],display_order:0
      });
      msg("نموذج تجريبي جاهز. اضغط اختبار التشغيل، ثم راجع المعاينة. لن ينشر أي شيء تلقائيًا.");
@@ -402,11 +393,11 @@
    };
    $("impTest").onclick=testPlayback;$("impRefreshPreview").onclick=updatePreview;
    $("impDraft").onclick=()=>save("draft");$("impPublish").onclick=()=>save("published");
-   $("impHide").onclick=()=>{if(!currentId)return msg("احفظ الفيلم أولًا ثم يمكنك إخفاؤه.",true);save("hidden")};
+   $("impHide").onclick=()=>save("draft");
    $("impCopy").onclick=copy;$("impReload").onclick=()=>listSaved().catch(e=>msg(e.message,true));
    $("impSearch").oninput=renderSaved;
    $("impReset").onclick=reset;
-   $("impDuplicate").onclick=()=>{currentId=null;val("source_page_url","");val("rights_status","pending");$("impRightsConfirmed").checked=false;$("impEditing").textContent="نسخة جديدة غير محفوظة";msg("نسخة جديدة جاهزة. اختر رابط مصدر مختلفًا لتجنب التكرار.");updatePreview();};
+   $("impDuplicate").onclick=()=>{currentId=null;val("source_page_url","");$("impEditing").textContent="نسخة جديدة غير محفوظة";msg("نسخة جديدة جاهزة. اختر رابط مصدر مختلفًا لتجنب التكرار.");updatePreview();};
    $("impOpenStream").onclick=()=>{const v=vals();const link=v.stream_url||v.youtube_url||v.source_page_url;if(!link||!urlOk(link))return msg("لا يوجد رابط HTTPS لفتحه",true);window.open(link,"_blank","noopener,noreferrer")};
    document.getElementById("logout")?.addEventListener("click",()=>{$("importStudio").hidden=true;clearPlayer();saved=[];found=[];currentId=null;});
    apply(null);
