@@ -410,7 +410,7 @@ def register(portal, template_path):
         name = payload.get("storage_provider")
         if name not in video_storage.VALID_IDS:
             raise HTTPException(422, "الملف لا يستخدم التخزين الخارجي")
-        provider = video_storage.providers()[name]
+        provider = video_storage.providers(portal)[name]
         if not provider.ready:
             raise HTTPException(503, "مركز التخزين غير متاح")
         parts_count = (payload["size"] + video_storage.PART_BYTES - 1) // video_storage.PART_BYTES
@@ -430,7 +430,7 @@ def register(portal, template_path):
         name = payload.get("storage_provider")
         if name not in video_storage.VALID_IDS:
             raise HTTPException(422, "الملف لا يستخدم التخزين الخارجي")
-        provider = video_storage.providers()[name]
+        provider = video_storage.providers(portal)[name]
         if not provider.ready:
             raise HTTPException(503, "مركز التخزين غير متاح")
         path = payload["path"]
@@ -484,7 +484,7 @@ def register(portal, template_path):
         name = payload.get("storage_provider")
         if name not in video_storage.VALID_IDS:
             raise HTTPException(422, "الملف لا يستخدم التخزين الخارجي")
-        provider = video_storage.providers()[name]
+        provider = video_storage.providers(portal)[name]
         try:
             video_storage.abort_multipart(provider, payload["path"], payload["upload_id"])
         except (ClientError, BotoCoreError) as exc:
