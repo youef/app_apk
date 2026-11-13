@@ -663,7 +663,9 @@
         known.add(key);app.catalogue.episodes.push(ep);changed=true;
       }
       if(changed){renderSeasons();redrawStats();updateStudioLiveCards();}
-    }else if(packet.kind==='episode'&&packet.delta){
+    }else if((packet.kind==='episode'||packet.kind==='episode_candidates')&&packet.delta){
+      // Show a candidate immediately, before the server finishes probing
+      // media bytes. The verified flag is only set by the completed check.
       updateDiscoveryDelta(packet.delta);
     }
     if(packet.tracking && !packet.tracking.queued &&
