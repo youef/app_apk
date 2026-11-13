@@ -52,6 +52,7 @@ jobs:
         run: |
           node --test web/tests/api-player-fallback.test.cjs
           node --test web/tests/private-live-studio.test.cjs
+          node --test web/tests/main-studio-fast.test.cjs
       - name: Run offline regression tests
         run: |
           python -m unittest discover -s python-cloud-studio/tests -p 'test_studio_v5_integrity.py' -v
