@@ -63,13 +63,13 @@
     /* playback */
     stream_url: { key: 'stream_url', label: 'رابط التشغيل (MP4 / HLS / Embed)', type: 'url', group: 'playback', hint: 'مصدر HTTPS مباشر أو مشغل Embed مسموح (مثل hanerix.com/e/…).' },
     youtube_url: { key: 'youtube_url', label: 'رابط يوتيوب الرسمي', type: 'url', group: 'playback' },
-    stream_variants: { key: 'stream_variants', label: 'مصادر إضافية وجودات', type: 'variants', group: 'playback', span: 2, hint: 'يمكن إضافة حتى 8 روابط MP4 أو HLS أو Embed معتمدة أو يوتيوب، ولكل مصدر اسم واضح. النشر يتطلب اعتماد الحقوق.' },
-    source_id: { key: 'source_id', label: 'مصدر الحقوق', type: 'select', group: 'playback', source: 'sources', emptyLabel: 'غير محدد' },
+    stream_variants: { key: 'stream_variants', label: 'مصادر إضافية وجودات', type: 'variants', group: 'playback', span: 2, hint: 'يمكن إضافة حتى 8 روابط MP4 أو HLS أو Embed مدعومة، مع تسمية كل مشغل.' },
+    source_id: { key: 'source_id', label: 'مصدر المحتوى', type: 'select', group: 'playback', source: 'sources', emptyLabel: 'غير محدد' },
     source_page_url: { key: 'source_page_url', label: 'صفحة المصدر الأصلية', type: 'url', group: 'playback' },
     official_url: { key: 'official_url', label: 'رابط المشاهدة الرسمي', type: 'url', group: 'playback' },
     playback_mode: { key: 'playback_mode', label: 'طريقة العرض', type: 'select', group: 'playback', options: 'playback', default: 'stream' },
 
-    /* publish + rights */
+    /* publication is independent of optional legacy rights metadata */
     status: { key: 'status', label: 'حالة النشر', type: 'select', group: 'basic', options: 'status', default: 'draft' },
     rights_status: { key: 'rights_status', label: 'حالة الحقوق', type: 'select', group: 'rights', options: 'rights', default: 'pending' },
     rights_holder: { key: 'rights_holder', label: 'صاحب الحقوق', type: 'text', group: 'rights', max: 250 },
@@ -114,12 +114,12 @@
     fallbackOrder: 'title_ar.asc',
     searchKeys: ['title_ar', 'title_original', 'description'],
     statusFilter: { field: 'status', options: [['', 'الكل'], ['published', 'منشور'], ['draft', 'مسودة']] },
-    publishGuard: true,
+    publishGuard: false,
     fields: [
       F.title_ar, F.title_original, F.description, F.release_year, F.category_id, F.genre_tags, F.duration_minutes,
       F.language_code, F.country_code, F.age_rating, F.quality, F.poster_url, F.backdrop_url,
       F.stream_url, F.youtube_url, F.stream_variants, F.source_id, F.source_page_url,
-      F.status, F.rights_status, F.rights_holder, F.license_reference, F.rights_expires_at,
+      F.status,
       F.is_kids, F.featured, F.display_order
     ],
     columns: [
@@ -141,11 +141,11 @@
     fallbackOrder: 'title_ar.asc',
     searchKeys: ['title_ar', 'title_original', 'description'],
     statusFilter: { field: 'status', options: [['', 'الكل'], ['published', 'منشور'], ['draft', 'مسودة']] },
-    publishGuard: true,
+    publishGuard: false,
     fields: [
       F.title_ar, F.title_original, F.description, F.release_year, F.category_id, F.genre_tags,
       F.language_code, F.country_code, F.age_rating, F.quality, F.poster_url, F.backdrop_url,
-      F.status, F.rights_status, F.rights_holder, F.license_reference, F.rights_expires_at,
+      F.status,
       F.is_kids, F.featured, F.display_order
     ],
     columns: [
@@ -186,10 +186,10 @@
     fallbackOrder: 'id.asc',
     searchKeys: ['title_ar', 'description'],
     statusFilter: { field: 'status', options: [['', 'الكل'], ['published', 'منشور'], ['draft', 'مسودة']] },
-    publishGuard: true,
+    publishGuard: false,
     fields: [
       F.season_id, F.number, F.title_ar, F.description, F.poster_url, F.duration_minutes,
-      F.stream_url, F.youtube_url, F.stream_variants, F.status, F.rights_status, F.license_reference
+      F.stream_url, F.youtube_url, F.stream_variants, F.status
     ],
     columns: [
       { key: 'number', kind: 'number', label: '#', prefix: '' },
@@ -208,18 +208,18 @@
     order: 'display_order.asc',
     fallbackOrder: 'title_ar.asc',
     searchKeys: ['title_ar', 'description'],
-    statusFilter: null,
+    statusFilter: { field: 'status', options: [['', 'الكل'], ['published', 'منشور'], ['draft', 'مسودة']] },
     publishGuard: false,
     fields: [
-      Object.assign({}, F.title_ar, { required: true }),
-      Object.assign({}, F.poster_url, { required: true }),
-      Object.assign({}, F.stream_url, { required: true }),
-      Object.assign({}, F.category_id, { required: true })
+      Object.assign({}, F.title_ar, { required: true }), F.description, F.poster_url, F.stream_url,
+      F.youtube_url, F.official_url, F.playback_mode, F.category_id,
+      F.language_code, F.country_code, F.is_kids, F.status
     ],
     columns: [
       { key: 'poster_url', kind: 'poster', label: '' },
       { key: 'title_ar', kind: 'title', sub: 'description', label: 'القناة' },
       { key: 'category_id', kind: 'lookup', source: 'categories', label: 'التصنيف' },
+      { key: 'status', kind: 'status', label: 'النشر' },
       { key: 'link_health_status', kind: 'map', map: { healthy: 'شغّال', suspect: 'يحتاج فحص', broken: 'معطوب', unchecked: 'غير مفحوص' }, label: 'فحص الرابط' }
     ]
   };
@@ -303,17 +303,16 @@
 
   var SOURCES = {
     table: 'aseel_content_sources',
-    label: 'مصادر الحقوق',
+    label: 'مصادر المحتوى',
     singular: 'مصدر',
     order: 'title.asc',
     fallbackOrder: 'id.asc',
-    searchKeys: ['title', 'license_reference', 'rights_contact'],
+    searchKeys: ['title','source_url'],
     statusFilter: { field: 'verified', options: [['', 'الكل'], ['yes', 'موثّق'], ['no', 'قيد المراجعة']] },
-    fields: [F.title, F.source_url, F.rights_contact, F.license_reference, F.verified],
+    fields: [F.title, F.source_url, F.verified],
     columns: [
       { key: 'title', kind: 'title', label: 'المصدر' },
       { key: 'source_url', kind: 'link', label: 'الرابط' },
-      { key: 'license_reference', label: 'مرجع الترخيص' },
       { key: 'verified', kind: 'flag', trueLabel: 'موثّق', falseLabel: 'قيد المراجعة', label: 'التحقق' }
     ]
   };
@@ -321,14 +320,14 @@
   /* ---------- sections (sidebar order) ---------- */
   var SECTIONS = [
     { id: 'dashboard', label: 'لوحة التحكم', title: 'لوحة التحكم', subtitle: 'نظرة عامة على مكتبة العز TV', icon: 'dashboard', tables: [] },
-    { id: 'movies', label: 'الأفلام', title: 'مكتبة الأفلام', subtitle: 'إدارة الأفلام والجودات وحقوق العرض', icon: 'film', tables: [MOVIES] },
+    { id: 'movies', label: 'الأفلام', title: 'مكتبة الأفلام', subtitle: 'إدارة الأفلام والجودات وحالة النشر', icon: 'film', tables: [MOVIES] },
     { id: 'series', label: 'المسلسلات', title: 'المسلسلات', subtitle: 'إدارة المسلسلات وبياناتها', icon: 'tv', tables: [SERIES] },
     { id: 'seasons', label: 'المواسم والحلقات', title: 'المواسم والحلقات', subtitle: 'تنظيم المواسم وإضافة الحلقات', icon: 'layers', tables: [SEASONS, EPISODES] },
     { id: 'channels', label: 'القنوات', title: 'القنوات', subtitle: 'القنوات المباشرة وطرق عرضها', icon: 'radio', tables: [CHANNELS] },
     { id: 'youtube', label: 'يوتيوب', title: 'فيديوهات يوتيوب', subtitle: 'مقاطع القناة الرسمية وترتيب ظهورها', icon: 'play', tables: [YOUTUBE] },
     { id: 'home', label: 'صفوف الرئيسية', title: 'صفوف الرئيسية', subtitle: 'بناء صفوف الصفحة الأولى من المحتوى', icon: 'layout', tables: [COLLECTIONS, COLLECTION_ITEMS] },
     { id: 'categories', label: 'التصنيفات', title: 'التصنيفات', subtitle: 'تصنيفات المكتبة وترتيب ظهورها', icon: 'tag', tables: [CATEGORIES] },
-    { id: 'rights', label: 'المصادر والحقوق', title: 'المصادر والحقوق', subtitle: 'سجل مصادر الحقوق والتراخيص', icon: 'shield', tables: [SOURCES] }
+    { id: 'sources', label: 'مصادر المحتوى', title: 'مصادر المحتوى', subtitle: 'إدارة روابط المصادر', icon: 'shield', tables: [SOURCES] }
   ];
 
   window.ALEZZ_ADMIN_CONFIG = {
@@ -343,7 +342,6 @@
       ['basic', 'المعلومات الأساسية'],
       ['media', 'الوسائط والصور'],
       ['playback', 'التشغيل والمصادر'],
-      ['rights', 'الحقوق والتراخيص'],
       ['meta', 'الإعدادات والترتيب']
     ],
     sections: SECTIONS
