@@ -7,8 +7,8 @@
   <meta name="robots" content="noindex, nofollow">
   <title>رفع فيديو MP4 | استديو العز TV</title>
   <link rel="icon" type="image/svg+xml" href="/static/studio-icon.svg">
-  <link rel="stylesheet" href="/static/video-upload.css?v=1">
-  <script defer src="/static/video-upload.js?v=1"></script>
+  <link rel="stylesheet" href="/static/video-upload.css?v=2">
+  <script defer src="/static/video-upload.js?v=2"></script>
 </head>
 <body>
   <div class="shell">
@@ -31,6 +31,31 @@
 
       <section class="panel upload-panel" aria-labelledby="upload-heading">
         <div class="panel-title"><div><h2 id="upload-heading">فيديو جديد</h2><p>ملف MP4 أصلي — لا يتم تحويل الصيغ الأخرى تلقائيًا.</p></div><span class="pill">رفع مجزأ 6 MB</span></div>
+        <div class="kind-title">نوع المحتوى</div>
+        <div class="kind-picker" role="radiogroup" aria-label="نوع المحتوى">
+          <label class="kind-option"><input name="media-kind" type="radio" value="movie" checked><span><b>🎬 فيلم</b><small>فيديو واحد مرتبط بالفيلم</small></span></label>
+          <label class="kind-option"><input name="media-kind" type="radio" value="episode"><span><b>📺 مسلسل</b><small>مواسم وحلقات مرتبطة بمسلسل</small></span></label>
+        </div>
+        <div id="series-panel" class="series-panel" hidden>
+          <label class="field" for="series-select"><span>المسلسل الذي تنتمي إليه الحلقة</span>
+            <select id="series-select"><option value="new">+ إنشاء مسلسل جديد</option></select>
+          </label>
+          <div id="new-series-panel" class="new-series-panel">
+            <div class="section-note">أنشئ المسلسل مرة واحدة، ثم ارفع كل حلقة إلى الموسم المناسب.</div>
+            <label class="field" for="series-title"><span>اسم المسلسل</span><input id="series-title" maxlength="180" placeholder="مثال: مسلسل الحياة"></label>
+            <label class="field" for="series-description"><span>وصف المسلسل (اختياري)</span><input id="series-description" maxlength="1500" placeholder="قصة المسلسل باختصار"></label>
+            <label class="field" for="series-poster"><span>رابط بوستر المسلسل (اختياري)</span><input id="series-poster" type="url" dir="ltr" placeholder="https://..."></label>
+            <button id="create-series" class="secondary" type="button">إنشاء مسلسل في الداتا</button>
+          </div>
+          <div id="episode-panel" hidden>
+            <div class="episode-coordinates">
+              <label class="field" for="season-number"><span>رقم الموسم</span><input id="season-number" type="number" inputmode="numeric" min="1" max="99" value="1"></label>
+              <label class="field" for="episode-number"><span>رقم الحلقة</span><input id="episode-number" type="number" inputmode="numeric" min="1" max="9999" value="1"></label>
+            </div>
+            <div id="series-episodes" class="episode-list" aria-live="polite"></div>
+          </div>
+        </div>
+        <div class="storage-notice" id="size-notice" role="status">ملفات Supabase في الباقة المجانية: بحد أقصى 50 MB للملف. الملفات الأكبر تحتاج رفع حد التخزين عبر باقة مناسبة.</div>
         <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="اختر أو اسحب ملف MP4">
           <span class="upload-symbol" aria-hidden="true">⇧</span>
           <strong>اضغط لاختيار الفيديو أو اسحبه هنا</strong>
@@ -39,7 +64,9 @@
         </div>
         <div id="chosen" class="chosen" hidden><span aria-hidden="true">🎞</span><div class="chosen-text"><strong id="file-name"></strong><small id="file-size"></small></div><button id="change-file" type="button" class="quiet">تغيير الملف</button></div>
 
-        <label class="field" for="video-title"><span>عنوان الفيديو في سجل الملفات</span><input id="video-title" type="text" maxlength="180" placeholder="مثال: الحلقة الأولى" autocomplete="off"></label>
+        <label class="field" for="video-title"><span id="video-title-label">عنوان الفيلم</span><input id="video-title" type="text" maxlength="180" placeholder="مثال: الحلقة الأولى" autocomplete="off"></label>
+        <label class="field" for="video-description"><span id="video-description-label">وصف الفيلم (اختياري)</span><input id="video-description" maxlength="1500" placeholder="وصف الفيديو"></label>
+        <label class="field" for="video-poster"><span>رابط بوستر الفيلم (اختياري)</span><input id="video-poster" type="url" dir="ltr" placeholder="https://..." ></label>
         <div class="actions">
           <button id="upload" class="primary" type="button" disabled>رفع إلى الداتا</button>
           <button id="pause" class="secondary" type="button" hidden>إيقاف مؤقت</button>
@@ -53,7 +80,7 @@
       </section>
 
       <section class="panel result-panel" id="result" hidden aria-label="رابط الفيديو بعد الرفع">
-        <div class="success-heading"><span class="check">✓</span><div><h2>تم رفع الفيديو بنجاح</h2><p>هذا رابط MP4 مباشر وثابت، ويمكن نسخه إلى بيانات الفيلم أو الحلقة.</p></div></div>
+        <div class="success-heading"><span class="check">✓</span><div><h2>تم رفع الفيديو بنجاح</h2><p id="catalogue-summary">رابط MP4 مباشر، وتم ربطه بالمحتوى كمسودة في العز TV.</p></div></div>
         <label for="result-url">رابط الفيديو المباشر</label>
         <div class="url-row"><input id="result-url" type="url" dir="ltr" readonly><button id="copy-result" type="button" class="primary">نسخ الرابط</button></div>
         <div class="result-links"><a id="open-result" href="#" target="_blank" rel="noopener noreferrer">اختبار رابط MP4</a><a href="/admin/#movies">إضافة إلى فيلم</a><a href="/admin/series-quick.html">إضافة إلى حلقة</a></div>
