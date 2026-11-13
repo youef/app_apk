@@ -45,7 +45,7 @@ from media_resolver import MediaResolver, read_public_html, safe_error, supporte
 from title_cleaner import content_title
 from launch import studio_revision
 from member_portal import Portal
-from studio_scan_checkpoints import save as save_scan_checkpoint, load as load_scan_checkpoint, available as scan_checkpoint_available
+from studio_scan_checkpoints import save as save_scan_checkpoint, load as load_scan_checkpoint, available as scan_checkpoint_available, recent as recent_scan_checkpoints
 
 BASE = Path(__file__).resolve().parent
 STUDIO_REVISION = studio_revision()
@@ -247,6 +247,7 @@ def _schedule_scan_checkpoint(state,cat,progress,*,force=False):
     progress["last_checkpoint_at"]=now
     job_id=progress["id"]
     progress_snapshot=_scan_public(progress)
+    progress_snapshot["crawl_checkpoint"]=deepcopy(progress.get("crawl_checkpoint") or {})
     record=asdict(cat)
     completed=list(progress.get("completed_keys",[]))
     status="completed" if not progress.get("running") else "scanning"
@@ -753,7 +754,7 @@ def start_catalogue_scan(state: UserState, cat: Catalogue, *,
         "started_at":time.time(),"first_batch_target_seconds":30,
         "owner_id":owner_uid,
         "checkpoint_saved":None,
-        "crawl_running":bool(crawl_checkpoint and crawl_checkpoint.get("queued")),
+        "crawl_running":bool(crawl_checkpoint is not None and cat.kind=="series"),
         "crawl_checkpoint":crawl_checkpoint or {},
         "stop_requested":False,
     }
@@ -832,6 +833,106 @@ async def discovery_scan_events(request: Request, scan_id: str, after: int=0):
     return StreamingResponse(generate(),media_type="text/event-stream",
         headers={"Cache-Control":"private, no-store, no-transform",
                  "X-Accel-Buffering":"no","X-Content-Type-Options":"nosniff"})
+
+
+class ScanControl(BaseModel):
+    scan_id: str = Field(pattern=r"^[0-9a-f]{16}$")
+
+@app.get("/api/discovery-scan/history")
+async def studio_scan_history(request:Request):
+    find_state(request)
+    uid=_portal_scan_uid(request)
+    if uid is None:raise HTTPException(403,"Administrator session is required")
+    rows=await run_in_threadpool(recent_scan_checkpoints,uid,15)
+    # No snapshot contents or signed source URLs are returned in history.
+    return {"jobs":rows,"durable":scan_checkpoint_available()}
+
+@app.get("/api/discovery-scan/recover")
+async def studio_scan_recover(request:Request,scan_id:str):
+    _,state=find_state(request)
+    uid=_portal_scan_uid(request)
+    if uid is None:raise HTTPException(403,"Administrator session is required")
+    with state.lock:
+        if state.scan and state.scan.get("id")==scan_id and state.catalogue:
+            return {"found":True,"active":bool(state.scan.get("running")),
+                    "summary":get_summary(state),"resumable":False}
+    record=await run_in_threadpool(load_scan_checkpoint,scan_id,uid)
+    if not record:raise HTTPException(404,"Checkpoint expired or not found")
+    prog=dict(record.get("progress") or {})
+    prog.pop("crawl_checkpoint",None)
+    prog["running"]=False
+    prog["interrupted"]=record.get("scan_status")=="scanning"
+    return {"found":True,"active":False,"resumable":record.get("scan_status")!="cancelled",
+            "scan":prog,"catalogue":record["payload"],
+            "status":record.get("scan_status"),"updated_at":record.get("updated_at")}
+
+@app.post("/api/discovery-scan/resume")
+async def studio_scan_resume(request:Request,data:ScanControl):
+    state=protected(request)
+    uid=_portal_scan_uid(request)
+    if uid is None:raise HTTPException(403,"Administrator session is required")
+    with state.lock:
+        if state.scan and state.scan.get("running"):
+            raise HTTPException(409,"يوجد فحص نشط؛ أوقفه قبل استعادة مهمة أخرى")
+    record=await run_in_threadpool(load_scan_checkpoint,data.scan_id,uid)
+    if not record:raise HTTPException(404,"Checkpoint expired or not found")
+    if record.get("scan_status")=="cancelled":
+        raise HTTPException(409,"هذه المهمة أُوقفت؛ ابدأ فحصًا جديدًا")
+    try:
+        payload=dict(record["payload"])
+        episodes=[Episode(**row) for row in payload.pop("episodes",[])]
+        cat=Catalogue(**payload,episodes=episodes)
+    except (KeyError,TypeError,ValueError):
+        raise HTTPException(422,"بيانات المهمة المحفوظة غير صالحة")
+    original=dict(record.get("progress") or {})
+    progress_id=record["scan_id"]
+    resume={"id":progress_id,
+            "completed_keys":record.get("completed") or [],
+            "seq":int(original.get("seq",original.get("revision",0))),
+            "revision":int(original.get("revision",0))}
+    crawl=original.get("crawl_checkpoint") if isinstance(original.get("crawl_checkpoint"),dict) else None
+    with state.lock:
+        state.catalogue=cat
+        state.catalogues=[cat]
+        state.current_index=0
+        state.demo=False
+        state.batch_errors=[]
+        start_catalogue_scan(state,cat,owner_uid=uid,
+                             crawl_checkpoint=crawl,resume=resume)
+        return {"summary":get_summary(state),"resumed":True,
+                "pending":state.scan["total"]-state.scan["done"]}
+
+@app.post("/api/discovery-scan/stop")
+async def studio_scan_stop(request:Request,data:ScanControl):
+    state=protected(request)
+    with state.lock:
+        if not state.scan or state.scan.get("id")!=data.scan_id:
+            raise HTTPException(404,"الفحص المطلوب غير موجود")
+        state.scan["stop_requested"]=True
+        _emit_scan_event(state,state.scan,"stop_requested")
+        return {"stopping":True,"scan":scan_status(state)}
+
+@app.post("/api/discovery-scan/retry-failed")
+async def studio_scan_retry_failed(request:Request,data:ScanControl):
+    state=protected(request)
+    with state.lock:
+        if not state.scan or state.scan.get("id")!=data.scan_id:
+            raise HTTPException(404,"الفحص المطلوب غير موجود")
+        if state.scan.get("running"):
+            raise HTTPException(409,"أوقف الفحص الحالي أو انتظر اكتماله")
+        cat=current_catalogue(state)
+        if cat.kind=="series":
+            passed=[_scan_key(ep,cat.kind) for ep in cat.episodes if ep.verified]
+            missing=sum(not ep.verified for ep in cat.episodes)
+        else:
+            passed=["movie"] if cat.verified else []
+            missing=int(not cat.verified)
+        if not missing:
+            return {"retry":False,"message":"كل العناصر الحالية اجتازت الفحص"}
+        start_catalogue_scan(state,cat,owner_uid=_portal_scan_uid(request),
+                             resume={"completed_keys":passed})
+        return {"retry":True,"summary":get_summary(state),
+                "remaining":missing}
 
 
 class DiscoverForm(BaseModel):
