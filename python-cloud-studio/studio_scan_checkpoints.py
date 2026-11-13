@@ -72,7 +72,7 @@ def save(scan_id,owner_id,source_url,catalogue,progress,completed,*,status="scan
     target=_connection()
     if not target:return False
     payload={"scan_id":scan_id,"owner_id":owner_id,
-             "source_url":source_url,"payload":_pack_catalogue(catalogue),"progress":progress,
+             "source_url":source_url,"payload":_pack_catalogue(catalogue),"progress":_pack_catalogue(progress),
              "completed":list(completed),"scan_status":status,
              "updated_at":time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime()),
              "expires_at":time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime(time.time()+86400))}
@@ -110,9 +110,11 @@ def load(scan_id,owner_id):
         if not isinstance(rows,list) or not rows:return None
         row=rows[0]
         payload=_unpack_catalogue(row.get("payload"))
-        if payload is None or not isinstance(row.get("progress"),dict):
+        progress=_unpack_catalogue(row.get("progress"))
+        if payload is None or progress is None:
             return None
         row["payload"]=payload
+        row["progress"]=progress
         if not isinstance(row.get("completed"),list):row["completed"]=[]
         return row
     except (ValueError,requests.RequestException):
@@ -140,7 +142,7 @@ def recent(owner_id,limit=15):
         result=[]
         for row in rows:
             if not isinstance(row,dict):continue
-            progress=row.get("progress") or {}
+            progress=_unpack_catalogue(row.get("progress")) or {}
             row["progress"]={k:progress.get(k) for k in
                 ("done","total","verified","sources_found","seq") if k in progress}
             result.append(row)
