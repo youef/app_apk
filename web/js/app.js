@@ -680,11 +680,11 @@
   function sourceLabel(item) {
     if (item.kind === "channel" && item.playback === "official_link") return "قريبًا داخل العز TV";
     if (item.youtubeId) return "فيديو رسمي";
-    if (item.kind === "series" && item.episodeCount) return "حلقات عبر مصادر رسمية";
+    if (item.kind === "series" && item.episodeCount) return "حلقات المسلسل";
     if (item.live) return "بث مباشر";
     if (item.stream && /\\.mp4/i.test(item.stream)) return "MP4";
     if (item.stream && /\\.m3u8/i.test(item.stream)) return "HLS";
-    return item.stream ? "مصدر مباشر" : "غير متوفر";
+    return item.stream ? "مصدر مباشر" : "قيد تحديث المشغل";
   }
 
     function detailHTML(item) {
