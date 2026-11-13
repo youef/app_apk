@@ -191,6 +191,8 @@ def try_proxy_get(host, path, origin, max_bytes, user_agent, target_addresses):
     public_ips = [ip for ip in target_addresses if ipaddress.ip_address(ip).is_global]
     if not public_ips or len(public_ips) != len(target_addresses):
         raise ValueError("Target DNS not fully public")
+    # Most HTTP CONNECT services accept IPv4 first; retain verified IPv6 fallback.
+    public_ips.sort(key=lambda ip: 0 if ipaddress.ip_address(ip).version == 4 else 1)
 
     indices = [context.active if context.active is not None else context.selected]
     if len(context.pool) > 1:
