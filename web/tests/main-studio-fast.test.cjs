@@ -19,7 +19,7 @@ test('main studio fast-scan bundle compiles and all live controls exist',()=>{
                     'discoveryProgress','liveMediaLinks']){
    assert.ok(ids.includes(id),'Missing control '+id);
  }
- for(const [id] of script.matchAll(/\$\('([^']+)'\)/g)){
+ for(const [,id] of script.matchAll(/\$\('([^']+)'\)/g)){
    assert.ok(ids.includes(id),'Missing main Studio element '+id);
  }
 });
