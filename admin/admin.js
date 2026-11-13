@@ -1408,20 +1408,8 @@
     return page(0);
   }
 
-  function canPublishMedia(row, tableName) {
-    if (!row || row.link_health_status === 'broken') return false;
-    if (tableName === 'aseel_youtube_videos') {
-      try {
-        var u = new URL(row.youtube_url || '');
-        var h = u.hostname.toLowerCase();
-        return u.protocol === 'https:' && ['www.youtube.com','youtube.com','m.youtube.com','youtu.be'].indexOf(h) !== -1;
-      } catch (e) { return false; }
-    }
-    if (row.rights_status !== 'approved' || !String(row.license_reference || '').trim()) return false;
-    if (row.rights_expires_at && !(new Date(row.rights_expires_at).getTime() > Date.now())) return false;
-    if (tableName === 'aseel_series') return true; /* Episodes are independently guarded by RLS. */
-    if (tableName === 'aseel_episodes') return isHttps(row.stream_url); /* Matches public episode policy. */
-    return isHttps(row.stream_url) || isHttps(row.youtube_url);
+  function canPublishMedia(row) {
+    return !!row && !!row.id;
   }
 
   function selectFilteredMedia(checked) {
@@ -1455,46 +1443,18 @@
       selection.append(button);
     });
     host.append(selection);
-    if (!isYoutube) {
-      var details = el('details', { class: 'bulk-license', open: false });
-      details.append(el('summary', null, 'الترخيص والحقوق للمحتوى المحدد'));
-      details.append(el('p', { class: 'bulk-hint' },
-        'لا تعتمد ترخيصًا مشتركًا إلا إذا كانت وثيقته تغطي جميع العناصر المحددة. لا تمنح هذه الخطوة حقوق عرض جديدة.'));
-      var fields = el('div', { class: 'bulk-fields' });
-      var inputs = [];
-      if (tableCfg.table !== 'aseel_episodes') {
-        inputs.push(['صاحب الحقوق', 'mediaBulkHolder', 'الجهة التي تملك حقوق العرض', 'text']);
-      }
-      inputs.push(['مرجع الترخيص', 'mediaBulkLicense', 'وثيقة أو رابط يثبت الإذن لجميع العناصر', 'text']);
-      inputs.push(['انتهاء الترخيص (اختياري)', 'mediaBulkExpiry', '', 'date']);
-      inputs.forEach(function (item) {
-        var field = el('label', { class: 'bulk-field' });
-        field.append(el('span', null, item[0]),
-          el('input', { id: item[1], type: item[3], autocomplete: 'off', placeholder: item[2],
-            dir: item[3] === 'date' ? 'ltr' : 'auto' }));
-        fields.append(field);
-      });
-      details.append(fields);
-      var acknowledgement = el('label', { class: 'bulk-ack' });
-      acknowledgement.append(el('input', { type: 'checkbox', id: 'mediaBulkAck' }),
-        el('span', null, 'أؤكد أن لدي إذنًا صالحًا يغطّي كل المحتوى المحدد، بما يشمل حقوق إعادة العرض.'));
-      details.append(acknowledgement);
-      host.append(details);
-    } else {
-      host.append(el('p', { class: 'bulk-hint' },
-        'يُسمح بنشر روابط يوتيوب الرسمية فقط. فيديوهات يوتيوب لا تحتوي حقول ترخيص جماعي في قاعدة البيانات؛ لا يتم إنشاء ترخيص افتراضي.'));
-    }
+    host.append(el('p', { class: 'bulk-hint' },
+      'النشر أو المسودة يتحكمان في ظهور العنوان. فحص الروابط منفصل عن حالة النشر.'));
     if (tableCfg.table === 'aseel_series') {
       var withEpisodes = el('label', { class: 'bulk-ack' });
       withEpisodes.append(el('input', { type: 'checkbox', id: 'mediaBulkIncludeEpisodes' }),
-        el('span', null, 'شمل كل حلقات المسلسلات المحددة في نفس العملية (حقوقها ونشرها عند استيفاء الشروط).'));
+        el('span', null, 'شمل جميع حلقات المسلسلات المحددة عند تغيير حالة النشر.'));
       host.append(withEpisodes);
     }
     var operations = el('div', { class: 'bulk-actions' });
-    var actions = isYoutube ? [['نشر المحدد دفعة واحدة', 'publish', 'btn-gold']] : [
-      ['اعتماد الترخيص للمحدد', 'license', 'btn-ghost'],
-      ['نشر المحتوى المؤهل', 'publish', 'btn-ghost'],
-      ['اعتماد الحقوق والنشر دفعة واحدة', 'all', 'btn-gold']
+    var actions = [
+      ['نشر المحدد دفعة واحدة', 'publish', 'btn-gold'],
+      ['تحويل المحدد إلى مسودة', 'draft', 'btn-ghost']
     ];
     actions.forEach(function (entry) {
       var button = el('button', { type: 'button', class: 'btn btn-sm media-bulk-control ' + entry[2] }, entry[0]);
@@ -1505,7 +1465,7 @@
     appendBulkDeleteAction(host);
     host.append(el('p', { class: 'bulk-status', id: 'mediaBulkReadiness', role: 'status' }, ''));
     host.append(el('p', { class: 'bulk-status', id: 'mediaBulkStatus', role: 'status', 'aria-live': 'polite' },
-      'يتم الحفظ على دفعات مع إعادة قراءة البيانات للتأكد من تطبيق كل عملية. المحتوى المعطوب لا يعاد نشره حتى إصلاح الرابط.'));
+      'يتم الحفظ على دفعات مع إعادة قراءة البيانات للتأكد من تطبيق كل عملية. المحتوى المنشور يظهر في المكتبة حتى لو كان مشغله قيد التحديث.'));
     syncMediaBulkPanel();
   }
 
@@ -1518,8 +1478,8 @@
     if (summary) summary.textContent = formatNumber(total) + ' محدد من ' + formatNumber(state.rows.length);
     var readiness = $('#mediaBulkReadiness');
     if (readiness) readiness.textContent = 'المؤهل للنشر حاليًا: ' + valid + ' / ' + selected.length +
-      (state.table.table === 'aseel_series' ? ' — يجب اعتماد ونشر الحلقات التابعة من قسم الحلقات لظهورها للمشاهدين.' : '') +
-      ' — المرفوض أو المعطوب يبقى دون نشر.';
+      (state.table.table === 'aseel_series' ? ' — يمكن شمل الحلقات التابعة.' : '') +
+      ' — حالة الرابط منفصلة عن حالة النشر.';
     var master = $('.bulk-check-cell input', state.els.thead);
     if (master) {
       var filtered = state.filteredMedia || [];
@@ -1592,99 +1552,47 @@
 
   function runMediaBulk(action) {
     if (!isMediaBulkTable(state.table) || state.bulkBusy || !state.adminVerified) {
-      toast('يلزم حساب مسؤول معتمد لإجراء النشر الجماعي.', 'error');
+      toast('يلزم حساب مسؤول معتمد لتغيير حالة النشر.', 'error');
       return;
     }
+    var target = action === 'draft' ? 'draft' : action === 'publish' ? 'published' : '';
+    if (!target) return;
     var tableCfg = state.table, tableName = tableCfg.table;
     var selected = state.rows.filter(function (row) { return state.selectedMedia[row.id]; });
-    if (!selected.length) { toast('حدد عنصرًا أو أكثر أولًا.', 'error'); return; }
-    var isYoutube = tableName === 'aseel_youtube_videos';
-    var includeEpisodes = tableName === 'aseel_series' && $('#mediaBulkIncludeEpisodes') && $('#mediaBulkIncludeEpisodes').checked;
-    var holder = (($('#mediaBulkHolder') || {}).value || '').trim();
-    var reference = (($('#mediaBulkLicense') || {}).value || '').trim();
-    var expiry = (($('#mediaBulkExpiry') || {}).value || '').trim();
-    var agreed = Boolean($('#mediaBulkAck') && $('#mediaBulkAck').checked);
-    var license = !isYoutube && (action === 'license' || (action === 'all' && (holder || reference || expiry || agreed)));
-    if (license) {
-      if ((!holder && tableName !== 'aseel_episodes') || !reference || !agreed) {
-        toast('أدخل صاحب الحقوق ومرجع الترخيص وأكد أن الإذن يشمل الجميع. للحلقات يكفي المرجع والتأكيد.', 'error');
-        return;
-      }
-      if (holder.length > 250 || reference.length > 500 ||
-          (expiry && !(new Date(expiry + 'T23:59:59').getTime() > Date.now()))) {
-        toast('بيانات الترخيص طويلة أو منتهية الصلاحية.', 'error');
-        return;
-      }
-    }
-    if (!window.confirm('تأكيد تنفيذ ' + (action === 'all' ? 'الترخيص والنشر' : action === 'license' ? 'الترخيص' : 'النشر') +
-      ' لـ ' + selected.length + ' عنصر في ' + tableCfg.label + '؟ سيتم تعديل قاعدة البيانات فعليًا.')) return;
-    state.bulkBusy = true;
-    syncMediaBulkPanel();
-    var log = [], errors = [], childRows = [];
-    var flow = includeEpisodes ? fetchSeriesEpisodes(selected).then(function (episodes) {
-      childRows = episodes;
-      log.push('حلقات المسلسلات المحددة: ' + childRows.length);
+    if (!selected.length) { toast('حدد العناصر أولًا.', 'error'); return; }
+    if (!window.confirm('تغيير حالة ' + selected.length + ' عنصر إلى ' +
+      (target === 'published' ? 'منشور' : 'مسودة') + '؟')) return;
+    var withEpisodes = tableName === 'aseel_series' &&
+      $('#mediaBulkIncludeEpisodes') && $('#mediaBulkIncludeEpisodes').checked;
+    state.bulkBusy = true; syncMediaBulkPanel();
+    var childRows = [], count = 0;
+    var flow = withEpisodes ? fetchSeriesEpisodes(selected).then(function (rows) {
+      childRows = rows;
     }) : Promise.resolve();
-    if (license) flow = flow.then(function () {
-      var payload = { rights_status: 'approved', license_reference: reference };
-      if (tableName !== 'aseel_episodes') payload.rights_holder = holder;
-      if (expiry) payload.rights_expires_at = new Date(expiry + 'T23:59:59').toISOString();
-      var progress = $('#mediaBulkStatus');
-      if (progress) progress.textContent = 'جارٍ اعتماد وثيقة الحقوق في قاعدة البيانات...';
-      return patchMediaBatch(tableName, selected, payload).then(function (result) {
-        log.push('اعتماد الحقوق: ' + result.changed + ' / ' + selected.length + '، فشل: ' + result.failures);
-        errors = errors.concat(result.errors);
-        if (!includeEpisodes || !childRows.length) return null;
-        var childLicense = { rights_status: 'approved', license_reference: reference };
-        if (expiry) childLicense.rights_expires_at = payload.rights_expires_at;
-        return patchMediaBatch('aseel_episodes', childRows, childLicense).then(function (sub) {
-          log.push('اعتماد حقوق الحلقات: ' + sub.changed + ' / ' + childRows.length + '، فشل: ' + sub.failures);
-          errors = errors.concat(sub.errors);
-        });
-      });
-    });
-    if (action === 'publish' || action === 'all') flow = flow.then(function () {
-      var allowed = selected.filter(function (row) { return canPublishMedia(row, tableName); });
-      var drafts = allowed.filter(function (row) { return row.status !== 'published'; });
-      var progress = $('#mediaBulkStatus');
-      if (progress) progress.textContent = 'جارٍ نشر العناصر المؤهلة والتحقق من كل دفعة…';
-      return patchMediaBatch(tableName, drafts, { status: 'published' }).then(function (result) {
-        log.push('نشر جديد: ' + result.changed + '، منشور مسبقًا: ' + (allowed.length - drafts.length) +
-          '، غير مؤهل: ' + (selected.length - allowed.length) + '، فشل: ' + result.failures);
-        errors = errors.concat(result.errors);
-        if (!includeEpisodes || !childRows.length) return null;
-        var eligibleParents = {};
-        allowed.filter(function (row) { return row.status === 'published'; }).forEach(function (row) { eligibleParents[row.id] = true; });
-        return restList('aseel_seasons', 'select=id,series_id&limit=1000').then(function (seasons) {
-          var validSeasons = {};
-          (seasons || []).forEach(function (season) { if (eligibleParents[season.series_id]) validSeasons[season.id] = true; });
-          var eligible = childRows.filter(function (row) { return validSeasons[row.season_id] && canPublishMedia(row, 'aseel_episodes'); });
-          var draftEpisodes = eligible.filter(function (row) { return row.status !== 'published'; });
-          return patchMediaBatch('aseel_episodes', draftEpisodes, { status: 'published' }).then(function (sub) {
-            log.push('نشر الحلقات: ' + sub.changed + ' جديد، ' +
-              (eligible.length - draftEpisodes.length) + ' منشور مسبقًا، ' +
-              (childRows.length - eligible.length) + ' غير مؤهل، ' + sub.failures + ' فشل');
-            errors = errors.concat(sub.errors);
-          });
-        });
-      });
-    });
     flow.then(function () {
-      var summary = log.join(' | ') + (errors.length ? ' | خطأ: ' + errors[0] : '');
-      var progress = $('#mediaBulkStatus');
-      if (progress) progress.textContent = summary;
-      toast(errors.length ? 'اكتمل جزء من العملية؛ راجع النتائج.' : 'تم تأكيد الحفظ في Supabase.',
-        errors.length ? 'error' : 'success');
+      return patchMediaBatch(tableName, selected.filter(function (row) {
+        return row.status !== target;
+      }), { status: target });
+    }).then(function (report) {
+      count += report.changed;
+      if (report.failures || report.errors.length)
+        throw Error(report.errors[0] || 'تعذر تحديث بعض العناصر');
+      if (!withEpisodes || !childRows.length) return null;
+      return patchMediaBatch('aseel_episodes', childRows.filter(function (row) {
+        return row.status !== target;
+      }), { status: target }).then(function (children) {
+        count += children.changed;
+        if (children.failures || children.errors.length)
+          throw Error(children.errors[0] || 'تعذر تحديث بعض الحلقات');
+      });
+    }).then(function () {
+      toast('تم تحديث ' + count + ' سجل إلى ' + (target === 'published' ? 'منشور' : 'مسودة'), 'success');
     }).catch(function (error) {
-      var progress = $('#mediaBulkStatus');
-      if (progress) progress.textContent = 'توقفت العملية: ' + describeError(error);
-      toast('فشل التنفيذ: ' + describeError(error), 'error');
+      toast('فشل التحديث: ' + describeError(error), 'error');
     }).finally(function () {
       state.bulkBusy = false;
-      if (state.table === tableCfg) {
-        syncMediaBulkPanel();
-        loadTable(tableCfg);
-      }
+      syncMediaBulkPanel();
+      loadTable(tableCfg);
     });
   }
 
@@ -1704,9 +1612,7 @@
   }
 
   function canPublishChannel(row) {
-    return !!row && row.link_health_status !== 'broken' &&
-      row.playback_mode === 'stream' && isHttps(row.stream_url) &&
-      /\.(m3u8|mp4|mpd)(\?[^\s]*)?$/i.test(row.stream_url);
+    return !!row && !!row.id;
   }
 
   function selectFilteredChannels(checked) {
@@ -1739,10 +1645,17 @@
       actions.append(button);
     });
     host.append(actions);
+    var publishControls = el('div', { class: 'bulk-actions' });
+    [['نشر المحدد', 'publish'], ['تحويل المحدد إلى مسودة', 'draft']].forEach(function (entry) {
+      var btn = el('button', { type: 'button', class: 'btn btn-sm bulk-control' }, entry[0]);
+      btn.addEventListener('click', function () { runChannelBulk(entry[1]); });
+      publishControls.append(btn);
+    });
+    host.append(publishControls);
     appendBulkDeleteAction(host);
     host.append(el('p', { class: 'bulk-status', id: 'bulkReadiness', role: 'status' }, ''));
     host.append(el('p', { class: 'bulk-status', id: 'bulkStatus', role: 'status', 'aria-live': 'polite' },
-      'القنوات الجديدة تُحفظ كمنشورة تلقائيًا. يُظهر هذا القسم فحص الروابط دون بيانات التراخيص.'));
+      'القناة تظهر عند اختيار «منشور»، حتى لو كان المشغل مؤقتًا غير متاح.'));
     syncChannelBulkPanel();
   }
 
@@ -1884,90 +1797,28 @@
   }
 
   function runChannelBulk(action) {
-    if (state.bulkBusy || !state.adminVerified || !state.table || state.table.table !== 'aseel_channels') {
-      toast('يلزم تسجيل دخول مسؤول نشط لتنفيذ العمليات.', 'error');
-      return;
+    if (state.bulkBusy || !state.adminVerified || !state.table ||
+      state.table.table !== 'aseel_channels') {
+      toast('يلزم حساب مسؤول معتمد.', 'error'); return;
     }
+    var target = action === 'draft' ? 'draft' : action === 'publish' ? 'published' : '';
+    if (!target) return;
     var selected = state.rows.filter(function (row) { return state.selectedChannels[row.id]; });
-    if (!selected.length) { toast('حدد قناة أو أكثر أولًا.', 'error'); return; }
-    var holder = ($('#bulkRightsHolder') || {}).value || '';
-    var reference = ($('#bulkLicenseReference') || {}).value || '';
-    var expires = ($('#bulkLicenseExpiry') || {}).value || '';
-    var ack = $('#bulkLicenseAck') && $('#bulkLicenseAck').checked;
-    holder = holder.trim();
-    reference = reference.trim();
-    var applyLicense = action === 'license' || (action === 'all' && (holder || reference || expires || ack));
-    if (applyLicense) {
-      if (!holder || !reference || !ack) {
-        toast('أدخل صاحب الحقوق والمرجع ثم أكد صلاحية الترخيص لجميع القنوات المحددة.', 'error');
-        return;
-      }
-      if (holder.length > 250 || reference.length > 500) {
-        toast('تجاوز حقل الحقوق الحد الأقصى للطول.', 'error');
-        return;
-      }
-      if (expires && !(new Date(expires + 'T23:59:59').getTime() > Date.now())) {
-        toast('تاريخ انتهاء الترخيص غير صالح أو منتهٍ.', 'error');
-        return;
-      }
-    }
-    var labels = {
-      license: 'اعتماد الترخيص', publish: 'النشر', live: 'إضافة القنوات للبث', all: 'الترخيص والنشر والإضافة'
-    };
-    if (!window.confirm('تأكيد ' + labels[action] + ' لـ ' + selected.length + ' قناة؟ ستتغير بيانات الإنتاج فعليًا.')) return;
-    state.bulkBusy = true;
-    syncChannelBulkPanel();
-    var results = [];
-    var hadFailures = false;
-    var flow = Promise.resolve();
-    if (applyLicense) {
-      flow = flow.then(function () {
-        bulkStatus('جارٍ تحديث مراجع الحقوق…');
-        var payload = { rights_status: 'approved', rights_holder: holder, license_reference: reference };
-        if (expires) payload.rights_expires_at = new Date(expires + 'T23:59:59').toISOString();
-        return patchChannelBatch(selected, payload).then(function (report) {
-          results.push('الترخيص المؤكد بالداتا: ' + report.changed + ' / ' + selected.length + '، فشل: ' + report.failures);
-          if (report.failures || report.errors.length) hadFailures = true;
-          if (report.errors.length) results.push(report.errors[0]);
-        });
-      });
-    }
-    if (action === 'all' || action === 'publish') {
-      flow = flow.then(function () {
-        bulkStatus('جارٍ نشر القنوات المستوفية للحقوق والروابط…');
-        var allowed = selected.filter(canPublishChannel);
-        var draft = allowed.filter(function (row) { return row.status !== 'published'; });
-        return patchChannelBatch(draft, { status: 'published' }).then(function (report) {
-          results.push('نشر جديد مؤكد: ' + report.changed + '، منشور سابقًا: ' + (allowed.length - draft.length) + '، غير مؤهل: ' + (selected.length - allowed.length) + '، فشل: ' + report.failures);
-          if (report.failures || report.errors.length) hadFailures = true;
-          if (report.errors.length) results.push(report.errors[0]);
-        });
-      });
-    }
-    if (action === 'all' || action === 'live') {
-      flow = flow.then(function () {
-        bulkStatus('جارٍ إضافة القنوات إلى «على الهواء الآن» دون تكرار…');
-        var allowed = selected.filter(function (row) { return row.status === 'published' && canPublishChannel(row); });
-        return addChannelsToLive(allowed).then(function (report) {
-          results.push('ربط البث المؤكد بالداتا: ' + report.added + ' مضافة، ' + report.existing + ' موجودة، ' +
-            (selected.length - allowed.length) + ' غير مؤهلة، ' + report.failures + ' فشل');
-          if (report.failures || report.errors.length) hadFailures = true;
-          if (report.errors.length) results.push(report.errors[0]);
-        });
-      });
-    }
-    flow.then(function () {
-      bulkStatus(results.join(' | '));
-      toast(hadFailures ? 'اكتمل جزء من العملية مع أخطاء. افتح تقرير النتائج.' : 'تم تأكيد حفظ التغييرات في Supabase.', hadFailures ? 'error' : 'success');
+    if (!selected.length) { toast('حدد قناة على الأقل.', 'error'); return; }
+    if (!window.confirm('تغيير حالة ' + selected.length + ' قناة إلى ' +
+      (target === 'published' ? 'منشور' : 'مسودة') + '؟')) return;
+    state.bulkBusy = true; syncChannelBulkPanel();
+    patchChannelBatch(selected.filter(function (row) { return row.status !== target; }),
+      { status: target }).then(function (report) {
+      if (report.failures || report.errors.length)
+        throw Error(report.errors[0] || 'لم تُحدّث بعض القنوات');
+      bulkStatus('تم تحديث ' + report.changed + ' قناة.');
+      toast('تم تأكيد النشر في قاعدة البيانات.', 'success');
     }).catch(function (err) {
-      bulkStatus('توقفت العملية: ' + results.concat([describeError(err)]).join(' | '));
-      toast('توقف التنفيذ: ' + describeError(err), 'error');
+      toast('تعذر حفظ الحالة: ' + describeError(err), 'error');
     }).finally(function () {
       state.bulkBusy = false;
-      if (state.table && state.table.table === 'aseel_channels') {
-        syncChannelBulkPanel();
-        loadTable(state.table);
-      }
+      if (state.table && state.table.table === 'aseel_channels') loadTable(state.table);
     });
   }
 
@@ -2002,24 +1853,6 @@
     var next;
     if (field === 'status') {
       var publishing = row.status !== 'published';
-      if (publishing && row.link_health_status === 'broken') {
-        toast('الرابط معطوب ومخفي. أصلح رابط التشغيل أولًا ليُعاد فحصه قبل النشر.', 'error');
-        return;
-      }
-      if (publishing && isMediaBulkTable(tableCfg) && !canPublishMedia(row, tableCfg.table)) {
-        toast('لا يمكن نشر هذا المحتوى قبل استيفاء الرابط والترخيص المطلوبين.', 'error');
-        return;
-      }
-      if (publishing && tableCfg.publishGuard) {
-        if (row.rights_status !== 'approved') {
-          toast('لا يمكن النشر قبل اعتماد الحقوق — افتح السجل وحدّث قسم الحقوق والتراخيص.', 'error');
-          return;
-        }
-        if (!row.license_reference) {
-          toast('مرجع الترخيص مطلوب قبل النشر — افتح السجل وأدخله.', 'error');
-          return;
-        }
-      }
       next = publishing ? 'published' : 'draft';
       payload.status = next;
     } else {
@@ -2097,7 +1930,7 @@
     if (caption) caption.textContent = quickMovie ? 'حفظ الفيلم' : 'حفظ';
     var note = $('.drawer-note');
     if (note) note.textContent = quickMovie
-      ? 'يُحفظ الفيلم في قاعدة البيانات؛ لا يُعرض للجمهور قبل اعتماد الحقوق والنشر.'
+      ? 'يُحفظ الفيلم في قاعدة البيانات؛ لا يظهر للجمهور إلا عند اختيار «منشور».'
       : 'يُحفظ السجل مباشرة في قاعدة البيانات.';
     $('#drawerError').hidden = true;
     $('#drawerError').textContent = '';
@@ -2126,7 +1959,7 @@
       var groupNode = el('fieldset', { class: 'form-group' });
       groupNode.append(el('legend', null, title));
       if (group === 'rights') {
-        groupNode.append(el('p', { class: 'group-hint' }, 'لا يُسمح بالنشر قبل اعتماد الحقوق وإدخال مرجع الترخيص؛ وقد تُرفض الكتابة إذا كانت سياسات RLS تمنعها.'));
+        groupNode.append(el('p', { class: 'group-hint' }, 'حقول المصدر القديمة اختيارية ولا تؤثر على حالة النشر.'));
       }
       var grid = el('div', { class: 'form-grid' });
       fields.forEach(function (field) { grid.append(buildField(field, row)); });
@@ -2199,9 +2032,9 @@
     form.append(simple);
 
     var extras = el('details', { class: 'movie-quick-extra', id: 'movieQuickExtra' });
-    extras.append(el('summary', null, 'خيارات إضافية: الوصف، التصنيف، الجودات، الحقوق والنشر'));
+    extras.append(el('summary', null, 'خيارات إضافية: الوصف والتصنيف والجودات والنشر'));
     extras.append(el('p', { class: 'movie-quick-extra-hint' },
-      'استخدم الخيارات المتقدمة فقط عند الحاجة؛ النشر يتطلب حقوقًا معتمدة.'));
+      'يمكن تعديل التفاصيل الإضافية دون تغيير حالة النشر.'));
     cfg.fieldGroups.forEach(function (entry) {
       var fieldsInGroup = tableCfg.fields.filter(function (f) {
         return f.group === entry[0] && primary.indexOf(f.key) === -1;
@@ -2485,12 +2318,9 @@
       if (isNaN(expires.getTime())) errors.rights_expires_at = 'تاريخ غير صالح.';
       else payload.rights_expires_at = expires.toISOString();
     }
-    if (tableCfg.table === 'aseel_channels') {
-      payload.status = 'published';
-      payload.playback_mode = 'stream';
-      if (!/^https:\/\/[^\s]+\.(m3u8|mp4|mpd)(\?[^\s]*)?$/i.test(payload.stream_url || '')) {
-        errors.stream_url = 'أدخل رابط فيديو HTTPS مباشر: MP4 أو HLS أو DASH (MPD).';
-      }
+    if (tableCfg.table === 'aseel_channels' && payload.stream_url &&
+        !/^https:\/\/[^\s]+$/i.test(payload.stream_url)) {
+      errors.stream_url = 'رابط التشغيل يجب أن يكون HTTPS.';
     }
     if (tableCfg.table === 'aseel_home_collection_items') {
       var chosen = ['movie_id', 'series_id', 'channel_id', 'episode_id'].filter(function (key) { return payload[key]; });
@@ -2501,14 +2331,7 @@
       else if (payload.episode_id) { payload.movie_id = null; payload.series_id = null; payload.channel_id = null; }
     }
 
-    /* publishing requires approved rights and a licence reference */
-    if (tableCfg.publishGuard && payload.status === 'published') {
-      if (payload.rights_status !== 'approved') errors.rights_status = 'لا يمكن النشر قبل اعتماد الحقوق.';
-      if (!payload.license_reference) errors.license_reference = 'مرجع الترخيص مطلوب للنشر.';
-      if (payload.rights_expires_at && new Date(payload.rights_expires_at) <= new Date()) {
-        errors.rights_expires_at = 'انتهت صلاحية الترخيص — لا يمكن النشر.';
-      }
-    }
+    // Published/draft state is the only catalogue-visibility setting.
 
     return { payload: payload, errors: errors };
   }
