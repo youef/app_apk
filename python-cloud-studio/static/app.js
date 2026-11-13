@@ -717,6 +717,7 @@
     $('studioResumeScan').hidden=!studioRecoverableId;
     activity('عُثر على فحص محفوظ. استكمل الحلقات غير المكتملة من الزر.','info');
     location.hash='import';
+    return record;
   }
   async function resumeAdminScan(){
     const id=studioRecoverableId;
@@ -1142,8 +1143,24 @@
       if(result.scan?.running || !$('browserCaptureResults').hidden)return;
       const saved=sessionStorage.getItem('alezz:main-scan');
       if(saved && /^[0-9a-f]{16}$/.test(saved)){
-        try{await recoverAdminScan(saved);return;}
-        catch(error){sessionStorage.removeItem('alezz:main-scan');}
+        try{
+          const recovery=await recoverAdminScan(saved);
+          // A scanning checkpoint left by a Render restart can continue
+          // automatically when the SAME admin reopens this tab. A deliberate
+          // stop remains manual, so the user keeps control of resource use.
+          const marker='alezz:auto-resume:'+saved;
+          if(recovery?.status==='scanning' && recovery.resumable &&
+             studioRecoverableId===saved && sessionStorage.getItem(marker)!=='tried'){
+            sessionStorage.setItem(marker,'tried');
+            try{
+              await resumeAdminScan();
+              activity('استؤنف فحص المواسم والحلقات تلقائيًا بعد إعادة تشغيل الخادم.','success');
+            }catch(error){
+              toast('تعذّر الاستكمال التلقائي: '+error.message+' — استخدم زر الاستكمال.','error');
+            }
+          }
+          return;
+        }catch(error){sessionStorage.removeItem('alezz:main-scan');}
       }
       activity('الموقع جاهز. ابحث بالاسم أو أدخل رابط صفحة العمل.','success');
     }catch(error){activity(error.message,'error');toast(error.message,'error');}
