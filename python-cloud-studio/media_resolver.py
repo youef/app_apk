@@ -366,15 +366,18 @@ class MediaResolver:
         with ThreadPoolExecutor(max_workers=self.workers) as pool:
             return list(pool.map(probe, merge_sources(sources)))
 
-    def resolve(self, pages: list[str], existing=()) -> tuple[list[dict], list[str]]:
-        """Discover public candidates fast; reserve browser time for JS players."""
+    def resolve(self, pages: list[str], existing=(), *, on_candidates=None) -> tuple[list[dict], list[str]]:
+        """Discover public candidates fast; stream previews before verification."""
         deadline = time.monotonic()+self.max_seconds
         browser_enabled = self.mode in ('auto','headless')
-        # Previously HTTP extraction + media probes exhausted the same budget,
-        # leaving Chromium ~0 seconds. Reserve 8-10s for browser-only players.
+        # Reserve time for JS-created players instead of spending all of it
+        # in HTTP verification. Discovery callback never implies success.
         reserve = min(10, max(2, self.max_seconds*.5)) if browser_enabled else 0
         http_deadline = deadline-reserve if browser_enabled else deadline
         candidates, errors = self._http(pages, deadline=http_deadline)
+        if on_candidates and candidates:
+            try: on_candidates(merge_sources(existing,candidates), 'http')
+            except Exception: pass
         checked = self.check(merge_sources(existing, candidates), deadline=http_deadline)
         need_browser = browser_enabled and (self.mode=='headless' or
                                             not any(x.get('verified') for x in checked))
@@ -384,6 +387,9 @@ class MediaResolver:
                                                            known=previous)
             errors.extend(browser_errors)
             new = [x for x in browser_sources if x.get('url') not in previous]
+            if on_candidates and new:
+                try: on_candidates(merge_sources(checked,new), 'chromium')
+                except Exception: pass
             checked = merge_sources(checked, self.check(new, deadline=deadline))
         return checked, errors[:6]
 
