@@ -858,6 +858,13 @@
       }
     } catch(error) {
       if(discoveryId!==id)return;
+      if(/401|404|جلسة|غير موجود/.test(error.message)){
+        closeDiscoveryStream();clearTimeout(discoveryTimer);
+        studioRecoverableId=id;app.scanning=false;
+        $('studioResumeScan').hidden=false;
+        activity('انقطع اتصال الفحص أثناء تحديث Render. حدّث الصفحة لاستعادة النقطة المحفوظة ثم استكمل المهمة.','info');
+        return;
+      }
       activity('تعذر تحديث التقدم. جارٍ إعادة المحاولة…','info');
       discoveryTimer=setTimeout(()=>pollDiscovery(id),3500);
     }
