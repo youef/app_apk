@@ -32,7 +32,8 @@ Supabase من زر تسجيل الدخول داخل الاستوديو. يستخ
 | `ALEZZ_SUPABASE_SECRET_KEY` | بديل للمفتاح السابق عند استخدام مفتاح `sb_secret_` الحديث؛ يكفي أحدهما |
 | `ALEZZ_AUTOSYNC_ENABLED` | `1` لبدء العامل تلقائيًا |
 | `ALEZZ_AUTOSYNC_MODE` | `auto` أو `http` أو `headless` |
-| `ALEZZ_AUTOSYNC_INTERVAL_HOURS` | `4` (إعادة اكتشاف المصادر كل 4 ساعات، وأبكر إذا اقترب انتهاء رابط موقّع) |
+| `ALEZZ_AUTOSYNC_SOURCE_INTERVAL_HOURS` | `4` (إعادة اكتشاف المصادر كل 4 ساعات، وأبكر إذا اقترب انتهاء رابط موقّع) |
+| `ALEZZ_AUTOSYNC_INTERVAL_HOURS` | متغير قديم؛ تجاهله العامل الجديد حتى لا تُجبره إعدادات Render السابقة على 30 دقيقة |
 | `ALEZZ_AUTOSYNC_CHECK_MINUTES` | `5` (فحص صحة الروابط كل 5 دقائق تقريبًا) |
 | `ALEZZ_AUTOSYNC_CONCURRENCY` | `3`–`5` عمّال متوازيين بحسب إعداد Render |
 | `ALEZZ_AUTOSYNC_PUBLISH_APPROVED` | `1` نشر المسودات المعتمدة مسبقًا فقط عند وجود مصدر محفوظ ورابط فيديو مباشر تم التحقق منه؛ لا يعتمد الحقوق آليًا |
