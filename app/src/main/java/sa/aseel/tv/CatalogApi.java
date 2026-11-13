@@ -37,48 +37,17 @@ public final class CatalogApi {
         cache=this.context.getSharedPreferences("aseel_catalog_cache_v1", Context.MODE_PRIVATE);
     }
 
-    /** Reject obsolete website-only and broken-format catalog rows, including stale cache. */
+    /** Publication controls visibility; source health controls playback only.
+     * Missing/expired links must not erase published catalogue cards. */
     private static JSONArray directMediaOnly(String table,JSONArray input) {
-        if(!("aseel_movies".equals(table)||"aseel_episodes".equals(table)||"aseel_channels".equals(table)))return input;
-        JSONArray output=new JSONArray();
+        if(!("aseel_movies".equals(table)||"aseel_series".equals(table)||
+             "aseel_episodes".equals(table)||"aseel_channels".equals(table)))return input;
+        JSONArray result=new JSONArray();
         for(int i=0;i<input.length();i++){
             JSONObject item=input.optJSONObject(i);
-            if(item==null)continue;
-            boolean youtube=YouTubeLink.usable(item.optString("youtube_url",""));
-            boolean direct=StreamQuality.isDirectUrl(item.optString("stream_url",""));
-            if("aseel_channels".equals(table)){
-                String mode=item.optString("playback_mode","stream");
-                String external=item.optString("official_url","");
-                // Official outbound navigation is not a video redistribution license.
-                // Pending-rights channels may still open their broadcaster's own page.
-                boolean approvedLink="official_link".equals(mode)
-                    && ("approved".equals(item.optString("rights_status",""))
-                        || "pending".equals(item.optString("rights_status","")))
-                    && (item.isNull("stream_url")||item.optString("stream_url","").isEmpty())
-                    && (item.isNull("youtube_url")||item.optString("youtube_url","").isEmpty())
-                    && !"broken".equals(item.optString("link_health_status",""))
-                    && officialChannelLink(external);
-                if(!approvedLink){
-                    if(!"approved".equals(item.optString("rights_status","")))continue;
-                    if(!youtube&&!direct)continue;
-                    if("youtube_embed".equals(mode) && !youtube)continue;
-                    if("stream".equals(mode) &&
-                        (!direct || "broken".equals(item.optString("link_health_status",""))))continue;
-                    if(!"stream".equals(mode)&&!"youtube_embed".equals(mode))continue;
-                }
-            } else if(!youtube&&!direct) {
-                // Keep published, rights-approved movies and episode outlines visible.
-                // Missing/unusable streams show our built-in Coming Soon view on click.
-                // This is catalog visibility, not playback approval.
-                if(!("aseel_movies".equals(table)||"aseel_episodes".equals(table)))continue;
-            }
-            boolean channelAllowed="aseel_channels".equals(table)
-                && "official_link".equals(item.optString("playback_mode",""));
-            if(!"published".equals(item.optString("status","")) ||
-                (!"approved".equals(item.optString("rights_status","")) && !channelAllowed))continue;
-            output.put(item);
+            if(item!=null && "published".equals(item.optString("status","")))result.put(item);
         }
-        return output;
+        return result;
     }
     static boolean officialChannelLink(String external){
         return external.startsWith("https://www.qanwatlive.com/")
