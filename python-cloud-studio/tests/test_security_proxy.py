@@ -71,7 +71,7 @@ class ProxyPoolTests(unittest.TestCase):
     def test_reject_proxy_dns_with_private_ip(self):
         entries = [(socket.AF_INET,socket.SOCK_STREAM,6,"",("93.184.215.14",3128)),
                    (socket.AF_INET,socket.SOCK_STREAM,6,"",("10.1.2.3",3128))]
-        with patch("security_proxy.socket.getaddrinfo", return_value=entries):
+        with patch("socket.getaddrinfo", return_value=entries):
             with self.assertRaises(OSError):
                 _public_addrs("edge1.example.net",3128)
 
