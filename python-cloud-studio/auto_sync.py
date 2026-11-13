@@ -416,7 +416,6 @@ class AutoSync:
             return {}
 
     @property
-    @property
     def enabled(self): return self.queue.get_setting('enabled',os.getenv('ALEZZ_AUTOSYNC_ENABLED','1')=='1')
 
     @staticmethod
