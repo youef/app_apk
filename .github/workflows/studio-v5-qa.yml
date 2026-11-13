@@ -48,8 +48,11 @@ jobs:
           node --check python-cloud-studio/static/autosync.js
           node --check python-cloud-studio/static/studio-pro.js
           node --check python-cloud-studio/static/studio-quality.js
-      - name: Run Node player-source recovery tests
-        run: node --test web/tests/api-player-fallback.test.cjs
+      - name: Run Node player-source and live-stream UI tests
+        run: |
+          node --test web/tests/api-player-fallback.test.cjs
+          node --test web/tests/private-live-studio.test.cjs
       - name: Run offline regression tests
         run: |
           python -m unittest discover -s python-cloud-studio/tests -p 'test_studio_v5_integrity.py' -v
+          python -m unittest discover -s python-cloud-studio/tests -p 'test_live_scan_integrity.py' -v
