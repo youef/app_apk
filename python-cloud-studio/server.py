@@ -214,7 +214,10 @@ def get_summary(state: UserState) -> dict:
                                 verified=sum(ep.verified for ep in c.episodes) if c.kind=='series' else int(c.verified))
                            for i,c in enumerate(state.catalogues)],
                     batch_errors=state.batch_errors[:25],current_index=state.current_index,
-                    tracking=dict(state.tracking) if state.tracking else None)
+                    tracking=dict(state.tracking) if state.tracking else None,
+                    capture=(_capture_summary(state.capture)
+                             if cat and state.capture and state.capture.get('catalogue_url')==cat.url
+                             else None))
 
 
 @app.get('/')
@@ -1160,14 +1163,18 @@ def _run_episode_capture_batches(state:UserState,cat:Catalogue,job:dict):
             with state.lock:
                 if state.catalogue is not cat or state.capture is not job:break
                 # A budget timeout is not a confirmed broken source.
+                interrupted=bool(job.get('cancel'))
                 skipped=len(pending)
-                job['done']+=skipped
-                job['batch_done']+=skipped
-                job['timed_out']+=skipped
-                job['next_index']=stop
+                if not interrupted:
+                    job['done']+=skipped
+                    job['batch_done']+=skipped
+                    job['timed_out']+=skipped
+                # Stopping mid-batch leaves it eligible for a clean retry.
+                job['next_index']=start if interrupted else stop
                 job['last_batch_seconds']=round(time.time()-job['batch_started_at'],1)
                 job['phase']='batch_done'
-                job['message']=(f"انتهت الدفعة {job['batch_number']} خلال "
+                job['message']=('تم إيقاف الدفعة، ويمكن استئنافها' if interrupted else
+                                f"انتهت الدفعة {job['batch_number']} خلال "
                                 f"{job['last_batch_seconds']} ثانية؛ "
                                 f"{skipped} حلقة تحتاج إعادة محاولة" if skipped else
                                 f"اكتملت الدفعة {job['batch_number']}؛ الانتقال تلقائيًا")
