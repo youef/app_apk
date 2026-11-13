@@ -302,6 +302,37 @@ class AutoSyncTests(unittest.TestCase):
         self.assertTrue(any(force for _,force in self.resolver.extractions))
         self.assertEqual(self.db.rows['aseel_movies'][row['id']]['stream_url'],NEW)
 
+    def test_approved_movie_is_published_after_verified_direct_stream(self):
+        row=self.row(name='approved-draft',status='draft',rights_status='approved')
+        self.resolver.healthy.add(OLD)
+        def update(method,table,filters,payload):
+            self.assertEqual(method,'PATCH')
+            return [self.db.patch(table,item['id'],payload)
+                    for item in self.db.query(table,filters)]
+        with patch.object(self.db,'req',create=True,side_effect=update):
+            self.worker.check_target(self.job(row))
+        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['status'],'published')
+
+    def test_pending_rights_never_publish_after_verified_stream(self):
+        row=self.row(name='pending-draft',status='draft',rights_status='pending')
+        self.resolver.healthy.add(OLD)
+        with patch.object(self.db,'req',create=True) as publish:
+            self.worker.check_target(self.job(row))
+        publish.assert_not_called()
+        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['status'],'draft')
+
+    def test_hidden_approved_media_never_auto_published(self):
+        row=self.row(name='hidden-verified',status='hidden',rights_status='approved')
+        self.resolver.healthy.add(OLD)
+        with patch.object(self.db,'req',create=True) as publish:
+            self.worker.check_target(self.job(row))
+        publish.assert_not_called()
+        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['status'],'hidden')
+
+    def test_worker_four_hour_refresh_default_and_independent_health_checks(self):
+        self.assertEqual(self.worker.interval,4*3600)
+        self.assertEqual(self.worker.check_interval,5*60)
+
     def test_new_episode_publication_requires_opt_in_and_approved_series(self):
         from unittest.mock import Mock
         database = Mock()

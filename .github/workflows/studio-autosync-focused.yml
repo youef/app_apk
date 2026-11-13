@@ -1,0 +1,41 @@
+name: Al Ezz Studio - Focused background worker checks
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'python-cloud-studio/auto_sync.py'
+      - 'python-cloud-studio/test_auto_sync.py'
+      - '.github/workflows/studio-autosync-focused.yml'
+  pull_request:
+    paths:
+      - 'python-cloud-studio/auto_sync.py'
+      - 'python-cloud-studio/test_auto_sync.py'
+      - '.github/workflows/studio-autosync-focused.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check-background-worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install -r python-cloud-studio/requirements-dev.txt
+      - run: python -m compileall -q python-cloud-studio
+      - name: Verify autonomous refresh and rights-safe publication
+        working-directory: python-cloud-studio
+        env:
+          ALEZZ_AUTOSYNC_ENABLED: '0'
+          ALEZZ_AUTOSYNC_SOURCE_INTERVAL_HOURS: '4'
+        run: |
+          python -m unittest -v \
+            test_auto_sync.AutoSyncTests.test_approved_movie_is_published_after_verified_direct_stream \
+            test_auto_sync.AutoSyncTests.test_pending_rights_never_publish_after_verified_stream \
+            test_auto_sync.AutoSyncTests.test_hidden_approved_media_never_auto_published \
+            test_auto_sync.AutoSyncTests.test_worker_four_hour_refresh_default_and_independent_health_checks \
+            test_auto_sync.AutoSyncTests.test_pause_resume_setting_survives_restart \
+            test_auto_sync.AutoSyncTests.test_working_backup_prevents_draft_and_replaces_failed_primary \
+            test_auto_sync.AutoSyncTests.test_okru_provider_rate_limit_never_autodrafts_on_inconclusive_probe
