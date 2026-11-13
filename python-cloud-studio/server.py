@@ -514,7 +514,7 @@ async def title_search(request: Request, body: TitleSearchForm):
     return {'results': results}
 
 
-def _scan_media_entry(cat: Catalogue, entry):
+def _scan_media_entry(cat: Catalogue, entry, force_browser:bool=False):
     """Bounded, independent discovery worker. Only its own result is returned.
 
     Public HTTPS pages and media candidates are inspected. Embedded pages are
@@ -532,8 +532,8 @@ def _scan_media_entry(cat: Catalogue, entry):
     try:
         # HTTP checks run concurrently. Browser extraction is a controlled
         # fallback and can take longer on source sites that throttle access.
-        resolver = MediaResolver(mode=AUTOSYNC.mode, timeout=5, max_pages=3,
-                                 workers=3, max_seconds=8)
+        resolver = MediaResolver(mode='auto' if force_browser else AUTOSYNC.mode,
+                                 timeout=5,max_pages=3,workers=3,max_seconds=8)
         embed_pages = [item['url'] for item in candidates if item.get('kind') == 'embed' and item.get('url')]
         checked, errors = resolver.resolve([*pages, *embed_pages], existing=candidates)
         playable = next((item for item in checked
@@ -1126,7 +1126,7 @@ def _run_episode_capture_batches(state:UserState,cat:Catalogue,job:dict):
                 job['phase']='scanning'
                 job['message']=f"بدأت الدفعة {job['batch_number']} — الحلقات {start+1} إلى {stop}"
                 _capture_event(job,phase='batch',message=job['message'])
-            futures={_episode_capture_pool.submit(_scan_media_entry,cat,item):item for item in entries}
+            futures={_episode_capture_pool.submit(_scan_media_entry,cat,item,True):item for item in entries}
             pending=set(futures)
             deadline=time.monotonic()+_EPISODE_BATCH_SECONDS
             while pending:
