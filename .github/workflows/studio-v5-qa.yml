@@ -64,3 +64,4 @@ jobs:
           python -m unittest discover -s python-cloud-studio/tests -p 'test_studio_v6_scans.py' -v
           python -m unittest discover -s python-cloud-studio/tests -p 'test_studio_v6_continuation.py' -v
           python -m unittest discover -s python-cloud-studio/tests -p 'test_episode_capture_batches.py' -v
+          python -m unittest discover -s python-cloud-studio/tests -p 'test_media_discovery_regressions.py' -v
