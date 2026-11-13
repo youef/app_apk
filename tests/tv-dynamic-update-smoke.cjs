@@ -40,7 +40,7 @@ assert.ok(home.includes("goTo(browseOrigin)")&&home.includes("restorePosition(br
     "back button returns to category directory");
 assert.ok(home.includes('cardGridLimit+72'),"large lists progressively render");
 assert.ok(home.includes('UnavailableVideoActivity.show(this,"live",label(item))') &&
-    api.includes("officialChannelLink(external)") &&
+    api.includes("officialChannelLink(String external)") &&
     !home.includes("android.content.Intent.ACTION_VIEW"),
     "official link metadata retained but never opens an external video browser");
 assert.ok(nativeCategory.includes('category.contains("قنوات روتانا")'),"Rotana entries grouped by network");
