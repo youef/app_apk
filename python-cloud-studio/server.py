@@ -41,7 +41,7 @@ from alezz_fetchv_importer import (
 from metadata_enrichment import enrich
 from library_sync import JobDB,collect_pages,collect_works
 from auto_sync import AutoSync, target_key
-from media_resolver import MediaResolver, read_public_html, safe_error, supported_source_kind, normalized_source_url
+from media_resolver import MediaResolver, read_public_html, safe_error, supported_source_kind, normalized_source_url, merge_sources
 from title_cleaner import content_title
 from launch import studio_revision
 from member_portal import Portal
@@ -612,7 +612,7 @@ async def title_search(request: Request, body: TitleSearchForm):
     return {'results': results}
 
 
-def _scan_media_entry(cat: Catalogue, entry, force_browser:bool=False):
+def _scan_media_entry(cat: Catalogue, entry, force_browser:bool=False, on_candidates=None):
     """Bounded, independent discovery worker. Only its own result is returned.
 
     Public HTTPS pages and media candidates are inspected. Embedded pages are
@@ -638,7 +638,8 @@ def _scan_media_entry(cat: Catalogue, entry, force_browser:bool=False):
         budget = max(8, min(24, int(os.getenv('ALEZZ_STUDIO_SCAN_SECONDS', '18'))))
         resolver = MediaResolver(mode='auto' if force_browser or AUTOSYNC.mode == 'auto' else AUTOSYNC.mode,
                                  timeout=5,max_pages=5,workers=3,max_seconds=budget)
-        checked, errors = resolver.resolve(pages, existing=candidates)
+        checked, errors = resolver.resolve(pages, existing=candidates,
+                                           on_candidates=on_candidates)
         playable = next((item for item in checked
                          if item.get('verified') and item.get('kind') == 'direct'), None)
         embedded = any(item.get('kind') == 'embed' and item.get('reachable')
@@ -740,6 +741,28 @@ def scan_catalogue(state: UserState, cat: Catalogue, progress: dict):
     completed=set(progress.get("completed_keys",[]))
     scheduled=set(completed)
     errors_in_row=0
+
+    def report_candidates(entry, found, phase):
+        """Publish candidate counts at discovery time, before byte verification."""
+        if not found:return
+        with state.lock:
+            if state.catalogue is not cat or state.scan is not progress or progress.get("stop_requested"):
+                return
+            before={row.get("url") for row in entry.sources}
+            additions=[row for row in found
+                       if isinstance(row,dict) and row.get("url") not in before]
+            if not additions:return
+            entry.sources=merge_sources(entry.sources,additions,limit=128)
+            all_sources=[src for media in (cat.episodes if cat.kind=="series" else [cat])
+                         for src in media.sources]
+            progress["sources_found"]=sum(src.get("kind")=="direct" for src in all_sources)
+            progress["embeds_found"]=sum(src.get("kind")=="embed" for src in all_sources)
+            progress["players_found"]=len(all_sources)
+            packet={"sources":list(entry.sources),"phase":phase}
+            if cat.kind=="series":
+                packet.update(season=entry.season,number=entry.number)
+            _emit_scan_event(state,progress,"episode_candidates",packet)
+
     try:
         with ThreadPoolExecutor(max_workers=5,thread_name_prefix="studio-media") as executor:
             futures={}
@@ -756,7 +779,8 @@ def scan_catalogue(state: UserState, cat: Catalogue, progress: dict):
                             key=_scan_key(entry,cat.kind)
                             if key in scheduled:continue
                             scheduled.add(key)
-                            futures[executor.submit(_scan_media_entry,cat,entry)]=(key,entry)
+                            futures[executor.submit(_scan_media_entry,cat,entry,False,
+                                lambda found,phase,record=entry: report_candidates(record,found,phase))]=(key,entry)
                     if not futures and (not crawls or stopped):
                         break
                 if not futures:
