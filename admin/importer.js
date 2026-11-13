@@ -393,7 +393,7 @@
    };
    $("impTest").onclick=testPlayback;$("impRefreshPreview").onclick=updatePreview;
    $("impDraft").onclick=()=>save("draft");$("impPublish").onclick=()=>save("published");
-   $("impHide").onclick=()=>save("draft");
+   
    $("impCopy").onclick=copy;$("impReload").onclick=()=>listSaved().catch(e=>msg(e.message,true));
    $("impSearch").oninput=renderSaved;
    $("impReset").onclick=reset;
