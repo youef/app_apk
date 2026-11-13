@@ -898,7 +898,7 @@ public final class TVHomeActivity extends Activity {
         final int token=++generation;
         background.execute(new Runnable(){public void run(){
             JSONArray data=null;String error="";
-            try{data=catalog.listPaged("aseel_movies","?select=*&status=eq.published&rights_status=eq.approved&order=created_at.desc,id.asc");}
+            try{data=catalog.listPaged("aseel_movies","?select=*&status=eq.published&order=created_at.desc,id.asc");}
             catch(Exception e){error+="أفلام: "+CatalogApi.describe(e)+"  ";}
             final JSONArray rows=data;final String problem=error;
             ui.post(new Runnable(){public void run(){if(token!=generation||!unlocked)return;
@@ -908,7 +908,7 @@ public final class TVHomeActivity extends Activity {
         }});
         background.execute(new Runnable(){public void run(){
             JSONArray data=null;String error="";
-            try{data=catalog.listPaged("aseel_series","?select=*&status=eq.published&rights_status=eq.approved&order=created_at.desc,id.asc");}
+            try{data=catalog.listPaged("aseel_series","?select=*&status=eq.published&order=created_at.desc,id.asc");}
             catch(Exception e){error="مسلسلات: "+CatalogApi.describe(e);}
             final JSONArray rows=data;final String issue=error;
             ui.post(new Runnable(){public void run(){if(token!=generation||!unlocked)return;
@@ -919,7 +919,7 @@ public final class TVHomeActivity extends Activity {
         background.execute(new Runnable(){public void run(){
             JSONArray data=null;String error="";
             try{data=catalog.listPaged("aseel_channels","?select=*&status=eq.published"+
-                "&or=(rights_status.eq.approved,and(rights_status.eq.pending,playback_mode.eq.official_link))"+
+                ""+
                 "&order=display_order.asc,created_at.desc,id.asc");}
             catch(Exception e){error="قنوات: "+CatalogApi.describe(e);}
             // Resolve category IDs for ALL three libraries, not only channels.
@@ -2174,7 +2174,6 @@ public final class TVHomeActivity extends Activity {
     }
     private boolean kidsDirect(JSONObject x){
         if(x==null || !x.optBoolean("is_kids",false) ||
-           !"approved".equals(value(x,"rights_status")) ||
            !kidsAgeAllowed(value(x,"age_rating")))return false;
         String url=value(x,"stream_url");
         return url.startsWith("https://") &&
@@ -2235,7 +2234,7 @@ public final class TVHomeActivity extends Activity {
                     String seasonId=value(season,"id");
                     if(!seasonId.matches("[0-9a-fA-F-]{36}"))continue;
                     JSONArray list=catalog.listQuery("aseel_episodes",
-                        "?select=*&season_id=eq."+seasonId+"&status=eq.published&rights_status=eq.approved&order=number.asc&limit=500");
+                        "?select=*&season_id=eq."+seasonId+"&status=eq.published&order=number.asc&limit=500");
                     for(int k=0;k<list.length();k++){
                         JSONObject episode=list.optJSONObject(k);if(episode==null)continue;
                         mark(episode,"episode");
@@ -2463,8 +2462,7 @@ public final class TVHomeActivity extends Activity {
             for(int i=queueStart;i<Math.min(sourceItems.size(),queueStart+60);i++){
                 JSONObject candidate=sourceItems.get(i);
                 if(kidsMode && "movie".equals(kind(candidate)) && !kidsDirect(candidate))continue;
-                if(kidsMode && "episode".equals(kind(candidate)) &&
-                    !"approved".equals(value(candidate,"rights_status")))continue;
+                
                 String candidateUrl=value(candidate,"stream_url");
                 String variants=candidate.optJSONArray("stream_variants")==null
                     ? "[]" : candidate.optJSONArray("stream_variants").toString();
