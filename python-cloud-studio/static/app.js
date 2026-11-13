@@ -57,7 +57,7 @@
     else $('activity').querySelector('.activity-ico').classList.remove('spin');
   }
   function busy(value){app.busy=value; for(const id of ['discoverBtn','discoverBatchBtn','scanListingBtn','saveBatchBtn','demoBtn','applyLinksBtn','updateBtn','verifyAllBtn','verifySelectedBtn','verifyMovieBtn','edgeCaptureBtn','saveBtn','addEpisodeBtn']){
-    if($(id))$(id).disabled=value || (id==='saveBtn' && app.demo) || (app.scanning && !['discoverBtn','discoverBatchBtn','scanListingBtn','demoBtn','updateBtn','saveBtn'].includes(id));
+    if($(id))$(id).disabled=value || (id==='saveBtn' && app.demo) || (id==='edgeCaptureBtn' && app.browserCaptureRunning) || (app.scanning && !['discoverBtn','discoverBatchBtn','scanListingBtn','demoBtn','updateBtn','saveBtn'].includes(id));
   }}
   function text(el, value){el.textContent = value==null?'':String(value);return el;}
   function make(tag, cls='', content){const el=document.createElement(tag);if(cls)el.className=cls;if(content!=null)text(el,content);return el;}
@@ -99,6 +99,8 @@
     $('exportBtn').disabled=!cat;$('demoBadge').hidden=!app.demo;
     $('saveBtn').disabled=app.demo||app.busy;
     if(cat)renderContent();
+    if(payload.capture && payload.capture.catalogue_url===cat?.url)
+      connectEpisodeBatch(payload.capture);
     $('toolsLinksBtn').disabled=!cat||$('workspace').inert;
     document.dispatchEvent(new Event('studio:catalogue'));
   }
@@ -334,6 +336,137 @@
         toast(fail,'error');
       }else toast('اكتملت مزامنة جميع الأعمال مع قاعدة البيانات.','success');
     });
+  }
+
+  let episodeBatchStream=null,episodeBatchTimer=null,episodeBatchJob=null,
+      episodeBatchRevision=0,episodeBatchPolling=false,episodeBatchFallback=false;
+
+  function closeEpisodeBatchConnection(){
+    if(episodeBatchStream){episodeBatchStream.close();episodeBatchStream=null;}
+    if(episodeBatchTimer){clearInterval(episodeBatchTimer);episodeBatchTimer=null;}
+  }
+  function episodeBatchProgress(job){
+    if(!job || !app.catalogue)return;
+    episodeBatchJob=job;
+    const total=Number(job.total||0),done=Math.min(total,Number(job.done||0));
+    const panel=$('episodeBatchPanel');panel.hidden=false;
+    $('episodeBatchCount').textContent=done+' / '+total;
+    $('episodeBatchCurrent').textContent=(job.batch_done||0)+' / '+(job.batch_total||0)+
+      ' • الدفعة '+(job.batch_number||0);
+    const elapsed=job.batch_started_at ? Math.max(0,Math.round(Date.now()/1000-job.batch_started_at)) : 0;
+    $('episodeBatchElapsed').textContent=(job.running?Math.min(elapsed,45):job.last_batch_seconds||elapsed)+' / 45 ثانية';
+    $('episodeBatchFound').textContent=String(job.candidates||0);
+    $('episodeBatchStatus').textContent=job.message||
+      ('الدفعة '+(job.batch_number||0)+' — جلب الحلقات تلقائيًا');
+    $('episodeBatchProgress').max=Math.max(1,total);
+    $('episodeBatchProgress').value=done;
+    $('episodeBatchLive').classList.toggle('is-done',!job.running);
+    $('episodeBatchLive').classList.toggle('is-off',!job.running);
+    $('episodeBatchLive').textContent=job.running?'● LIVE · فحص الحلقات':'✓ النتائج متاحة';
+    $('episodeBatchStop').disabled=!job.running;
+    $('edgeCaptureBtn').disabled=job.running||app.busy;
+    $('edgeCaptureBtn').textContent=job.running?'◷ اكتشاف الحلقات جارٍ…':
+      (job.next_index>=total?'↻ إعادة اكتشاف روابط الحلقات':'⚡ استكمال اكتشاف روابط الحلقات');
+    app.browserScanIndex=job.next_index||0;
+    app.browserCaptureRunning=!!job.running;
+    if(!job.running){
+      closeEpisodeBatchConnection();
+      if(job.error)activity(job.error,'error');
+      else activity(job.message,job.cancel?'info':'success');
+    }
+  }
+  function applyEpisodeBatchEvent(item){
+    if(!item||!episodeBatchJob || item.revision<=episodeBatchRevision)return;
+    episodeBatchRevision=item.revision;
+    if(item.delta){
+      updateDiscoveryDelta(item.delta);
+      const ep=item.delta,title=app.catalogue?.kind==='movie'?app.catalogue.title:
+        ('م'+(ep.season||1)+' ح'+(ep.number||'?')+' · '+(ep.title||'حلقة'));
+      const sources=Array.isArray(ep.sources)?ep.sources:[];
+      const count=sources.filter(x=>x.kind==='direct').length;
+      const entry=make('div','episode-batch-item');
+      entry.append(make('strong','',title),
+        make('span','',ep.verified?'✓ صالح وقت الفحص':
+          count?count+' مصدر مرشح':'لم يُعثر على رابط قابل للتحقق'));
+      $('episodeBatchLog').prepend(entry);
+      while($('episodeBatchLog').children.length>22)$('episodeBatchLog').lastElementChild.remove();
+    }
+    if(item.snapshot)episodeBatchProgress(item.snapshot);
+  }
+  async function pollEpisodeBatch(){
+    if(episodeBatchPolling||!episodeBatchJob||!episodeBatchJob.running)return;
+    episodeBatchPolling=true;
+    try{
+      const query='episode-capture-batches/status?job_id='+encodeURIComponent(episodeBatchJob.id)+
+        '&after='+episodeBatchRevision;
+      const data=await API(query);
+      for(const event of data.events||[])applyEpisodeBatchEvent(event);
+      if(data.job&&data.job.revision>=episodeBatchRevision)episodeBatchProgress(data.job);
+    }catch(error){
+      if(/انتهت الجلسة|401|403|404/.test(error.message)){
+        closeEpisodeBatchConnection();
+        toast('تعذر متابعة فحص الحلقات: '+error.message,'error');
+      }
+    }finally{episodeBatchPolling=false;}
+  }
+  function connectEpisodeBatch(job){
+    if(!job)return;
+    if(episodeBatchJob?.id===job.id && episodeBatchStream)return;
+    closeEpisodeBatchConnection();
+    if(episodeBatchJob?.id!==job.id){
+      episodeBatchRevision=0;$('episodeBatchLog').replaceChildren();
+    }
+    episodeBatchJob=job;
+    episodeBatchProgress(job);
+    if(!job.running)return;
+    if(typeof EventSource==='undefined'){
+      episodeBatchFallback=true;
+    }else{
+      const stream=new EventSource('/api/episode-capture-batches/events?job_id='+encodeURIComponent(job.id));
+      episodeBatchStream=stream;
+      stream.addEventListener('snapshot',event=>{
+        if(episodeBatchJob?.id!==job.id)return;
+        try{applyEpisodeBatchEvent(JSON.parse(event.data));}
+        catch(error){console.warn('Invalid episode batch event',error);}
+      });
+      stream.onerror=()=>{
+        if(episodeBatchJob?.id!==job.id)return;
+        episodeBatchFallback=true;
+        if(episodeBatchStream){episodeBatchStream.close();episodeBatchStream=null;}
+      };
+    }
+    // Poll acts as a fallback when Render buffers an SSE connection.
+    episodeBatchTimer=setInterval(()=>{
+      if(episodeBatchFallback||!episodeBatchStream)pollEpisodeBatch();
+      if(episodeBatchJob?.running)episodeBatchProgress(episodeBatchJob);
+    },1300);
+    pollEpisodeBatch();
+  }
+  async function startEpisodeBatches(){
+    if(!app.catalogue)throw new Error('اكتشف العمل أولًا.');
+    if(episodeBatchJob?.running)return;
+    const cloud=!['localhost','127.0.0.1'].includes(location.hostname);
+    if(cloud&&!app.authenticated){
+      $('loginToggle').click();
+      throw new Error('سجّل دخول المسؤول لتفعيل فحص Chromium.');
+    }
+    await syncEdits({silent:true});
+    const total=app.catalogue.kind==='series'?app.catalogue.episodes.length:1;
+    if(!total)throw new Error('لم يتم اكتشاف حلقات بعد.');
+    const key=app.catalogue.url+'|'+total;
+    if(app.browserScanKey!==key){app.browserScanKey=key;app.browserScanIndex=0;}
+    let start=app.browserScanIndex||0;
+    if(start>=total)start=0;
+    activity('بدء الفحص التلقائي: 10 حلقات لكل دفعة، حتى 45 ثانية للدفعة.','loading');
+    const result=await API('episode-capture-batches/start',{start_index:start});
+    connectEpisodeBatch(result.job);
+    toast(result.already_running?'الفحص مستمر في الخلفية.':'بدأ فحص كل الحلقات بالتتابع دون الضغط المتكرر.','success');
+  }
+  async function stopEpisodeBatches(){
+    if(!episodeBatchJob?.running)return;
+    const result=await API('episode-capture-batches/stop',{});
+    episodeBatchProgress(result.job);
+    toast('طلب إيقاف الفحص؛ يمكن استكمال الدفعة لاحقًا.','info');
   }
 
   let discoveryTimer, discoveryId, discoveryDone=-1, discoveryStream=null,
@@ -710,35 +843,8 @@
       const input=$('movieMediaUrl');input.value=normalizeMediaInput(input.value);
       const button=$('movieOkPreview');if(button){button.hidden=!okPlayerUrl(input.value);}
     });
-    $('edgeCaptureBtn').onclick=()=>action(async()=>{
-      if(!app.catalogue)throw new Error('اكتشف العمل أولًا.');
-      const cloud=!['localhost','127.0.0.1'].includes(location.hostname);
-      if(cloud&&!app.authenticated){$('loginToggle').click();throw new Error('سجّل دخول مسؤول Supabase أولًا لتفعيل فحص Chromium على Render.');}
-      const message=cloud?'سيعمل متصفح Chromium على خادم Render لفحص روابط HTTPS العامة فقط. لا يتحكم في Safari ولا في الإضافات. متابعة؟':'سيُفتح Microsoft Edge محليًا في نافذة جديدة لفحص طلبات الوسائط العامة. متابعة؟';
-      if(!confirm(message))return;
-      await syncEdits({silent:true});
-      const total=app.catalogue.kind==='series'?app.catalogue.episodes.length:1;
-      if(!total)throw new Error('لم يتم اكتشاف حلقات بعد؛ استورد قائمة الحلقات أولًا.');
-      const key=app.catalogue.url+'|'+total;
-      if(app.browserScanKey!==key){app.browserScanKey=key;app.browserScanIndex=0;}
-      let index=app.browserScanIndex||0;
-      if(index>=total)index=0;
-      let found=0,processed=0;
-      while(index<total&&processed<32){
-        activity(`فحص الصفحات عبر Chromium: ${index} من ${total}. روابط مكتشفة في الجولة: ${found}.`,'loading');
-        const result=await API('edge-capture',{seconds:2,max_pages:4,start_index:index});
-        found+=result.detected;
-        processed+=result.processed;
-        index=result.next_index;
-        app.browserScanIndex=index;
-        updateStatus(result);
-        if(!result.processed)break;
-      }
-      const more=index<total;
-      const note=`انتهى فحص ${processed} صفحة؛ اكتُشف ${found} رابط. ${more?'اضغط الزر مجددًا لاستكمال بقية الحلقات.':'انتهت جميع الصفحات.'} افحص صلاحية الروابط قبل حفظها.`;
-      activity(note,found?'success':'info');
-      toast(note,found?'success':'info');
-    });
+    $('edgeCaptureBtn').onclick=()=>action(startEpisodeBatches);
+    $('episodeBatchStop').onclick=()=>action(stopEpisodeBatches);
     $('episodeSearch').oninput=()=>{if(app.catalogue?.kind==='series')renderEpisodes();};
     $('loginForm').onsubmit=doLogin;
     $('loginToggle').onclick=async()=>{
