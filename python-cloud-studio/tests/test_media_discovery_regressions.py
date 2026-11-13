@@ -112,6 +112,29 @@ class StudioMediaRecoveryTests(unittest.TestCase):
         self.assertTrue(found[0]["verified"])
         self.assertGreater(seen["browser_deadline"]-seen["html_deadline"], 7)
 
+    def test_preverification_candidates_are_emitted_to_client(self):
+        namespace = {"time": time,
+                     "merge_sources": lambda *groups: [x for group in groups for x in group]}
+        resolve = isolated_method(RESOLVER, "MediaResolver", "resolve", namespace)
+        provisional = {"url": "https://cdn.example.com/player.m3u8",
+                       "kind": "direct", "verified": False}
+        browser_candidate = {"url": "https://cdn.example.com/stream?sig=xyz",
+                             "kind": "direct", "verified": False}
+        observed = []
+        obj = types.SimpleNamespace(
+            mode="auto", max_seconds=18,
+            _http=lambda pages, *, deadline: ([provisional], []),
+            _browser=lambda pages, *, deadline, known: ([browser_candidate], []),
+            check=lambda sources, *, deadline: [dict(row, verified=False) for row in sources],
+        )
+        resolved, errors = resolve(obj, ["https://public.example.com/episode"],
+            on_candidates=lambda rows, phase: observed.append((phase, [x["url"] for x in rows])))
+        self.assertFalse(errors)
+        self.assertEqual([event[0] for event in observed], ["http", "chromium"])
+        self.assertIn(provisional["url"], observed[0][1])
+        self.assertIn(browser_candidate["url"], observed[1][1])
+        self.assertGreaterEqual(len(resolved), 2)
+
     def test_studio_counts_direct_and_embedded_candidates_separately(self):
         text = SERVER.read_text(encoding="utf-8")
         self.assertIn('progress["players_found"]=len(all_sources)', text)
@@ -119,6 +142,10 @@ class StudioMediaRecoveryTests(unittest.TestCase):
         self.assertIn('progress["sources_found"]=sum(', text)
         self.assertIn("max_pages=5", text)
         self.assertIn("ALEZZ_STUDIO_SCAN_SECONDS", text)
+        self.assertIn('_emit_scan_event(state,progress,"episode_candidates"', text)
+        self.assertIn('on_candidates=on_candidates', text)
+        client = (BASE / "static" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("packet.kind==='episode_candidates'", client)
 
     def test_inline_player_hints_and_network_media_are_observed(self):
         text = RESOLVER.read_text(encoding="utf-8")
