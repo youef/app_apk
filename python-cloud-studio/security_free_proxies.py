@@ -9,10 +9,7 @@ rotation, Cloudflare bypass, credentials, cookies or sensitive API requests.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
-from datetime import datetime, timezone
 import ipaddress
-import os
 import re
 import threading
 import time
@@ -81,7 +78,7 @@ def _fetch_candidates():
     for _, path in SOURCES:
         try:
             status, headers, blob = safe_get(SOURCE_HOST, path, max_bytes=MAX_SOURCE_BYTES)
-            if status != 200:
+            if status not in (200, 206):
                 continue
             ct = next((str(value).lower() for key, value in headers.items()
                        if key.lower() == "content-type"), "")
