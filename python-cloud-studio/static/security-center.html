@@ -5,7 +5,7 @@
 <meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#0b1018">
 <title>مركز أمان المواقع | العز TV</title>
 <link rel="stylesheet" href="/static/security-center.css?v=4">
-<script defer src="/static/security-center.js?v=6"></script>
+<script defer src="/static/security-center.js?v=7"></script>
 </head>
 <body>
 <div class="shell">
@@ -23,18 +23,19 @@
 <main class="main">
 <header class="topbar"><div class="crumbs"><a href="/studio/">الاستوديو</a><span>/</span><b>مركز الأمان</b></div><div class="top-status">● محرك Python آمن</div></header>
 <div class="content">
-<section class="hero"><div class="eyebrow">AL EZZ SECURITY CENTER / V3</div>
+<section class="hero"><div class="eyebrow">AL EZZ SECURITY CENTER / V3.2</div>
 <h1>مركز حماية <em>مواقعك.</em></h1>
 <p>افحص ووردبريس، XenForo، vBulletin، phpBB، MyBB، Laravel والمواقع المخصصة، واستعرض مسارات الإدارة وتسجيل الدخول وواجهات API العامة وطلبات الشبكة ومؤشرات الأمان، مع توصيات الإصلاح.</p>
-<div class="chips"><span>HTTPS / TLS</span><span>Headers</span><span>CORS</span><span>WordPress</span><span>Exposure</span><span>Chromium Network</span><span>Public API Discovery</span><span>OpenAPI</span><span>Soft-404 Calibration</span></div>
+<div class="chips"><span>HTTPS / TLS</span><span>Headers</span><span>CORS</span><span>WordPress</span><span>Exposure</span><span>Chromium Network</span><span>Public API Discovery</span><span>OpenAPI</span><span>Soft-404 Calibration</span><span>Trusted Proxy Pool</span></div>
 <div class="hero-icon" aria-hidden="true">⬡</div></section>
 <section class="panel"><div class="section-head"><div><span class="eyebrow">01 / إضافة نطاق</span><h2>سجل موقعك للفحص</h2><p>ألصق رابط الموقع الذي تريد اختباره، وسيبدأ فحص الأمان تلقائيًا بعد إضافته.</p></div></div>
 <form id="addForm" class="form"><label><span>رابط الموقع</span><input id="siteUrl" type="url" dir="ltr" required maxlength="2048" placeholder="https://example.com"></label><button type="submit" id="addButton">إضافة وفحص الآن ↗</button></form>
 <p class="note">عناوين localhost والخوادم الداخلية لا تصل إليها خدمة Render؛ يلزم تشغيل المحرك محليًا على شبكتك لهذه المواقع.</p></section>
+<section class="panel" aria-label="حالة اتصالات البروكسي"><div class="section-head"><div><span class="eyebrow">NETWORK / PROXY POOL</span><h2>البروكسيات الاحتياطية</h2><p>للنطاقات التي تعتمدها صراحةً فقط. يتبدّل البروكسي عند فشل اتصال الشبكة، وليس عند ظهور حظر Cloudflare أو HTTP 403/429.</p></div><button class="secondary" id="proxyRefresh" type="button">↻ حالة البروكسيات</button></div><div id="proxyStatus" class="note" aria-live="polite">قراءة الإعدادات...</div><p class="note">أضف عناوين البروكسيات السرية من إعدادات Render؛ لا تضع كلمات المرور في هذه الصفحة أو GitHub.</p></section>
 <div class="stats"><div><small>المواقع</small><strong id="totalSites">—</strong></div><div><small>جاهزة للفحص</small><strong id="verifiedSites">—</strong></div><div><small>التقارير</small><strong id="scannedSites">—</strong></div></div>
 <section class="panel"><div class="section-head"><div><span class="eyebrow">02 / قائمة المواقع</span><h2>مواقعك المسجلة</h2><p>بدون إثبات ملكية؛ ابدأ الفحص مباشرة، وتابع النتائج والجدولة.</p></div><button class="secondary" id="refreshButton" type="button">↻ تحديث</button></div><div id="sites" class="sites" aria-live="polite">جارٍ تحميل البيانات…</div></section>
 <section class="panel" id="reportSection" hidden><div class="section-head"><div><span class="eyebrow">03 / التقرير</span><h2>تفاصيل الفحص</h2><p id="reportMeta"></p></div><button type="button" class="secondary" id="exportButton">↓ JSON</button></div>
-<div id="accessWarning" class="access-warning" hidden role="status"></div><div id="reportOverview"></div><section id="technologySection" hidden><h3>التقنيات والإصدارات المعلنة وبيانات TLS</h3><p class="note">لا نخمن إصدار PHP أو قاعدة البيانات عندما لا يعلنه الموقع. تختلف الدلالة بين «معلن» و«مستنتج».</p><div class="route-list" id="technologyDetails"></div></section><h3>الثغرات والمؤشرات</h3><div id="findings"></div><div id="discoverySection" hidden><h3>مسارات الإدارة وتسجيل الدخول وواجهات API</h3><p class="note" id="discoveryNote"></p><div class="report-summary" id="discoverySummary"></div><div class="route-list" id="discoveryPaths"></div><h3>سجل الطلبات من Chromium DevTools / Network</h3><p class="note" id="browserStatus"></p><div class="route-list" id="discoveryNetwork"></div></div><h3>الفحوصات اليدوية المطلوبة</h3><div id="manualList"></div></section>
+<div id="accessWarning" class="access-warning" hidden role="status"></div><div id="proxyReport" class="note"></div><div id="reportOverview"></div><section id="technologySection" hidden><h3>التقنيات والإصدارات المعلنة وبيانات TLS</h3><p class="note">لا نخمن إصدار PHP أو قاعدة البيانات عندما لا يعلنه الموقع. تختلف الدلالة بين «معلن» و«مستنتج».</p><div class="route-list" id="technologyDetails"></div></section><h3>الثغرات والمؤشرات</h3><div id="findings"></div><div id="discoverySection" hidden><h3>مسارات الإدارة وتسجيل الدخول وواجهات API</h3><p class="note" id="discoveryNote"></p><div class="report-summary" id="discoverySummary"></div><div class="route-list" id="discoveryPaths"></div><h3>سجل الطلبات من Chromium DevTools / Network</h3><p class="note" id="browserStatus"></p><div class="route-list" id="discoveryNetwork"></div></div><h3>الفحوصات اليدوية المطلوبة</h3><div id="manualList"></div></section>
 <section class="panel"><div class="section-head"><div><span class="eyebrow">04 / الأدوات الخارجية</span><h2>استيراد نتائج ماسحات الأمان</h2><p>حلّل تقرير JSON سبق أن شغّلته على بيئتك المصرح بها، وادمج نتائجه في تقارير موقعك.</p></div></div>
 <form id="importForm" class="form">
 <label><span>الموقع المسجل</span><select required id="importSite"><option value="">اختر موقعًا</option></select></label>
