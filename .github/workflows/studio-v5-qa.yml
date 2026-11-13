@@ -41,21 +41,25 @@ jobs:
             python-cloud-studio/studio_quality.py \
             python-cloud-studio/member_portal.py \
             python-cloud-studio/alezz_fetchv_importer.py \
-            python-cloud-studio/private_deep_discovery.py
+            python-cloud-studio/private_deep_discovery.py \
+            python-cloud-studio/studio_scan_checkpoints.py
       - name: Syntax check JavaScript clients
         run: |
           node --check web/js/api.js
           node --check python-cloud-studio/static/autosync.js
           node --check python-cloud-studio/static/studio-pro.js
           node --check python-cloud-studio/static/studio-quality.js
+          node --check python-cloud-studio/static/app.js
       - name: Run Node player-source and live-stream UI tests
         run: |
           node --test web/tests/api-player-fallback.test.cjs
           node --test web/tests/private-live-studio.test.cjs
           node --test web/tests/main-studio-fast.test.cjs
+          node --test web/tests/studio-v6-admin.test.cjs
           node --test web/tests/episode-capture-batches.test.cjs
       - name: Run offline regression tests
         run: |
           python -m unittest discover -s python-cloud-studio/tests -p 'test_studio_v5_integrity.py' -v
           python -m unittest discover -s python-cloud-studio/tests -p 'test_live_scan_integrity.py' -v
+          python -m unittest discover -s python-cloud-studio/tests -p 'test_studio_v6_scans.py' -v
           python -m unittest discover -s python-cloud-studio/tests -p 'test_episode_capture_batches.py' -v
