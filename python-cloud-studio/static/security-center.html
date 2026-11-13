@@ -5,7 +5,7 @@
 <meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#0b1018">
 <title>مركز أمان المواقع | العز TV</title>
 <link rel="stylesheet" href="/static/security-center.css?v=4">
-<script defer src="/static/security-center.js?v=7"></script>
+<script defer src="/static/security-center.js?v=8"></script>
 </head>
 <body>
 <div class="shell">
@@ -23,7 +23,7 @@
 <main class="main">
 <header class="topbar"><div class="crumbs"><a href="/studio/">الاستوديو</a><span>/</span><b>مركز الأمان</b></div><div class="top-status">● محرك Python آمن</div></header>
 <div class="content">
-<section class="hero"><div class="eyebrow">AL EZZ SECURITY CENTER / V3.2</div>
+<section class="hero"><div class="eyebrow">AL EZZ SECURITY CENTER / V3.3</div>
 <h1>مركز حماية <em>مواقعك.</em></h1>
 <p>افحص ووردبريس، XenForo، vBulletin، phpBB، MyBB، Laravel والمواقع المخصصة، واستعرض مسارات الإدارة وتسجيل الدخول وواجهات API العامة وطلبات الشبكة ومؤشرات الأمان، مع توصيات الإصلاح.</p>
 <div class="chips"><span>HTTPS / TLS</span><span>Headers</span><span>CORS</span><span>WordPress</span><span>Exposure</span><span>Chromium Network</span><span>Public API Discovery</span><span>OpenAPI</span><span>Soft-404 Calibration</span><span>Trusted Proxy Pool</span></div>
@@ -31,7 +31,7 @@
 <section class="panel"><div class="section-head"><div><span class="eyebrow">01 / إضافة نطاق</span><h2>سجل موقعك للفحص</h2><p>ألصق رابط الموقع الذي تريد اختباره، وسيبدأ فحص الأمان تلقائيًا بعد إضافته.</p></div></div>
 <form id="addForm" class="form"><label><span>رابط الموقع</span><input id="siteUrl" type="url" dir="ltr" required maxlength="2048" placeholder="https://example.com"></label><button type="submit" id="addButton">إضافة وفحص الآن ↗</button></form>
 <p class="note">عناوين localhost والخوادم الداخلية لا تصل إليها خدمة Render؛ يلزم تشغيل المحرك محليًا على شبكتك لهذه المواقع.</p></section>
-<section class="panel" aria-label="حالة اتصالات البروكسي"><div class="section-head"><div><span class="eyebrow">NETWORK / PROXY POOL</span><h2>البروكسيات الاحتياطية</h2><p>للنطاقات التي تعتمدها صراحةً فقط. يتبدّل البروكسي عند فشل اتصال الشبكة، وليس عند ظهور حظر Cloudflare أو HTTP 403/429.</p></div><button class="secondary" id="proxyRefresh" type="button">↻ حالة البروكسيات</button></div><div id="proxyStatus" class="note" aria-live="polite">قراءة الإعدادات...</div><p class="note">أضف عناوين البروكسيات السرية من إعدادات Render؛ لا تضع كلمات المرور في هذه الصفحة أو GitHub.</p></section>
+<section class="panel" aria-label="حالة اتصالات البروكسي"><div class="section-head"><div><span class="eyebrow">NETWORK / PROXY POOL</span><h2>البروكسيات الاحتياطية</h2><p>للنطاقات التي تعتمدها صراحةً فقط. يتبدّل البروكسي عند فشل اتصال الشبكة، وليس عند ظهور حظر Cloudflare أو HTTP 403/429.</p></div><div class="site-actions"><button class="secondary" id="proxyRefresh" type="button">↻ الحالة</button><button class="secondary" id="proxyCommunityRefresh" type="button">فحص البروكسيات المجانية من GitHub</button></div></div><div id="proxyStatus" class="note" aria-live="polite">قراءة الإعدادات...</div><p class="note">القوائم المجانية من GitHub لا تحتاج اشتراكًا أو كلمة مرور. لن تُستخدم إلا بعد اختبار HTTPS وللنطاق المسموح به؛ قد تكون بطيئة أو متعطلة. يمكنك كذلك إضافة بروكسي خاص من إعدادات Render.</p></section>
 <div class="stats"><div><small>المواقع</small><strong id="totalSites">—</strong></div><div><small>جاهزة للفحص</small><strong id="verifiedSites">—</strong></div><div><small>التقارير</small><strong id="scannedSites">—</strong></div></div>
 <section class="panel"><div class="section-head"><div><span class="eyebrow">02 / قائمة المواقع</span><h2>مواقعك المسجلة</h2><p>بدون إثبات ملكية؛ ابدأ الفحص مباشرة، وتابع النتائج والجدولة.</p></div><button class="secondary" id="refreshButton" type="button">↻ تحديث</button></div><div id="sites" class="sites" aria-live="polite">جارٍ تحميل البيانات…</div></section>
 <section class="panel" id="reportSection" hidden><div class="section-head"><div><span class="eyebrow">03 / التقرير</span><h2>تفاصيل الفحص</h2><p id="reportMeta"></p></div><button type="button" class="secondary" id="exportButton">↓ JSON</button></div>
