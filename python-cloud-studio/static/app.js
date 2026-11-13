@@ -675,6 +675,87 @@
     return true;
   }
 
+  async function recoverAdminScan(scanId){
+    if(!/^[0-9a-f]{16}$/.test(scanId))return;
+    const record=await API('discovery-scan/recover?scan_id='+encodeURIComponent(scanId));
+    if(record.active && record.summary){
+      updateStatus(record.summary);
+      studioRecoverableId=null;
+      showDiscoveryProgress(record.summary.scan);
+      toast('تمت متابعة المهمة النشطة.','success');
+      return;
+    }
+    if(!record.catalogue)throw new Error('لا توجد بيانات محفوظة للاستعادة.');
+    const cat=record.catalogue;
+    app.selected.clear();app.season=1;
+    updateStatus({catalogue:cat,authenticated:app.authenticated,
+                  batch:[{title:cat.title,kind:cat.kind,episodes:(cat.episodes||[]).length}],
+                  current_index:0,batch_errors:[],demo:false});
+    const scan={...(record.scan||{}),id:scanId,running:false,interrupted:true};
+    studioRecoverableId=record.resumable?scanId:null;
+    showDiscoveryProgress(scan);
+    $('studioResumeScan').hidden=!studioRecoverableId;
+    activity('عُثر على فحص محفوظ. استكمل الحلقات غير المكتملة من الزر.','info');
+    location.hash='import';
+  }
+  async function resumeAdminScan(){
+    const id=studioRecoverableId;
+    if(!id)return toast('لا توجد مهمة قابلة للاستكمال.','info');
+    await action(async()=>{
+      const response=await API('discovery-scan/resume',{scan_id:id});
+      studioRecoverableId=null;discoveryLastSeq=0;discoveryDone=-1;
+      updateStatus(response.summary);showDiscoveryProgress(response.summary.scan);
+      toast('تم استكمال فحص '+response.pending+' حلقة متبقية.','success');
+    });
+  }
+  async function stopAdminScan(){
+    if(!discoveryId)return;
+    await action(async()=>{
+      await API('discovery-scan/stop',{scan_id:discoveryId});
+      toast('وصل طلب الإيقاف؛ تنتهي المحاولات الجارية دون بدء حلقات جديدة.','info');
+    });
+  }
+  async function retryFailedAdminScan(){
+    if(!discoveryId)return;
+    await action(async()=>{
+      const response=await API('discovery-scan/retry-failed',{scan_id:discoveryId});
+      if(response.retry){
+        studioRecoverableId=null;discoveryDone=-1;discoveryLastSeq=0;
+        updateStatus(response.summary);showDiscoveryProgress(response.summary.scan);
+        toast('بدأ فحص العناصر التي لم تجتز التحقق.','success');
+      }else toast(response.message||'لا توجد مصادر معطلة لإعادة فحصها.','info');
+    });
+  }
+  async function listAdminScanHistory(){
+    const list=$('studioScanHistoryEntries');
+    list.replaceChildren(make('div','','جارٍ قراءة سجل فحوص الإدارة...'));
+    try{
+      const result=await API('discovery-scan/history');
+      list.replaceChildren();
+      const jobs=Array.isArray(result.jobs)?result.jobs:[];
+      if(!jobs.length){list.append(make('div','','لم تُحفظ مهام حديثة، أو أن تخزين Supabase غير متاح.'));return;}
+      for(const job of jobs){
+        const row=make('div','studio-v6-history-row'),details=make('div');
+        let display='عمل محفوظ';
+        try{const uri=new URL(job.source_url);display=uri.hostname+uri.pathname.slice(0,80)}
+        catch(_){}
+        details.append(make('strong','',display));
+        const info=job.progress||{},updated=job.updated_at||'';
+        details.append(make('small','',String(job.scan_status||'')+' · '+String(info.done||0)+' / '+
+          String(info.total||0)+' حلقة · '+String(updated).slice(0,16)));
+        const button=make('button','','عرض واستعادة');button.type='button';
+        button.onclick=()=>action(()=>recoverAdminScan(job.scan_id));
+        row.append(details,button);list.append(row);
+      }
+    }catch(error){list.replaceChildren(make('div','',error.message))}
+  }
+  function updateScanClock(){
+    const clock=$('studioScanTimer');
+    if(!clock)return;
+    const elapsed=studioScanStarted?Math.max(0,Math.floor((Date.now()-studioScanStarted)/1000)):0;
+    const minutes=Math.floor(elapsed/60),seconds=elapsed%60;
+    clock.textContent=String(minutes).padStart(2,'0')+':'+String(seconds).padStart(2,'0');
+  }
   function updateDiscoveryMedia(payload){
     if(!payload?.catalogue || payload.catalogue.url!==app.catalogue?.url)return;
     const fresh=payload.catalogue;
@@ -913,6 +994,17 @@
     $('studioExportPlayersCsv').onclick=()=>exportStudioPlayers('csv');
     $('studioExportPlayersJson').onclick=()=>exportStudioPlayers('json');
     $('studioCopyPlayers').onclick=copyStudioPlayerLinks;
+    $('studioStopScan').onclick=stopAdminScan;
+    $('studioResumeScan').onclick=resumeAdminScan;
+    $('studioRetryFailed').onclick=retryFailedAdminScan;
+    $('studioScanHistoryBtn').onclick=()=>{
+      const details=$('studioScanHistory');
+      details.hidden=!details.hidden;
+      if(!details.hidden){details.open=true;listAdminScanHistory();}
+    };
+    $('studioPlayerFilter').onchange=updateStudioLiveCards;
+    $('studioShowAllSources').onclick=()=>{studioShowAll=!studioShowAll;updateStudioLiveCards();};
+    setInterval(updateScanClock,1000);
     $('exportBatchBtn').onclick=()=>{window.location.href='/api/export-batch';};
     $('exportBtn').onclick=()=>{if(!app.catalogue)return;window.location.href='/api/export';};
     $('toastCenterBtn').onclick=()=>toast('يمكنك الاطلاع على حالة الاستيراد في الشريط أسفل قسم الاكتشاف.');
@@ -1002,6 +1094,20 @@
     });
   }
   window.addEventListener('alezz-browser-capture',readBrowserCapture);
-  async function init(){wire();try{const result=await API('init');app.csrf=result.csrf;updateStatus(result);showDiscoveryProgress(result.scan);await readBrowserCapture();if(!$('browserCaptureResults').hidden||result.scan)return;activity('الموقع جاهز. ابحث بالاسم أو أدخل رابط صفحة العمل.','success');}catch(error){activity(error.message,'error');toast(error.message,'error');}}
+  async function init(){
+    wire();
+    try{
+      const result=await API('init');app.csrf=result.csrf;
+      updateStatus(result);showDiscoveryProgress(result.scan);
+      await readBrowserCapture();
+      if(result.scan?.running || !$('browserCaptureResults').hidden)return;
+      const saved=sessionStorage.getItem('alezz:main-scan');
+      if(saved && /^[0-9a-f]{16}$/.test(saved)){
+        try{await recoverAdminScan(saved);return;}
+        catch(error){sessionStorage.removeItem('alezz:main-scan');}
+      }
+      activity('الموقع جاهز. ابحث بالاسم أو أدخل رابط صفحة العمل.','success');
+    }catch(error){activity(error.message,'error');toast(error.message,'error');}
+  }
   init();
 })();
