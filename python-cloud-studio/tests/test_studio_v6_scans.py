@@ -76,7 +76,10 @@ class V6ScanTests(unittest.TestCase):
         text=SERVER.read_text(encoding="utf-8")
         self.assertIn("max_workers=5",text)
         self.assertIn("max_pages=42",text)
-        self.assertIn("client.deadline=time.monotonic()+85",text)
+        self.assertIn("client.deadline=min(overall_deadline,time.monotonic()+34)",text)
+        self.assertIn("chunks<6",text)
+        self.assertIn('progress["remaining_pages"]=pending',text)
+        self.assertIn("progress[\"crawl_paused\"]",text)
         self.assertIn("retry-episode",text)
         self.assertIn("stop_requested",text)
 
