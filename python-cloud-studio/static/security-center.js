@@ -31,7 +31,7 @@ const levels={critical:"حرجة",high:"عالية",medium:"متوسطة",low:"�
 async function showReport(id){const r=await api("/api/security/report/"+encodeURIComponent(id));report=r.report;active=id;$("reportSection").hidden=false;$("reportMeta").textContent=report.host+" • "+r.created_at;
 const proxied=report.proxy||null;
 $("proxyReport").textContent=proxied?
-  "الاتصال: "+(proxied.mode==="proxy"?"بروكسي معتمد":"اتصال مباشر")+
+  "الاتصال: "+(proxied.mode==="proxy"?"بروكسي معتمد":proxied.mode==="unavailable"?"تعذّر الوصول عبر البروكسيات المعتمدة":"اتصال مباشر")+
   (proxied.selected?" ("+proxied.selected+")":"")+
   " • عدد البروكسيات المهيأة: "+(proxied.configured||0)+
   " • محاولات البروكسي: "+(proxied.attempts||0)+
