@@ -478,7 +478,8 @@
   }
 
   let discoveryTimer, discoveryId, discoveryDone=-1, discoveryStream=null,
-      discoveryStreamFallbackId=null, discoveryEventTimer=null, lastTrackingMessage='';
+      discoveryStreamFallbackId=null, discoveryEventTimer=null, lastTrackingMessage='',
+      discoveryLastSeq=0, studioRecoverableId=null, studioShowAll=false, studioScanStarted=0;
   function closeDiscoveryStream(){
     if(discoveryStream){discoveryStream.close();discoveryStream=null;}
     if(discoveryEventTimer){clearTimeout(discoveryEventTimer);discoveryEventTimer=null;}
@@ -499,7 +500,8 @@
         if(seen.has(key))continue;
         seen.add(key);
         rows.push({episode,url:row.url,kind:row.kind||'unknown',
-          verified:Boolean(row.verified),page_url:row.page_url||entry.page_url||''});
+          verified:Boolean(row.verified),page_url:row.page_url||entry.page_url||'',
+          season:entry.season||0,number:entry.number||0,error:row.error||entry.error||''});
       }
     }
     return rows;
@@ -537,23 +539,51 @@
     try{await navigator.clipboard.writeText(urls.join('\n'));toast('تم نسخ '+urls.length+' رابطًا.','success');}
     catch(_){toast('تعذّر النسخ؛ استخدم تصدير JSON أو CSV.','error');}
   }
+  async function retryOneEpisode(season,number){
+    if(!discoveryId||app.scanning)return toast('انتظر اكتمال الفحص أولًا','info');
+    await action(async()=>{
+      const result=await API('discovery-scan/retry-episode',{scan_id:discoveryId,season,number});
+      if(result.summary){updateStatus(result.summary);showDiscoveryProgress(result.summary.scan)}
+      toast('بدأت إعادة فحص الحلقة '+number+' فقط.','success');
+    });
+  }
   function updateStudioLiveCards(){
     const rows=studioPlayerRows(),container=$('liveMediaLinks');
     const direct=rows.filter(x=>x.kind==='direct'),verified=direct.filter(x=>x.verified);
-    $('studioLiveCounts').textContent=direct.length+' فيديو مرشح · '+verified.length+' مجتاز · '+(rows.length-direct.length)+' صفحة/مشغل';
+    $('studioLiveCounts').textContent=direct.length+' فيديو مرشح · '+verified.length+' مجتاز · '+(rows.length-direct.length)+' صفحة مشغّل';
     for(const id of ['studioExportPlayersCsv','studioExportPlayersJson','studioCopyPlayers'])$(id).disabled=!rows.length;
+    const filter=$('studioPlayerFilter').value;
+    const filtered=rows.filter(x=>filter==='all'||
+      filter==='verified'&&x.verified||
+      filter==='unverified'&&!x.verified&&x.kind!=='embed'||
+      filter==='embed'&&x.kind==='embed');
+    const sorted=[...filtered].sort((a,b)=>Number(b.verified)-Number(a.verified));
     container.replaceChildren();
-    for(const row of [...rows].sort((a,b)=>Number(b.verified)-Number(a.verified)).slice(0,18)){
-      const panel=make('div','studio-fast-card');
+    for(const row of (studioShowAll?sorted:sorted.slice(0,18))){
+      const panel=make('div','studio-fast-card'+(row.verified?' is-verified':
+                                  row.kind==='embed'?' is-embedded':row.error?' is-invalid':''));
       panel.append(make('strong','',row.episode),
-        make('small','',row.kind==='direct'?(row.verified?'✓ اجتاز الفحص المبدئي':'◷ يحتاج اختبار التشغيل'):'◷ صفحة مشغّل مضمّنة'));
-      try{const uri=new URL(row.url);panel.append(make('small','',uri.hostname+uri.pathname.slice(0,62)));}
+        make('small','',row.kind==='direct'?(row.verified?'✓ اجتاز الفحص المبدئي':'◷ يحتاج اختبار التشغيل'):
+              '◷ صفحة مشغّل مضمّنة'));
+      try{const uri=new URL(row.url);panel.append(make('small','',uri.hostname+uri.pathname.slice(0,65)));}
       catch(_){panel.append(make('small','',row.url.slice(0,75)));}
+      if(row.error)panel.append(make('small','',row.error.slice(0,100)));
+      const actions=make('div','studio-v6-source-actions');
       const copy=make('button','','نسخ الرابط');copy.type='button';
       copy.onclick=()=>navigator.clipboard.writeText(row.url).then(()=>toast('تم النسخ','success')).catch(()=>toast('تعذّر النسخ','error'));
-      panel.append(copy);container.append(panel);
+      actions.append(copy);
+      if(row.season&&row.number){
+        const retry=make('button','','↻ فحص الحلقة');retry.type='button';
+        retry.disabled=app.scanning;
+        retry.onclick=()=>retryOneEpisode(row.season,row.number);
+        actions.append(retry);
+      }
+      panel.append(actions);container.append(panel);
     }
+    $('studioShowAllSources').textContent=studioShowAll?'عرض المختصر (18)':'عرض الكل ('+filtered.length+')';
+    $('studioShowAllSources').disabled=filtered.length<=18;
   }
+
   function updateDiscoveryDelta(delta){
     if(!delta||!app.catalogue)return;
     const keys=['media_url','sources','source_pages','verified','error'];
