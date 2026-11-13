@@ -101,6 +101,12 @@
     if(cat)renderContent();
     if(payload.capture && payload.capture.catalogue_url===cat?.url)
       connectEpisodeBatch(payload.capture);
+    else if(!app.browserCaptureRunning){
+      closeEpisodeBatchConnection();
+      episodeBatchJob=null;episodeBatchRevision=0;
+      $('episodeBatchPanel').hidden=true;
+      $('edgeCaptureBtn').textContent='⚡ اكتشاف روابط الحلقات تلقائيًا';
+    }
     $('toolsLinksBtn').disabled=!cat||$('workspace').inert;
     document.dispatchEvent(new Event('studio:catalogue'));
   }
@@ -372,7 +378,7 @@
     if(!job.running){
       closeEpisodeBatchConnection();
       if(job.error)activity(job.error,'error');
-      else activity(job.message,job.cancel?'info':'success');
+      else activity(job.message,job.phase==='cancelled'?'info':'success');
     }
   }
   function applyEpisodeBatchEvent(item){
