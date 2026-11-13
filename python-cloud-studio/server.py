@@ -610,75 +610,165 @@ def _scan_media_entry(cat: Catalogue, entry, force_browser:bool=False):
     return entry, checked, pages, playable, error
 
 
-def scan_catalogue(state: UserState, cat: Catalogue, progress: dict):
-    """Inspect episodes concurrently and surface each result as soon as it lands."""
-    from concurrent.futures import as_completed
+def _extend_catalogue(state: UserState, cat: Catalogue, progress: dict, checkpoint: dict):
+    """Continue slow season pagination separately; update admin as pages arrive.
 
-    targets = list(cat.episodes) if cat.kind == 'series' else [cat]
-    if not targets:
+    This is a bounded continuation of public HTTPS metadata, not an attempt
+    to bypass access restrictions. Never replace existing scanned episodes.
+    """
+    client=DiscoverySourceClient(cat.url)
+    client.timeout=6
+    client.retries=1
+    client.deadline=time.monotonic()+85
+    try:
+        def on_progress(snapshot):
+            if not isinstance(snapshot,dict):return
+            rows=snapshot.get("episodes",[])
+            if not isinstance(rows,list):return
+            with state.lock:
+                if state.scan is not progress or state.catalogue is not cat or progress.get("stop_requested"):
+                    raise InterruptedError("Scan cancelled or replaced")
+                known={(ep.season,ep.number) for ep in cat.episodes}
+                added=[]
+                for row in rows[:5000]:
+                    if not isinstance(row,dict):continue
+                    try: ep=Episode(**row)
+                    except (ValueError,TypeError):continue
+                    key=(ep.season,ep.number)
+                    if key in known:continue
+                    known.add(key)
+                    cat.episodes.append(ep)
+                    added.append(asdict(ep))
+                progress["crawl_pages"]=len(snapshot.get("seen_pages",[]))
+                progress["crawl_checkpoint"]=deepcopy(snapshot)
+                if added:
+                    progress["total"]=len(cat.episodes)
+                    _emit_scan_event(state,progress,"episodes_added",{"episodes":added})
+                    _schedule_scan_checkpoint(state,cat,progress)
+        pull_html(cat.url,client,cat.kind,max_pages=42,max_episodes=5000,
+                  resume_progress=checkpoint,progress_hook=on_progress)
+    except (InterruptedError,TimeoutError):
+        pass
+    except Exception as exc:
         with state.lock:
             if state.scan is progress:
-                progress['running'] = False
-        return
+                progress["crawl_error"]=safe_error(exc)
+    finally:
+        client.session.close()
+        with state.lock:
+            if state.scan is progress:
+                progress["crawl_running"]=False
+                _emit_scan_event(state,progress,"crawl_completed")
+                _schedule_scan_checkpoint(state,cat,progress)
 
-    # Keep the pool bounded so multiple administrators cannot exhaust Render.
-    workers = min(5, len(targets))
-    progress['workers'] = workers
+
+def scan_catalogue(state: UserState, cat: Catalogue, progress: dict):
+    """Adaptive parallel worker with per-episode events and durable checkpoints."""
+    completed=set(progress.get("completed_keys",[]))
+    scheduled=set(completed)
+    errors_in_row=0
     try:
-        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix='studio-media') as executor:
-            pending = {executor.submit(_scan_media_entry, cat, entry): entry for entry in targets}
-            for future in as_completed(pending):
+        with ThreadPoolExecutor(max_workers=5,thread_name_prefix="studio-media") as executor:
+            futures={}
+            while True:
                 with state.lock:
-                    if state.catalogue is not cat or state.scan is not progress:
-                        for outstanding in pending:
-                            outstanding.cancel()
-                        return
-                try:
-                    entry, checked, pages, playable, error = future.result()
-                except Exception as exc:
-                    entry = pending[future]
-                    checked, pages, playable, error = list(entry.sources), [], None, safe_error(exc)
-                with state.lock:
-                    if state.catalogue is not cat or state.scan is not progress:
-                        return
-                    entry.sources = checked
-                    if pages:
-                        entry.source_pages = pages
-                    if playable:
-                        entry.media_url = playable['url']
-                    entry.verified = playable is not None
-                    entry.error = error
-                    progress['done'] += 1
-                    progress['revision'] += 1
-                    progress['last_result'] = asdict(entry)
-                    progress['verified'] += int(entry.verified)
-                    progress['sources_found'] += sum(
-                        item.get('kind') == 'direct' for item in checked)
-                    if time.monotonic()-progress.get('persisted_at',0)>=2:
-                        LIBRARY.remember_discovery(cat)
-                        progress['persisted_at']=time.monotonic()
+                    if state.catalogue is not cat or state.scan is not progress:return
+                    stopped=bool(progress.get("stop_requested"))
+                    crawls=bool(progress.get("crawl_running"))
+                    limit=progress.get("adaptive_workers",5)
+                    if not stopped:
+                        candidates=list(cat.episodes) if cat.kind=="series" else [cat]
+                        for entry in candidates:
+                            if len(futures)>=limit:break
+                            key=_scan_key(entry,cat.kind)
+                            if key in scheduled:continue
+                            scheduled.add(key)
+                            futures[executor.submit(_scan_media_entry,cat,entry)]=(key,entry)
+                    if not futures and (not crawls or stopped):
+                        break
+                if not futures:
+                    time.sleep(.20)
+                    continue
+                done,_=wait(list(futures),timeout=.4,return_when=FIRST_COMPLETED)
+                for future in done:
+                    key,entry=futures.pop(future)
+                    try:
+                        _,checked,pages,playable,error=future.result()
+                    except Exception as exc:
+                        checked,pages,playable,error=list(entry.sources),[],None,safe_error(exc)
+                    with state.lock:
+                        if state.catalogue is not cat or state.scan is not progress:return
+                        entry.sources=checked
+                        if pages:entry.source_pages=pages
+                        if playable:entry.media_url=playable["url"]
+                        entry.verified=playable is not None
+                        entry.error=error
+                        completed.add(key)
+                        progress["completed_keys"]=list(completed)
+                        progress["done"]=len(completed)
+                        progress["total"]=len(cat.episodes) if cat.kind=="series" else 1
+                        progress["verified"]=sum(bool(x.verified) for x in
+                                                  (cat.episodes if cat.kind=="series" else [cat]))
+                        progress["sources_found"]=sum(sum(x.get("kind")=="direct" for x in item.sources)
+                            for item in (cat.episodes if cat.kind=="series" else [cat]))
+                        if entry.verified:
+                            errors_in_row=0
+                        else:
+                            errors_in_row+=1
+                        progress["adaptive_workers"]=3 if errors_in_row>=3 else 5
+                        progress["workers"]=progress["adaptive_workers"]
+                        progress["last_result"]=asdict(entry)
+                        _emit_scan_event(state,progress,"episode",asdict(entry))
+                        _schedule_scan_checkpoint(state,cat,progress)
+                        if time.monotonic()-progress.get("persisted_at",0)>=3:
+                            LIBRARY.remember_discovery(cat)
+                            progress["persisted_at"]=time.monotonic()
     except Exception as exc:
-        with state.lock: progress['error']=safe_error(exc)
+        with state.lock:
+            if state.scan is progress:progress["error"]=safe_error(exc)
     finally:
         with state.lock:
             if state.scan is progress:
-                try:
-                    LIBRARY.remember_discovery(cat)
-                except Exception as exc:
-                    progress['error'] = safe_error(exc)
-                finally:
-                    progress['running'] = False
-                    progress['revision'] += 1
+                try: LIBRARY.remember_discovery(cat)
+                except Exception as exc:progress["error"]=safe_error(exc)
+                progress["running"]=False
+                _emit_scan_event(state,progress,"stopped" if progress.get("stop_requested") else "complete")
+                _schedule_scan_checkpoint(state,cat,progress,force=True)
 
 
-def start_catalogue_scan(state: UserState, cat: Catalogue):
-    total = len(cat.episodes) if cat.kind == 'series' else 1
-    progress = {'id':secrets.token_hex(8),'running':bool(total),'done':0,'total':total,
-                'verified':0,'sources_found':0,'workers':0,'error':'',
-                'revision':0,'started_at':time.time(),'first_batch_target_seconds':30}
-    state.scan = progress
-    state.scan_catalogue = cat
-    if total: _discovery_scans.submit(scan_catalogue,state,cat,progress)
+def start_catalogue_scan(state: UserState, cat: Catalogue, *,
+                         owner_uid=None, crawl_checkpoint=None, resume=None):
+    total=len(cat.episodes) if cat.kind=="series" else 1
+    completed=list((resume or {}).get("completed_keys") or [])
+    progress={
+        "id":(resume or {}).get("id") or secrets.token_hex(8),
+        "running":True,"done":len(completed),"total":total,
+        "verified":sum(bool(x.verified) for x in (cat.episodes if cat.kind=="series" else [cat])),
+        "sources_found":sum(sum(y.get("kind")=="direct" for y in x.sources)
+           for x in (cat.episodes if cat.kind=="series" else [cat])),
+        "workers":5,"adaptive_workers":5,"error":"",
+        "revision":int((resume or {}).get("revision",0)),
+        "seq":int((resume or {}).get("seq",0)),
+        "events":[],"completed_keys":completed,
+        "started_at":time.time(),"first_batch_target_seconds":30,
+        "owner_id":owner_uid,
+        "checkpoint_saved":None,
+        "crawl_running":bool(crawl_checkpoint and crawl_checkpoint.get("queued")),
+        "crawl_checkpoint":crawl_checkpoint or {},
+        "stop_requested":False,
+    }
+    state.scan=progress
+    state.scan_catalogue=cat
+    state.scan_owner_uid=owner_uid
+    _emit_scan_event(state,progress,"started")
+    _schedule_scan_checkpoint(state,cat,progress,force=True)
+    # Queue media worker before optional longer pagination work. The quick
+    # batch is always eligible to run even on Render's free plan.
+    _discovery_scans.submit(scan_catalogue,state,cat,progress)
+    if progress["crawl_running"]:
+        _discovery_scans.submit(_extend_catalogue,state,cat,progress,
+                                deepcopy(crawl_checkpoint))
+    return progress
 
 
 @app.get('/api/discovery-scan')
