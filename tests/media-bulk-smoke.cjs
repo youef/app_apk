@@ -44,16 +44,17 @@ const {isMediaBulkTable,canPublishMedia,fetchAllMedia,patchMediaBatch}=context.w
 for(const name of ["aseel_movies","aseel_series","aseel_episodes","aseel_youtube_videos"]){
   assert.ok(isMediaBulkTable({table:name}),"Bulk controls unavailable for "+name);
 }
-assert.ok(!isMediaBulkTable({table:"aseel_seasons"}),"Seasons have no separate licenses");
-const movie={rights_status:"approved",license_reference:"reference",stream_url:"https://cdn.test/movie.mp4"};
-assert.ok(canPublishMedia(movie,"aseel_movies"));
-assert.ok(!canPublishMedia({...movie,link_health_status:"broken"},"aseel_movies"));
-assert.ok(!canPublishMedia({...movie,license_reference:""},"aseel_movies"));
+assert.ok(!isMediaBulkTable({table:"aseel_seasons"}),"Seasons use their parent series publication state");
+const movie={id:"11111111-1111-4111-8111-111111111111",rights_status:"pending",
+  license_reference:null,stream_url:null,status:"draft",link_health_status:"broken"};
+assert.ok(canPublishMedia(movie,"aseel_movies"),"Draft can become published without a working stream");
+assert.ok(canPublishMedia({...movie,link_health_status:"broken"},"aseel_movies"));
+assert.ok(canPublishMedia({...movie,license_reference:null},"aseel_movies"));
 assert.ok(canPublishMedia({...movie,stream_url:null},"aseel_series"));
-assert.ok(!canPublishMedia({...movie,stream_url:null,youtube_url:"https://youtube.com/watch?v=abcdefghijk"},"aseel_episodes"),
-  "Episodes must match the public RLS requirement for a direct HTTPS stream");
-assert.ok(canPublishMedia({youtube_url:"https://www.youtube.com/watch?v=abcdefghijk"},"aseel_youtube_videos"));
-assert.ok(!canPublishMedia({youtube_url:"https://youtube.com.fake.org/watch?v=abcdefghijk"},"aseel_youtube_videos"));
+assert.ok(canPublishMedia({...movie,stream_url:null},"aseel_episodes"));
+assert.ok(canPublishMedia({...movie,youtube_url:"https://youtube.com.fake.org/watch?v=abcdefghijk"},"aseel_youtube_videos"),
+  "Publishing metadata is independent from video link validity");
+assert.ok(!canPublishMedia(null,"aseel_movies"));
 assert.ok(source.includes("mediaBulkIncludeEpisodes"),"Optional series and episode one-click batch missing");
 assert.ok(source.includes("bulkPanel.querySelectorAll(\'.media-bulk-control\')"), "Bulk toolbar must iterate over multiple controls, not a single element");
 (async()=>{
@@ -65,5 +66,5 @@ assert.ok(source.includes("bulkPanel.querySelectorAll(\'.media-bulk-control\')")
   assert.equal(report.changed,55);
   assert.equal(report.failures,0);
   assert.ok(chosen.every(r=>r.status==="published"),"Confirmed DB data must update local state");
-  console.log("PASS media bulk: 620 loaded, secure eligibility, and 55 verified publications in two batches.");
+  console.log("PASS media bulk: 620 loaded, status-only eligibility, and 55 verified publications in two batches.");
 })().catch(error=>{console.error(error);process.exitCode=1;});
