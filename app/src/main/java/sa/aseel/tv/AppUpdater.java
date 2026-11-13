@@ -65,11 +65,11 @@ public final class AppUpdater {
     public String updateMode(){
         String mode=preferences.getString("update_mode","");
         if("off".equals(mode)||"manual".equals(mode)||"automatic".equals(mode))return mode;
-        return preferences.getBoolean("automatic_checks",false)?"automatic":"manual";
+        return preferences.getBoolean("automatic_checks",true)?"automatic":"manual";
     }
     /** Old installations automatically migrate from the original checkbox. */
     public boolean automaticChecksEnabled(){
-        return "automatic".equals(updateMode()) && preferences.getBoolean("automatic_checks",false);
+        return "automatic".equals(updateMode()) && preferences.getBoolean("automatic_checks",true);
     }
     public void setAutomaticChecksEnabled(boolean enabled){
         setUpdateMode(enabled?"automatic":"manual");
