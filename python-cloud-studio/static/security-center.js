@@ -8,13 +8,18 @@ async function action(fn){try{await fn()}catch(e){toast(e.message||"حدث خط�
 async function refresh(){sites=(await api("/api/security/sites")).sites;drawSites();}
 async function refreshProxyStatus(){
   const status=await api("/api/security/proxies");
-  $("proxyStatus").textContent=status.enabled?
-    "✓ مهيّأ "+status.configured+" بروكسي • النطاقات المعتمدة: "+status.approved_host_count+
-    " • لا نغيّر مسار الاتصال بعد حظر الموقع":
-    "غير مفعّل حاليًا • البروكسيات المهيأة: "+status.configured+
+  const free=status.community||{};
+  $("proxyStatus").textContent=
+    "البروكسيات المجانية من GitHub: "+(status.free_enabled?"مفعّلة للنطاق المعتمد":"غير مفعّلة")+
+    " • المصادر: "+(free.sources_reachable||0)+"/"+(free.sources||2)+
+    " • المرشحون: "+(free.candidates||0)+
+    " • تم اختبار: "+(free.tested||0)+
+    " • صالحة لاختبار HTTPS: "+(free.working||0)+
     " • النطاقات المعتمدة: "+status.approved_host_count+
-    " • الإعداد يتطلب متغيري ALEZZ_SECURITY_PROXY_URLS وALEZZ_SECURITY_PROXY_ALLOWED_HOSTS.";
+    (free.last_error?" • ملاحظة: "+free.last_error:"")+
+    ". لا يتم تبديل البروكسي عند الحظر أو تحدّي Cloudflare.";
 }
+
 function drawSites(){const root=$("sites");root.replaceChildren();$("totalSites").textContent=sites.length;$("verifiedSites").textContent=sites.length;$("scannedSites").textContent=sites.filter(s=>s.latest).length;const pick=$("importSite");const current=pick.value;pick.replaceChildren(n("option",null,"اختر موقعًا"));pick.firstChild.value="";sites.forEach(s=>{const o=n("option",null,s.host);o.value=s.id;pick.append(o)});if(sites.some(s=>s.id===current))pick.value=current;
 if(!sites.length){root.append(n("div","empty","لم تضف أي موقع بعد."));return}
 sites.forEach(s=>{const card=n("article","site-card"),head=n("div","site-top");head.append(n("strong",null,s.host),n("span","pill good","✓ جاهز للفحص"));card.append(head);
@@ -156,6 +161,19 @@ integrations.forEach(([name,description])=>{const item=n("div","tool-card");item
 $("addForm").onsubmit=e=>{e.preventDefault();action(async()=>{$("addButton").disabled=true;try{let data=await api("/api/security/sites",{url:$("siteUrl").value.trim()});toast("أُضيف "+data.host+"، بدأ الفحص الآمن مباشرة");$("siteUrl").value="";await api("/api/security/scan",{site_id:data.id});await refresh()}finally{$("addButton").disabled=false}})};
 $("refreshButton").onclick=()=>action(refresh);
 $("proxyRefresh").onclick=()=>action(refreshProxyStatus);
+$("proxyCommunityRefresh").onclick=()=>action(async()=>{
+  const button=$("proxyCommunityRefresh");
+  button.disabled=true;
+  button.textContent="جارٍ اختبار عدد محدود من البروكسيات...";
+  try{
+    const result=await api("/api/security/proxies/community-refresh",{});
+    toast("GitHub: "+result.candidates+" مرشح • "+result.working+" بروكسي اجتاز اختبار HTTPS");
+    await refreshProxyStatus();
+  }finally{
+    button.disabled=false;
+    button.textContent="فحص البروكسيات المجانية من GitHub";
+  }
+});
 $("importForm").onsubmit=e=>{e.preventDefault();action(async()=>{
   const file=$("importFile").files[0],site_id=$("importSite").value,tool=$("importTool").value;
   if(!site_id)throw Error("اختر موقعًا من قائمتك");
