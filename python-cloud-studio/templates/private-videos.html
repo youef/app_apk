@@ -503,7 +503,7 @@ function applyLiveSnapshot(data){
    (data.result.media||[]).map(x=>x.url),
    (data.result.embeds||[]),
    (data.result.methods||[]).length,
-   (data.result.episodes||[]).map(ep=>[(ep.sources||[]).length,(ep.embeds||[]).length,(ep.methods||[]).length])
+   (data.result.episodes||[]).map(ep=>[(ep.sources||[]).map(src=>src.url),(ep.embeds||[]),(ep.methods||[]).length])
   ]);
   if(deepScanState.lastFingerprint!==fingerprint){
    deepScanState.lastFingerprint=fingerprint;
@@ -591,15 +591,15 @@ async function pollDeepScan(){
  }catch(error){
   $("deep-progress").className="notice error";
   $("deep-progress").textContent="تعذر جلب التحديثات: "+error.message;
-  if(/401|403|جلسة/.test(error.message)){
-   stopDeepScan();setBusy("deep-scan",false);deepScanState.id=null;
+  if(/401|403|404|جلسة/.test(error.message)){
+   stopDeepScan();sessionStorage.removeItem("alezz-live-scan");setBusy("deep-scan",false);deepScanState.id=null;
   }
  }finally{deepScanState.polling=false}
 }
 function fallbackLivePoll(){
  if(!deepScanState.id||deepScanState.timer)return;
  if(deepScanState.stream){deepScanState.stream.close();deepScanState.stream=null}
- $("deep-live-label").textContent="مباشر • تحديث سريع";
+ $("deep-live-label").textContent="مباشر • تحديث سريع كل 1.4 ثانية";
  pollDeepScan();
  deepScanState.timer=setInterval(pollDeepScan,1400);
 }
@@ -633,7 +633,7 @@ async function deepScan(){
  renderMedia();renderEpisodes();renderEmbeds();
  $("deep-live-feed").replaceChildren();
  const placeholder=document.createElement("div");placeholder.className="empty";
- placeholder.textContent="ستظهر الروابط الجديدة هنا مباشرة أثناء الفحص.";
+ placeholder.id="deep-live-empty";placeholder.textContent="ستظهر الروابط الجديدة هنا مباشرة أثناء الفحص.";
  $("deep-live-feed").appendChild(placeholder);
  for(const id of ["deep-export-csv","deep-export-json","deep-copy-links"])$(id).disabled=true;
  setBusy("deep-scan",true);
