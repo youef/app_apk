@@ -239,27 +239,61 @@ def _emit_scan_event(state,progress,kind,delta=None):
     return event
 
 def _schedule_scan_checkpoint(state,cat,progress,*,force=False):
-    """Queue a private snapshot without blocking a scan worker on Supabase."""
+    """Coalesce frequent episode updates into one in-flight Supabase write.
+
+    Never block the media scanner on database latency. A newer completed
+    episode makes the in-flight snapshot stale, so the saver sends the latest
+    catalogue again, with a bounded number of catch-up writes.
+    """
     owner=progress.get("owner_id")
     if not owner or not scan_checkpoint_available():return
     now=time.monotonic()
-    if not force and now-progress.get("last_checkpoint_at",0)<5:return
+    if progress.get("checkpoint_inflight"):
+        progress["checkpoint_pending"]=True
+        return
+    if not force and now-progress.get("last_checkpoint_at",0)<2:
+        return
     progress["last_checkpoint_at"]=now
+    progress["checkpoint_inflight"]=True
     job_id=progress["id"]
-    progress_snapshot=_scan_public(progress)
-    progress_snapshot["crawl_checkpoint"]=deepcopy(progress.get("crawl_checkpoint") or {})
-    record=asdict(cat)
-    completed=list(progress.get("completed_keys",[]))
-    status="completed" if not progress.get("running") else "scanning"
+
     def persist():
-        ok=save_scan_checkpoint(job_id,owner,cat.url,record,progress_snapshot,
-                                completed,status=status)
-        with state.lock:
-            if state.scan is progress and state.scan_catalogue is cat:
-                progress["checkpoint_saved"]=bool(ok)
-                progress["checkpoint_checked_at"]=time.time()
-                # Inform connected admin clients of checkpoint success/failure.
-                _emit_scan_event(state,progress,"checkpoint",{"saved":bool(ok)})
+        try:
+            for attempt in range(3):
+                with state.lock:
+                    if state.scan is not progress or state.scan_catalogue is not cat:
+                        return
+                    record=asdict(cat)
+                    public=_scan_public(progress)
+                    public["crawl_checkpoint"]=deepcopy(progress.get("crawl_checkpoint") or {})
+                    completed=list(progress.get("completed_keys",[]))
+                    if progress.get("running"):
+                        status="scanning"
+                    elif progress.get("stop_requested") or progress.get("crawl_paused"):
+                        status="interrupted"
+                    else:
+                        status="completed"
+                    progress["checkpoint_pending"]=False
+                ok=save_scan_checkpoint(job_id,owner,cat.url,record,public,
+                                        completed,status=status)
+                with state.lock:
+                    if state.scan is not progress:return
+                    progress["checkpoint_saved"]=bool(ok)
+                    progress["checkpoint_checked_at"]=time.time()
+                    _emit_scan_event(state,progress,"checkpoint",{"saved":bool(ok)})
+                    # Coalesce every update produced during the write into
+                    # one newer snapshot. Never put unbounded tasks in queue.
+                    if not progress.get("checkpoint_pending"):
+                        return
+        finally:
+            with state.lock:
+                progress["checkpoint_inflight"]=False
+                if state.scan is progress and progress.get("checkpoint_pending"):
+                    progress["checkpoint_pending"]=False
+                    # Schedule one final catch-up snapshot without recursion
+                    # from a worker that currently holds this state lock.
+                    _schedule_scan_checkpoint(state,cat,progress,force=True)
+
     SCAN_SAVERS.submit(persist)
 
 def scan_status(state: UserState) -> dict | None:
