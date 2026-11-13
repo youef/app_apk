@@ -7,9 +7,9 @@ const path = require("node:path");
 const source = fs.readFileSync(path.join(__dirname, "../web/js/api.js"), "utf8");
 const native = fs.readFileSync(path.join(__dirname, "../app/src/main/java/sa/aseel/tv/TVHomeActivity.java"), "utf8");
 assert.ok(native.includes('catalog.listPaged("aseel_channels"') &&
-  native.includes("rights_status.eq.approved,and(rights_status.eq.pending,playback_mode.eq.official_link)") &&
+  !native.includes("rights_status.eq.approved,and(rights_status.eq.pending,playback_mode.eq.official_link)") &&
   native.includes("order=display_order.asc,created_at.desc,id.asc"),
-  "Android TV pages approved channels and separately permits external links.");
+  "Android TV pages published channels without separate rights filters.");
 
 async function run() {
   const channels = Array.from({ length: 216 }, (_, i) => ({
@@ -36,12 +36,12 @@ async function run() {
     view, fakeFetch, setTimeout, clearTimeout, { now: () => now }
   );
   const catalog = await view.AlezzApi.load();
-  assert.equal(catalog.channels.length, 214);
-  assert.ok(catalog.channels.every(channel => channel.rights.status === "approved"));
+  assert.equal(catalog.channels.length, 215);
+  assert.ok(catalog.channels.some(channel => channel.id === "215"), "Pending-rights channel is visible when published");
   assert.equal(requests.filter(x => x.includes("aseel_channels")).length, 1,
     "under 800 channels must require only one remote API call");
   response = "failed";
-  assert.equal((await view.AlezzApi.load()).channels.length, 214, "recent successful catalogue survives a failed request");
+  assert.equal((await view.AlezzApi.load()).channels.length, 215, "recent successful catalogue survives a failed request");
   now += 15 * 60 * 1000 + 1;
   assert.equal((await view.AlezzApi.load()).channels.length, 0, "expired media is dropped after sustained connection loss");
   response = "full";
