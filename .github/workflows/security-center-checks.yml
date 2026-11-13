@@ -12,6 +12,8 @@ on:
       - 'python-cloud-studio/tests/test_siteguard_tech.py'
       - 'python-cloud-studio/security_discovery.py'
       - 'python-cloud-studio/security_proxy.py'
+      - 'python-cloud-studio/security_free_proxies.py'
+      - 'python-cloud-studio/tests/test_security_free_proxies.py'
       - 'python-cloud-studio/tests/test_security_proxy.py'
       - 'python-cloud-studio/tests/test_security_discovery.py'
       - '.github/workflows/security-center-checks.yml'
@@ -26,6 +28,8 @@ on:
       - 'python-cloud-studio/tests/test_siteguard_tech.py'
       - 'python-cloud-studio/security_discovery.py'
       - 'python-cloud-studio/security_proxy.py'
+      - 'python-cloud-studio/security_free_proxies.py'
+      - 'python-cloud-studio/tests/test_security_free_proxies.py'
       - 'python-cloud-studio/tests/test_security_proxy.py'
       - 'python-cloud-studio/tests/test_security_discovery.py'
 jobs:
@@ -40,12 +44,15 @@ jobs:
       - name: Install HTML parser for offline discovery tests
         run: python -m pip install beautifulsoup4 dnspython==2.9.2
       - name: Compile Python modules
-        run: python -m py_compile python-cloud-studio/site_security.py python-cloud-studio/security_discovery.py python-cloud-studio/security_proxy.py python-cloud-studio/security_tools.py python-cloud-studio/public_siteguard.py python-cloud-studio/siteguard_tech.py python-cloud-studio/siteguard_network.py
+        run: python -m py_compile python-cloud-studio/site_security.py python-cloud-studio/security_discovery.py python-cloud-studio/security_proxy.py python-cloud-studio/security_free_proxies.py python-cloud-studio/security_tools.py python-cloud-studio/public_siteguard.py python-cloud-studio/siteguard_tech.py python-cloud-studio/siteguard_network.py
       - name: Check discovery against fake HTML and mocked HTTP responses
         run: PYTHONPATH=python-cloud-studio python -m unittest discover -s python-cloud-studio/tests -p 'test_security_discovery.py' -v
 
       - name: Check owner-scoped proxy failover and public DNS pinning
         run: PYTHONPATH=python-cloud-studio python -m unittest discover -s python-cloud-studio/tests -p 'test_security_proxy.py' -v
+
+      - name: Validate free proxy GitHub parser, HTTPS test and owner scoping without network
+        run: PYTHONPATH=python-cloud-studio python -m unittest discover -s python-cloud-studio/tests -p 'test_security_free_proxies.py' -v
 
       - name: Check public SiteGuard technology fingerprints without network
         run: PYTHONPATH=python-cloud-studio python -m unittest discover -s python-cloud-studio/tests -p 'test_siteguard_tech.py' -v
