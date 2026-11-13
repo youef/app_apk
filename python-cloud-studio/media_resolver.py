@@ -151,13 +151,15 @@ def extract_candidates(body: str, base: str, *, now: float | None = None) -> tup
     soup = BeautifulSoup(body, 'html.parser')
     sources, pages = [], []
 
-    def add(value, label='', embed=False):
+    def add(value, label='', embed=False, direct_hint=False):
         if not isinstance(value, str) or len(sources) >= MAX_CANDIDATES: return
         value = html_lib.unescape(value.strip())
         if not value or value.startswith(('#', 'javascript:', 'data:', 'blob:')): return
         try: url = normalized_source_url(urljoin(base, value))
         except (ValueError, TypeError): return
-        kind = 'direct' if MEDIA_EXT.search(url) else 'embed'
+        # Many authorized CDNs use signed, extensionless /play?token= URLs.
+        # An explicit video field is a CANDIDATE, not proof of playback.
+        kind = 'direct' if MEDIA_EXT.search(urlsplit(url).path) or direct_hint else 'embed'
         if kind == 'embed' and not embed and not official_ok_embed(url): return
         item = dict(url=url, label=clean(label, 80) or urlsplit(url).hostname,
                     kind=kind, page_url=base, verified=False,
@@ -177,7 +179,9 @@ def extract_candidates(body: str, base: str, *, now: float | None = None) -> tup
             if not isinstance(node, dict): continue
             label = node.get('label') or node.get('quality') or node.get('name') or ''
             for key, value in node.items():
-                if key in ('contentUrl', 'file', 'src', 'url', 'source', 'hls', 'mp4'):
+                if key in ('contentUrl', 'file', 'src', 'source', 'hls', 'mp4', 'manifest', 'playlist'):
+                    add(value, label, direct_hint=True)
+                elif key == 'url':
                     add(value, label)
                 elif key in ('embedUrl', 'iframe', 'player_url'):
                     add(value, label, embed=True)
@@ -193,7 +197,9 @@ def extract_candidates(body: str, base: str, *, now: float | None = None) -> tup
         marker = ' '.join(tag.get('class') or [])
         embed = tag.name in ('iframe', 'embed') or bool(re.search(r'player|server|مشغل|سيرفر|مشاهدة', marker+' '+label, re.I))
         for attr in ('src', 'data-src', 'data-file', 'data-url', 'data-embed', 'data-player', 'href'):
-            if tag.get(attr): add(tag[attr], label, embed=embed)
+            if tag.get(attr):
+                direct_hint = (tag.name in ('video','source') and attr in ('src','data-src')) or attr=='data-file'
+                add(tag[attr], label, embed=embed and not direct_hint, direct_hint=direct_hint)
     for script in soup.select('script')[:80]:
         text = (script.string or script.get_text())[:250000].replace('\\/', '/')
         if script.get('type') in ('application/ld+json', 'application/json'):
@@ -256,12 +262,19 @@ class MediaResolver:
         seen, sources, errors = set(), [], []
 
         def fetch(url):
+            # A direct video URL must NEVER be downloaded as an HTML page:
+            # SourceClient.get() reads up to 1.5 MB and rejects real MP4 files.
+            # Recognize the candidate immediately; check() samples a small
+            # prefix separately and keeps failures visible for diagnosis.
+            if MEDIA_EXT.search(urlsplit(url).path):
+                return [dict(url=url,kind='direct',page_url=url,verified=False,
+                             discovered_at=time.time())], [], ''
             client = self._client(deadline)
             try:
                 if time.monotonic() >= deadline: return [], [], 'انتهت مهلة قراءة المصادر'
                 final, typ, body = client.get(url)
                 public_url(final)
-                if MEDIA_EXT.search(final):
+                if MEDIA_EXT.search(urlsplit(final).path):
                     return [dict(url=final,kind='direct',page_url=url,verified=False)], [], ''
                 if 'html' in typ.lower() or 'json' in typ.lower() or body.lstrip().startswith(('{', '[')):
                     found, embeds = extract_candidates(body, final)
@@ -445,7 +458,11 @@ def _capture_headless(url: str, *, max_seconds=35) -> list[dict]:
             context.route_web_socket('**/*', lambda websocket: websocket.close())
 
             def observe(request):
-                if len(found) >= MAX_CANDIDATES or not MEDIA_EXT.search(request.url): return
+                if len(found) >= MAX_CANDIDATES: return
+                # Chromium reports 'media' for extensionless video URLs too.
+                # The follow-up bounded byte probe decides if it is playable.
+                if not MEDIA_EXT.search(urlsplit(request.url).path) and request.resource_type!='media':
+                    return
                 try:
                     target = normalized_source_url(request.url)
                     found.append(dict(url=target, label=urlsplit(target).hostname, kind='direct',
@@ -480,8 +497,17 @@ def _capture_headless(url: str, *, max_seconds=35) -> list[dict]:
                 try:
                     if time.monotonic()-started > max_seconds or len(found) >= MAX_CANDIDATES: return
                     headers = response.headers
+                    ctype = headers.get('content-type', '').lower()
+                    # Network responses with video MIME are common when the
+                    # delivery URL has no .mp4/.m3u8 file extension.
+                    if ctype.startswith(('video/','application/vnd.apple.mpegurl',
+                                          'application/x-mpegurl')):
+                        target=normalized_source_url(response.url)
+                        found.append(dict(url=target,label=urlsplit(target).hostname,kind='direct',
+                                          page_url=url,verified=False,discovered_at=time.time()))
+                        return
                     size = headers.get('content-length', '')
-                    if 'json' not in headers.get('content-type', '').lower(): return
+                    if 'json' not in ctype: return
                     # Do not buffer unknown-size browser responses in server RAM.
                     if not size.isdecimal() or not 0 < int(size) <= 250000: return
                     public_url(response.url)
