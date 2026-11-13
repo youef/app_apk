@@ -10,7 +10,7 @@ import asyncio
 from copy import deepcopy
 from ipaddress import ip_address
 from contextlib import asynccontextmanager
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 import io
@@ -148,6 +148,7 @@ class UserState:
     demo: bool = False
     scan: dict | None = None
     scan_catalogue: Catalogue | None = None
+    capture: dict | None = None
     tracking: dict | None = None
     last_used: float = field(default_factory=time.monotonic)
     lock: Any = field(default_factory=threading.RLock)
@@ -444,6 +445,11 @@ async def library_load(request:Request,body:LibraryLoadForm):
 
 
 _discovery_scans = ThreadPoolExecutor(max_workers=2, thread_name_prefix='studio-scan')
+# One active browser-intensive scan job at a time, four bounded source workers.
+_episode_capture_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix='studio-episode-probe')
+_episode_capture_jobs = ThreadPoolExecutor(max_workers=1, thread_name_prefix='studio-episode-batches')
+_EPISODE_BATCH_SIZE = 10
+_EPISODE_BATCH_SECONDS = 45
 _discovery_save_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='studio-fast-save')
 
 
@@ -1077,6 +1083,200 @@ async def verify(request: Request, data: VerifyForm):
     except Exception as exc:
         raise HTTPException(400, clean(exc, 200)) from None
     return {'checked': count, **get_summary(state)}
+
+
+def _capture_summary(job:dict) -> dict:
+    return {k:v for k,v in job.items() if k not in ('events','cancel')}
+
+
+def _capture_event(job:dict, *, entry=None, phase:str='progress', message:str=''):
+    job['revision']=int(job.get('revision',0))+1
+    event={'revision':job['revision'],'phase':phase,
+           'message':message,'snapshot':_capture_summary(job)}
+    if entry is not None:event['delta']=asdict(entry)
+    job.setdefault('events',[]).append(event)
+    if len(job['events'])>240:
+        del job['events'][:-240]
+
+
+def _run_episode_capture_batches(state:UserState,cat:Catalogue,job:dict):
+    """Ten public episode pages per bounded 45s batch, then auto-advance.
+
+    All network operations use the existing SSRF-checked MediaResolver. Futures
+    that exceed the batch budget are skipped; at most four run concurrently
+    through the shared worker pool, even if a provider stalls.
+    """
+    try:
+        total=job['total']
+        while True:
+            with state.lock:
+                if (state.catalogue is not cat or state.capture is not job
+                        or job.get('cancel') or job['next_index']>=total):
+                    break
+                start=job['next_index']
+                stop=min(start+_EPISODE_BATCH_SIZE,total)
+                entries=cat.episodes[start:stop] if cat.kind=='series' else [cat]
+                job['batch_number']+=1
+                job['batch_total']=len(entries)
+                job['batch_done']=0
+                job['batch_started_at']=time.time()
+                job['phase']='scanning'
+                job['message']=f"بدأت الدفعة {job['batch_number']} — الحلقات {start+1} إلى {stop}"
+                _capture_event(job,phase='batch',message=job['message'])
+            futures={_episode_capture_pool.submit(_scan_media_entry,cat,item):item for item in entries}
+            pending=set(futures)
+            deadline=time.monotonic()+_EPISODE_BATCH_SECONDS
+            while pending:
+                with state.lock:
+                    interrupted=(job.get('cancel') or state.capture is not job
+                                 or state.catalogue is not cat)
+                if interrupted:break
+                remaining=deadline-time.monotonic()
+                if remaining<=0:break
+                completed,pending=wait(pending,timeout=min(1.2,remaining),
+                                       return_when=FIRST_COMPLETED)
+                for future in completed:
+                    item=futures[future]
+                    try:
+                        _,checked,pages,playable,error=future.result()
+                    except Exception as exc:
+                        checked,pages,playable,error=list(item.sources),[],None,safe_error(exc)
+                    with state.lock:
+                        if state.catalogue is not cat or state.capture is not job:
+                            continue
+                        item.sources=checked
+                        if pages:item.source_pages=pages
+                        if playable:item.media_url=playable['url']
+                        item.verified=playable is not None
+                        item.error=error
+                        job['done']+=1
+                        job['batch_done']+=1
+                        job['verified']+=int(bool(playable))
+                        job['candidates']+=sum(bool(x.get('url')) for x in checked)
+                        if error:job['failed']+=1
+                        job['message']=f"تمت مراجعة {job['done']} من {total} حلقة"
+                        _capture_event(job,entry=item,phase='episode',message=job['message'])
+            for future in pending:future.cancel()
+            with state.lock:
+                if state.catalogue is not cat or state.capture is not job:break
+                # A budget timeout is not a confirmed broken source.
+                skipped=len(pending)
+                job['done']+=skipped
+                job['batch_done']+=skipped
+                job['timed_out']+=skipped
+                job['next_index']=stop
+                job['last_batch_seconds']=round(time.time()-job['batch_started_at'],1)
+                job['phase']='batch_done'
+                job['message']=(f"انتهت الدفعة {job['batch_number']} خلال "
+                                f"{job['last_batch_seconds']} ثانية؛ "
+                                f"{skipped} حلقة تحتاج إعادة محاولة" if skipped else
+                                f"اكتملت الدفعة {job['batch_number']}؛ الانتقال تلقائيًا")
+                _capture_event(job,phase='batch_done',message=job['message'])
+            try:
+                LIBRARY.remember_discovery(cat)
+            except Exception:
+                # Save failures are visible in the studio, never silently
+                # treated as evidence that a video source failed.
+                with state.lock:
+                    job['save_warning']='تعذّر حفظ آخر دفعة في التخزين المحلي'
+                    _capture_event(job,phase='warning',message=job['save_warning'])
+    except Exception as exc:
+        with state.lock:
+            if state.capture is job:
+                job['error']=safe_error(exc)
+                _capture_event(job,phase='error',message=job['error'])
+    finally:
+        with state.lock:
+            if state.capture is job:
+                job['running']=False
+                job['phase']='cancelled' if job.get('cancel') else 'complete'
+                job['finished_at']=time.time()
+                job['message']=('تم إيقاف الفحص؛ يمكن استئنافه من آخر دفعة'
+                                if job.get('cancel') else
+                                f"اكتمل فحص {job['done']} من {job['total']} حلقة")
+                _capture_event(job,phase=job['phase'],message=job['message'])
+
+
+class EpisodeCaptureBatchForm(BaseModel):
+    start_index:int=Field(default=0,ge=0,le=5000)
+
+
+@app.post('/api/episode-capture-batches/start')
+async def episode_capture_batches_start(request:Request,data:EpisodeCaptureBatchForm):
+    state=protected(request)
+    cloud=os.getenv('ALEZZ_PUBLIC_MODE')=='1' or bool(os.getenv('RENDER'))
+    if cloud and os.getenv('ALEZZ_BROWSER_CAPTURE')!='1':
+        raise HTTPException(503,'فحص Chromium السحابي غير مفعّل')
+    if cloud and state.db is None:
+        raise HTTPException(401,'سجّل دخول مسؤول Supabase لاستخدام فحص الحلقات')
+    if state.demo:raise HTTPException(400,'اكتشف مسلسلًا فعليًا أولًا')
+    with state.lock:
+        cat=current_catalogue(state)
+        total=len(cat.episodes) if cat.kind=='series' else 1
+        if not total:raise HTTPException(400,'لا توجد حلقات للفحص')
+        existing=state.capture
+        if existing and existing['running']:
+            if existing['catalogue_url']==cat.url:
+                return {'job':_capture_summary(existing),'already_running':True}
+            raise HTTPException(409,'يوجد فحص آخر قيد التشغيل')
+        if data.start_index>=total:raise HTTPException(400,'مؤشر البداية يتجاوز عدد الحلقات')
+        job={'id':secrets.token_hex(12),'running':True,'phase':'starting',
+             'catalogue_url':cat.url,'created_at':time.time(),'revision':0,
+             'batch_size':_EPISODE_BATCH_SIZE,'batch_seconds':_EPISODE_BATCH_SECONDS,
+             'batch_number':0,'batch_total':0,'batch_done':0,
+             'next_index':data.start_index,'done':data.start_index,'total':total,
+             'verified':0,'candidates':0,'failed':0,'timed_out':0,'error':'',
+             'message':'جاري تجهيز فحص الحلقات المتتابع','events':[],'cancel':False}
+        state.capture=job
+        _capture_event(job,phase='starting',message=job['message'])
+    _episode_capture_jobs.submit(_run_episode_capture_batches,state,cat,job)
+    return {'job':_capture_summary(job),'already_running':False}
+
+
+@app.get('/api/episode-capture-batches/status')
+async def episode_capture_batches_status(request:Request,job_id:str,after:int=0):
+    _,state=find_state(request)
+    with state.lock:
+        job=state.capture
+        if not job or job['id']!=job_id:raise HTTPException(404,'مهمة الفحص غير موجودة في هذه الجلسة')
+        return {'job':_capture_summary(job),
+                'events':[deepcopy(item) for item in job['events'] if item['revision']>after][:100]}
+
+
+@app.get('/api/episode-capture-batches/events')
+async def episode_capture_batches_events(request:Request,job_id:str):
+    _,state=find_state(request)
+    with state.lock:
+        if not state.capture or state.capture['id']!=job_id:
+            raise HTTPException(404,'مهمة الفحص غير موجودة في هذه الجلسة')
+    async def events():
+        revision=0
+        while not await request.is_disconnected():
+            with state.lock:
+                job=state.capture
+                if not job or job['id']!=job_id:break
+                updates=[deepcopy(item) for item in job['events'] if item['revision']>revision]
+                running=job['running']
+            for item in updates:
+                revision=item['revision']
+                yield 'event: snapshot\ndata: '+json.dumps(item,ensure_ascii=False,separators=(',',':'))+'\n\n'
+            if not running:break
+            await asyncio.sleep(.45)
+    return StreamingResponse(events(),media_type='text/event-stream',
+                             headers={'Cache-Control':'private, no-store, no-transform',
+                                      'X-Accel-Buffering':'no'})
+
+
+@app.post('/api/episode-capture-batches/stop')
+async def episode_capture_batches_stop(request:Request):
+    state=protected(request)
+    with state.lock:
+        job=state.capture
+        if not job:raise HTTPException(404,'لا توجد مهمة فحص')
+        job['cancel']=True
+        job['message']='جارٍ إيقاف الفحص بعد إنهاء المهمة الجارية'
+        _capture_event(job,phase='stopping',message=job['message'])
+        return {'job':_capture_summary(job)}
 
 
 class EdgeCaptureForm(BaseModel):
