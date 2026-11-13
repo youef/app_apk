@@ -492,7 +492,16 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
         in_flight=set(slice_urls)
         def fetch_page(page):
             worker=SourceClient(timeout=getattr(client,'timeout',11)) if isinstance(client,SourceClient) else client
-            return worker.get(page)
+            # Quick discovery has one shared deadline across its pagination
+            # requests; never reset retries or timeout for each page.
+            if worker is not client and isinstance(worker,SourceClient):
+                worker.deadline=getattr(client,'deadline',None)
+                worker.retries=getattr(client,'retries',3)
+            try:
+                return worker.get(page)
+            finally:
+                if worker is not client and hasattr(worker,'session'):
+                    worker.session.close()
         with ThreadPoolExecutor(max_workers=len(slice_urls)) as executor:
             futures={executor.submit(fetch_page,page):page for page in slice_urls}
             for future in as_completed(futures):
