@@ -839,6 +839,7 @@ class Supabase:
         self.refresh_token = ''
         self.expires_at = 0
         self.auth_lock = threading.RLock()
+        self.trusted_admin_uid = trusted_admin_uid or ""
         # Only backend routes that have verified an active portal admin may use
         # this path. Never send an elevated key or token back to the browser.
         if trusted_admin_uid:
@@ -1015,7 +1016,10 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
             result["media_verified" if cat.verified else "embed_reachable"]+=1
         else:result["metadata_only"]+=1
         if movie:
-            db.patch("aseel_movies",movie["id"],{**merge_capture(payload,movie,cat),**({"status":"published","rights_status":"approved"} if publish and rights else {})})
+            changes={**merge_capture(payload,movie,cat),**({"status":"published","rights_status":"approved"} if publish and rights else {})}
+            # PostgREST PATCH {} is not a successful row update. If no metadata
+            # changed, the existing record is already saved: do not issue it.
+            if changes: db.patch("aseel_movies",movie["id"],changes)
             result["works_updated"]+=1
         else:
             movie=db.insert("aseel_movies",{**payload,**work_rights})
@@ -1060,7 +1064,8 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
         else:result["metadata_only"]+=1
         awaiting_playback = defer_unverified_episodes and publish and not payload.get("stream_url")
         if old:
-            db.patch("aseel_episodes",old["id"],{**merge_capture(payload,old,ep),**({"status":"published","rights_status":"approved"} if publish and rights and not awaiting_playback else {})})
+            changes={**merge_capture(payload,old,ep),**({"status":"published","rights_status":"approved"} if publish and rights and not awaiting_playback else {})}
+            if changes: db.patch("aseel_episodes",old["id"],changes)
             result["episodes_updated"]+=1
         else:
             old=db.insert("aseel_episodes",{"season_id":season_id,"number":ep.number,
