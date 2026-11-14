@@ -344,7 +344,9 @@ class MediaResolver:
         deadline = time.monotonic()+self.max_seconds
         sources, errors = self._http(pages, deadline=deadline)
         if self.mode == 'headless' or self.mode == 'auto' and (force_browser or not any(x.get('kind') == 'direct' for x in sources)):
-            browser_sources, browser_errors = self._browser(pages, deadline=deadline)
+            player_pages = getattr(self, '_http_player_pages', [])
+            browser_pages = list(dict.fromkeys([*player_pages[:3], *pages]))
+            browser_sources, browser_errors = self._browser(browser_pages, deadline=deadline)
             sources = merge_sources(sources, browser_sources)
             errors.extend(browser_errors)
         return sources, errors[:6]
