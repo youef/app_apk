@@ -165,27 +165,28 @@ class AutoSyncTests(unittest.TestCase):
             value = conn.execute('select * from auto_jobs where table_name=? and target_id=?', (table,row['id'])).fetchone()
             return dict(value)
 
-    def test_missing_original_auto_drafts_even_when_direct_media_is_healthy(self):
+    def test_missing_original_preserves_status_and_reports_missing_page(self):
         row = self.row(name='no-source-movie', source='', stream=OLD)
         self.resolver.healthy.add(OLD)
         self.worker.check_target(self.job(row))
         remote = self.db.rows['aseel_movies'][row['id']]
-        self.assertEqual(remote['status'], 'draft')
+        self.assertEqual(remote['status'], 'published')
         self.assertEqual(remote['rights_status'], 'approved')
         self.assertEqual(remote['stream_url'], OLD)
         self.assertEqual(remote['link_health_status'], 'healthy')
         self.assertIn('الأصلي', remote['link_health_reason'])
 
-    def test_three_consecutive_media_failures_draft_once_and_never_auto_publish(self):
+    def test_three_consecutive_failures_report_broken_without_silent_drafting(self):
         row = self.row(name='three-failures')
         for count in (1, 2, 3):
             self.worker.check_target(self.job(row))
             remote = self.db.rows['aseel_movies'][row['id']]
-            self.assertEqual(remote['status'], 'draft' if count == 3 else 'published')
+            self.assertEqual(remote['status'], 'published')
+            self.assertEqual(remote['link_health_status'], 'broken' if count == 3 else 'suspect')
             self.now += 125
         self.resolver.healthy.add(OLD)
         self.worker.check_target(self.job(row))
-        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['status'], 'draft')
+        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['status'], 'published')
         self.assertEqual(self.db.rows['aseel_movies'][row['id']]['rights_status'], 'approved')
 
     def test_working_backup_prevents_draft_and_replaces_failed_primary(self):
@@ -215,16 +216,18 @@ class AutoSyncTests(unittest.TestCase):
         for _ in range(3):
             self.worker.check_target(self.job(row))
             self.now += 125
-        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['status'],'draft')
+        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['status'],'published')
+        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['link_health_status'],'broken')
 
-    def test_missing_original_series_is_drafted(self):
+    def test_missing_original_series_preserves_publication_and_warns(self):
         row = self.row(table='aseel_series', name='no-source-series',source='',stream='')
         self.worker.discover_series(self.job(row,'aseel_series'))
         remote = self.db.rows['aseel_series'][row['id']]
-        self.assertEqual(remote['status'], 'draft')
+        self.assertEqual(remote['status'], 'published')
         self.assertEqual(remote['rights_status'], 'approved')
+        self.assertEqual(self.job(row,'aseel_series')['status'],'missing_source')
 
-    def test_series_without_discovered_episodes_drafts_after_three_scans(self):
+    def test_series_without_discovered_episodes_preserves_status_and_records_failure(self):
         row = self.row(table='aseel_series',name='empty-series',source=ROOT,stream='')
         from alezz_fetchv_importer import Catalogue
         cat = Catalogue(kind='series',title='No episodes',url=ROOT)
@@ -232,7 +235,8 @@ class AutoSyncTests(unittest.TestCase):
             for n in (1,2,3):
                 self.worker.discover_series(self.job(row,'aseel_series'))
                 remote = self.db.rows['aseel_series'][row['id']]
-                self.assertEqual(remote['status'],'draft' if n==3 else 'published')
+                self.assertEqual(remote['status'],'published')
+                self.assertEqual(self.job(row,'aseel_series')['status'],'broken' if n==3 else 'suspect')
                 self.now = self.job(row,'aseel_series')['next_check'] + 1
 
     def test_reimport_preserves_synced_source_history_without_reupload_churn(self):
