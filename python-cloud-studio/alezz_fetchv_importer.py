@@ -1113,12 +1113,20 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
         else:result["metadata_only"]+=1
         awaiting_playback = defer_unverified_episodes and publish and not payload.get("stream_url")
         if old:
-            changes={**merge_capture(payload,old,ep),**({"status":"published","rights_status":"approved"} if publish and rights and not awaiting_playback else {})}
+            # Explicitly approved rights survive the playback-pending state.
+            # Do not mark an unverified episode published; AutoSync promotes
+            # the approved draft only after an actual direct-media probe.
+            authorization = ({"rights_status":"approved","license_reference":license_reference}
+                             if publish and rights and awaiting_playback else
+                             {"status":"published","rights_status":"approved"}
+                             if publish and rights else {})
+            changes={**merge_capture(payload,old,ep),**authorization}
             if changes: db.patch("aseel_episodes",old["id"],changes)
             result["episodes_updated"]+=1
         else:
+            awaiting_rights=({**episode_rights,"status":"draft"} if awaiting_playback else episode_rights)
             old=db.insert("aseel_episodes",{"season_id":season_id,"number":ep.number,
-                        **payload,**({"status":"draft","rights_status":"pending"} if awaiting_playback else episode_rights)})
+                        **payload,**awaiting_rights})
             result["episodes_new"]+=1
         result['bindings'].append(dict(season=ep.season,number=ep.number,id=old['id'],table='aseel_episodes'))
         if awaiting_playback:
