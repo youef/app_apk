@@ -51,5 +51,5 @@ test('partial exports support CSV and JSON without saving unpublished media',()=
  assert.match(script,/function studioExportCsvField\(value\)/);
  assert.match(script,/app\.scanning\?'scanning':'review'/);
  assert.match(script,/function copyStudioPlayerLinks\(\)/);
- assert.match(script,/مصدر محتمل/);
+ assert.match(script,/مرشح غير متحقق/);
 });
