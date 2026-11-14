@@ -52,7 +52,7 @@ class CaptureBatchTests(unittest.TestCase):
         class Store:
             def remember_discovery(self,cat):
                 events.append(len(cat.episodes))
-        def scan(cat,ep):
+        def scan(cat,ep,*_):
             time.sleep(.005)
             media={"kind":"direct","url":f"https://example.org/{ep.number}.m3u8",
                    "verified":True}
