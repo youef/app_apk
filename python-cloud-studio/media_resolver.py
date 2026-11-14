@@ -200,6 +200,14 @@ def extract_candidates(body: str, base: str, *, now: float | None = None) -> tup
     for url in find_static_media(soup, base): add(url)
     for tag in soup.select('iframe[src],iframe[data-src],embed[src],video[src],source[src],'
                            '[data-file],[data-src],[data-url],[data-embed],[data-player],a[href]')[:1600]:
+        # Episode listings often have recommendations for OTHER series.
+        # Never crawl those episode links as player frames of this episode.
+        if tag.name == 'a' and tag.get('href'):
+            href = urlsplit(urljoin(base, tag['href']))
+            origin = urlsplit(base)
+            if '/episode/' in href.path.lower() and (
+                    href.hostname != origin.hostname or href.path.rstrip('/') != origin.path.rstrip('/')):
+                continue
         label = tag.get('title') or tag.get('data-label') or tag.get_text(' ', strip=True)[:80]
         marker = ' '.join(tag.get('class') or [])
         embed = tag.name in ('iframe', 'embed') or bool(re.search(r'player|server|مشغل|سيرفر|مشاهدة', marker+' '+label, re.I))
