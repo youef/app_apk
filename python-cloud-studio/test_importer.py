@@ -58,6 +58,35 @@ class Tests(unittest.TestCase):
         self.assertEqual([(e.season,e.number) for e in cat.episodes],[(1,1),(1,2),(2,1)])
 
 
+    def test_series_automatically_follows_episode_index_without_related_titles(self):
+        from urllib.parse import quote
+        root='https://www.qrmzi.tv/series/مسلسل-الكرامة/'
+        first='https://www.qrmzi.tv/episode/مسلسل-الكرامة-الحلقة-1/'
+        related='https://www.qrmzi.tv/episode/مسلسل-حب-أعمى-الحلقة-5/'
+        listing=f"""<html><head><title>مسلسل الكرامة</title></head><body>
+            <h1>مسلسل الكرامة</h1>
+            <a href="{first}">الحلقة 1</a>
+            <aside><a href="{related}">مسلسل حب أعمى الحلقة 5</a></aside>
+            </body></html>"""
+        episodes=''.join(
+            f'<a href="https://www.qrmzi.tv/episode/مسلسل-الكرامة-الحلقة-{i}/">مسلسل الكرامة الحلقة {i}</a>'
+            for i in range(1,10))
+        detail=f'<html><h1>مسلسل الكرامة الحلقة 1</h1>{episodes}<a href="{related}">مسلسل حب أعمى الحلقة 5</a></html>'
+        class Source:
+            def __init__(self):self.visited=[]
+            def get(self,url):
+                self.visited.append(url)
+                if url.rstrip('/')==root.rstrip('/'):return url,'text/html',listing
+                if url.rstrip('/')==first.rstrip('/'):return url,'text/html',detail
+                raise ValueError('Unexpected other series crawl')
+        client=Source()
+        result=mod.pull_html(root,client,kind='series',max_pages=3)
+        self.assertEqual([(ep.season,ep.number) for ep in result.episodes],[(1,n) for n in range(1,10)])
+        self.assertIn(first,client.visited)
+        self.assertNotIn(related,client.visited)
+        self.assertTrue(all('الكرامة' in ep.page_url for ep in result.episodes))
+        self.assertTrue(all('حب-أعمى' not in ep.page_url for ep in result.episodes))
+
     def test_static_player_links_and_escaped_scripts(self):
         soup = mod.BeautifulSoup('''
           <html><body>
