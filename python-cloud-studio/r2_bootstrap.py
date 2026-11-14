@@ -144,5 +144,7 @@ def bootstrap(portal):
     except Exception as exc:
         # Never print the access key, secret, bearer token, raw HTTP body,
         # request headers or traceback; only safe step/type markers.
-        log.error("ALEZZ_R2_SETUP status=INCOMPLETE stage=%s error_type=%s",
-                  step, type(exc).__name__)
+        safe = str(exc) if (isinstance(exc, RuntimeError)
+                            and str(exc).startswith("Cloudflare API ")) else "-"
+        log.error("ALEZZ_R2_SETUP status=INCOMPLETE stage=%s error_type=%s safe_error=%s",
+                  step, type(exc).__name__, safe)
