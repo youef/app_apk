@@ -129,8 +129,11 @@ def validate_settings(name, values: dict):
     if (not VALID_BUCKET.fullmatch(bucket) or ".." in bucket
             or ".-" in bucket or "-." in bucket):
         raise ValueError("اسم الحاوية Bucket غير صحيح")
-    public_url = _https_url(values.get("public_base_url", ""), public=True)
-    if not public_url or not public_url.startswith("https://"):
+    # R2 managed r2.dev domain may be provisioned after saving credentials;
+    # only allow omission for R2. Other providers need a public read URL.
+    value = (values.get("public_base_url") or "").strip()
+    public_url = _https_url(value, public=True) if value else ""
+    if name != "r2" and not public_url:
         raise ValueError("أدخل رابط القراءة العام للفيديوهات عبر HTTPS")
     quota_gb = float(values.get("quota_gb") or 0)
     limit_gb = float(values.get("max_file_gb") or 0)
@@ -165,6 +168,14 @@ def save(portal, name: str, values: dict):
         encrypt(new_secret) if new_secret else current.get("encrypted_secret_key", "") if current else "")
     if not row["encrypted_access_key"] or not row["encrypted_secret_key"]:
         raise ValueError("أدخل مفتاح الوصول والمفتاح السري أول مرة")
+    management_token = (values.get("management_token") or "").strip()
+    if management_token:
+        if name != "r2" or not re.fullmatch(r"[A-Za-z0-9_.-]{20,180}", management_token):
+            raise ValueError("رمز Cloudflare API غير صالح")
+        row["encrypted_management_token"] = encrypt(management_token)
+    else:
+        row["encrypted_management_token"] = (
+            current.get("encrypted_management_token", "") if current else "")
     # Modified connection details invalidate prior test; a fresh positive
     # test is required before re-enabling.
     row.update({"enabled": False, "health_status": "unchecked",
@@ -191,6 +202,7 @@ def public_config(row):
         "health_checked_at": row.get("health_checked_at"),
         "has_access_key": bool(row.get("encrypted_access_key")),
         "has_secret_key": bool(row.get("encrypted_secret_key")),
+        "has_management_token": bool(row.get("encrypted_management_token")),
     }
 
 
