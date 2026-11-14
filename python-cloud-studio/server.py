@@ -41,7 +41,7 @@ from alezz_fetchv_importer import (
 from metadata_enrichment import enrich
 from library_sync import JobDB,collect_pages,collect_works
 from auto_sync import AutoSync, target_key
-from media_resolver import MediaResolver, read_public_html, safe_error, supported_source_kind, normalized_source_url, merge_sources
+from media_resolver import MediaResolver, read_public_html, safe_error, supported_source_kind, normalized_source_url, merge_sources, signed_expiry
 from title_cleaner import content_title
 from launch import studio_revision
 from member_portal import Portal
@@ -1328,6 +1328,9 @@ def _bind_player_source(entry, media_url: str, page_url: str = '') -> None:
            'verified': previous_verified,
            'label': prior.get('label') or (urlsplit(target).hostname or 'مشغل مباشر'),
            'discovered_at': prior.get('discovered_at') or time.time()}
+    expiry = signed_expiry(target)
+    if expiry is not None:
+        row['expires_at'] = expiry
     entry.sources = merge_sources(entry.sources, [row], limit=128)
     if page:
         entry.source_pages = list(dict.fromkeys([*entry.source_pages, page]))
