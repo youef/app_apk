@@ -64,6 +64,30 @@ def bootstrap(portal):
             log.warning("ALEZZ_R2_SETUP status=ALREADY_ACTIVE bucket=%s", bucket)
             return
 
+        # Persist all provided S3 credentials encrypted before testing the
+        # Cloudflare subscription. This lets the owner finish account
+        # activation later without pasting secret keys into chat again.
+        step = "pending_credentials"
+        staged = {
+            "provider_id": "r2",
+            "account_id": account,
+            "endpoint": "https://" + account + ".r2.cloudflarestorage.com",
+            "region": "auto", "bucket": bucket,
+            "public_base_url": (existing or {}).get("public_base_url") or "",
+            "encrypted_access_key": settings.encrypt(access),
+            "encrypted_secret_key": settings.encrypt(secret),
+            "enabled": False, "priority": 1,
+            "quota_bytes": 10 * 1024**3,
+            "max_file_bytes": 50 * 1024**3,
+            "health_status": "unchecked",
+            "health_message": "المفاتيح محفوظة مشفرة؛ بانتظار تفعيل R2 وإنشاء الحاوية والرابط العام.",
+        }
+        portal.upstream("POST", "/rest/v1/aseel_storage_provider_configs",
+                        secret=True,
+                        prefer="resolution=merge-duplicates,return=minimal",
+                        json=staged)
+        log.warning("ALEZZ_R2_SETUP credentials=ENCRYPTED_STAGED")
+
         path = "/accounts/" + account + "/r2/buckets"
         step = "bucket"
         current = _api(api_token, "GET", path + "/" + quote(bucket, safe=""), allow_missing=True)
@@ -146,5 +170,13 @@ def bootstrap(portal):
         # request headers or traceback; only safe step/type markers.
         safe = str(exc) if (isinstance(exc, RuntimeError)
                             and str(exc).startswith("Cloudflare API ")) else "-"
+        if "status=403" in safe and "10042" in safe:
+            try:
+                settings._status(
+                    portal, "r2", "error",
+                    "Cloudflare 10042: يلزم تفعيل اشتراك R2 من لوحة Cloudflare "
+                    "ثم إنشاء حاوية الفيديو وتفعيل نطاق القراءة العام. المفاتيح محفوظة مشفرة.")
+            except Exception:
+                pass
         log.error("ALEZZ_R2_SETUP status=INCOMPLETE stage=%s error_type=%s safe_error=%s",
                   step, type(exc).__name__, safe)
