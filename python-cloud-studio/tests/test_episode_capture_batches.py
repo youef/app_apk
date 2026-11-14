@@ -77,7 +77,7 @@ class CaptureBatchTests(unittest.TestCase):
             "safe_error":lambda e:type(e).__name__
         }
         exec(compile(ast.fix_missing_locations(
-            ast.Module(body=nodes,type_ignores=[])),"<capture>","exec"),globals_)
+            ast.Module(body=[ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0), *nodes],type_ignores=[])),"<capture>","exec"),globals_)
         try:
             globals_["_run_episode_capture_batches"](state,cat,job)
         finally:
