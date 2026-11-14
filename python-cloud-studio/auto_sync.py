@@ -639,7 +639,7 @@ class AutoSync:
                                      kind=source['kind'],page_url=source['page_url']))
         # Health checks report failure but never silently change a published item to draft.
         if not pages:
-            error='المصدر الأصلي غير متاح؛ يرجى تحديث المشغل'
+            error='المصدر الأصلي مفقود أو غير متاح؛ يرجى تحديث المشغل'
         payload=dict(link_health_status=status,link_health_reason=error or None,
                      link_health_checked_at=iso(now),link_health_failures=failures,link_health_url=selected or None)
         if extracted:payload.update(self.metadata_patch(job,pages))
