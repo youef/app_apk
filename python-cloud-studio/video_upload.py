@@ -20,6 +20,7 @@ import requests
 from botocore.exceptions import BotoCoreError, ClientError
 import video_storage
 import video_storage_settings
+import cloudflare_r2_setup
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -81,6 +82,7 @@ class ProviderConfigBody(BaseModel):
     public_base_url: str = Field(min_length=9, max_length=1024)
     access_key_id: str = Field(default="", max_length=256)
     secret_access_key: str = Field(default="", max_length=4096)
+    management_token: str = Field(default="", max_length=256)
     quota_gb: float = Field(default=10, gt=0, le=100000)
     max_file_gb: float = Field(default=50, gt=0, le=5120)
     priority: int = Field(default=50, ge=1, le=100)
@@ -97,6 +99,10 @@ class EnableBody(BaseModel):
 
 class SetupCorsBody(BaseModel):
     create_bucket: bool = False
+
+
+class R2AutomaticSetupBody(BaseModel):
+    publish_dev: bool = False
 
 
 def is_mp4(filename: str) -> bool:
@@ -237,6 +243,28 @@ def register(portal, template_path):
             raise HTTPException(422, str(exc)) from exc
         except requests.RequestException as exc:
             raise HTTPException(503, "تعذّر حفظ إعدادات المركز") from exc
+
+    @router.get("/api/studio/video-upload/providers/r2/token-test")
+    def test_r2_management_token(request: Request):
+        _admin(request, portal)
+        try:
+            return cloudflare_r2_setup.token_status(portal)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        except requests.RequestException as exc:
+            raise HTTPException(503, "تعذّر فحص Cloudflare API الآن") from exc
+
+    @router.post("/api/studio/video-upload/providers/r2/auto-setup")
+    def auto_setup_r2(body: R2AutomaticSetupBody, request: Request):
+        _admin(request, portal, mutation=True)
+        try:
+            return cloudflare_r2_setup.configure(
+                portal, str(request.base_url).rstrip("/"),
+                publish_dev=body.publish_dev)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        except requests.RequestException as exc:
+            raise HTTPException(503, "فشل حفظ تهيئة R2 في قاعدة البيانات") from exc
 
     @router.post("/api/studio/video-upload/providers/{name}/test")
     def test_storage_provider(name: Literal["r2", "b2", "oracle"], request: Request):
