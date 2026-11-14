@@ -13,16 +13,16 @@
   "dir": "rtl",
   "icons": [
     {
-      "src": "/apple-touch-icon.png",
-      "sizes": "any",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
       "src": "/static/studio-icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ],
   "shortcuts": [
