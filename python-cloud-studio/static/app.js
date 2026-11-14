@@ -56,7 +56,7 @@
     if(type==='loading')$('activity').querySelector('.activity-ico').classList.add('spin');
     else $('activity').querySelector('.activity-ico').classList.remove('spin');
   }
-  function busy(value){app.busy=value; for(const id of ['discoverBtn','discoverBatchBtn','scanListingBtn','saveBatchBtn','demoBtn','applyLinksBtn','updateBtn','verifyAllBtn','verifySelectedBtn','verifyMovieBtn','edgeCaptureBtn','saveBtn','addEpisodeBtn']){
+  function busy(value){app.busy=value; for(const id of ['discoverBtn','discoverBatchBtn','scanListingBtn','saveBatchBtn','demoBtn','episodeLinkBtn','applyLinksBtn','updateBtn','verifyAllBtn','verifySelectedBtn','verifyMovieBtn','edgeCaptureBtn','saveBtn','addEpisodeBtn']){
     if($(id))$(id).disabled=value || (id==='saveBtn' && app.demo) || (id==='edgeCaptureBtn' && app.browserCaptureRunning) || (app.scanning && !['discoverBtn','discoverBatchBtn','scanListingBtn','demoBtn','updateBtn','saveBtn'].includes(id));
   }}
   function text(el, value){el.textContent = value==null?'':String(value);return el;}
@@ -205,7 +205,8 @@
         const value=normalizeMediaInput(url.value);url.value=value;
         if(current.media_url!==value){
           current.media_url=value;current.verified=false;current.error='';
-          current.sources=[];redrawStats();
+          if(value){current.sources=[...(current.sources||[]).filter(s=>s.url!==value),{url:value,kind:/\.(?:m3u8|mp4|m4v|webm)(?:[?#]|$)/i.test(value)?'direct':'embed',page_url:current.page_url,verified:false}];}
+          redrawStats();
           badge.textContent=value?'◷ يحتاج فحصًا':'— بلا رابط';
           badge.className='media-badge wait';
         }
@@ -1063,6 +1064,18 @@
     $('toastCenterBtn').onclick=()=>toast('يمكنك الاطلاع على حالة الاستيراد في الشريط أسفل قسم الاكتشاف.');
     $('updateBtn').onclick=()=>action(()=>syncEdits());
     $('linksToggle').onclick=$('toolsLinksBtn').onclick=()=>openModal('linksModal');$('applyLinksBtn').onclick=importLinks;
+    $('episodeLinkForm').onsubmit=event=>{event.preventDefault();action(async()=>{
+      if(!app.catalogue||app.catalogue.kind!=='series')throw new Error('اكتشف المسلسل وحلقاته أولًا.');
+      await syncEdits({silent:true});
+      const page_url=$('episodeLinkPage').value.trim(),media_url=$('episodeLinkMedia').value.trim();
+      const result=await API('episode-player-link',{page_url,media_url});
+      app.season=result.linked.season;
+      updateStatus(result);
+      const msg='تم ربط المصدر بالموسم '+result.linked.season+'، الحلقة '+result.linked.number+'. الرابط محفوظ كمرشح حتى ينجح فحص التشغيل؛ احفظ العمل في المكتبة بعد التحقق.';
+      $('episodeLinkStatus').textContent=msg;
+      activity(msg,'success');toast('تمت مطابقة الحلقة وحفظ رابطها ضمن مصادر الاستديو.','success');
+    });};
+
     $('pasteFetchVBtn').onclick=async()=>{
       const field=$('linksInput');
       try {
