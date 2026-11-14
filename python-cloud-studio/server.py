@@ -743,6 +743,49 @@ def _extend_catalogue(state: UserState, cat: Catalogue, progress: dict, checkpoi
                 _schedule_scan_checkpoint(state,cat,progress)
 
 
+def _persist_autodiscovered_players(state: UserState, cat: Catalogue, progress: dict):
+    """Update the saved draft after media discovery, without any manual binding.
+
+    Each Episode retains its own page_url, season and number. The existing
+    store() method maps those keys to aseel_seasons / aseel_episodes; verified
+    direct streams become available to the existing AutoSync job. Unverified
+    candidates are never automatically published.
+    """
+    with state.lock:
+        if state.catalogue is not cat or state.scan is not progress or state.db is None:
+            return
+        if not state.tracking or not (state.tracking.get('saved') or state.tracking.get('queued')):
+            return
+        snapshot = deepcopy(cat)
+        database = state.db
+        progress['db_sync'] = 'queued'
+
+    def save():
+        try:
+            # Initial discovery draft and this refreshed snapshot share the
+            # same serial writer; no half-written season/episode mappings.
+            with state.save_lock, _capture_write_lock:
+                saved = store(snapshot, database, publish=False, rights=False,
+                              capture_merge=True)
+                AUTOSYNC.remember_saved(snapshot, saved, capture=True, refresh=True)
+            with state.lock:
+                if state.catalogue is cat and state.scan is progress:
+                    progress['db_sync'] = 'saved'
+                    progress['db_synced_episodes'] = len(snapshot.episodes)
+                    _emit_scan_event(state, progress, 'database_synced',
+                                     {'episodes': len(snapshot.episodes),
+                                      'verified': sum(bool(e.verified) for e in snapshot.episodes)})
+        except Exception as exc:
+            with state.lock:
+                if state.catalogue is cat and state.scan is progress:
+                    progress['db_sync'] = 'failed'
+                    progress['db_sync_error'] = safe_error(exc)
+                    _emit_scan_event(state, progress, 'database_sync_error',
+                                     {'message': progress['db_sync_error']})
+
+    _discovery_save_pool.submit(save)
+
+
 def scan_catalogue(state: UserState, cat: Catalogue, progress: dict):
     """Adaptive parallel worker with per-episode events and durable checkpoints."""
     completed=set(progress.get("completed_keys",[]))
@@ -842,6 +885,10 @@ def scan_catalogue(state: UserState, cat: Catalogue, progress: dict):
                 progress["running"]=False
                 _emit_scan_event(state,progress,"stopped" if progress.get("stop_requested") else "complete")
                 _schedule_scan_checkpoint(state,cat,progress,force=True)
+        # Persist all autonomously scanned episode/source associations to the
+        # already enabled draft sync after releasing the UI progress lock.
+        if not progress.get("stop_requested"):
+            _persist_autodiscovered_players(state, cat, progress)
 
 
 def start_catalogue_scan(state: UserState, cat: Catalogue, *,
