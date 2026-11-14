@@ -35,7 +35,7 @@ from alezz_fetchv_importer import (
     Catalogue, Episode, MEDIA_EXT, SourceClient, SourceConnectionError, Supabase, category_for_genres,
     hydrate_episode_metadata,
     collect_edge_network,
-    clean, inspect_episodes, public_url, pull_html, store,
+    clean, inspect_episodes, public_url, pull_html, store, episode_numbers,
 )
 
 from metadata_enrichment import enrich
@@ -798,8 +798,8 @@ def scan_catalogue(state: UserState, cat: Catalogue, progress: dict):
                         checked,pages,playable,error=list(entry.sources),[],None,safe_error(exc)
                     with state.lock:
                         if state.catalogue is not cat or state.scan is not progress:return
-                        entry.sources=checked
-                        if pages:entry.source_pages=pages
+                        entry.sources=merge_sources(entry.sources, checked, limit=128)
+                        if pages:entry.source_pages=list(dict.fromkeys([*entry.source_pages, *pages]))
                         if playable:entry.media_url=playable["url"]
                         entry.verified=playable is not None
                         entry.error=error
@@ -1311,6 +1311,77 @@ async def demo(request: Request):
     return get_summary(state)
 
 
+def _bind_player_source(entry, media_url: str, page_url: str = '') -> None:
+    """Associate a manual HTTPS media candidate with exactly one episode/movie.
+
+    Manual attachment is not playback verification. Keep the candidate and
+    original episode page for retry even when the CDN is temporarily unreachable.
+    """
+    target = normalized_source_url(public_url(media_url))
+    kind = supported_source_kind(target)
+    if not kind:
+        raise ValueError('الرابط يجب أن يكون MP4 أو M3U8 أو WebM أو Embed مدعوم')
+    page = public_url(page_url) if page_url else getattr(entry, 'page_url', '')
+    previous_verified = bool(entry.verified and entry.media_url == target)
+    prior = next((row for row in entry.sources if row.get('url') == target), {})
+    row = {**prior, 'url': target, 'kind': kind, 'page_url': page,
+           'verified': previous_verified,
+           'label': prior.get('label') or (urlsplit(target).hostname or 'مشغل مباشر'),
+           'discovered_at': prior.get('discovered_at') or time.time()}
+    entry.sources = merge_sources(entry.sources, [row], limit=128)
+    if page:
+        entry.source_pages = list(dict.fromkeys([*entry.source_pages, page]))
+    entry.media_url, entry.verified, entry.error = target, previous_verified, ''
+
+
+def _match_episode_by_page(cat: Catalogue, page_url: str) -> Episode | None:
+    """Prefer exact page association; use the episode label only as a fallback."""
+    from urllib.parse import unquote
+    page = page_url.rstrip('/')
+    exact = [ep for ep in cat.episodes if ep.page_url.rstrip('/') == page]
+    if len(exact) == 1:
+        return exact[0]
+    if len(exact) > 1:
+        return None
+    numbers = episode_numbers(unquote(page_url))
+    return next((ep for ep in cat.episodes if (ep.season, ep.number) == numbers), None) if numbers else None
+
+
+class EpisodePlayerLinkForm(BaseModel):
+    page_url: str = Field(min_length=12, max_length=2048)
+    media_url: str = Field(min_length=12, max_length=2048)
+
+
+@app.post('/api/episode-player-link')
+async def episode_player_link(request: Request, data: EpisodePlayerLinkForm):
+    """Bind a known media candidate to an existing episode; never auto-publish."""
+    state = protected(request)
+    cat = current_catalogue(state)
+    if cat.kind != 'series':
+        raise HTTPException(400, 'هذه الميزة للمسلسلات فقط')
+    try:
+        page = public_url(data.page_url.strip())
+        media = public_url(data.media_url.strip())
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(400, 'استخدم رابط HTTPS عامًا للحلقة وللفيديو') from exc
+    with state.lock:
+        episode = _match_episode_by_page(cat, page)
+        if episode is None:
+            raise HTTPException(404, 'لم أجد الحلقة المطابقة. اكتشف الموسم والحلقة أولاً أو استخدم رابط صفحتها الصحيح.')
+        try:
+            _bind_player_source(episode, media, page)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        binding = {'season': episode.season, 'number': episode.number,
+                   'media_url': episode.media_url, 'verified': episode.verified,
+                   'status': 'candidate' if not episode.verified else 'verified'}
+        summary = get_summary(state)
+    # This persists the candidate to the discovery cache; Supabase publication
+    # still requires the administrator's explicit save and playback verification.
+    LIBRARY.remember_discovery(cat)
+    return {'linked': binding, **summary}
+
+
 class LinkForm(BaseModel):
     text: str = Field(max_length=120000)
 
@@ -1325,34 +1396,40 @@ async def links(request: Request, data: LinkForm):
             line = line.strip()
             if not line or line.startswith('#'):
                 continue
-            if len(line) > 2200:
+            if len(line) > 4300:
                 problems.append(f'السطر {no}: طويل جدًا')
                 continue
             try:
                 if cat.kind == 'movie' and '|' not in line:
-                    url = public_url(line)
-                    if not supported_source_kind(url):
-                        raise ValueError('الرابط يجب أن يكون MP4/HLS/WebM أو Embed مدعوم')
-                    cat.media_url, cat.verified = normalized_source_url(url), False
+                    _bind_player_source(cat, line, cat.url)
                     count += 1
                     continue
                 if '|' not in line:
-                    raise ValueError('المطلوب S01E01|https://...')
-                label, url = line.split('|', 1)
-                from alezz_fetchv_importer import episode_numbers
-                numbers = episode_numbers(label.strip())
-                url = public_url(url.strip())
-                if not numbers or not supported_source_kind(url):
-                    raise ValueError('الموسم/الحلقة أو صيغة الرابط غير صحيحة')
-                ep = next((e for e in cat.episodes if (e.season, e.number) == numbers), None)
+                    raise ValueError('المطلوب S01E01|https://... أو رابط الحلقة|رابط الفيديو')
+                label, url = (part.strip() for part in line.split('|', 1))
+                url = public_url(url)
+                if not supported_source_kind(url):
+                    raise ValueError('الرابط يجب أن يكون فيديو مباشرًا مدعومًا')
+                if cat.kind != 'series':
+                    raise ValueError('صيغة المواسم مخصصة للمسلسلات')
+                if label.startswith('https://'):
+                    page = public_url(label)
+                    ep = _match_episode_by_page(cat, page)
+                else:
+                    numbers = episode_numbers(label)
+                    ep = next((e for e in cat.episodes if (e.season, e.number) == numbers), None) if numbers else None
+                    page = ep.page_url if ep else ''
                 if ep is None:
-                    problems.append(f'السطر {no}: الحلقة غير موجودة في الاكتشاف')
+                    problems.append(f'السطر {no}: لا توجد حلقة مطابقة في المواسم المكتشفة')
                     continue
-                ep.media_url, ep.verified, ep.error = normalized_source_url(url), False, ''
+                _bind_player_source(ep, url, page)
                 count += 1
             except (ValueError, TypeError) as exc:
                 problems.append(f'السطر {no}: {clean(exc, 100)}')
-    return {'updated': count, 'problems': problems[:30], **get_summary(state)}
+        summary = get_summary(state)
+    if count:
+        LIBRARY.remember_discovery(cat)
+    return {'updated': count, 'problems': problems[:30], **summary}
 
 
 class UpdateForm(BaseModel):
@@ -1442,7 +1519,10 @@ async def update(request: Request, data: UpdateForm):
                     if supported_source_kind(value) == 'embed':
                         value = normalized_source_url(value)
                     if value != ep.media_url:
-                        ep.media_url, ep.verified, ep.error = value, False, ''
+                        if value:
+                            _bind_player_source(ep, value, ep.page_url)
+                        else:
+                            ep.media_url, ep.verified, ep.error = '', False, ''
     return get_summary(state)
 
 
@@ -1578,8 +1658,8 @@ def _run_episode_capture_batches(state:UserState,cat:Catalogue,job:dict):
                     with state.lock:
                         if state.catalogue is not cat or state.capture is not job:
                             continue
-                        item.sources=checked
-                        if pages:item.source_pages=pages
+                        item.sources=merge_sources(item.sources, checked, limit=128)
+                        if pages:item.source_pages=list(dict.fromkeys([*item.source_pages, *pages]))
                         if playable:item.media_url=playable['url']
                         item.verified=playable is not None
                         item.error=error
