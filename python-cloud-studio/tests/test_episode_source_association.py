@@ -97,16 +97,21 @@ class EpisodeSourceAssociationTests(unittest.TestCase):
         self.assertIs(match(cat, "https://source.example/episode/مسلسل-الكرامة-الحلقة-1/"), ep1)
         self.assertIsNone(match(cat, "https://source.example/other"))
 
-    def test_ui_contains_pairing_form_and_bulk_url_support(self):
+    def test_entire_series_discovery_requires_no_manual_player_binding(self):
         html = UI.read_text(encoding="utf-8")
         js = CLIENT.read_text(encoding="utf-8")
         server = SERVER.read_text(encoding="utf-8")
-        self.assertIn('id="episodeLinkForm"', html)
-        self.assertIn('id="episodeLinkPage"', html)
-        self.assertIn('id="episodeLinkMedia"', html)
-        self.assertIn("API('episode-player-link'", js)
-        self.assertIn("label.startswith('https://')", server)
-        self.assertIn("LIBRARY.remember_discovery(cat)", server)
+        resolver = (BASE / "media_resolver.py").read_text(encoding="utf-8")
+        self.assertNotIn('id="episodeLinkForm"', html)
+        self.assertIn('id="edgeCaptureBtn"', html)
+        self.assertIn('id="autoTrack" checked', html)
+        self.assertIn("scan_media:true", js)
+        self.assertIn("auto_track:$('autoTrack').checked", js)
+        self.assertIn("def _persist_autodiscovered_players", server)
+        self.assertIn("_persist_autodiscovered_players(state, cat, progress)", server)
+        self.assertIn("'database_synced'", server)
+        self.assertIn("browser_pages = list(dict.fromkeys([*player_pages[:3], *pages]))", resolver)
+        self.assertIn("self._http_player_pages", resolver)
 
 
 if __name__ == "__main__":
