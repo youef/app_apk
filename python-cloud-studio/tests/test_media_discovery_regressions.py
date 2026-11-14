@@ -135,6 +135,29 @@ class StudioMediaRecoveryTests(unittest.TestCase):
         self.assertIn(browser_candidate["url"], observed[1][1])
         self.assertGreaterEqual(len(resolved), 2)
 
+    def test_unverified_players_are_kept_as_episode_candidates_not_playback_proof(self):
+        tree=ast.parse(SERVER.read_text(encoding="utf-8"))
+        function=next(node for node in tree.body if isinstance(node,ast.FunctionDef)
+                      and node.name=="_provisional_player_url")
+        env={"time":time,
+             "supported_source_kind":lambda url:'direct' if '.m3u8' in url or '.mp4' in url else '',
+             "signed_expiry":lambda url:time.time()-60 if "expired" in url else None}
+        module=ast.fix_missing_locations(ast.Module(body=[function],type_ignores=[]))
+        exec(compile(module,str(SERVER),"exec"),env)
+        choose=env["_provisional_player_url"]
+        failed={"kind":"direct","url":"https://cdn.example.com/video.m3u8",
+                "verified":False,"error":"403 during external probe"}
+        expired={"kind":"direct","url":"https://cdn.example.com/expired.m3u8",
+                 "verified":False}
+        unrelated={"kind":"embed","url":"https://elsewhere.example.com/embed",
+                   "verified":False}
+        self.assertEqual(choose([expired,unrelated,failed]),failed["url"])
+        self.assertEqual(choose([expired,unrelated]),"")
+        server=SERVER.read_text(encoding="utf-8")
+        self.assertIn("entry.media_url=_provisional_player_url(entry.sources)",server)
+        self.assertIn("item.media_url=_provisional_player_url(checked)",server)
+        self.assertIn("item.verified=playable is not None",server)
+
     def test_studio_counts_direct_and_embedded_candidates_separately(self):
         text = SERVER.read_text(encoding="utf-8")
         self.assertIn('progress["players_found"]=len(all_sources)', text)
