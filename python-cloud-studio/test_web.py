@@ -69,7 +69,7 @@ class DemoTest(unittest.TestCase):
         with patch.object(server.MediaResolver,'resolve',return_value=([direct],[])) as resolve:
             _, _, original_pages, playable, error = server._scan_media_entry(cat,cat)
         self.assertEqual(resolve.call_args.args[0],[source,embed])
-        self.assertEqual(original_pages,[source])
+        self.assertEqual(original_pages,[source,embed])
         self.assertEqual(playable,direct)
         self.assertFalse(error)
 
@@ -126,7 +126,7 @@ class DemoTest(unittest.TestCase):
         cat = Catalogue('series', 'Example Show', root,
                         episodes=[Episode(1, 1, 'One', episode_page), Episode(1, 2, 'Two', root)])
         stream = {'kind':'direct','url':'https://cdn.example.org/live.m3u8','verified':True}
-        def resolve(pages, existing):
+        def resolve(pages, existing, **kwargs):
             return ([stream], []) if pages == [episode_page] else ([], [])
         with patch.object(server, 'discover_full', return_value=cat), \
              patch.object(server.MediaResolver, 'resolve', side_effect=resolve) as resolver:
@@ -150,7 +150,7 @@ class DemoTest(unittest.TestCase):
             Episode(1,1,'Slow',root+'slow'),Episode(1,2,'Fast',root+'fast')])
         release=threading.Event()
         fast=threading.Event()
-        def resolve(pages,existing):
+        def resolve(pages,existing, **kwargs):
             if pages==[root+'slow']:release.wait(timeout=5)
             else:fast.set()
             return [{'url':'https://cdn.example.org/'+pages[0].split('/')[-1]+'.mp4',
