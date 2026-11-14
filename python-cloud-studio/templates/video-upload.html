@@ -7,8 +7,9 @@
   <meta name="robots" content="noindex, nofollow">
   <title>رفع فيديو MP4 | استديو العز TV</title>
   <link rel="icon" type="image/svg+xml" href="/static/studio-icon.svg">
-  <link rel="stylesheet" href="/static/video-upload.css?v=5">
-  <script defer src="/static/video-upload.js?v=3"></script>
+  <link rel="stylesheet" href="/static/video-upload.css?v=7">
+  <script defer src="/static/video-upload.js?v=7"></script>
+  <script defer src="/static/video-upload-settings.js?v=7"></script>
 </head>
 <body>
   <div class="shell">
@@ -72,6 +73,7 @@
               <label class="field" for="settings-public-url"><span>رابط القراءة العام للملفات / نطاق الفيديو</span><input id="settings-public-url" type="url" dir="ltr" autocomplete="off" placeholder="https://videos.example.com"></label>
               <label class="field" for="settings-access"><span>Access Key ID — مفتاح S3</span><input id="settings-access" type="password" autocomplete="new-password" placeholder="أدخل مفتاح API، وليس كلمة مرور الحساب"></label>
               <label class="field" for="settings-secret"><span>Secret Access Key — المفتاح السري</span><input id="settings-secret" type="password" autocomplete="new-password" placeholder="سري — يُحفظ مشفرًا"></label>
+              <label class="field" id="settings-management-wrap" for="settings-management-token"><span>Cloudflare API Token — رمز إدارة R2</span><input id="settings-management-token" type="password" autocomplete="new-password" spellcheck="false" placeholder="رمز Cloudflare لإنشاء الحاوية وضبط CORS"><small>اختياري، مختلف عن مفتاح S3؛ يحفظ مشفرًا ولا يظهر لاحقًا.</small></label>
               <label class="field" for="settings-quota"><span>الحصة التي تريد تخصيصها للمركز (GB)</span><input id="settings-quota" type="number" min="0.1" step="0.1" value="10"></label>
               <label class="field" for="settings-max-file"><span>أقصى حجم ملف يسمح به المركز (GB)</span><input id="settings-max-file" type="number" min="0.01" step="0.01" value="50"></label>
               <label class="field" for="settings-priority"><span>الأولوية (1 أعلى أولوية)</span><input id="settings-priority" type="number" min="1" max="100" value="50"></label>
@@ -80,11 +82,14 @@
             <div class="provider-actions">
               <button id="save-provider" type="button" class="primary">حفظ المفاتيح والإعدادات</button>
               <button id="setup-provider" type="button" class="secondary">تهيئة حاوية / CORS</button>
+              <button id="verify-management-token" type="button" class="secondary">فحص رمز Cloudflare</button>
+              <button id="auto-setup-r2" type="button" class="secondary">إعداد Cloudflare R2 تلقائيًا</button>
               <button id="test-provider" type="button" class="secondary">فحص اتصال المركز</button>
               <button id="enable-provider" type="button" class="secondary">تفعيل المركز</button>
               <button id="disconnect-provider" type="button" class="quiet">فصل المركز وحذف مفاتيحه</button>
             </div>
             <label class="check-field"><input id="create-bucket" type="checkbox"><span>أنشئ الحاوية تلقائيًا إذا لم تكن موجودة (يلزم صلاحية إنشاء حاوية)</span></label>
+            <label class="check-field" id="publish-dev-wrap"><input id="publish-r2-dev" type="checkbox"><span>R2 فقط: فعّل رابط r2.dev العام للتجربة. الملفات قابلة للوصول لمن لديه الرابط؛ الرابط محدود السرعة ولا يصلح للبث الإنتاجي.</span></label>
             <div id="settings-feedback" class="feedback" aria-live="polite" role="status">اختر أحد المراكز وأدخل مفاتيحه لربطه بالتوزيع التلقائي.</div>
             <details class="cors-help"><summary>إعداد CORS يدويًا إذا رفض المركز التهيئة التلقائية</summary>
               <p>انسخ هذه السياسة إلى إعدادات CORS في حاوية التخزين. يتعين السماح لـ ETag حتى يكتمل الرفع المجزأ.</p>
