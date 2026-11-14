@@ -33,14 +33,15 @@ class AdminSessionTests(unittest.TestCase):
             store = sessions.AdminSessions(directory)
             with patch.object(sessions.time, 'time', return_value=base):
                 store.create('B' * 43, 'uid', 'csrf')
-            with patch.object(sessions.time, 'time', return_value=base + 6 * 86400 + 3600):
+            with patch.object(sessions.time, 'time', return_value=base + 24 * 86400):
                 result = store.get('B' * 43)
             self.assertTrue(result[1])
-            # Even with repeated activity, re-authentication is required at 30 days.
-            for day in (13, 19, 25, 29):
+            # Rolling admin sessions renew near the 30-day idle deadline,
+            # but must never outlive the 180-day absolute authentication cap.
+            for day in (48, 72, 96, 120, 144, 168, 179):
                 with patch.object(sessions.time, 'time', return_value=base + day * 86400):
                     self.assertIsNotNone(store.get('B' * 43), 'Session expired prematurely on day ' + str(day))
-            with patch.object(sessions.time, 'time', return_value=base + 30 * 86400):
+            with patch.object(sessions.time, 'time', return_value=base + 180 * 86400):
                 self.assertIsNone(store.get('B' * 43))
 
     def test_periodic_role_recheck_and_explicit_revocation(self):
