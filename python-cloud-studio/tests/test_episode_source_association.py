@@ -45,7 +45,7 @@ class EpisodeSourceAssociationTests(unittest.TestCase):
         self.ns = {
             "public_url": normalize,
             "normalized_source_url": normalize,
-            "supported_source_kind": lambda u: "direct" if re.search(r"\\.(mp4|m3u8)(?:\\?|$)", u) else "",
+            "supported_source_kind": lambda u: "direct" if re.search(r"\.(mp4|m3u8)(?:\?|$)", u) else "",
             "signed_expiry": lambda u: 1794658905 if "master.m3u8" in u else None,
             "merge_sources": merge_sources,
             "urlsplit": urlsplit,
@@ -86,8 +86,8 @@ class EpisodeSourceAssociationTests(unittest.TestCase):
 
     def test_episode_link_is_matched_to_page_before_number_fallback(self):
         self.ns["episode_numbers"] = lambda label: (
-            (1, int(re.search(r"الحلقة-(\\d+)", label).group(1)))
-            if re.search(r"الحلقة-(\\d+)", label) else None
+            (1, int(re.search(r"الحلقة-(\d+)", label).group(1)))
+            if re.search(r"الحلقة-(\d+)", label) else None
         )
         match = function_only("_match_episode_by_page", self.ns)
         ep1 = SimpleNamespace(season=1, number=1, page_url="https://source.example/ep-one")
