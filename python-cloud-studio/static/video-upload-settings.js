@@ -6,7 +6,7 @@
   const SIGNUP = {r2: 'https://dash.cloudflare.com/', b2: 'https://secure.backblaze.com/',
                   oracle: 'https://cloud.oracle.com/'};
   const HELP = {
-    r2: 'Cloudflare R2: خذ Account ID من R2 Overview، وأنشئ R2 API Token بصلاحيات الحاوية. رابط الفيديو العام يحتاج تفعيل نطاق مخصص أو r2.dev من لوحة R2.',
+    r2: 'Cloudflare R2: الصق Account ID ومفتاحَي S3 وCloudflare API Token منفصلًا. يمكنك حفظها قبل إنشاء الحاوية أو رابط القراءة، ثم الضغط على إعداد R2 تلقائيًا. يجب تفعيل R2 في حساب Cloudflare أولًا.',
     b2: 'Backblaze B2: اختر المنطقة التي أنشئت فيها الحاوية مثل us-west-004. أنشئ Application Key بحقوق Read/Write على الحاوية. يمكن إظهار ملفات الحاوية للعامة من لوحة B2.',
     oracle: 'Oracle: أدخل رابط S3 Compatibility API والـ Region الخاصين بك. أنشئ Customer Secret Key من إعدادات مستخدم OCI، وجهز الحاوية وسياسة القراءة العامة.'
   };
@@ -62,6 +62,13 @@
     $('settings-account-wrap').hidden = id !== 'r2';
     $('settings-region-wrap').hidden = id === 'r2';
     $('settings-endpoint-wrap').hidden = id !== 'oracle';
+    $('settings-management-wrap').hidden = id !== 'r2';
+    $('publish-dev-wrap').hidden = id !== 'r2';
+    $('verify-management-token').hidden = id !== 'r2';
+    $('auto-setup-r2').hidden = id !== 'r2';
+    $('settings-public-url').placeholder = id === 'r2'
+      ? 'اختياري قبل الإعداد التلقائي — https://videos.example.com'
+      : 'https://videos.example.com';
     const c = config[id] || {};
     $('settings-account-id').value = c.account_id || '';
     $('settings-region').value = c.region || (id === 'b2' ? 'us-west-004' :
@@ -71,6 +78,12 @@
     $('settings-public-url').value = c.public_base_url || '';
     $('settings-access').value = '';
     $('settings-secret').value = '';
+    $('settings-management-token').value = '';
+    $('settings-management-token').placeholder = c.has_management_token
+      ? 'الرمز محفوظ مشفّرًا — اتركه فارغًا للاحتفاظ به'
+      : 'Cloudflare API Token (Workers R2 Storage Write)';
+    $('verify-management-token').disabled = !c.has_management_token;
+    $('auto-setup-r2').disabled = !c.has_management_token;
     $('settings-access').placeholder = c.has_access_key
       ? 'محفوظ مشفّرًا — اتركه فارغًا للاحتفاظ به' : 'S3 Access Key ID';
     $('settings-secret').placeholder = c.has_secret_key
@@ -163,20 +176,46 @@
       public_base_url: $('settings-public-url').value.trim(),
       access_key_id: $('settings-access').value.trim(),
       secret_access_key: $('settings-secret').value.trim(),
+      management_token: id === 'r2' ? $('settings-management-token').value.trim() : '',
       quota_gb: Number($('settings-quota').value),
       max_file_gb: Number($('settings-max-file').value),
       priority: Number($('settings-priority').value)
     };
-    if (!body.bucket || !body.public_base_url) {
-      throw new Error('أدخل اسم الحاوية ورابط القراءة العام.');
+    if (!body.bucket || (id !== 'r2' && !body.public_base_url)) {
+      throw new Error(id === 'r2' ? 'أدخل اسم الحاوية.'
+        : 'أدخل اسم الحاوية ورابط القراءة العام.');
     }
     const data = await api('POST', '/providers/' + id, body);
     config[id] = data.provider;
     $('settings-access').value = '';
     $('settings-secret').value = '';
-    feedback('تم تشفير المفاتيح وحفظ الإعدادات. اضغط تهيئة الحاوية/CORS ثم فحص الاتصال وتفعيل المركز.', true);
+    $('settings-management-token').value = '';
+    feedback(id === 'r2'
+      ? 'تم حفظ مفاتيح S3 ورمز Cloudflare مشفّرين. يمكنك اختيار إعداد R2 تلقائيًا، أو تهيئة CORS يدويًا ثم فحص المركز.'
+      : 'تم تشفير المفاتيح وحفظ الإعدادات. اضغط تهيئة الحاوية/CORS ثم فحص الاتصال وتفعيل المركز.', true);
     reloadUpload();
   }));
+
+  $('verify-management-token').addEventListener('click',
+    () => action('verify-management-token', async () => {
+      const status = await api('GET', '/providers/r2/token-test');
+      feedback(status.message, status.ok === true);
+    }));
+
+  $('auto-setup-r2').addEventListener('click',
+    () => action('auto-setup-r2', async () => {
+      if (selected !== 'r2') return;
+      const publish = $('publish-r2-dev').checked;
+      if (!window.confirm('سيتم إنشاء حاوية R2 إذا لم تكن موجودة وضبط CORS.' +
+        (publish ? ' وسيُفعّل رابط r2.dev العام للتجربة.' : '') +
+        ' هل توافق؟')) return;
+      const result = await api('POST', '/providers/r2/auto-setup', {
+        publish_dev: publish
+      });
+      await loadSettings();
+      feedback(result.message, true);
+      reloadUpload();
+    }));
 
   $('setup-provider').addEventListener('click', () => action('setup-provider', async () => {
     const createBucket = $('create-bucket').checked;
