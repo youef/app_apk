@@ -74,7 +74,9 @@ class CaptureBatchTests(unittest.TestCase):
             "deepcopy":deepcopy,"time":time,"_EPISODE_BATCH_SIZE":10,
             "_EPISODE_BATCH_SECONDS":45,"_episode_capture_pool":pool,
             "LIBRARY":Store(),"_scan_media_entry":scan,
-            "safe_error":lambda e:type(e).__name__
+            "safe_error":lambda e:type(e).__name__,
+            "merge_sources":lambda *groups,limit=128:list(
+                {src["url"]:src for group in groups for src in group}.values())[:limit]
         }
         exec(compile(ast.fix_missing_locations(
             ast.Module(body=[ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0), *nodes],type_ignores=[])),"<capture>","exec"),globals_)
