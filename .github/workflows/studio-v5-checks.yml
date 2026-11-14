@@ -34,6 +34,8 @@ jobs:
           node-version: "22"
       - name: Compile Python source (without network or production credentials)
         run: python -m compileall -q python-cloud-studio
+      - name: Test episode player/source associations
+        run: python python-cloud-studio/tests/test_episode_source_association.py
       - name: Validate browser JavaScript
         run: |
           node --check web/js/api.js
