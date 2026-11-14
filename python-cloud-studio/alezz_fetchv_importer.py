@@ -291,6 +291,33 @@ def episode_numbers(value: str) -> tuple[int, int] | None:
     return season_number, int(m.group(2) or m.group(3))
 
 
+def belongs_to_series_episode(series_url: str, candidate_url: str, label: str = "") -> bool:
+    """Avoid importing unrelated 'recommended episode' cards into a series.
+
+    On sites with a descriptive /series/<slug> path, the corresponding episode
+    link normally contains the same distinctive title words in its URL or
+    link text. Generic numeric series IDs and short titles remain compatible.
+    """
+    from urllib.parse import unquote
+    source, target = urlsplit(series_url), urlsplit(candidate_url)
+    if source.hostname != target.hostname or target.scheme != "https":
+        return False
+    source_path = unquote(source.path).strip("/")
+    if not re.search(r"(?:^|/)(?:series|tv-series|shows|مسلسلات)(?:/|$)", source_path, re.I):
+        return True
+    slug = source_path.rsplit("/", 1)[-1]
+    normalized = lambda value: re.sub(r"[^\w\u0600-\u06ff]+", " ", unquote(value).casefold())
+    ignored = {"مسلسل", "مسلسلات", "series", "tv", "show", "season", "الموسم", "حلقة", "الحلقة"}
+    title_words = [word for word in normalized(slug).split()
+                   if len(word) >= 4 and word not in ignored and
+                   not re.fullmatch(r"(?:19|20)\d{2}|\d+", word)]
+    if not title_words:
+        return True  # Generic ID/short title: existing discovery behavior.
+    text = normalized(target.path + " " + label)
+    return all(re.search(r"(?<!\w)" + re.escape(word) + r"(?!\w)", text)
+               for word in title_words)
+
+
 def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int=100,
               max_episodes: int=5000, max_pages: int=250,
               resume_progress: dict | None=None, progress_hook=None) -> Catalogue:
@@ -418,6 +445,7 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
             progress_hook({'seen_pages':list(seen_pages), 'queued':list(in_flight)+queued[:],
                            'episodes':[asdict(e) for e in episode_map.values()]})
     root_host=urlsplit(final).hostname
+    exploration_seeded=False
     def add_episode(link: str, label: str, data: dict | None=None, display_title: str=""):
         parsed=episode_numbers(label)
         if not parsed and data:
@@ -429,7 +457,8 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
             except (TypeError,ValueError):pass
         if not parsed or parsed[1]<1 or parsed[1]>10000 or parsed[0]<1 or parsed[0]>200:return
         link=absolutize(final,link)
-        if not link:return
+        if not link or not belongs_to_series_episode(final,link,display_title or label):
+            return
         key=parsed
         if key not in episode_map:
             ep=Episode(parsed[0],parsed[1],content_title(display_title or label, final, site_name,
@@ -455,6 +484,7 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
         if len(queued)+len(in_flight)<1200:queued.append(uri)
         else:skipped_pages+=1
     def scan_doc(s: BeautifulSoup, base: str):
+        nonlocal exploration_seeded
         for item in json_nodes(s):
             if "tvepisode" in str(item.get("@type", "")).lower():
                 name=field_of(item,"name")
@@ -469,7 +499,16 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
             if data_episode.isdigit() and data_season.isdigit():
                 combined=f"S{int(data_season):02}E{int(data_episode):02} {combined}"
             if episode_numbers(combined):
-                add_episode(urljoin(base,href),combined,display_title=label or f"الحلقة {episode_numbers(combined)[1]}")
+                candidate=urljoin(base,href)
+                if not belongs_to_series_episode(final,candidate,label):
+                    continue
+                add_episode(candidate,combined,display_title=label or f"الحلقة {episode_numbers(combined)[1]}")
+                # Some series indexes show only their newest episode. That
+                # episode's own page links to the full season. Fetch just one
+                # representative page, not every episode (fast + bounded).
+                if not exploration_seeded and base.rstrip('/')==final.rstrip('/'):
+                    queue_page(candidate,base)
+                    exploration_seeded=True
                 continue
             uri=absolutize(base,href)
             if not uri or urlsplit(uri).hostname != root_host:continue
