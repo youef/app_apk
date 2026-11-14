@@ -619,6 +619,30 @@ async def title_search(request: Request, body: TitleSearchForm):
     return {'results': results}
 
 
+def _provisional_player_url(sources) -> str:
+    """Keep an episode-scoped candidate visible without claiming playback.
+
+    Expired signed URLs are never selected. A failed probe is still useful
+    for future source refresh, but cannot make an episode 'verified' or public.
+    """
+    now=time.time()
+    possible=[]
+    for source in sources or []:
+        if not isinstance(source,dict) or source.get('kind')!='direct':
+            continue
+        address=source.get('url') or ''
+        if not supported_source_kind(address)=='direct':
+            continue
+        expiry=signed_expiry(address)
+        if expiry is not None and expiry<=now+90:
+            continue
+        possible.append(source)
+    possible.sort(key=lambda source:(bool(source.get('verified')),
+                                      not bool(source.get('error')),
+                                      bool(source.get('reachable'))),reverse=True)
+    return possible[0]['url'] if possible else ''
+
+
 def _scan_media_entry(cat: Catalogue, entry, force_browser:bool=False, on_candidates=None):
     """Bounded, independent discovery worker. Only its own result is returned.
 
@@ -803,6 +827,8 @@ def scan_catalogue(state: UserState, cat: Catalogue, progress: dict):
                        if isinstance(row,dict) and row.get("url") not in before]
             if not additions:return
             entry.sources=merge_sources(entry.sources,additions,limit=128)
+            if not entry.media_url:
+                entry.media_url=_provisional_player_url(entry.sources)
             all_sources=[src for media in (cat.episodes if cat.kind=="series" else [cat])
                          for src in media.sources]
             progress["sources_found"]=sum(src.get("kind")=="direct" for src in all_sources)
@@ -847,7 +873,10 @@ def scan_catalogue(state: UserState, cat: Catalogue, progress: dict):
                         if state.catalogue is not cat or state.scan is not progress:return
                         entry.sources=merge_sources(entry.sources, checked, limit=128)
                         if pages:entry.source_pages=list(dict.fromkeys([*entry.source_pages, *pages]))
-                        if playable:entry.media_url=playable["url"]
+                        if playable:
+                            entry.media_url=playable["url"]
+                        elif not entry.media_url or (signed_expiry(entry.media_url) or float('inf'))<=time.time()+90:
+                            entry.media_url=_provisional_player_url(checked) or entry.media_url
                         entry.verified=playable is not None
                         entry.error=error
                         completed.add(key)
@@ -1714,7 +1743,10 @@ def _run_episode_capture_batches(state:UserState,cat:Catalogue,job:dict):
                             continue
                         item.sources=merge_sources(item.sources, checked, limit=128)
                         if pages:item.source_pages=list(dict.fromkeys([*item.source_pages, *pages]))
-                        if playable:item.media_url=playable['url']
+                        if playable:
+                            item.media_url=playable['url']
+                        elif not item.media_url or (signed_expiry(item.media_url) or float('inf'))<=time.time()+90:
+                            item.media_url=_provisional_player_url(checked) or item.media_url
                         item.verified=playable is not None
                         item.error=error
                         job['done']+=1
