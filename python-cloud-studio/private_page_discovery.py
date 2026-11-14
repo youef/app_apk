@@ -120,11 +120,19 @@ def discover_page(url):
         except (ValueError,OSError):continue
         seen_episodes.add(link)
         result["episodes"].append({"title":label,"page_url":link,"verified":False})
-    for frame in doc.select("iframe[src]")[:20]:
-        link=urljoin(url,frame.get("src",""))
+    # Publicly declared player pages may be linked by anchors rather than iframes.
+    # Keep these as unverified embed candidates; never mistake them for direct media.
+    for frame in doc.select("iframe[src], a[href]")[:1200]:
+        raw=frame.get("src") or frame.get("href") or ""
+        link=urljoin(url,raw)
+        if frame.name=="a":
+            player_host=(urlsplit(link).hostname or "").lower()
+            player_path=urlsplit(link).path.lower()
+            if not (player_host=="w.anaplayer.online" and player_path.startswith("/albaplayer/")):
+                continue
         try: validate_page(link)
         except (ValueError,OSError):continue
-        if link not in result["embeds"]:
+        if link not in result["embeds"] and len(result["embeds"])<MAX_RESULTS:
             result["embeds"].append(link)
     result["status"]="parsed"
     if not result["media"]:
