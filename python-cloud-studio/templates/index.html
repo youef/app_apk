@@ -245,6 +245,12 @@ https://example.org/movie/film-one"></textarea></label>
           </section>
           <section id="episodes" data-studio-page="episodes" hidden>
           <div class="section-title-row"><div><span class="overline">روابط التشغيل</span><h2>المواسم <span class="muted-title">والحلقات</span></h2></div><div class="inline-actions"><button id="linksToggle" class="small-outline">+ لصق روابط FetchV</button><button id="edgeCaptureBtn" class="small-outline" title="ابدأ فحصًا متوازيًا لجميع الحلقات؛ 10 حلقات لكل دفعة، والانتقال تلقائيًا خلال ميزانية 45 ثانية للدفعة">⚡ اكتشاف روابط الحلقات تلقائيًا</button><button id="verifyAllBtn" class="small-gold">◈ فحص جميع الروابط</button></div></div>
+          <form id="episodeLinkForm" class="source-form" style="margin:12px 0 18px;align-items:end" aria-label="ربط مشغل بحلقة من مصدرها">
+            <label class="field field--source"><span class="field-label">رابط صفحة الحلقة الأصلية</span><input id="episodeLinkPage" type="url" dir="ltr" required maxlength="2048" placeholder="https://example.org/episode/series-episode-1/"></label>
+            <label class="field field--source"><span class="field-label">رابط مشغل الحلقة المباشر (MP4 / M3U8)</span><input id="episodeLinkMedia" type="url" dir="ltr" required maxlength="2048" placeholder="https://cdn.example.org/playlist.m3u8"></label>
+            <button id="episodeLinkBtn" class="small-gold" type="submit">ربط المشغل بالحلقة</button>
+          </form>
+          <p id="episodeLinkStatus" role="status" aria-live="polite" class="studio-fast-hint">تتم مطابقة صفحة الحلقة بالموسم ورقم الحلقة وحفظ الرابط كمرشح؛ لا يُعد الرابط سليمًا قبل اجتياز فحص التشغيل. احفظ العمل لاحقًا في Supabase.</p>
           <section id="episodeBatchPanel" class="episode-batch-panel" hidden aria-label="الفحص التلقائي للحلقات">
             <div class="episode-batch-heading">
               <div><span class="studio-fast-pill" id="episodeBatchLive">● LIVE · جلب المشغلات</span>
