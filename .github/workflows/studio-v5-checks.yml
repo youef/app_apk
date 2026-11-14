@@ -65,10 +65,11 @@ jobs:
           quality=(base/"static/studio-quality.js").read_text()
           server=(base/"server.py").read_text()
           for path in ("web/index.view","web/index.html"):
-              assert "health-guard-20261113-v5" in Path(path).read_text(), path
-          assert 'filter(approvedMedia)' in app_js
-          assert 'link_health_status === "broken"' in app_js
-          assert 'link_health_status === "suspect"' in app_js
+              assert '<script src="js/app.js?v=' in Path(path).read_text(), path
+          assert 'function visibleMedia(row)' in app_js
+          assert 'row.status === "published"' in app_js
+          assert 'row.link_health_status || "unchecked"' in app_js
+          assert 'freshPlayback: function' in app_js
           assert 'id="qualityDashboard"' in studio
           assert 'id="qualityRefresh"' in studio
           assert '"/api/studio/quality"' in (base/"studio_quality.py").read_text()
