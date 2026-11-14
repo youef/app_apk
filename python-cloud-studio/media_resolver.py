@@ -207,6 +207,22 @@ def extract_candidates(body: str, base: str, *, now: float | None = None) -> tup
             if tag.get(attr):
                 direct_hint = (tag.name in ('video','source') and attr in ('src','data-src')) or attr=='data-file'
                 add(tag[attr], label, embed=embed and not direct_hint, direct_hint=direct_hint)
+    # Public multi-server players often expose selectable ?serv=0,1,... links.
+    # Fetch these as distinct documents, not as confirmed video streams.
+    # Only same-origin player selectors are followed; no DRM/auth bypass.
+    base_parts = urlsplit(base)
+    for tag in soup.select('a[href], [data-server][data-url], [data-server][data-src]')[:120]:
+        raw = tag.get('href') or tag.get('data-url') or tag.get('data-src') or ''
+        if not raw: continue
+        try:
+            target = normalized_source_url(urljoin(base, raw))
+            target_parts = urlsplit(target)
+        except (ValueError, TypeError): continue
+        if (target_parts.hostname == base_parts.hostname
+                and target_parts.path.rstrip('/') == base_parts.path.rstrip('/')
+                and any(k in parse_qs(target_parts.query) for k in ('serv', 'server', 'player'))
+                and target != base):
+            add(target, tag.get_text(' ', strip=True)[:65], embed=True)
     for script in soup.select('script')[:80]:
         text = (script.string or script.get_text())[:250000].replace('\\/', '/')
         if script.get('type') in ('application/ld+json', 'application/json'):
@@ -275,6 +291,10 @@ class MediaResolver:
         roots = self._pages(pages)
         queue = [(url, 0) for url in roots]
         seen, sources, errors = set(), [], []
+        # HTTP-reachable iframe pages can host the actual media player. Let
+        # Chromium visit them directly instead of repeatedly loading only the
+        # series/episode wrapper document.
+        self._http_player_pages = []
 
         def fetch(url):
             # A direct video URL must NEVER be downloaded as an HTML page:
@@ -310,7 +330,12 @@ class MediaResolver:
                 for (_, depth), (found, embeds, error) in zip(batch, pool.map(fetch, [url for url,_ in batch])):
                     sources = merge_sources(sources, found)
                     if error: errors.append(error)
+                    for source_page in embeds:
+                        if source_page not in self._http_player_pages and source_page not in roots:
+                            self._http_player_pages.append(source_page)
                     if depth < 2:
+                        # Put the actual iframe document before optional server
+                        # selectors so it is not starved by the page budget.
                         queue.extend((u, depth+1) for u in embeds if u not in seen and len(queue) < 36)
         return sources, errors[:6]
 
@@ -378,12 +403,26 @@ class MediaResolver:
         if on_candidates and candidates:
             try: on_candidates(merge_sources(existing,candidates), 'http')
             except Exception: pass
-        checked = self.check(merge_sources(existing, candidates), deadline=http_deadline)
-        need_browser = browser_enabled and (self.mode=='headless' or
+        all_candidates = merge_sources(existing, candidates)
+        if browser_enabled:
+            # Embed URLs were already parsed as reachable documents during
+            # discovery. Re-reading each HTML iframe while racing against the
+            # Chromium deadline can exhaust the whole browser budget.
+            # Check direct-video bytes first, then recover public iframe players.
+            directs = [item for item in all_candidates if item.get('kind') != 'embed']
+            embeds = [item for item in all_candidates if item.get('kind') == 'embed']
+            checked = merge_sources(self.check(directs, deadline=http_deadline), embeds)
+        else:
+            checked = self.check(all_candidates, deadline=http_deadline)
+        need_browser = browser_enabled and (self.mode == 'headless' or
                                             not any(x.get('verified') for x in checked))
         if need_browser and time.monotonic() < deadline:
             previous = {x['url'] for x in checked}
-            browser_sources, browser_errors = self._browser(pages, deadline=deadline,
+            # Direct player pages first, original episode wrapper last.
+            # All belong to this single episode's resolver invocation.
+            player_pages = getattr(self, '_http_player_pages', [])
+            browser_pages = self._pages([*player_pages[:3], *pages])
+            browser_sources, browser_errors = self._browser(browser_pages, deadline=deadline,
                                                            known=previous)
             errors.extend(browser_errors)
             new = [x for x in browser_sources if x.get('url') not in previous]
