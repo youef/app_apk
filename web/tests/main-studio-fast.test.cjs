@@ -38,7 +38,8 @@ test('fast scan has bounded first pass and keeps separate comprehensive mode',()
  assert.match(script,/,fast\}/);
  assert.match(server,/fast:\s*bool = False/);
  assert.match(server,/max_pages=3 if fast else 500/);
- assert.match(server,/max_seconds=8/);
+ assert.match(server,/ALEZZ_STUDIO_SCAN_SECONDS/);
+ assert.match(server,/max_seconds=budget/);
  assert.match(server,/max_episodes=5000/);
  assert.match(page,/استكشاف صفحات جميع المواسم/);
 });
