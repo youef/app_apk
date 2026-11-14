@@ -341,7 +341,7 @@
         id: "eq." + id, limit: 1
       }).then(function (rows) {
         var row = Array.isArray(rows) && rows[0];
-        if (!row || row.status !== "published") return null;
+        if (!row || row.status !== "published" || row.rights_status !== "approved") return null;
         // Do not turn a suspect/broken source into a verified result. Return
         // the saved alternatives for the first-party player to try normally.
         return { stream: row.stream_url || "", variants: Array.isArray(row.stream_variants) ? row.stream_variants : [],
