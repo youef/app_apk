@@ -421,7 +421,7 @@ class MediaResolver:
             # Direct player pages first, original episode wrapper last.
             # All belong to this single episode's resolver invocation.
             player_pages = getattr(self, '_http_player_pages', [])
-            browser_pages = self._pages([*player_pages[:3], *pages])
+            browser_pages = list(dict.fromkeys([*player_pages[:3], *pages]))
             browser_sources, browser_errors = self._browser(browser_pages, deadline=deadline,
                                                            known=previous)
             errors.extend(browser_errors)
