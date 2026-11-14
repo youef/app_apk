@@ -103,6 +103,16 @@ app.include_router(studio_quality_router)
 from video_upload import router as video_upload_router, register as register_video_upload
 register_video_upload(portal, BASE / 'templates' / 'video-upload.html')
 app.include_router(video_upload_router)
+
+# One-shot R2 provisioning is run only with an explicit Render bootstrap flag.
+# All sensitive provider credentials stay in Render/Supabase encrypted settings.
+@app.on_event('startup')
+def bootstrap_cloudflare_video_storage():
+    import os
+    if os.getenv('ALEZZ_R2_BOOTSTRAP') == '1':
+        from r2_bootstrap import bootstrap
+        bootstrap(portal)
+
 from site_security import router as security_center_router, register as register_security_center
 register_security_center(portal)
 app.include_router(security_center_router)
