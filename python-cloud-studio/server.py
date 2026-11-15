@@ -912,7 +912,33 @@ class AutoSyncBulkTarget(BaseModel):
 
 class AutoSyncBulkForm(BaseModel):
     targets:list[AutoSyncBulkTarget]=Field(min_length=1,max_length=60)
-    action:str=Field(pattern='^(check|refresh)
+    action:str=Field(max_length=20)
+
+
+@app.post('/api/autosync/bulk')
+async def autosync_bulk(request:Request,body:AutoSyncBulkForm):
+    protected(request)
+    if body.action not in ('check','refresh'):
+        raise HTTPException(400,'أمر المزامنة غير مدعوم')
+    try:
+        unique=list(dict.fromkeys(target_key(item.table,item.id) for item in body.targets))
+    except ValueError as exc:
+        raise HTTPException(400,str(exc)) from None
+    with AUTOSYNC.queue.db() as conn:
+        existing={(row['table_name'],row['target_id']) for row in conn.execute(
+            'select table_name,target_id from auto_jobs')}
+        if any(target not in existing for target in unique):
+            raise HTTPException(404,'بعض العناصر لم تُستورد إلى المزامنة؛ حدّث المكتبة أولًا')
+        for table,identifier in unique:
+            conn.execute("update auto_jobs set next_check=0"+
+                         (",next_refresh=0" if body.action=='refresh' else "")+
+                         " where table_name=? and target_id=?",(table,identifier))
+    AUTOSYNC.queue.event('bulk','أضيف '+str(len(unique))+' عنصرًا إلى طابور المزامنة')
+    AUTOSYNC.wake_event.set()
+    return {'ok':True,'queued':len(unique),'action':body.action}
+
+
+@app.get('/api/autosync/sources')
 async def autosync_sources(request:Request,table:str,id:str):
     find_state(request)
     try: rows=AUTOSYNC.queue.sources(*target_key(table,id))
