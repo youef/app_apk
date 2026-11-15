@@ -138,6 +138,61 @@ print('Tampered auth cookie rejected')
         result=self.subprocess(script)
         self.assertEqual(result.returncode,0,result.stdout+'\n'+result.stderr)
 
+
+    def test_redeploy_uses_valid_encrypted_access_without_spending_refresh(self):
+        script = '''
+from fastapi.testclient import TestClient
+from unittest.mock import patch
+import time
+import cloud_auth
+import alezz_fetchv_importer
+from server import app
+
+class FakeAdmin:
+    def __init__(self):
+        self.refresh_token = ''
+        self.expires_at = 0
+        self.session = type('Session',(),{'headers':{'Authorization':'Bearer valid-jwt-for-test'}})()
+    def query(self,*args,**kwargs): return []
+
+with TestClient(app,base_url='https://studio.example.test') as c:
+    sealed = cloud_auth._token('saved-refresh-token','valid-jwt-for-test',time.time()+1800)
+    c.cookies.set(cloud_auth.COOKIE,sealed)
+    assert cloud_auth._session_data(sealed)['access']=='valid-jwt-for-test'
+    cloud_auth._SESSIONS.clear()  # Simulate Render restart.
+    with patch.object(alezz_fetchv_importer,'Supabase',return_value=FakeAdmin()) as verify:
+        with patch.object(cloud_auth,'_restore_admin',side_effect=AssertionError('unexpected refresh')):
+            first=c.get('/api/init')
+        verify.assert_called_once()
+    assert first.status_code==200 and first.json()['authenticated']
+    assert c.get('/',follow_redirects=False).status_code==200
+    assert c.cookies.get(cloud_auth.COOKIE)
+print('Redeploy retained live access without rotating refresh')
+'''
+        result=self.subprocess(script)
+        self.assertEqual(result.returncode,0,result.stdout+'\n'+result.stderr)
+
+    def test_transient_auth_failure_preserves_cookie_and_does_not_demand_login(self):
+        script = '''
+from fastapi.testclient import TestClient
+from unittest.mock import patch
+import cloud_auth
+from server import app
+with TestClient(app,base_url='https://studio.example.test') as c:
+    sealed=cloud_auth._token('saved-refresh-token')
+    c.cookies.set(cloud_auth.COOKIE,sealed)
+    cloud_auth._SESSIONS.clear()
+    with patch.object(cloud_auth,'_restore_saved_session',
+                      side_effect=cloud_auth.TemporaryAuthError('network temporarily down')):
+        page=c.get('/',follow_redirects=False)
+    assert page.status_code==503, (page.status_code,page.text)
+    assert c.cookies.get(cloud_auth.COOKIE)==sealed
+    assert 'جلسة المسؤول محفوظة' in page.text
+print('Transient downtime does not force password reentry')
+'''
+        result=self.subprocess(script)
+        self.assertEqual(result.returncode,0,result.stdout+'\n'+result.stderr)
+
     def test_cloud_mode_rejects_remote_edge_capture(self):
         script = '''
 from fastapi.testclient import TestClient
