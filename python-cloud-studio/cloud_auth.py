@@ -330,7 +330,7 @@ button{border:0;background:#e8bf78;color:#24190d;border-radius:12px;width:100%;p
 
 
 async def site_auth_middleware(request: Request, call_next):
-    if not ENABLED or request.url.path in ("/login", "/healthz"):
+    if not ENABLED or request.url.path in ("/login", "/healthz", "/customer-auth/login", "/customer-auth/session"):
         return await call_next(request)
     admin = await _ensure_admin(request)
     if admin is None:
