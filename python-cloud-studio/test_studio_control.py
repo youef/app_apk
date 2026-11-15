@@ -80,5 +80,42 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(overview["alerts_unread"],0)
 
 
+    def test_cloud_mirror_restores_alerts_and_audit(self):
+        from studio_control_cloud import ALERT_TABLE, AUDIT_TABLE
+        class MemoryCloud:
+            ready=True
+            def __init__(self):
+                self.tables={ALERT_TABLE:[],AUDIT_TABLE:[]}
+            def read(self,table,limit=600):
+                return list(self.tables[table])[:limit]
+            def insert_once(self,table,rows):
+                known={r['fingerprint'] for r in self.tables[table]}
+                for row in rows:
+                    if row['fingerprint'] not in known:
+                        self.tables[table].append(dict(row))
+            def mark_read(self,fingerprints,when):
+                pass
+
+        cloud=MemoryCloud()
+        self.control.cloud=cloud
+        identifier=str(uuid4())
+        self.sync.queue.event("new_episode","تم العثور على حلقة جديدة","aseel_episodes",identifier)
+        self.control.audit("manual_refresh","aseel_episodes",identifier,detail="Queued legacy engine")
+        self.control.step()
+        self.assertEqual(len(cloud.tables[ALERT_TABLE]),1)
+        self.assertEqual(len(cloud.tables[AUDIT_TABLE]),1)
+        self.control.step()
+        self.assertEqual(len(cloud.tables[ALERT_TABLE]),1)
+        self.assertEqual(len(cloud.tables[AUDIT_TABLE]),1)
+        with tempfile.TemporaryDirectory() as second:
+            restored=Control(second,StandaloneSync(second))
+            restored.cloud=cloud
+            restored.restore()
+            self.assertEqual(restored.overview()['alerts_unread'],1)
+            with restored.db() as db:
+                n=db.execute("select count(*) from control_audit").fetchone()[0]
+            self.assertEqual(n,1)
+
+
 if __name__=="__main__":
     unittest.main()
