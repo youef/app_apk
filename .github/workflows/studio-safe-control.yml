@@ -28,9 +28,38 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD:python-cloud-studio/media_resolver.py)" = "faaf4f333612004aea9dfa3035d0d1ddbafdc3c9"
-          test "$(git rev-parse HEAD:python-cloud-studio/alezz_fetchv_importer.py)" = "88cb315576893c418bef229878a6dbf29c852fb9"
+          # Metadata scanning may evolve; extraction functions are frozen below.
           test "$(git rev-parse HEAD:python-cloud-studio/auto_sync.py)" = "d8afed58383af765c783043ad39bea399d301512"
           test "$(git rev-parse HEAD:python-cloud-studio/library_sync.py)" = "a3a56da1773251aa8decc5c186f85f67545eb6b9"
+      - name: Keep original media extraction functions unchanged by Python AST
+        run: |
+          python - <<'PY'
+          import ast
+          import subprocess
+          from pathlib import Path
+          old = subprocess.check_output(
+              ["git", "show", "f63f646a0530:python-cloud-studio/alezz_fetchv_importer.py"],
+              text=True)
+          current = Path("python-cloud-studio/alezz_fetchv_importer.py").read_text()
+          top_level = {"find_static_media", "inspect_episodes",
+                       "collect_edge_network", "load_fetchv_links"}
+          client_methods = {"get", "sample", "media_verified"}
+          def frozen(text):
+              nodes = ast.parse(text).body
+              collected = {}
+              for node in nodes:
+                  if isinstance(node, ast.FunctionDef) and node.name in top_level:
+                      collected[node.name] = ast.dump(node, include_attributes=False)
+                  if isinstance(node, ast.ClassDef) and node.name == "SourceClient":
+                      for method in node.body:
+                          if isinstance(method, ast.FunctionDef) and method.name in client_methods:
+                              collected["SourceClient."+method.name] = ast.dump(method, include_attributes=False)
+              return collected
+          before, after = frozen(old), frozen(current)
+          assert set(before) == top_level | {"SourceClient."+name for name in client_methods}
+          assert before == after, "Frozen video player / media extraction methods changed!"
+          print("All original media discovery and verification functions remain unchanged.")
+          PY
       - name: Compare original media discovery handlers by Python AST
         run: |
           python - <<'PY'
