@@ -4,7 +4,7 @@
   const $ = id => document.getElementById(id);
   if (!$('smart-sync')) return;
   const state = {offset:0, limit:50, csrf:'', selected:new Map(), target:null,
-    busy:false, refreshing:false, signature:'', searchTimer:null, previousFocus:null};
+    busy:false, refreshing:false, signature:'', searchTimer:null, previousFocus:null,scheduleEditing:false};
   const labels = {healthy:'سليم',broken:'معطوب',suspect:'يحتاج مراجعة',unchecked:'لم يُفحص',
     missing_source:'يحتاج مصدرًا',pending:'بانتظار الفحص',reachable:'صفحة متاحة',
     direct:'فيديو مباشر',embed:'صفحة مشغل',page:'صفحة المصدر',source:'صفحة المصدر',original:'صفحة المصدر'};
@@ -48,7 +48,7 @@
     $('autoNotice').textContent = message;
     $('autoNotice').dataset.error = String(error);
   }
-  function selectionCount() { $('autoCheckSelected').textContent = `فحص المحدد (${state.selected.size})`; }
+  function selectionCount() { $('autoCheckSelected').textContent = `فحص المحدد (${state.selected.size})`; $('autoRenewSelected').textContent = `تجديد المحدد (${state.selected.size})`; }
   async function action(task) {
     if (state.busy) return;
     state.busy = true;
@@ -72,6 +72,16 @@
       ['autoBroken',(counts.broken||0)+(counts.suspect||0)],['autoMissing',counts.missing_source]]) {
       $(id).textContent = Number(value || 0).toLocaleString('ar-SA');
     }
+    for (const [id, value] of [['autoDue',data.due_count],['autoExpiring',data.expiring_soon],
+      ['autoRetrying',data.retrying],['autoActive',data.in_progress]]) {
+      $(id).textContent = Number(value || 0).toLocaleString('ar-SA');
+    }
+    if (!state.scheduleEditing) {
+      const interval = String(Math.round(Number(data.interval_hours || 4)));
+      const lead = String(Math.round(Number(data.expiry_lead_minutes || 5)));
+      if ([...$('autoScheduleInterval').options].some(option=>option.value===interval)) $('autoScheduleInterval').value=interval;
+      if ([...$('autoScheduleLead').options].some(option=>option.value===lead)) $('autoScheduleLead').value=lead;
+    }
     const running = data.running && data.enabled;
     $('autoWorkerBadge').textContent = !data.connected ? 'ينتظر اتصال قاعدة البيانات' :
       !data.enabled ? 'متوقف مؤقتًا' : running ? 'العامل يعمل' : 'العامل غير نشط';
@@ -94,7 +104,7 @@
   }
   function renderTargets(data) {
     const targets = Array.isArray(data) ? data : data.targets || data.items || [];
-    const signature = JSON.stringify([targets,state.offset]);
+    const signature = JSON.stringify([targets,data.total,state.offset,$('autoFilter').value]);
     if (signature === state.signature) return;
     state.signature = signature;
     const container = $('autoTargets'); container.replaceChildren();
@@ -113,7 +123,15 @@
       meta.append(el('span','',target.table_name === 'aseel_movies' ? 'فيلم' : target.table_name === 'aseel_series' ? 'مسلسل' : 'حلقة'),
         el('span','',`مصادر: ${target.source_count||0} · صالحة: ${target.valid_sources||0}`),
         el('span','',`آخر فحص: ${date(target.last_check)}`),
-        el('span','',`التالي: ${date(target.next_check)}`));
+        el('span','',`الفحص التالي: ${date(target.next_check)}`),
+        el('span','',`التجديد التالي: ${date(target.next_refresh)}`));
+      if (target.primary_expires_at) {
+        const remaining = Number(target.primary_expires_at) - Date.now()/1000;
+        meta.append(el('span',remaining <= 0 ? 'auto-expires-critical' :
+          remaining < 3600 ? 'auto-expires-soon' : '',
+          (remaining <= 0 ? 'انتهت صلاحية الرابط: ' : 'انتهاء الرابط: ') + date(target.primary_expires_at)));
+      }
+      if (target.failures > 0) meta.append(el('span','','محاولات فاشلة: '+Number(target.failures)));
       info.append(meta);
       if (!target.page_url) info.append(el('p','auto-target-error','المصدر الأصلي مفقود؛ أضف صفحة الفيلم أو الحلقة من «المصادر».'));
       if (target.error) info.append(el('p','auto-target-error',target.error));
@@ -186,7 +204,7 @@
     if (state.refreshing || document.hidden && !force) return;
     state.refreshing = true;
     try {
-      const query = new URLSearchParams({limit:state.limit,offset:state.offset,q:$('autoSearch').value.trim()});
+      const query = new URLSearchParams({limit:state.limit,offset:state.offset,q:$('autoSearch').value.trim(),filter:$('autoFilter').value});
       const results = await Promise.allSettled([api('status'),api('targets?'+query),api('events?limit=40'),api('feeds')]);
       if (results[0].status === 'fulfilled') renderStatus(results[0].value);
       else notice(results[0].reason.message, true);
@@ -282,12 +300,29 @@
       $('autoFeedNotice').textContent='تم حفظ المصدر في Supabase؛ يبدأ الفحص التلقائي في الخلفية.';
     });
   };
-  $('autoCheckSelected').onclick = ()=>action(async()=>{
+  async function bulkSelected(mode) {
     if (!state.selected.size) throw new Error('حدّد فيلمًا أو حلقة أولًا.');
-    const targets = [...state.selected.values()];
-    for (const target of targets) await api('target',{table:target.table_name,id:target.target_id,action:'check'});
-    state.selected.clear(); selectionCount(); notice(`أضيف ${targets.length} عنصرًا إلى طابور الفحص.`);
-  });
+    if (state.selected.size > 60) throw new Error('الحد الأقصى 60 عنصرًا لكل دفعة.');
+    const targets = [...state.selected.values()].map(item=>({table:item.table_name,id:item.target_id}));
+    const result = await api('bulk',{action:mode,targets});
+    state.selected.clear(); selectionCount();
+    notice(`أضيف ${result.queued} عنصرًا إلى طابور ${mode==='refresh'?'التجديد':'الفحص'}.`);
+  }
+  $('autoCheckSelected').onclick = ()=>action(()=>bulkSelected('check'));
+  $('autoRenewSelected').onclick = ()=>action(()=>bulkSelected('refresh'));
+  $('autoScheduleForm').onsubmit = event => {
+    event.preventDefault();
+    action(async()=>{
+      const interval_hours=Number($('autoScheduleInterval').value);
+      const expiry_lead_minutes=Number($('autoScheduleLead').value);
+      const result=await api('schedule',{interval_hours,expiry_lead_minutes});
+      state.scheduleEditing=false;
+      notice(`حُفظت الجدولة: فحص كل ${result.interval_hours} ساعة، وتجديد مبكر قبل ${result.expiry_lead_minutes} دقيقة.`);
+    });
+  };
+  $('autoScheduleInterval').onchange = ()=>{state.scheduleEditing=true;};
+  $('autoScheduleLead').onchange = ()=>{state.scheduleEditing=true;};
+  $('autoFilter').onchange = ()=>{state.offset=0;state.signature='';refresh(true);};
   $('autoSearch').oninput = ()=>{
     clearTimeout(state.searchTimer);
     state.searchTimer = setTimeout(()=>{state.offset=0;state.signature='';refresh(true);},300);
