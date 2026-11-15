@@ -20,6 +20,8 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 from auto_sync import target_key
+from studio_control_cloud import ControlCloud, ALERT_TABLE, AUDIT_TABLE, as_epoch, as_iso
+from uuid import uuid4
 
 ALLOWED_TABLES = {"aseel_movies", "aseel_series", "aseel_episodes"}
 ALERT_TYPES = {
@@ -93,6 +95,10 @@ class Control:
         self.lock = threading.RLock()
         self.stop_signal = threading.Event()
         self.thread = None
+        self.install_id = uuid4().hex
+        self.cloud = ControlCloud()
+        self.cloud_loaded = False
+        self.cloud_error = ''
         with self.db() as db:
             db.executescript("""
             pragma journal_mode=WAL;
@@ -115,6 +121,19 @@ class Control:
               key text primary key,value text not null
             );
             """)
+            # Migrate local outbox without losing pending events.
+            for table in ('control_alerts','control_audit'):
+                columns={r['name'] for r in db.execute('pragma table_info('+table+')')}
+                if 'synced' not in columns:
+                    db.execute('alter table '+table+' add column synced integer not null default 0')
+            columns={r['name'] for r in db.execute('pragma table_info(control_audit)')}
+            if 'fingerprint' not in columns:
+                db.execute('alter table control_audit add column fingerprint text')
+            db.execute('create unique index if not exists control_audit_fingerprint on control_audit(fingerprint)')
+            old_rows=db.execute('select id from control_audit where fingerprint is null').fetchall()
+            for row in old_rows:
+                db.execute('update control_audit set fingerprint=? where id=?',
+                           ('audit:'+self.install_id+':'+str(row['id']),row['id']))
 
     @contextmanager
     def db(self):
@@ -157,10 +176,12 @@ class Control:
 
     def audit(self, action, table, identifier, old="", new="", detail=""):
         with self.db() as db:
-            db.execute("""insert into control_audit
+            cursor=db.execute("""insert into control_audit
              (created_at,action,table_name,target_id,old_status,new_status,detail)
              values(?,?,?,?,?,?,?)""",
              (time.time(),action,table,identifier,old,new,str(detail)[:300]))
+            db.execute('update control_audit set fingerprint=? where id=?',
+                       ('audit:'+self.install_id+':'+str(cursor.lastrowid),cursor.lastrowid))
 
     def step(self):
         """Read existing events, notify, and prequeue refresh without changing resolver."""
