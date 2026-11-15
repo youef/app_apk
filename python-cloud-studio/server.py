@@ -38,6 +38,7 @@ from metadata_enrichment import enrich
 from library_sync import JobDB,collect_pages,collect_works
 from cloud_auth import site_auth_middleware, site_login, site_logout, site_health
 from auto_sync import AutoSync, target_key
+from studio_control import Control
 
 BASE = Path(__file__).resolve().parent
 DATA_DIR = Path(os.getenv("ALEZZ_DATA_DIR", str(BASE))).resolve()
@@ -45,6 +46,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 LIBRARY = JobDB(DATA_DIR / "library_sync.sqlite3")
 LIBRARY.recover()
 AUTOSYNC = AutoSync(DATA_DIR)
+CONTROL = Control(DATA_DIR, AUTOSYNC)
 _library_lock = threading.RLock()
 _library_worker = None
 DEFAULT_DB_URL = 'https://qyzmlwtvzzgooccqxglq.supabase.co'
@@ -56,10 +58,13 @@ MAX_STATES = 50
 @asynccontextmanager
 async def lifespan(app):
     AUTOSYNC.start()
+    CONTROL.start()
     if any(LIBRARY.snapshot()['counts'][k].get('pending',0) for k in ('pages','works')):
         _start_library_worker()
     try: yield
-    finally: AUTOSYNC.stop()
+    finally:
+        CONTROL.stop()
+        AUTOSYNC.stop()
 
 
 app = FastAPI(title='Al Ezz TV | Python Import Studio', docs_url=None, redoc_url=None,
@@ -126,6 +131,10 @@ def protected(request: Request) -> UserState:
         if parsed.scheme not in ('http', 'https') or parsed.netloc != request.url.netloc:
             raise HTTPException(403, 'مصدر الطلب غير مسموح به')
     return state
+
+
+# Separate operator UI/API; extraction engine and existing endpoints are untouched.
+app.include_router(CONTROL.router(find_state, protected, BASE))
 
 
 def current_catalogue(state: UserState) -> Catalogue:
