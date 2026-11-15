@@ -53,7 +53,7 @@
     $('sideSignal').style.background=w.running&&w.connected?'var(--green)':'var(--red)';
     $('workerSummary').textContent=(w.running?'العامل يعمل':'العامل متوقف')+' · '+
       (w.enabled?'المزامنة مفعلة':'المزامنة معطلة')+' · آخر نبضة '+date(w.last_tick)+
-      ' · الفحص القادم '+date(o.next_due)+(w.last_error?' · '+w.last_error:'');
+      ' · الفحص القادم '+date(o.next_due)+(o.storage&&o.storage.durable?' · سجل التنبيهات محفوظ في Supabase':' · تخزين السجل المحلي فقط')+(o.storage&&o.storage.error?' · '+o.storage.error:'')+(w.last_error?' · '+w.last_error:'');
     $('recentAlerts').innerHTML=(o.alerts&&o.alerts.length?o.alerts.map(alertView).join(''):
        '<div class="empty">لا توجد تنبيهات حتى الآن.</div>');
     $('sideAlertCount').textContent=o.alerts_unread||0;
