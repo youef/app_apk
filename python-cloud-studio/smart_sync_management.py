@@ -75,7 +75,9 @@ class SmartSyncManagement:
             # A shortened interval should take effect for pending health checks.
             with self.worker.queue.db() as conn:
                 due=self.clock()+interval_hours*3600
-                conn.execute('update auto_jobs set next_check=min(next_check,?) where next_check>? and lease_until<=?',
+                conn.execute("""update auto_jobs set next_check=min(next_check,?)
+                    where next_check>? and lease_until<=?
+                    and (table_name='aseel_series' or status!='healthy')""",
                              (due,due,self.clock()))
             self.worker.queue.event('schedule','تم تحديث الجدولة: فحص كل '+str(interval_hours)+
                                     ' ساعة، وتجديد مسبق قبل '+str(expiry_lead_minutes)+' دقيقة')
@@ -175,7 +177,7 @@ class SmartSyncManagement:
                         table_name=? and target_id=? and url=? limit 1""",
                         (row['table_name'],row['target_id'],row['stream_url'])).fetchone()
                     prior=cached['expires_at'] if cached else 0
-                if row['new_expiry']<=prior+120:continue
+                if not prior or row['new_expiry']<=prior+120:continue
                 payload=json.dumps({'stream_url':row['candidate'],
                                     'link_health_url':row['candidate']},ensure_ascii=False)
                 result=conn.execute("""update auto_jobs set stream_url=?,dirty=?,

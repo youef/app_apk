@@ -21,7 +21,7 @@ from urllib.parse import parse_qs, urlsplit
 from uuid import UUID
 
 import requests
-from alezz_fetchv_importer import SourceClient, public_url, pull_html
+from alezz_fetchv_importer import SourceClient, public_url, pull_html, hydrate_episode_metadata
 from media_resolver import MediaResolver, safe_error, signed_expiry
 from title_cleaner import content_title
 
@@ -45,8 +45,25 @@ def target_key(table, identifier):
 
 
 def expires_at(url):
-    """Recognize explicit epoch/AWS expiry only; unknown signatures stay unknown."""
-    return signed_expiry(url) or 0
+    """Read only explicit signed expiry; unrecognized URLs stay non-expiring."""
+    expiry=signed_expiry(url)
+    if expiry:return expiry
+    try:
+        parsed=urlsplit(url)
+        if parsed.scheme!='https' or not parsed.path.lower().endswith('/master.m3u8'):
+            return 0
+        query=parse_qs(parsed.query)
+        start=(query.get('s') or [''])[0]
+        seconds=(query.get('e') or [''])[0]
+        token=(query.get('t') or [''])[0]
+        if (token and re.fullmatch(r'[0-9]{10}',start) and
+            re.fullmatch(r'[0-9]{1,6}',seconds) and
+            946684800<=int(start)<=4102444800 and
+            60<=int(seconds)<=604800):
+            return float(int(start)+int(seconds))
+    except (TypeError,ValueError,OverflowError):
+        pass
+    return 0
 
 
 class ServiceDB:
@@ -417,11 +434,22 @@ class AutoSync:
         resolver=self.resolver_factory()
         candidates=[dict(url=r['url'],kind=r['kind'],label=r['label'],page_url=r['page_url'])
                     for r in sources if r['kind']!='original']
-        # Re-extraction happens daily even while current media still works.
+        # Permanent/unknown-expiry links only need a health probe every 48h.
+        # Re-extract when a saved link fails, when it has a known approaching
+        # expiry, or after an explicit operator "refresh" command.
+        expiry_current=expires_at(job['stream_url'])
+        lead_minutes=max(5,min(180,int(self.queue.get_setting('smart_expiry_lead_minutes',60))))
+        nearing_expiry=bool(expiry_current and expiry_current<=now+lead_minutes*60)
+        forced_refresh=job['next_refresh']==0
+        needs_extract=bool(pages and (forced_refresh or not job['stream_url']
+                           or job['status']!='healthy' or nearing_expiry))
+        if job['stream_url'] and job['status']=='healthy' and not needs_extract:
+            current=[item for item in candidates if item['url']==job['stream_url']]
+            candidates=current or [dict(url=job['stream_url'],kind='direct',label='primary',page_url=job['page_url'])]
         errors=[]
         extracted=False
         browser_requested=False
-        if job['next_refresh']<=now and pages:
+        if needs_extract:
             fresh,errors=resolver.extract(pages)
             extracted=True
             browser_requested=self.mode=='headless' or self.mode=='auto' and not any(s.get('kind')=='direct' for s in fresh)
@@ -444,19 +472,36 @@ class AutoSync:
         history=self.queue.sources(table,identifier)
         by_url={s['url']:s for s in history}
         good.sort(key=lambda s:by_url[s['url']]['confidence'],reverse=True)
-        selected=next((s['url'] for s in good if s['url']==job['stream_url']),good[0]['url'] if good else job['stream_url'])
+        selected=next((s['url'] for s in good if s['url']==job['stream_url']),
+                      good[0]['url'] if good else job['stream_url'])
+        # When the currently valid signed token is about to expire, prefer a
+        # verified newer token for the SAME resource, not another episode.
+        if good and nearing_expiry and expiry_current:
+            current=urlsplit(job['stream_url'])
+            renewed=next((s for s in good if s['url']!=job['stream_url']
+                          and urlsplit(s['url']).hostname==current.hostname
+                          and urlsplit(s['url']).path==current.path
+                          and expires_at(s['url'])>expiry_current+120),None)
+            if renewed:selected=renewed['url']
         failures=0 if good else job['failures']+1
         status='healthy' if good else 'broken' if failures>=3 else 'suspect'
         error='' if good else ('المصدر الأصلي مفقود؛ أضف صفحة الفيلم أو الحلقة' if not pages else
                               'لا يوجد رابط مباشر اجتاز الفحص؛ '+('; '.join(errors) if errors else 'تعذرت الروابط المحفوظة'))
-        next_check=now+self.interval if good else now+min(3600,60*2**min(failures-1,6))
-        next_refresh=now+self.interval if extracted or not pages else job['next_refresh']
-        if not good and pages:next_refresh=min(next_refresh,next_check)
-        # Explicit signatures are refreshed before expiry, without inferring unknown tokens.
+        # A working permanent/unknown-expiry URL is never re-extracted just
+        # because a daily/4-hour timer elapsed. Verify its playback every 48h.
+        # A signed URL is renewed ahead of its actual known expiry.
+        check_interval=48*3600
+        retry_delay=min(7200,300*2**min(failures-1,4)) if failures else 0
+        next_check=now+check_interval if good else now+retry_delay
         expiry=expires_at(selected)
         if good and expiry>now:
-            next_check=min(next_check,max(now+60,expiry-300))
-            next_refresh=min(next_refresh,max(now+60,expiry-300))
+            refresh_at=max(now+60,expiry-lead_minutes*60)
+            next_refresh=refresh_at
+            next_check=min(next_check,refresh_at)
+        elif good:
+            next_refresh=now+10*365*86400  # no scheduled re-extraction
+        else:
+            next_refresh=next_check if pages else now+10*365*86400
         allowed={s['url'] for s in checked if s.get('verified') or s.get('kind')=='embed' and s.get('reachable')}
         variants=[]
         for source in sorted(history,key=lambda s:(s['kind']=='direct',s['confidence']),reverse=True):
@@ -529,6 +574,19 @@ class AutoSync:
         for page in pages:
             cat=pull_html(page,SourceClient(timeout=12),kind='series',max_pages=500,max_episodes=5000,
                 resume_progress=json.loads(job['checkpoint']),progress_hook=lambda data:self.queue.update(table,identifier,checkpoint=json.dumps(data,ensure_ascii=False)))
+            # A series is a durable source: refresh missing artwork/metadata
+            # and discover newly released seasons without disturbing curated fields.
+            if cat.episodes:
+                hydrate_episode_metadata(cat,max_pages=80,workers=6)
+            show=self.db.single('aseel_series',{'id':'eq.'+identifier,
+                'select':'id,poster_url,backdrop_url,description'})
+            if show:
+                artwork={}
+                for field,value in (('poster_url',cat.poster_url),
+                                    ('backdrop_url',cat.backdrop_url),
+                                    ('description',cat.description)):
+                    if value and not show.get(field): artwork[field]=value
+                if artwork:self.db.patch('aseel_series',identifier,artwork)
             seasons={}
             for episode in cat.episodes:
                 if self.stop_event.is_set():return
@@ -543,9 +601,17 @@ class AutoSync:
                         description=episode.description or None,poster_url=episode.poster_url or None,
                         source_page_url=episode.page_url if episode.page_url!=cat.url else None,status='draft',rights_status='pending'))
                     self.queue.event('new_episode','تم اكتشاف حلقة جديدة وحفظها مسودة', 'aseel_episodes',old['id'])
-                elif not old.get('source_page_url') and episode.page_url!=cat.url:
-                    self.db.patch('aseel_episodes',old['id'],{'source_page_url':episode.page_url})
-                    old['source_page_url']=episode.page_url
+                elif old:
+                    changes={}
+                    if not old.get('source_page_url') and episode.page_url!=cat.url:
+                        changes['source_page_url']=episode.page_url
+                    if not old.get('poster_url') and episode.poster_url:
+                        changes['poster_url']=episode.poster_url
+                    if not old.get('description') and episode.description:
+                        changes['description']=episode.description
+                    if changes:
+                        self.db.patch('aseel_episodes',old['id'],changes)
+                        old.update(changes)
                 self.queue.ingest('aseel_episodes',old)
                 if episode.page_url!=cat.url:self.queue.remember('aseel_episodes',old['id'],dict(url=episode.page_url,kind='original'))
             for warning in cat.discovery_warnings:

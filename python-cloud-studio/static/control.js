@@ -92,15 +92,28 @@
     return '<input type="checkbox" aria-label="تحديد للنشر أو التجديد" data-select-table="'+esc(table)+
       '" data-select-id="'+esc(id)+'"'+selection(key)+'>';
   }
+  function artworkThumb(row,placeholder){
+    const url=String(row.poster_url||'');
+    return /^https:\/\/[^"<>]+$/i.test(url)?'<img class="library-cover" src="'+esc(url)+'" loading="lazy" alt="">':
+      '<span class="poster-dot">'+esc(placeholder)+'</span>';
+  }
+  function mediaState(row){
+    return row.link_health_status==='healthy'?'healthy':
+      row.link_health_status==='broken'?'broken':row.link_health_status==='suspect'?'suspect':
+      row.stream_url?'unchecked':'missing';
+  }
+  function nextCheck(row){
+    const maintenance=row.maintenance||{};
+    return maintenance.next_check?' · الفحص القادم '+date(maintenance.next_check):'';
+  }
   function movieCard(movie){
-    let table='aseel_movies',ready=movie.link_health_status==='healthy',status=movie.status||'draft';
-    return '<article class="content-card"><div class="card-heading">'+checkbox(table,movie.id)+
-      '<span class="poster-dot">▷</span><div class="title-wrap"><h3>'+esc(movie.title_ar||'فيلم بدون عنوان')+
-      '</h3><p>'+(movie.stream_url?'يوجد رابط تشغيل':'لا يوجد رابط تشغيل')+' · '+(movie.rights_status==='approved'?'حقوق معتمدة':'الحقوق قيد المراجعة')+
-      '</p></div>'+tag(status)+tag(ready?'healthy':'missing')+
-      '<div class="card-actions"><button data-action="history" data-table="'+table+'" data-id="'+esc(movie.id)+
-      '" data-title="'+esc(movie.title_ar)+'">مصادر التشغيل</button><button data-action="refresh" data-table="'+table+
-      '" data-id="'+esc(movie.id)+'">⟳ جدولة فحص</button></div></div></article>';
+    const table='aseel_movies';
+    return '<article class="content-card minimal-card"><div class="card-heading">'+checkbox(table,movie.id)+
+      artworkThumb(movie,'▷')+'<div class="title-wrap"><h3>'+esc(movie.title_ar||'فيلم بدون عنوان')+
+      '</h3><p>'+esc(movie.stream_url?'مشغل محفوظ':'لا يوجد مشغل')+nextCheck(movie)+'</p></div>'+
+      tag(movie.status||'draft')+tag(mediaState(movie))+
+      '<div class="card-actions"><button data-library-action="open" data-table="'+table+'" data-id="'+esc(movie.id)+'">التفاصيل</button>'+
+      '<button data-library-action="check" data-table="'+table+'" data-id="'+esc(movie.id)+'">فحص</button></div></div></article>';
   }
   function episodeRow(ep){
     const table='aseel_episodes',status=ep.status||'draft';
@@ -113,30 +126,24 @@
       '<button data-action="refresh" data-table="'+table+'" data-id="'+esc(ep.id)+'" title="جدولة تحديث الحلقة">⟳</button></div>';
   }
   function seriesCard(series){
-    const search=state.query.toLocaleLowerCase('ar'), matches=isMatch(series,search);
-    const sections=(series.seasons||[]).map(function(season){
-      let eps=season.episodes||[];
-      if(search&&!matches)eps=eps.filter(function(e){return isMatch(e,search);});
-      if(state.filter==='duplicates'&&!season.duplicate_total)return '';
-      if(state.filter==='gaps'&&!season.missing_total)return '';
-      if(!['gaps','duplicates'].includes(state.filter))eps=eps.filter(passes);
-      if(!eps.length&&state.filter!=='gaps'&&state.filter!=='duplicates')return '';
-      let warning='';
-      if(season.missing_total)warning+='<div class="warning-line">◷ حلقات ناقصة: '+esc(season.missing.join('، '))+(season.missing_total>100?' …':'')+'</div>';
-      if(season.duplicate_total)warning+='<div class="warning-line">⚠ أرقام حلقات مكررة: '+esc(season.duplicate.join('، '))+'</div>';
-      return '<details class="season-block"'+(search||state.filter!=='all'?' open':'')+'><summary>'+esc(season.title)+' <small>'+
-        esc(season.episodes.length)+' حلقة'+(season.missing_total?' · '+season.missing_total+' ناقصة':'')+
-        (season.duplicate_total?' · '+season.duplicate_total+' مكررة':'')+'</small></summary>'+warning+
-        '<div class="episode-stack">'+(eps.length?eps.map(episodeRow).join(''):'<div class="empty">لا توجد حلقات تطابق البحث.</div>')+'</div></details>';
-    }).filter(Boolean).join('');
-    if(!matches&&!sections)return '';
-    if(state.filter==='duplicates'&&!sections||state.filter==='gaps'&&!sections)return '';
-    return '<article class="content-card"><div class="card-heading">'+checkbox('aseel_series',series.id)+
-      '<span class="poster-dot">▦</span><div class="title-wrap"><h3>'+esc(series.title_ar||'مسلسل بدون عنوان')+
-      '</h3><p>'+esc(series.episode_count)+' حلقة · '+esc(series.verified_count)+' رابط سليم · '+
-      esc((series.seasons||[]).length)+' مواسم</p></div>'+tag(series.status||'draft')+
-      '<div class="card-actions"><button data-action="refresh" data-table="aseel_series" data-id="'+esc(series.id)+
-      '">⟳ فحص المواسم</button></div></div>'+sections+'</article>';
+    const search=state.query.toLocaleLowerCase('ar');
+    const seasons=series.seasons||[];
+    const matches=isMatch(series,search) || seasons.some(function(season){
+      return season.episodes.some(function(ep){return isMatch(ep,search);});
+    });
+    if(search&&!matches)return '';
+    if(state.filter==='gaps'&&!seasons.some(function(s){return s.missing_total>0;}))return '';
+    if(state.filter==='duplicates'&&!seasons.some(function(s){return s.duplicate_total>0;}))return '';
+    if(!['all','gaps','duplicates'].includes(state.filter)&&!passes(series)&&
+       !seasons.some(function(season){return season.episodes.some(passes);}))return '';
+    const source=series.source_page_url?' · المصدر محفوظ':' · يحتاج مصدر';
+    return '<article class="content-card minimal-card"><div class="card-heading">'+checkbox('aseel_series',series.id)+
+      artworkThumb(series,'▦')+'<div class="title-wrap"><h3>'+esc(series.title_ar||'مسلسل بدون عنوان')+
+      '</h3><p>'+seasons.length+' مواسم · '+esc(series.episode_count)+' حلقة · '+
+      esc(series.verified_count)+' سليمة'+source+'</p></div>'+tag(series.status||'draft')+
+      '<div class="card-actions"><button data-library-action="open" data-table="aseel_series" data-id="'+
+      esc(series.id)+'">المواسم والتفاصيل</button><button data-library-action="check" data-table="aseel_series" data-id="'+
+      esc(series.id)+'">فحص الكل</button></div></div></article>';
   }
   function renderLibrary(){
     const lib=state.library;if(!lib||!lib.authenticated)return;
@@ -201,8 +208,13 @@
   }
   async function refreshTargets(items){
     if(!items.length)return;
-    try{let r=await api('/api/control/refresh',{targets:items});
-      toast('تمت جدولة فحص '+r.queued+' عنصر عبر محرك المزامنة الأصلي.','success');
+    try{
+      let queued=0;
+      for(const item of items){
+        const result=await api('/api/control/check',{table:item.table,id:item.id,force:false});
+        queued+=result.queued||0;
+      }
+      toast('تمت جدولة فحص '+queued+' عنصر. أي رابط غير صالح سيُعاد استخراجه من مصدره.','success');
       await Promise.all([loadHistory(),loadOverview(true)]);
     }catch(e){toast(e.message,'error');}
   }

@@ -10,7 +10,9 @@
 <title>مركز العمليات | استوديو العز TV</title>
 <link rel="icon" href="/static/studio-icon.svg">
 <link rel="stylesheet" href="/static/control.css?v=1">
-<script src="/static/control.js?v=1" defer></script>
+<link rel="stylesheet" href="/static/library-modern.css?v=2">
+<script src="/static/control.js?v=2" defer></script>
+<script src="/static/library-editor.js?v=2" defer></script>
 </head>
 <body>
 <div class="control-app" id="controlApp">
@@ -39,8 +41,8 @@
     </header>
     <div class="content">
       <section class="hero">
-        <div class="hero-copy"><div class="eyebrow"><i></i> AL EZZ CONTROL · STABLE ENGINE</div><h1>إدارة المحتوى <span>بمستوى جديد.</span></h1><p>مركز عمليات سينمائي لمراقبة الأفلام والحلقات والروابط والنشر — دون تغيير آلية الاستخراج الأصلية.</p>
-          <div class="hero-actions"><a href="/#import" class="primary">✦ استخراج فيلم أو مسلسل</a><button class="secondary" id="goLibrary">▦ إدارة المكتبة</button></div>
+        <div class="hero-copy"><h1>مكتبة <span>العز TV</span></h1><p>أفلام ومسلسلات ومواسم ومشغلات؛ إدارة واضحة وفحص تلقائي من المصدر المحفوظ.</p>
+          <div class="hero-actions"><button class="secondary" id="goLibrary">عرض المكتبة</button><a href="/#import" class="primary">استكشاف رابط جديد</a></div>
         </div>
         <div class="hero-art" aria-hidden="true"><div class="art-ring r1"></div><div class="art-ring r2"></div><div class="art-center">▶</div><div class="art-caption">AL EZZ <b>TV</b><span>STUDIO OPERATIONS</span></div></div>
       </section>
@@ -69,7 +71,7 @@
         <div class="surface tools">
           <label class="search-box"><span>⌕</span><input type="search" id="librarySearch" placeholder="ابحث عن فيلم، مسلسل، حلقة أو رقمها…" autocomplete="off"></label>
           <select id="libraryFilter" aria-label="تصفية المكتبة"><option value="all">كل الحالات</option><option value="published">المنشور</option><option value="draft">المسودات</option><option value="healthy">الرابط السليم</option><option value="missing">الرابط الناقص</option><option value="duplicates">الحلقات المكررة</option><option value="gaps">الحلقات الناقصة</option></select>
-          <button class="refresh-button" id="reloadLibrary">تحديث المكتبة ⟳</button>
+          <button class="refresh-button" id="reloadLibrary">تحديث</button><button class="refresh-button" id="addSeriesBtn">+ مسلسل</button><button class="refresh-button" id="addMovieBtn">+ فيلم</button>
         </div>
         <div class="library-stats" id="libraryStats"></div>
         <div class="bulk-bar" id="bulkBar"><div><b id="selectedCount">0</b> عنصر محدد <small>النشر متاح فقط لمن لديه حقوق معتمدة ورابط متحقق منه</small></div><div class="bulk-actions"><button id="bulkRefresh">⟳ تجديد المحدد</button><button id="bulkDraft">حفظ كمسودة</button><button id="bulkPublish" class="gold-button">✓ اعتماد ونشر</button><button id="clearSelection" class="muted-button">إلغاء</button></div></div>
@@ -98,5 +100,6 @@
 <div id="toastHost" class="toast-host" aria-live="polite"></div>
 <dialog id="authDialog" class="modal"><form method="dialog" class="modal-head"><h2>دخول مسؤول Supabase</h2><button class="modal-close" aria-label="إغلاق">✕</button></form><p>تحتاج تسجيل الدخول بحساب مسؤول معتمد لعرض المكتبة وتغيير حالات النشر. لا تُخزّن بيانات الدخول في المتصفح.</p><form id="authForm"><label>البريد الإلكتروني<input type="email" name="email" required autocomplete="username"></label><label>كلمة المرور<input type="password" name="password" required autocomplete="current-password"></label><button type="submit" class="gold-button">دخول آمن</button></form></dialog>
 <dialog id="detailDialog" class="modal"><form method="dialog" class="modal-head"><h2 id="detailTitle">تاريخ مصادر التشغيل</h2><button class="modal-close" aria-label="إغلاق">✕</button></form><div id="detailContent"></div></dialog>
+<dialog id="libraryEditorDialog" class="modal library-editor-dialog"><form method="dialog" class="modal-head"><h2 id="libraryEditorTitle">تفاصيل المحتوى</h2><button class="modal-close" aria-label="إغلاق">✕</button></form><div id="libraryEditorBody"></div></dialog>
 </body>
 </html>
