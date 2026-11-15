@@ -65,6 +65,8 @@ jobs:
           script: |
             set -eu
             adb install -r app/build/outputs/apk/debug/app-debug.apk
+            # AOSP KitKat first-run immersive hint obscures screenshots; pre-acknowledge it.
+            adb shell settings put secure immersive_mode_confirmations confirmed
             adb shell am start -n sa.alezz.tv.redclassic.local/sa.aseel.tv.TVHomeActivity
             sleep 5
             adb shell screencap -p /data/local/tmp/smoke.png
