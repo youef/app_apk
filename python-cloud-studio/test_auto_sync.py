@@ -245,6 +245,26 @@ class AutoSyncTests(unittest.TestCase):
         self.worker.check_target(self.job(row))
         self.assertEqual(self.db.rows['aseel_movies'][row['id']]['stream_url'], old)
 
+    def test_legacy_signed_cdn_start_duration_expiry_is_recognized(self):
+        link=f'https://store.example.org/hls/02/movie/master.m3u8?t=signature&s={int(NOW-300)}&e=3600'
+        self.assertEqual(expires_at(link),NOW+3300)
+        self.assertEqual(expires_at(link.replace('master.m3u8','player.html')),0)
+        self.assertEqual(expires_at(link.replace('&t=signature','').replace('t=signature&','')),0)
+
+    def test_pre_expiry_refresh_opens_saved_embed_and_renews_signed_hls(self):
+        path='https://store.example.org/hls/02/movie/master.m3u8'
+        old=f'{path}?t=old&s={int(NOW-3300)}&e=3600'
+        fresh=f'{path}?t=new&s={int(NOW)}&e=43200'
+        embed='https://player.example.org/embed-film.html'
+        row=self.row(stream=old,stream_variants=[dict(url=embed,kind='embed')])
+        self.resolver=FakeResolver(healthy=[old,fresh],browser=[
+            dict(url=fresh,kind='direct',page_url=embed)])
+        self.worker.check_target(self.job(row))
+        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['stream_url'],fresh)
+        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['rights_status'],'approved')
+        self.assertTrue(any(force and pages[0]==embed
+            for pages,force in self.resolver.extractions))
+
     def test_variant_limit_does_not_discard_full_source_history(self):
         backups = [dict(url=f'https://cdn.example.org/v{n}.mp4',label=str(n),kind='direct') for n in range(14)]
         row = self.row(stream_variants=backups)
