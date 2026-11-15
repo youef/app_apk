@@ -40,6 +40,8 @@ import cloud_auth
 from cloud_auth import site_auth_middleware, site_login, site_logout, site_health
 from auto_sync import AutoSync, target_key
 from smart_sync_management import SmartSyncManagement
+from smart_discovery import SmartDiscovery
+from smart_title_lookup import find_titles, queue_title_refresh
 from studio_control import Control
 
 BASE = Path(__file__).resolve().parent
@@ -48,7 +50,8 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 LIBRARY = JobDB(DATA_DIR / "library_sync.sqlite3")
 LIBRARY.recover()
 AUTOSYNC = AutoSync(DATA_DIR)
-SMART_SYNC = SmartSyncManagement(AUTOSYNC)
+DISCOVERY = SmartDiscovery(AUTOSYNC)
+SMART_SYNC = SmartSyncManagement(AUTOSYNC, discovery=DISCOVERY)
 CONTROL = Control(DATA_DIR, AUTOSYNC)
 _library_lock = threading.RLock()
 _library_worker = None
@@ -297,6 +300,45 @@ class DiscoverForm(BaseModel):
     kind: str = 'auto'
     deep: bool = True
     metadata: bool = True
+
+
+
+# A title-first operator workflow. It reuses the original 3 November importer
+# and AutoSync worker; no media-extraction code is called or modified here.
+class TitleRefreshForm(BaseModel):
+    table: str = Field(max_length=32)
+    id: str = Field(max_length=36)
+
+
+@app.get('/api/title-search')
+async def title_search(request: Request, q: str = '', kind: str = 'auto',
+                       sources: bool = False):
+    _, state = find_state(request)
+    if state.db is None:
+        raise HTTPException(401, 'سجّل الدخول ببريد المسؤول للبحث في مكتبة العز')
+    try:
+        result = await run_in_threadpool(find_titles, state.db, q, kind, sources)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+    except Exception:
+        raise HTTPException(503, 'تعذّر البحث في المكتبة حاليًا؛ تأكد من اتصال Supabase') from None
+    return JSONResponse(result, headers={'Cache-Control':'private, no-store'})
+
+
+@app.post('/api/title-refresh')
+async def title_refresh(request: Request, body: TitleRefreshForm):
+    state = protected(request)
+    if state.db is None:
+        raise HTTPException(401, 'سجّل الدخول بحساب المسؤول أولًا')
+    try:
+        result = await run_in_threadpool(
+            queue_title_refresh, state.db, AUTOSYNC, body.table, body.id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+    except Exception:
+        raise HTTPException(503, 'تعذّرت جدولة التجديد من قاعدة البيانات') from None
+    return JSONResponse({'ok': True, **result},
+                        headers={'Cache-Control':'private, no-store'})
 
 
 @app.post('/api/discover')
@@ -1014,7 +1056,7 @@ class DiscoveryFeedForm(BaseModel):
 async def autosync_feeds(request: Request):
     find_state(request)
     try:
-        return JSONResponse({'feeds': await run_in_threadpool(AUTOSYNC.discovery.feeds)},
+        return JSONResponse({'feeds': await run_in_threadpool(DISCOVERY.feeds)},
                             headers={'Cache-Control':'no-store'})
     except Exception as exc:
         raise HTTPException(503,'تعذّر قراءة مصادر الاكتشاف: '+clean(exc,150)) from None
@@ -1027,10 +1069,10 @@ async def autosync_feed(request: Request, body: DiscoveryFeedForm):
         if body.action == 'add':
             if not body.url:
                 raise ValueError('أدخل صفحة فهرس الأفلام أو المسلسلات')
-            row=await run_in_threadpool(AUTOSYNC.discovery.add,
+            row=await run_in_threadpool(DISCOVERY.add,
                 body.url,body.kind,body.interval_minutes)
         elif body.action in ('scan','pause','resume'):
-            row=await run_in_threadpool(AUTOSYNC.discovery.action,
+            row=await run_in_threadpool(DISCOVERY.action,
                 body.id,body.action)
         else:
             raise ValueError('أمر غير مدعوم')

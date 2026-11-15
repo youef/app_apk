@@ -38,11 +38,14 @@ def known_signed_expiry(url):
 
 
 class SmartSyncManagement:
-    def __init__(self, worker, clock=time.time):
+    def __init__(self, worker, clock=time.time, discovery=None):
         self.worker=worker
+        self.discovery=discovery
         self.clock=clock
         self.stop_event=threading.Event()
         self.thread=None
+        self.feeds_thread=None
+        self.feeds_error=''
         self.last_error=''
         self.lock=threading.RLock()
         with self.worker.queue.db() as conn:
@@ -84,10 +87,27 @@ class SmartSyncManagement:
         self.stop_event.clear()
         self.thread=threading.Thread(target=self._run,name='alezz-smart-sync-scheduler',daemon=True)
         self.thread.start()
+        if self.discovery is not None:
+            self.feeds_thread=threading.Thread(target=self._run_feeds,
+                name='alezz-scheduled-source-discovery',daemon=True)
+            self.feeds_thread.start()
+
+    def _run_feeds(self):
+        while not self.stop_event.is_set():
+            if self.worker.enabled and self.discovery is not None and self.worker.db is not None:
+                try:
+                    # Feed cursor and next-run timestamps persist in Supabase.
+                    # Never invoke or alter the legacy media capture engine here.
+                    self.discovery.process_due()
+                    self.feeds_error=''
+                except Exception as exc:
+                    self.feeds_error=type(exc).__name__
+            self.stop_event.wait(40)
 
     def stop(self):
         self.stop_event.set()
         if self.thread:self.thread.join(timeout=3)
+        if self.feeds_thread:self.feeds_thread.join(timeout=3)
 
     def _run(self):
         while not self.stop_event.is_set():
@@ -289,5 +309,8 @@ class SmartSyncManagement:
         base.update(interval_hours=self.worker.interval/3600,
                     expiry_lead_minutes=self.expiry_lead_minutes,
                     smart_scheduler_running=bool(self.thread and self.thread.is_alive()),
-                    smart_scheduler_error=self.last_error)
+                    smart_scheduler_error=self.last_error,
+                    discovery_scheduler_running=bool(self.feeds_thread and self.feeds_thread.is_alive()),
+                    discovery_scheduler_error=self.feeds_error,
+                    discovery_last_success=(self.discovery.last_success if self.discovery else 0))
         return base
