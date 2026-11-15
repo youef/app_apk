@@ -208,15 +208,14 @@
   }
   async function refreshTargets(items){
     if(!items.length)return;
-    try{
-      let queued=0;
-      for(const item of items){
-        const result=await api('/api/control/check',{table:item.table,id:item.id,force:false});
-        queued+=result.queued||0;
-      }
-      toast('تمت جدولة فحص '+queued+' عنصر. أي رابط غير صالح سيُعاد استخراجه من مصدره.','success');
-      await Promise.all([loadHistory(),loadOverview(true)]);
-    }catch(e){toast(e.message,'error');}
+    // Immediate scans start concurrently, not via the scheduled AutoSync queue.
+    const instant=window.AlEzzInstantScan;
+    if(typeof instant!=='function'){
+      toast('تعذر تحميل شاشة الفحص المباشر، حدّث الاستوديو.','error');return;
+    }
+    const selected=items.slice(0,4);
+    await Promise.all(selected.map(item=>instant(item.table,item.id,true)));
+    if(items.length>4)toast('بدأت أربعة فحوص متزامنة. بعد اكتمالها افحص بقية المحدد.','success');
   }
   function selectedByTable(){
     const grouped={};state.selected.forEach(function(item){if(!grouped[item.table])grouped[item.table]=[];grouped[item.table].push(item.id);});
