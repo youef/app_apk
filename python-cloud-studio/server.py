@@ -752,7 +752,7 @@ async def logout(request: Request):
         state.db = None
     response = JSONResponse({'ok': True})
     if cloud_auth.ENABLED:
-        cloud_auth.invalidate_site_admin(request)
+        await cloud_auth.revoke_site_admin(request)
         response.delete_cookie(cloud_auth.COOKIE, path='/')
     return response
 
