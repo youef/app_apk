@@ -84,7 +84,7 @@
     else if (!data.connected) notice('العامل يحتاج مفتاح Supabase السري في إعدادات الخادم ليعمل بصورة مستقلة.');
     else if (!data.enabled) notice('المزامنة متوقفة مؤقتًا. المصادر والمهام محفوظة ويمكن استئنافها.');
     else if (counts.missing_source) notice(`يوجد ${counts.missing_source} عنصرًا يحتاج صفحة مصدر أصلية. يمكن فحص روابطه الحالية، ويبدأ تجديدها بعد إضافة المصدر.`);
-    else notice(`آخر نبضة للعامل: ${date(data.last_tick)} · آخر تحديث للمكتبة: ${date(data.last_import)}. الفحص مجدول كل 24 ساعة مع إعادة محاولة المتعثر.`);
+    else notice(`آخر نبضة للعامل: ${date(data.last_tick)} · تحديث المكتبة: ${date(data.last_import)}. الفحص كل ${Number(data.interval_hours||4)} ساعات وتجديد الروابط الموقعة قبل انتهاء صلاحيتها.`);
     const pause = document.querySelector('[data-auto-action="pause"]');
     const resume = document.querySelector('[data-auto-action="resume"]');
     pause.hidden = !data.enabled; resume.hidden = !!data.enabled;
@@ -134,6 +134,43 @@
     $('autoNext').disabled = typeof total === 'number' ? state.offset+targets.length >= total : targets.length < state.limit;
     $('autoPageLabel').textContent = targets.length ? `${state.offset+1}–${state.offset+targets.length}${typeof total === 'number' ? ' من '+total : ''}` : 'لا توجد نتائج';
   }
+  function renderFeeds(data) {
+    const feeds = Array.isArray(data?.feeds) ? data.feeds : [];
+    const host = $('autoFeedsList');
+    if (!host) return;
+    $('autoFeedCount').textContent = feeds.length.toLocaleString('ar-SA')+' مصادر';
+    host.replaceChildren();
+    if (!feeds.length) {
+      host.append(el('p','auto-empty','لا توجد قوائم اكتشاف مسجلة. أضف رابط فهرس أفلام أو مسلسلات لتبدأ المزامنة التلقائية.'));
+      return;
+    }
+    feeds.forEach(feed => {
+      const row=el('article','auto-target auto-feed-row');
+      const info=el('div','auto-feed-details');
+      const heading=el('strong','',feed.kind==='movie'?'أفلام':feed.kind==='series'?'مسلسلات':'أفلام ومسلسلات');
+      const url=el('p','auto-feed-link',feed.source_url);
+      const stats=el('div','auto-target-meta');
+      stats.append(
+        el('span','',feed.enabled?'نشط':'متوقف'),
+        el('span','',`كل ${Math.round(Number(feed.interval_minutes||240)/60)} ساعات`),
+        el('span','',`آخر زيارة: ${date(feed.last_scan)}`),
+        el('span','',`الموعد القادم: ${date(feed.next_scan)}`),
+        el('span','',`آخر أعمال جديدة: ${Number(feed.last_created||0)}`));
+      info.append(heading,url,stats);
+      if(feed.last_error)info.append(el('p','auto-target-error',feed.last_error));
+      const actions=el('div','auto-target-buttons');
+      actions.append(button('افحص الآن',()=>action(async()=>{
+        await api('feed',{action:'scan',id:feed.id});
+        $('autoFeedNotice').textContent='أُضيف مصدر الاكتشاف إلى جدول الفحص.';
+      })));
+      actions.append(button(feed.enabled?'إيقاف':'استئناف',()=>action(async()=>{
+        await api('feed',{action:feed.enabled?'pause':'resume',id:feed.id});
+        $('autoFeedNotice').textContent='حُفظ وضع مصدر الاكتشاف.';
+      })));
+      row.append(info,actions);host.append(row);
+    });
+  }
+
   function renderEvents(data) {
     const events = Array.isArray(data) ? data : data.events || data.items || [];
     const host = $('autoEvents'); host.replaceChildren();
@@ -150,11 +187,13 @@
     state.refreshing = true;
     try {
       const query = new URLSearchParams({limit:state.limit,offset:state.offset,q:$('autoSearch').value.trim()});
-      const results = await Promise.allSettled([api('status'),api('targets?'+query),api('events?limit=40')]);
+      const results = await Promise.allSettled([api('status'),api('targets?'+query),api('events?limit=40'),api('feeds')]);
       if (results[0].status === 'fulfilled') renderStatus(results[0].value);
       else notice(results[0].reason.message, true);
       if (results[1].status === 'fulfilled') renderTargets(results[1].value);
       if (results[2].status === 'fulfilled') renderEvents(results[2].value);
+      if (results[3].status === 'fulfilled') renderFeeds(results[3].value);
+      else if($('autoFeedNotice')) $('autoFeedNotice').textContent = results[3].reason.message;
     } finally { state.refreshing = false; }
   }
   async function loadSources() {
@@ -232,6 +271,17 @@
     notice({'pause':'أُوقفت المزامنة مؤقتًا.','resume':'استؤنفت المزامنة.','check-all':'أضيفت المكتبة إلى طابور الفحص.',
       'refresh-all':'أضيفت المصادر إلى طابور التجديد.','import':'بدأ تحديث المكتبة من Supabase.'}[control.dataset.autoAction]);
   }));
+  $('autoFeedForm').onsubmit = event => {
+    event.preventDefault();
+    action(async()=>{
+      const url=$('autoFeedUrl').value.trim();
+      const kind=$('autoFeedKind').value;
+      const interval_minutes=Number($('autoFeedInterval').value);
+      await api('feed',{action:'add',url,kind,interval_minutes});
+      $('autoFeedUrl').value='';
+      $('autoFeedNotice').textContent='تم حفظ المصدر في Supabase؛ يبدأ الفحص التلقائي في الخلفية.';
+    });
+  };
   $('autoCheckSelected').onclick = ()=>action(async()=>{
     if (!state.selected.size) throw new Error('حدّد فيلمًا أو حلقة أولًا.');
     const targets = [...state.selected.values()];
