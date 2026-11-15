@@ -161,7 +161,8 @@ class Tests(unittest.TestCase):
         self.assertEqual(original['stream_url'],old)
         episode.verified=True
         episode.sources=[dict(url=new, kind='direct', verified=True)]
-        mod.store(cat,db,publish=False,rights=False,capture_merge=True)
+        mod.store(cat,db,publish=False,rights=False,capture_merge=True,
+                  replace_verified_streams=True)
         self.assertEqual(original['stream_url'],new)
         self.assertEqual(original['link_health_status'],'healthy')
         self.assertEqual(original['status'],'published')
