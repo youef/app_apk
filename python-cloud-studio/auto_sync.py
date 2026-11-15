@@ -302,6 +302,7 @@ class AutoSync:
         self.resolver_factory=resolver_factory or (lambda:MediaResolver(self.mode))
         self.stop_event=threading.Event();self.wake_event=threading.Event();self.feed_wake=threading.Event()
         self.thread=None;self.feed_thread=None;self.db=None;self.last_tick=0;self.last_import=0;self.last_error=''
+        self.last_error_type='';self.import_phase='idle';self.import_seen=0
         self.force_import=True
         self.process_lock=ProcessLock(Path(data_dir)/'autosync.lock')
         self.discovery=SmartDiscovery(self,clock=self.clock)
@@ -361,9 +362,10 @@ class AutoSync:
                     if self.enabled:
                         if self.db is None:self.db=self.db_factory()
                         self.tick()
-                        self.last_error=''
+                        self.last_error='';self.last_error_type=''
                 except Exception as exc:
                     error=safe_error(exc)
+                    self.last_error_type=type(exc).__name__
                     if error!=self.last_error:self.queue.event('worker_error',error)
                     self.last_error=error
                 self.wake_event.wait(15 if self.last_error else 2)
@@ -394,13 +396,24 @@ class AutoSync:
             offset+=len(rows)
 
     def import_remote(self):
+        # Only fetch columns used by the maintenance queue.
+        self.import_seen=0
         for table in TABLES:
-            for row in self._rows(table,{'select':'*'}):
+            self.import_phase=table
+            projection=('id,title_ar,source_page_url,stream_url,stream_variants'
+                        if table!='aseel_series' else 'id,title_ar,source_page_url')
+            for row in self._rows(table,{'select':projection}):
                 self.queue.ingest(table,row)
-        # Restore every history row as well as the current eight public variants.
-        for row in self._rows('aseel_media_sources',{'select':'*'}):
+                self.import_seen+=1
+        self.import_phase='source-history'
+        history_columns=('target_table,target_id,source_url,source_kind,label,page_url,'
+                         'first_seen_at,last_seen_at,last_checked_at,status,successes,failures,'
+                         'consecutive_failures,confidence,expires_at,error')
+        for row in self._rows('aseel_media_sources',{'select':history_columns}):
             self.queue.remember(row['target_table'],row['target_id'],row,restored=True)
+            self.import_seen+=1
         self.last_import=self.clock();self.force_import=False
+        self.import_phase='ready'
         self.queue.setting('last_import',self.last_import)
 
     def tick(self):
@@ -606,4 +619,6 @@ class AutoSync:
                     mode=self.mode,interval_hours=self.interval/3600,last_tick=self.last_tick,last_import=self.last_import,
                     discovery_last_tick=self.discovery.last_tick,discovery_last_success=self.discovery.last_success,
                     discovery_last_error=self.discovery.last_error,
+                    import_phase=self.import_phase,import_seen=self.import_seen,
+                    last_error_type=self.last_error_type,
                     last_error=self.last_error,**self.queue.snapshot())
