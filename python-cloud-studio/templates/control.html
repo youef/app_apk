@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070b15">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="robots" content="noindex,nofollow">
+<title>مركز العمليات | استوديو العز TV</title>
+<link rel="icon" href="/static/studio-icon.svg">
+<link rel="stylesheet" href="/static/control.css?v=1">
+<script src="/static/control.js?v=1" defer></script>
+</head>
+<body>
+<div class="control-app" id="controlApp">
+  <aside class="side" aria-label="التنقل الرئيسي">
+    <a class="identity" href="/studio/control"><span class="logo" aria-hidden="true">ع<span>TV</span></span><span><b>العز <em>TV</em></b><small>OPERATIONS CENTER</small></span></a>
+    <div class="side-label">لوحة الاستوديو</div>
+    <nav class="side-nav">
+      <button type="button" data-view="overview" class="nav-item active"><span class="nav-icon">◈</span> نظرة عامة</button>
+      <button type="button" data-view="library" class="nav-item"><span class="nav-icon">▤</span> المكتبة والمواسم</button>
+      <button type="button" data-view="alerts" class="nav-item"><span class="nav-icon">♧</span> مركز التنبيهات <span class="alert-count" id="sideAlertCount" hidden>0</span></button>
+      <button type="button" data-view="history" class="nav-item"><span class="nav-icon">≡</span> سجل العمليات</button>
+    </nav>
+    <div class="side-label">الاستوديو الأصلي</div>
+    <a class="original-link" href="/#import"><span>⟲</span> فتح محرك الاستخراج القديم</a>
+    <div class="side-footer"><span class="signal" id="sideSignal"></span><span>محرك الاستخراج محمي من التغييرات</span></div>
+  </aside>
+  <main class="main">
+    <header class="topbar">
+      <div class="crumb"><b>العز TV</b><span>/</span><span id="pageCrumb">نظرة عامة</span></div>
+      <div class="header-actions">
+        <span id="workerBadge" class="worker-badge"><span class="dot"></span>جارٍ الاتصال</span>
+        <button id="themeToggle" class="icon-button" aria-label="تبديل المظهر" title="تبديل المظهر">◐</button>
+        <button id="refreshNow" class="icon-button" title="تحديث البيانات" aria-label="تحديث البيانات">⟳</button>
+        <button id="authButton" class="account-button">دخول المسؤول</button>
+      </div>
+    </header>
+    <div class="content">
+      <section class="hero">
+        <div class="hero-copy"><div class="eyebrow"><i></i> AL EZZ CONTROL · STABLE ENGINE</div><h1>إدارة المحتوى <span>بمستوى جديد.</span></h1><p>مركز عمليات سينمائي لمراقبة الأفلام والحلقات والروابط والنشر — دون تغيير آلية الاستخراج الأصلية.</p>
+          <div class="hero-actions"><a href="/#import" class="primary">✦ استخراج فيلم أو مسلسل</a><button class="secondary" id="goLibrary">▦ إدارة المكتبة</button></div>
+        </div>
+        <div class="hero-art" aria-hidden="true"><div class="art-ring r1"></div><div class="art-ring r2"></div><div class="art-center">▶</div><div class="art-caption">AL EZZ <b>TV</b><span>STUDIO OPERATIONS</span></div></div>
+      </section>
+      <div class="error-bar" id="globalError" hidden role="alert"></div>
+      <section data-panel="overview" id="overviewPanel">
+        <div class="section-title"><div><small>LIVE OVERVIEW</small><h2>ملخص العمليات</h2></div><span class="live-tag"><i></i> تتحدث البيانات تلقائيًا</span></div>
+        <div id="metricGrid" class="metric-grid"><div class="skeleton">تحميل الإحصائيات...</div></div>
+        <div class="overview-grid">
+          <section class="surface"><div class="panel-head"><div><small>HEALTH & PROGRESS</small><h3>حالة المكتبة</h3></div><span id="libraryPercent" class="percent">—</span></div>
+            <div class="progress-track" role="progressbar" aria-label="نسبة الروابط السليمة" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="healthProgress"><span></span></div>
+            <div class="health-legend" id="healthLegend"></div>
+            <div class="worker-summary" id="workerSummary">جارٍ الاستعلام عن عامل المزامنة...</div>
+            <div class="quick-buttons"><button id="scanAll" class="gold-button">◴ فحص العناصر المحددة</button><button id="openAlerts" class="ghost-button">عرض التنبيهات</button></div>
+          </section>
+          <section class="surface"><div class="panel-head"><div><small>UPCOMING ALERTS</small><h3>آخر التنبيهات</h3></div><button class="text-action" id="allAlerts">عرض الكل ←</button></div><div class="compact-alerts" id="recentAlerts">تحميل التنبيهات...</div></section>
+        </div>
+        <div class="section-title"><div><small>QUICK ACCESS</small><h2>إدارة أسرع</h2></div></div>
+        <div class="quick-grid">
+          <button data-view="library"><span>▦</span><b>المواسم والحلقات</b><small>اكتشف الناقص والمكرر ورتّب المحتوى</small></button>
+          <button data-view="alerts"><span>♧</span><b>مراقبة الروابط</b><small>الأعطال والتجديد وانتهاء الصلاحية</small></button>
+          <button data-view="history"><span>≡</span><b>سجل النشر</b><small>كل تغيير ومراجعة محفوظة بالتاريخ</small></button>
+        </div>
+      </section>
+      <section data-panel="library" id="libraryPanel" hidden>
+        <div class="section-title"><div><small>CONTENT LIBRARY</small><h2>الأفلام والمواسم والحلقات</h2></div><span id="librarySummary" class="subtitle">—</span></div>
+        <div class="surface tools">
+          <label class="search-box"><span>⌕</span><input type="search" id="librarySearch" placeholder="ابحث عن فيلم، مسلسل، حلقة أو رقمها…" autocomplete="off"></label>
+          <select id="libraryFilter" aria-label="تصفية المكتبة"><option value="all">كل الحالات</option><option value="published">المنشور</option><option value="draft">المسودات</option><option value="healthy">الرابط السليم</option><option value="missing">الرابط الناقص</option><option value="duplicates">الحلقات المكررة</option><option value="gaps">الحلقات الناقصة</option></select>
+          <button class="refresh-button" id="reloadLibrary">تحديث المكتبة ⟳</button>
+        </div>
+        <div class="library-stats" id="libraryStats"></div>
+        <div class="bulk-bar" id="bulkBar"><div><b id="selectedCount">0</b> عنصر محدد <small>النشر متاح فقط لمن لديه حقوق معتمدة ورابط متحقق منه</small></div><div class="bulk-actions"><button id="bulkRefresh">⟳ تجديد المحدد</button><button id="bulkDraft">حفظ كمسودة</button><button id="bulkPublish" class="gold-button">✓ اعتماد ونشر</button><button id="clearSelection" class="muted-button">إلغاء</button></div></div>
+        <div class="seg-tabs"><button data-kind="series" class="active">المسلسلات</button><button data-kind="movies">الأفلام</button></div>
+        <div id="libraryList" class="content-list"><div class="loading">جارٍ تحميل المكتبة...</div></div>
+      </section>
+      <section data-panel="alerts" id="alertsPanel" hidden>
+        <div class="section-title"><div><small>NOTIFICATION CENTER</small><h2>التنبيهات والمراقبة</h2></div><button class="outline" id="markRead">✓ تحديد الظاهر كمقروء</button></div>
+        <div class="surface"><div id="allAlertList" class="full-alerts"></div></div>
+      </section>
+      <section data-panel="history" id="historyPanel" hidden>
+        <div class="section-title"><div><small>AUDIT TRAIL</small><h2>سجل الفحص والنشر</h2></div><button id="reloadHistory" class="outline">⟳ تحديث</button></div>
+        <div class="surface"><div id="auditList" class="audit-list"></div></div>
+      </section>
+      <footer class="page-footer"><span>العز TV · لوحة إضافية آمنة — محرك استخراج الفيديو القديم دون تعديل</span><span id="lastUpdated">—</span></footer>
+    </div>
+  </main>
+</div>
+<nav class="mobile-tabs" aria-label="التنقل على الهاتف">
+  <button data-view="overview" class="active"><span>◈</span>الرئيسية</button>
+  <button data-view="library"><span>▤</span>المكتبة</button>
+  <a href="/#import"><span>✦</span>استخراج</a>
+  <button data-view="alerts"><span>♧</span>التنبيهات</button>
+  <button data-view="history"><span>≡</span>السجل</button>
+</nav>
+<div id="toastHost" class="toast-host" aria-live="polite"></div>
+<dialog id="authDialog" class="modal"><form method="dialog" class="modal-head"><h2>دخول مسؤول Supabase</h2><button class="modal-close" aria-label="إغلاق">✕</button></form><p>تحتاج تسجيل الدخول بحساب مسؤول معتمد لعرض المكتبة وتغيير حالات النشر. لا تُخزّن بيانات الدخول في المتصفح.</p><form id="authForm"><label>البريد الإلكتروني<input type="email" name="email" required autocomplete="username"></label><label>كلمة المرور<input type="password" name="password" required autocomplete="current-password"></label><button type="submit" class="gold-button">دخول آمن</button></form></dialog>
+<dialog id="detailDialog" class="modal"><form method="dialog" class="modal-head"><h2 id="detailTitle">تاريخ مصادر التشغيل</h2><button class="modal-close" aria-label="إغلاق">✕</button></form><div id="detailContent"></div></dialog>
+</body>
+</html>
