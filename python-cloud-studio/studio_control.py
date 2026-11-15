@@ -345,17 +345,27 @@ class Control:
                 if len(chunk)<250:
                     break
             return result
-        movies = pages("aseel_movies","id,title_ar,status,rights_status,stream_url,source_page_url,link_health_status")
-        series = pages("aseel_series","id,title_ar,status,rights_status,source_page_url")
+        movies = pages("aseel_movies","id,title_ar,status,rights_status,stream_url,source_page_url,link_health_status,poster_url,backdrop_url,description,link_health_checked_at")
+        series = pages("aseel_series","id,title_ar,status,rights_status,source_page_url,poster_url,backdrop_url,description")
         seasons = pages("aseel_seasons","id,series_id,number,title_ar")
         episodes = pages("aseel_episodes",
-                         "id,season_id,number,title_ar,status,rights_status,stream_url,source_page_url,link_health_status")
+                         "id,season_id,number,title_ar,status,rights_status,stream_url,source_page_url,link_health_status,poster_url,description,link_health_checked_at")
         by_series = {}
         for season in seasons:
             by_series.setdefault(season.get("series_id"),[]).append(season)
         by_season = {}
         for episode in episodes:
             by_season.setdefault(episode.get("season_id"),[]).append(episode)
+        # Schedule metadata comes from the persistent background queue.
+        with self.autosync.queue.db() as queue_db:
+            schedules = {(row["table_name"],row["target_id"]):dict(row)
+                         for row in queue_db.execute("""select table_name,target_id,status,
+                         next_check,next_refresh,last_check,last_refresh from auto_jobs
+                         where table_name in ('aseel_series','aseel_movies','aseel_episodes')""")}
+        for movie in movies:
+            movie["maintenance"] = schedules.get(("aseel_movies",movie["id"]),{})
+        for episode in episodes:
+            episode["maintenance"] = schedules.get(("aseel_episodes",episode["id"]),{})
         all_series = []
         for entry in series:
             own_seasons = by_series.get(entry["id"], [])
@@ -363,6 +373,7 @@ class Control:
                             for episode in by_season.get(season["id"], [])]
             result = {**entry,"seasons":analyze_seasons(own_seasons, own_episodes)}
             result["episode_count"] = len(own_episodes)
+            result["maintenance"] = schedules.get(("aseel_series",entry["id"]),{})
             result["verified_count"] = sum(x.get("link_health_status")=="healthy" for x in own_episodes)
             all_series.append(result)
         return {
