@@ -285,7 +285,9 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
     detected_movie = bool(any("movie" in str(n.get("@type", "")).lower() for n in nodes))
     has_episode_links = any(episode_numbers(clean(a.get_text(" ",strip=True)) + " " + (a.get("href") or ""))
                             for a in soup.select("a[href]")[:400])
-    detected = "series" if detected_series or (not detected_movie and has_episode_links) else "movie" if detected_movie else kind if kind != "auto" else "movie"
+    detected = (kind if kind in ("series", "movie") else
+                "series" if detected_series or (not detected_movie and has_episode_links) else
+                "movie")
     title = re.sub(r"\s*[-–—|]\s*(?:موقع\s*)?(?:قرمزي|qrmzi)\s*$", "", title or "").strip()
     original=(field_of(main,"alternateName","originalTitle","originalName") or
               meta("og:original_title") or meta("originalTitle") or meta("original_name") or "")
@@ -319,6 +321,7 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
         image=soup.select_one('[itemprop="image"], img.poster, .poster img, img[itemprop="thumbnailUrl"]')
         if image:
             poster=absolutize(final,image.get("src") or image.get("data-src") or image.get("data-original") or image.get("content") or "")
+    original = content_title(original, final, site_name) if original else ""
     # Bind the source to the show itself, not the related episodes sidebar.
     guard = SeriesEpisodeGuard(final, title, soup, site_name) if detected == "series" else None
     if guard is not None and guard.is_episode_page:
@@ -568,7 +571,9 @@ def inspect_episodes(out: Catalogue, client: SourceClient, delay: float=.15):
                     if isinstance(episode,Episode):
                         if not episode.description:
                             d=soup.select_one('meta[property="og:description"],meta[name="description"]')
-                            episode.description=clean(d.get("content")) if d else ""
+                            site=soup.select_one('meta[property="og:site_name"],meta[name="og:site_name"]')
+                            episode.description=content_description(
+                                d.get("content"),final,site.get("content","") if site else "") if d else ""
                         if not episode.poster_url:
                             p=soup.select_one('meta[property="og:image"]')
                             episode.poster_url=absolutize(final,p.get("content")) if p else ""
@@ -598,6 +603,9 @@ def hydrate_episode_metadata(cat: Catalogue, *, max_pages:int=150, workers:int=6
             def meta(name):
                 node=soup.select_one(f'meta[property="{name}"],meta[name="{name}"]')
                 return clean(node.get("content","")) if node else ""
+            identity = SeriesEpisodeGuard(cat.url, cat.title, soup, meta("og:site_name"))
+            if not identity.matches(url, meta("og:title") or meta("twitter:title") or ""):
+                return None
             description=content_description(meta("og:description") or meta("description"), url, meta("og:site_name"))
             poster=absolutize(url,meta("og:image") or meta("twitter:image"))
             media=find_static_media(soup,url)
