@@ -39,6 +39,7 @@ from library_sync import JobDB,collect_pages,collect_works
 import cloud_auth
 from cloud_auth import site_auth_middleware, site_login, site_logout, site_health
 from auto_sync import AutoSync, target_key
+from smart_sync_management import SmartSyncManagement
 from studio_control import Control
 
 BASE = Path(__file__).resolve().parent
@@ -47,6 +48,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 LIBRARY = JobDB(DATA_DIR / "library_sync.sqlite3")
 LIBRARY.recover()
 AUTOSYNC = AutoSync(DATA_DIR)
+SMART_SYNC = SmartSyncManagement(AUTOSYNC)
 CONTROL = Control(DATA_DIR, AUTOSYNC)
 _library_lock = threading.RLock()
 _library_worker = None
@@ -58,6 +60,7 @@ MAX_STATES = 50
 
 @asynccontextmanager
 async def lifespan(app):
+    SMART_SYNC.start()
     AUTOSYNC.start()
     CONTROL.start()
     if any(LIBRARY.snapshot()['counts'][k].get('pending',0) for k in ('pages','works')):
@@ -65,6 +68,7 @@ async def lifespan(app):
     try: yield
     finally:
         CONTROL.stop()
+        SMART_SYNC.stop()
         AUTOSYNC.stop()
 
 
@@ -860,7 +864,7 @@ async def health():
 @app.get('/api/autosync/status')
 async def autosync_status(request:Request):
     find_state(request)
-    return JSONResponse(AUTOSYNC.status(),headers={'Cache-Control':'no-store'})
+    return JSONResponse(SMART_SYNC.status(),headers={'Cache-Control':'no-store'})
 
 
 class AutoSyncControl(BaseModel):
@@ -872,7 +876,7 @@ async def autosync_control(request:Request,body:AutoSyncControl):
     protected(request)
     try: AUTOSYNC.control(body.action)
     except ValueError as exc: raise HTTPException(400,str(exc)) from None
-    return {'ok':True,**AUTOSYNC.status()}
+    return {'ok':True,**SMART_SYNC.status()}
 
 
 @app.get('/api/autosync/targets')
@@ -881,8 +885,7 @@ async def autosync_targets(request:Request,limit:int=50,offset:int=0,q:str='',fi
     limit=max(1,min(limit,100));offset=max(0,min(offset,100000))
     query=q[:250]
     try:
-        rows=AUTOSYNC.queue.targets(limit,offset,query,filter)
-        total=AUTOSYNC.queue.count_targets(query,filter)
+        rows,total=SMART_SYNC.targets(limit,offset,query,filter)
     except ValueError as exc:raise HTTPException(400,str(exc)) from None
     # Only safe metadata; no saved row JSON or signed stream links here.
     fields=('table_name','target_id','title','page_url','status','last_check','next_check',
@@ -900,7 +903,7 @@ class AutoSyncScheduleForm(BaseModel):
 @app.post('/api/autosync/schedule')
 async def autosync_schedule(request:Request,body:AutoSyncScheduleForm):
     protected(request)
-    try: settings=AUTOSYNC.configure(body.interval_hours,body.expiry_lead_minutes)
+    try: settings=SMART_SYNC.configure(body.interval_hours,body.expiry_lead_minutes)
     except ValueError as exc:raise HTTPException(400,str(exc)) from None
     return {'ok':True,**settings}
 
