@@ -81,8 +81,8 @@ app.add_api_route('/logout-site', site_logout, methods=['POST'], include_in_sche
 async def worker_health():
     info=AUTOSYNC.status()
     return JSONResponse({'ok':True,'service':'al-ezz-tv-python-studio',
-        'autosync':{k:info[k] for k in ('running','enabled','connected','last_tick','import_phase','import_seen','last_error_type')},
-        'autosync_ready':bool(info['running'] and info['connected'] and info['last_import'] and not info['last_error']),
+        'autosync':{k:info.get(k) for k in ('running','enabled','connected','last_tick','import_phase','import_seen','last_error_type')},
+        'autosync_ready':bool(info.get('running') and info.get('connected') and info.get('last_import') and not info.get('last_error')),
         'version':os.getenv('RENDER_GIT_COMMIT','autosync-v1')[:40]},headers={'Cache-Control':'no-store'})
 
 app.add_api_route('/healthz', worker_health, methods=['GET'], include_in_schema=False)
