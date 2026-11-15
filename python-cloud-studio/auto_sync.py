@@ -417,11 +417,22 @@ class AutoSync:
         resolver=self.resolver_factory()
         candidates=[dict(url=r['url'],kind=r['kind'],label=r['label'],page_url=r['page_url'])
                     for r in sources if r['kind']!='original']
-        # Re-extraction happens daily even while current media still works.
+        # Permanent/unknown-expiry links only need a health probe every 48h.
+        # Re-extract when a saved link fails, when it has a known approaching
+        # expiry, or after an explicit operator "refresh" command.
+        expiry_current=expires_at(job['stream_url'])
+        lead_minutes=max(5,min(180,int(self.queue.get_setting('smart_expiry_lead_minutes',60))))
+        nearing_expiry=bool(expiry_current and expiry_current<=now+lead_minutes*60)
+        forced_refresh=job['next_refresh']==0
+        needs_extract=bool(pages and (forced_refresh or not job['stream_url']
+                           or job['status']!='healthy' or nearing_expiry))
+        if job['stream_url'] and job['status']=='healthy' and not needs_extract:
+            current=[item for item in candidates if item['url']==job['stream_url']]
+            candidates=current or [dict(url=job['stream_url'],kind='direct',label='primary',page_url=job['page_url'])]
         errors=[]
         extracted=False
         browser_requested=False
-        if job['next_refresh']<=now and pages:
+        if needs_extract:
             fresh,errors=resolver.extract(pages)
             extracted=True
             browser_requested=self.mode=='headless' or self.mode=='auto' and not any(s.get('kind')=='direct' for s in fresh)
@@ -449,14 +460,21 @@ class AutoSync:
         status='healthy' if good else 'broken' if failures>=3 else 'suspect'
         error='' if good else ('المصدر الأصلي مفقود؛ أضف صفحة الفيلم أو الحلقة' if not pages else
                               'لا يوجد رابط مباشر اجتاز الفحص؛ '+('; '.join(errors) if errors else 'تعذرت الروابط المحفوظة'))
-        next_check=now+self.interval if good else now+min(3600,60*2**min(failures-1,6))
-        next_refresh=now+self.interval if extracted or not pages else job['next_refresh']
-        if not good and pages:next_refresh=min(next_refresh,next_check)
-        # Explicit signatures are refreshed before expiry, without inferring unknown tokens.
+        # A working permanent/unknown-expiry URL is never re-extracted just
+        # because a daily/4-hour timer elapsed. Verify its playback every 48h.
+        # A signed URL is renewed ahead of its actual known expiry.
+        check_interval=48*3600
+        retry_delay=min(7200,300*2**min(failures-1,4)) if failures else 0
+        next_check=now+check_interval if good else now+retry_delay
         expiry=expires_at(selected)
         if good and expiry>now:
-            next_check=min(next_check,max(now+60,expiry-300))
-            next_refresh=min(next_refresh,max(now+60,expiry-300))
+            refresh_at=max(now+60,expiry-lead_minutes*60)
+            next_refresh=refresh_at
+            next_check=min(next_check,refresh_at)
+        elif good:
+            next_refresh=now+10*365*86400  # no scheduled re-extraction
+        else:
+            next_refresh=next_check if pages else now+10*365*86400
         allowed={s['url'] for s in checked if s.get('verified') or s.get('kind')=='embed' and s.get('reachable')}
         variants=[]
         for source in sorted(history,key=lambda s:(s['kind']=='direct',s['confidence']),reverse=True):
