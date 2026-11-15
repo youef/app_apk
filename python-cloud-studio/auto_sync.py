@@ -427,8 +427,11 @@ class AutoSync:
             self.queue.event('task_error',safe_error(exc),table,identifier)
         finally:self.queue.update(table,identifier,lease_until=0)
 
-    def check_target(self,job):
+    def check_target(self,job,remote_db=None,progress_hook=None):
+        """Shared health engine used by autonomous and immediate operator scans."""
+        report=progress_hook or (lambda stage,message,amount:None)
         now=self.clock();table,identifier=job['table_name'],job['target_id']
+        report('sources','قراءة مصادر التشغيل المحفوظة',0.08)
         sources=self.queue.sources(table,identifier)
         pages=[r['url'] for r in sources if r['kind']=='original']
         resolver=self.resolver_factory()
@@ -450,12 +453,14 @@ class AutoSync:
         extracted=False
         browser_requested=False
         if needs_extract:
+            report('extract','استخراج روابط جديدة من المصدر الأصلي',0.24)
             fresh,errors=resolver.extract(pages)
             extracted=True
             browser_requested=self.mode=='headless' or self.mode=='auto' and not any(s.get('kind')=='direct' for s in fresh)
             for source in fresh:self.queue.remember(table,identifier,source)
             seen={s['url'] for s in fresh}
             candidates=fresh+[s for s in candidates if s['url'] not in seen]
+        report('verify','التحقق من روابط التشغيل الفعلية',0.58)
         checked=resolver.check(candidates)
         good=[s for s in checked if s.get('verified') and s.get('kind','direct')=='direct']
         if not good and pages and not browser_requested:
@@ -468,6 +473,7 @@ class AutoSync:
             replace={s['url']:s for s in checked+checked_new}
             checked=list(replace.values())
             good=[s for s in checked if s.get('verified') and s.get('kind','direct')=='direct']
+        report('records','تسجيل نتائج الفحص',0.82)
         for source in checked:self.record_check(table,identifier,source,now)
         history=self.queue.sources(table,identifier)
         by_url={s['url']:s for s in history}
@@ -522,7 +528,12 @@ class AutoSync:
         if not pages and job['last_check']==0:self.queue.event('missing_source','المصدر الأصلي مفقود؛ يمكن فحص الروابط الحالية فقط',table,identifier)
         with self.queue.db() as conn:
             updated=dict(conn.execute('select * from auto_jobs where table_name=? and target_id=?',(table,identifier)).fetchone())
-        self.flush(updated)
+        report('save','حفظ حالة المشغل وموعد تجديده',0.94)
+        self.flush(updated,remote_db=remote_db)
+        report('done','اكتمل فحص المشغل',1.0)
+        return {'status':status,'renewed':selected!=job['stream_url'],
+                'stream_url':selected,'next_check':next_check,'next_refresh':next_refresh,
+                'error':error,'extracted':extracted}
 
     def record_check(self,table,identifier,source,now):
         self.queue.remember(table,identifier,source)
@@ -541,8 +552,11 @@ class AutoSync:
                          'confidence=?,error=?,synced=0 where table_name=? and target_id=? and source_key=?',
                          (now,status,successes,failures,consecutive,confidence,safe_error(source.get('error','')),table,identifier,key))
 
-    def flush(self,job):
+    def flush(self,job,remote_db=None):
         table,identifier=job['table_name'],job['target_id']
+        db=remote_db or self.db
+        if db is None:
+            raise ValueError('قاعدة المزامنة غير متصلة')
         # Upload source history before replacing current playback fields.
         for source in self.queue.sources(table,identifier):
             if source['synced']:continue
@@ -552,33 +566,41 @@ class AutoSync:
                          status=source['status'],successes=source['successes'],failures=source['failures'],
                          consecutive_failures=source['consecutive_failures'],confidence=source['confidence'],
                          expires_at=iso(source['expires_at']),error=source['error'])
-            self.db.upsert_source(payload)
+            db.upsert_source(payload)
             with self.queue.db() as conn:
                 conn.execute('update auto_sources set synced=1 where table_name=? and target_id=? and source_key=? and last_seen_at=?',
                              (table,identifier,source['source_key'],source['last_seen_at']))
         if job['dirty']:
             payload=json.loads(job['dirty'])
-            self.db.patch(table,identifier,payload)
+            db.patch(table,identifier,payload)
             with self.queue.db() as conn:
                 conn.execute('update auto_jobs set dirty=\'\',upload_at=0 where table_name=? and target_id=? and dirty=?',
                              (table,identifier,job['dirty']))
 
-    def discover_series(self,job):
+    def discover_series(self,job,remote_db=None,progress_hook=None):
         if min(job['next_refresh'],job['next_check'])>self.clock():return
+        db=remote_db or self.db
+        if db is None:raise ValueError('قاعدة المزامنة غير متصلة')
+        report=progress_hook or (lambda stage,message,amount:None)
         table,identifier=job['table_name'],job['target_id']
+        report('series','قراءة صفحات المسلسل ومواسمه من المصدر',0.02)
         pages=[s['url'] for s in self.queue.sources(table,identifier) if s['kind']=='original']
         if not pages:
             self.queue.update(table,identifier,next_check=self.clock()+self.interval,next_refresh=self.clock()+self.interval,
                               error='مصدر المسلسل الأصلي مفقود؛ فحص الحلقات المحفوظة مستمر')
             return
         for page in pages:
+            def checkpoint(data):
+                self.queue.update(table,identifier,checkpoint=json.dumps(data,ensure_ascii=False))
+                report('series','اكتشاف صفحات المواسم والحلقات',0.07)
             cat=pull_html(page,SourceClient(timeout=12),kind='series',max_pages=500,max_episodes=5000,
-                resume_progress=json.loads(job['checkpoint']),progress_hook=lambda data:self.queue.update(table,identifier,checkpoint=json.dumps(data,ensure_ascii=False)))
+                resume_progress=json.loads(job['checkpoint']),progress_hook=checkpoint)
             # A series is a durable source: refresh missing artwork/metadata
             # and discover newly released seasons without disturbing curated fields.
             if cat.episodes:
+                report('series','استكمال بيانات الحلقات والصور',0.12)
                 hydrate_episode_metadata(cat,max_pages=80,workers=6)
-            show=self.db.single('aseel_series',{'id':'eq.'+identifier,
+            show=db.single('aseel_series',{'id':'eq.'+identifier,
                 'select':'id,poster_url,backdrop_url,description'})
             if show:
                 artwork={}
@@ -586,17 +608,21 @@ class AutoSync:
                                     ('backdrop_url',cat.backdrop_url),
                                     ('description',cat.description)):
                     if value and not show.get(field): artwork[field]=value
-                if artwork:self.db.patch('aseel_series',identifier,artwork)
+                if artwork:db.patch('aseel_series',identifier,artwork)
             seasons={}
-            for episode in cat.episodes:
+            report('series','ربط الحلقات بالمواسم',0.16)
+            for episode_number,episode in enumerate(cat.episodes,1):
+                if episode_number==1 or episode_number%10==0:
+                    report('series','حفظ الحلقة '+str(episode_number)+' من '+str(len(cat.episodes)),
+                           0.16+0.04*episode_number/max(1,len(cat.episodes)))
                 if self.stop_event.is_set():return
                 if episode.season not in seasons:
-                    season=self.db.single('aseel_seasons',{'series_id':'eq.'+identifier,'number':'eq.'+str(episode.season),'select':'id'})
-                    if not season:season=self.db.insert('aseel_seasons',dict(series_id=identifier,number=episode.season,title_ar='الموسم '+str(episode.season)))
+                    season=db.single('aseel_seasons',{'series_id':'eq.'+identifier,'number':'eq.'+str(episode.season),'select':'id'})
+                    if not season:season=db.insert('aseel_seasons',dict(series_id=identifier,number=episode.season,title_ar='الموسم '+str(episode.season)))
                     seasons[episode.season]=season['id']
-                old=self.db.single('aseel_episodes',{'season_id':'eq.'+seasons[episode.season],'number':'eq.'+str(episode.number),'select':'*'})
+                old=db.single('aseel_episodes',{'season_id':'eq.'+seasons[episode.season],'number':'eq.'+str(episode.number),'select':'*'})
                 if not old:
-                    old=self.db.insert('aseel_episodes',dict(season_id=seasons[episode.season],number=episode.number,
+                    old=db.insert('aseel_episodes',dict(season_id=seasons[episode.season],number=episode.number,
                         title_ar=content_title(episode.title,page,fallback='الحلقة '+str(episode.number)),
                         description=episode.description or None,poster_url=episode.poster_url or None,
                         source_page_url=episode.page_url if episode.page_url!=cat.url else None,status='draft',rights_status='pending'))
@@ -610,7 +636,7 @@ class AutoSync:
                     if not old.get('description') and episode.description:
                         changes['description']=episode.description
                     if changes:
-                        self.db.patch('aseel_episodes',old['id'],changes)
+                        db.patch('aseel_episodes',old['id'],changes)
                         old.update(changes)
                 self.queue.ingest('aseel_episodes',old)
                 if episode.page_url!=cat.url:self.queue.remember('aseel_episodes',old['id'],dict(url=episode.page_url,kind='original'))
@@ -619,7 +645,8 @@ class AutoSync:
         now=self.clock()
         self.queue.update(table,identifier,next_check=now+self.interval,next_refresh=now+self.interval,
                           last_check=now,last_refresh=now,failures=0,error='',checkpoint='{}')
-        self.flush(job)
+        self.flush(job,remote_db=remote_db)
+        report('series','اكتمل استيراد المواسم والحلقات',0.20)
 
     def control(self,action):
         if action in ('pause','resume'):self.queue.setting('enabled',action=='resume')
