@@ -259,7 +259,10 @@ async def site_auth_middleware(request: Request, call_next):
                 status_code=401, headers={"Cache-Control":"no-store"})
         return RedirectResponse("/login", status_code=303)
     response = await call_next(request)
-    _session_cookie(response, admin, request)
+    # A successful /api/logout invalidates the admin during call_next().
+    # Do not resurrect its cookie from the middleware's pre-logout variable.
+    if get_site_admin(request) is not None:
+        _session_cookie(response, admin, request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("Referrer-Policy", "same-origin")
     response.headers.setdefault("X-Frame-Options", "DENY")
