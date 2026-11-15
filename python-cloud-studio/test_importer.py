@@ -164,6 +164,8 @@ class Tests(unittest.TestCase):
         mod.store(cat,db,publish=False,rights=False,capture_merge=True,
                   replace_verified_streams=True)
         self.assertEqual(original['stream_url'],new)
+        self.assertFalse(any(variant.get('url') == new
+                             for variant in original.get('stream_variants', [])))
         self.assertEqual(original['link_health_status'],'healthy')
         self.assertEqual(original['status'],'published')
         self.assertEqual(original['rights_status'],'approved')
