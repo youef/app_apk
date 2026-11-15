@@ -186,6 +186,12 @@ class Control:
     def step(self):
         """Read existing events, notify, and prequeue refresh without changing resolver."""
         with self.lock:
+            if self.cloud.ready and not self.cloud_loaded:
+                try:
+                    self.restore()
+                    self.cloud_error=''
+                except Exception:
+                    self.cloud_error='تعذرت استعادة سجل Supabase؛ ستستمر المحاولة'
             with self.db() as db:
                 state = db.execute("select value from control_state where key='last_event_id'").fetchone()
                 cursor = int(state["value"]) if state else 0
@@ -205,7 +211,7 @@ class Control:
                 kind = event["kind"]
                 if kind in ALERT_TYPES:
                     title, severity = ALERT_TYPES[kind]
-                    self._alert("event:"+str(event["id"]), title, severity,
+                    self._alert("event:%s:%s:%s:%s:%s" % (int(event.get("at") or 0),kind,event.get("table_name"),event.get("target_id"),event["id"]), title, severity,
                                 event["message"],event.get("table_name"),event.get("target_id"))
             if events:
                 with self.db() as db:
@@ -232,6 +238,68 @@ class Control:
                 self.autosync.wake_event.set()
                 self.audit("scheduled_refresh",source["table_name"],source["target_id"],
                            detail="Queued ahead of signed source expiry")
+            if self.cloud.ready:
+                try:
+                    self.persist()
+                    self.cloud_error=''
+                except Exception:
+                    self.cloud_error='تعذرت مزامنة السجل الدائم؛ محفوظ مؤقتًا على الخادم'
+
+    def restore(self):
+        """Restore the last 600 cloud events after a Render instance restart."""
+        if not self.cloud.ready or self.cloud_loaded:
+            return
+        remote_alerts=self.cloud.read(ALERT_TABLE,limit=600)
+        remote_audit=self.cloud.read(AUDIT_TABLE,limit=600)
+        with self.db() as db:
+            for r in remote_alerts:
+                db.execute("""insert or ignore into control_alerts
+                    (fingerprint,created_at,severity,title,message,table_name,target_id,read_at,synced)
+                    values(?,?,?,?,?,?,?,?,1)""",
+                    (r['fingerprint'],as_epoch(r.get('created_at')),r.get('severity') or 'warning',
+                     r.get('title') or '',r.get('message') or '',r.get('table_name') or '',
+                     r.get('target_id') or '',as_epoch(r.get('read_at'))))
+                db.execute("update control_alerts set synced=1,read_at=max(read_at,?) where fingerprint=?",
+                           (as_epoch(r.get('read_at')),r['fingerprint']))
+            for r in remote_audit:
+                db.execute("""insert or ignore into control_audit
+                    (fingerprint,created_at,action,table_name,target_id,old_status,new_status,detail,synced)
+                    values(?,?,?,?,?,?,?,?,1)""",
+                    (r['fingerprint'],as_epoch(r.get('created_at')),r.get('action') or '',
+                     r.get('table_name') or '',r.get('target_id') or '',
+                     r.get('old_status') or '',r.get('new_status') or '',r.get('detail') or ''))
+        self.cloud_loaded=True
+
+    def persist(self):
+        """Idempotent, best-effort Supabase mirror; SQLite remains the outbox."""
+        if not self.cloud.ready:
+            return
+        with self.db() as db:
+            alert_rows=[dict(r) for r in db.execute(
+                "select * from control_alerts where synced=0 order by id limit 50")]
+            audit_rows=[dict(r) for r in db.execute(
+                "select * from control_audit where synced=0 order by id limit 50")]
+        if alert_rows:
+            payload=[dict(fingerprint=r['fingerprint'],created_at=as_iso(r['created_at']),
+                    severity=r['severity'],title=r['title'],message=r['message'],
+                    table_name=r['table_name'],target_id=r['target_id'] or None,
+                    read_at=as_iso(r['read_at'])) for r in alert_rows]
+            self.cloud.insert_once(ALERT_TABLE,payload)
+            for r in alert_rows:
+                if r['read_at']:
+                    self.cloud.mark_read([r['fingerprint']],r['read_at'])
+            with self.db() as db:
+                db.executemany('update control_alerts set synced=1 where id=?',
+                               [(r['id'],) for r in alert_rows])
+        if audit_rows:
+            payload=[dict(fingerprint=r['fingerprint'],created_at=as_iso(r['created_at']),
+                    action=r['action'],table_name=r['table_name'],
+                    target_id=r['target_id'] or None,old_status=r['old_status'],
+                    new_status=r['new_status'],detail=r['detail']) for r in audit_rows]
+            self.cloud.insert_once(AUDIT_TABLE,payload)
+            with self.db() as db:
+                db.executemany('update control_audit set synced=1 where id=?',
+                               [(r['id'],) for r in audit_rows])
 
     def overview(self):
         with self.autosync.queue.db() as db:
@@ -257,6 +325,8 @@ class Control:
         return {
             "counts":count,"expiring":expiring,"errors":errors,"next_due":next_due,
             "alerts_unread":unread,"alerts":recent,
+            "storage":{"durable":bool(self.cloud.ready and self.cloud_loaded and not self.cloud_error),
+                       "error":self.cloud_error},
             "worker":{"running":bool(sync.get("running")),"enabled":bool(sync.get("enabled")),
                       "connected":bool(sync.get("connected")),
                       "last_tick":sync.get("last_tick"),"last_error":sync.get("last_error") or ""}
@@ -361,8 +431,13 @@ class Control:
         async def ack(request:Request, body:AckBody):
             protected(request)
             with control.db() as db:
-                db.executemany("update control_alerts set read_at=? where id=? and read_at=0",
+                db.executemany("update control_alerts set read_at=?,synced=0 where id=? and read_at=0",
                                [(time.time(),i) for i in set(body.ids)])
+            if control.cloud.ready:
+                try:
+                    await asyncio.to_thread(control.persist)
+                except Exception:
+                    pass  # Retried by the background outbox.
             return {"ok":True}
 
         @router.post("/api/control/refresh")
