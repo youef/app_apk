@@ -149,6 +149,8 @@ class Control:
         if self.thread and self.thread.is_alive():
             return
         self.stop_signal.clear()
+        self._alert('studio-control-ready-v1','مركز العمليات جاهز','success',
+                    'لوحة الإدارة السينمائية تعمل مع محرك الاستخراج الأصلي دون تغيير.')
         self.thread = threading.Thread(target=self._loop, daemon=True, name="studio-control-monitor")
         self.thread.start()
 
