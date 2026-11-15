@@ -21,7 +21,7 @@ from urllib.parse import parse_qs, urlsplit
 from uuid import UUID
 
 import requests
-from alezz_fetchv_importer import SourceClient, public_url, pull_html
+from alezz_fetchv_importer import SourceClient, public_url, pull_html, hydrate_episode_metadata
 from media_resolver import MediaResolver, safe_error, signed_expiry
 from title_cleaner import content_title
 
@@ -547,6 +547,19 @@ class AutoSync:
         for page in pages:
             cat=pull_html(page,SourceClient(timeout=12),kind='series',max_pages=500,max_episodes=5000,
                 resume_progress=json.loads(job['checkpoint']),progress_hook=lambda data:self.queue.update(table,identifier,checkpoint=json.dumps(data,ensure_ascii=False)))
+            # A series is a durable source: refresh missing artwork/metadata
+            # and discover newly released seasons without disturbing curated fields.
+            if cat.episodes:
+                hydrate_episode_metadata(cat,max_pages=80,workers=6)
+            show=self.db.single('aseel_series',{'id':'eq.'+identifier,
+                'select':'id,poster_url,backdrop_url,description'})
+            if show:
+                artwork={}
+                for field,value in (('poster_url',cat.poster_url),
+                                    ('backdrop_url',cat.backdrop_url),
+                                    ('description',cat.description)):
+                    if value and not show.get(field): artwork[field]=value
+                if artwork:self.db.patch('aseel_series',identifier,artwork)
             seasons={}
             for episode in cat.episodes:
                 if self.stop_event.is_set():return
@@ -561,9 +574,17 @@ class AutoSync:
                         description=episode.description or None,poster_url=episode.poster_url or None,
                         source_page_url=episode.page_url if episode.page_url!=cat.url else None,status='draft',rights_status='pending'))
                     self.queue.event('new_episode','تم اكتشاف حلقة جديدة وحفظها مسودة', 'aseel_episodes',old['id'])
-                elif not old.get('source_page_url') and episode.page_url!=cat.url:
-                    self.db.patch('aseel_episodes',old['id'],{'source_page_url':episode.page_url})
-                    old['source_page_url']=episode.page_url
+                elif old:
+                    changes={}
+                    if not old.get('source_page_url') and episode.page_url!=cat.url:
+                        changes['source_page_url']=episode.page_url
+                    if not old.get('poster_url') and episode.poster_url:
+                        changes['poster_url']=episode.poster_url
+                    if not old.get('description') and episode.description:
+                        changes['description']=episode.description
+                    if changes:
+                        self.db.patch('aseel_episodes',old['id'],changes)
+                        old.update(changes)
                 self.queue.ingest('aseel_episodes',old)
                 if episode.page_url!=cat.url:self.queue.remember('aseel_episodes',old['id'],dict(url=episode.page_url,kind='original'))
             for warning in cat.discovery_warnings:
