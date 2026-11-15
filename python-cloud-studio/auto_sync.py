@@ -45,8 +45,25 @@ def target_key(table, identifier):
 
 
 def expires_at(url):
-    """Recognize explicit epoch/AWS expiry only; unknown signatures stay unknown."""
-    return signed_expiry(url) or 0
+    """Read only explicit signed expiry; unrecognized URLs stay non-expiring."""
+    expiry=signed_expiry(url)
+    if expiry:return expiry
+    try:
+        parsed=urlsplit(url)
+        if parsed.scheme!='https' or not parsed.path.lower().endswith('/master.m3u8'):
+            return 0
+        query=parse_qs(parsed.query)
+        start=(query.get('s') or [''])[0]
+        seconds=(query.get('e') or [''])[0]
+        token=(query.get('t') or [''])[0]
+        if (token and re.fullmatch(r'[0-9]{10}',start) and
+            re.fullmatch(r'[0-9]{1,6}',seconds) and
+            946684800<=int(start)<=4102444800 and
+            60<=int(seconds)<=604800):
+            return float(int(start)+int(seconds))
+    except (TypeError,ValueError,OverflowError):
+        pass
+    return 0
 
 
 class ServiceDB:
