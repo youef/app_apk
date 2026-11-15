@@ -790,7 +790,7 @@ def _persist_autodiscovered_players(state: UserState, cat: Catalogue, progress: 
             # same serial writer; no half-written season/episode mappings.
             with state.save_lock, _capture_write_lock:
                 saved = store(snapshot, database, publish=False, rights=False,
-                              capture_merge=True)
+                              capture_merge=True, replace_verified_streams=True)
                 AUTOSYNC.remember_saved(snapshot, saved, capture=True, refresh=True)
             with state.lock:
                 if state.catalogue is cat and state.scan is progress:
@@ -1797,7 +1797,7 @@ def _run_episode_capture_batches(state:UserState,cat:Catalogue,job:dict):
         # for server-side source renewal even after the studio is closed.
         with state.lock:
             eligible = (not job.get('cancel') and state.catalogue is cat
-                        and state.capture is job and state.db is not None)
+                        and state.capture is job and getattr(state, 'db', None) is not None)
             snapshot = deepcopy(cat) if eligible else None
             database = state.db if eligible else None
             if eligible:
@@ -1809,7 +1809,8 @@ def _run_episode_capture_batches(state:UserState,cat:Catalogue,job:dict):
             try:
                 with state.save_lock, _capture_write_lock:
                     stored = store(snapshot, database, publish=False,
-                                   rights=False, capture_merge=True)
+                                   rights=False, capture_merge=True,
+                                   replace_verified_streams=True)
                     AUTOSYNC.remember_saved(snapshot, stored, capture=True,
                                             refresh=True)
                 with state.lock:
