@@ -46,8 +46,26 @@ def target_key(table, identifier):
 
 
 def expires_at(url):
-    """Recognize explicit epoch/AWS expiry only; unknown signatures stay unknown."""
-    return signed_expiry(url) or 0
+    """Recognize trusted signed-HLS clocks; leave other query formats unknown."""
+    known = signed_expiry(url)
+    if known:
+        return known
+    try:
+        parts = urlsplit(url)
+        if not parts.path.lower().endswith('/master.m3u8'):
+            return 0
+        query = parse_qs(parts.query)
+        start, lifetime, signature = ((query.get(key) or [''])[0]
+                                      for key in ('s', 'e', 't'))
+        if not (re.fullmatch(r'\d{10}', start or '') and
+                re.fullmatch(r'\d{1,6}', lifetime or '') and signature):
+            return 0
+        beginning, seconds = int(start), int(lifetime)
+        if 946684800 <= beginning <= 4102444800 and 60 <= seconds <= 604800:
+            return float(beginning + seconds)
+    except (TypeError, ValueError, OverflowError):
+        return 0
+    return 0
 
 
 class ServiceDB:
@@ -228,10 +246,10 @@ class QueueDB:
             row = db.execute('select j.* from auto_jobs j where j.lease_until<=? and '
                              '(j.next_check<=? or j.next_refresh<=? or (j.dirty!=\'\' and j.upload_at<=?)) '
                              'order by case when j.dirty!=\'\' and j.upload_at<=? then 0 '
-                             'when j.table_name=\'aseel_series\' then 1 '
                              'when exists (select 1 from auto_sources s where s.table_name=j.table_name '
                              'and s.target_id=j.target_id and s.url=j.stream_url '
-                             'and s.expires_at>0 and s.expires_at<=?) then 2 else 3 end, '
+                             'and s.expires_at>0 and s.expires_at<=?) then 1 '
+                             'when j.table_name=\'aseel_series\' then 2 else 3 end, '
                              'min(j.next_check,j.next_refresh,case when j.dirty!=\'\' then j.upload_at else 1e20 end),'
                              'j.failures desc limit 1', (now,now,now,now,now,now+3600)).fetchone()
             if not row: return None
@@ -462,9 +480,16 @@ class AutoSync:
         browser_requested=False
         current_expiry=expires_at(job['stream_url'])
         if pages and (job['next_refresh']<=now or current_expiry and current_expiry<=now+3600):
-            fresh,errors=resolver.extract(pages)
+            # Ask the FROZEN browser extractor for a new signed token before
+            # the old (still-healthy) one expires. Prefer known embed origins.
+            signing_refresh=bool(current_expiry and current_expiry<=now+3600)
+            embed_pages=[source['url'] for source in sources if source['kind']=='embed']
+            discovery_pages=(embed_pages[:2]+pages if signing_refresh else pages)
+            fresh,errors=resolver.extract(discovery_pages,
+                                          force_browser=signing_refresh and self.mode!='http')
             extracted=True
-            browser_requested=self.mode=='headless' or self.mode=='auto' and not any(s.get('kind')=='direct' for s in fresh)
+            browser_requested=(self.mode=='headless' or signing_refresh and self.mode!='http'
+               or self.mode=='auto' and not any(source.get('kind')=='direct' for source in fresh))
             for source in fresh:self.queue.remember(table,identifier,source)
             seen={s['url'] for s in fresh}
             candidates=fresh+[s for s in candidates if s['url'] not in seen]
