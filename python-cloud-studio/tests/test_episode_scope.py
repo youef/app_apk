@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import unittest
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 from alezz_fetchv_importer import pull_html
 from title_cleaner import content_description, content_title
@@ -61,7 +61,7 @@ class SeriesScopeTests(unittest.TestCase):
         self.assertEqual(result.kind, "series")
         self.assertEqual(result.title, "مسلسل الكرامة")
         self.assertEqual([e.number for e in result.episodes], list(range(1, 10)))
-        self.assertTrue(all("الكرامة" in e.page_url for e in result.episodes))
+        self.assertTrue(all("الكرامة" in unquote(e.page_url) for e in result.episodes))
         self.assertNotIn("قرمزي", result.description)
         self.assertNotIn("qrmzi", result.title.casefold())
 
