@@ -1790,6 +1790,41 @@ def _run_episode_capture_batches(state:UserState,cat:Catalogue,job:dict):
                 job['error']=safe_error(exc)
                 _capture_event(job,phase='error',message=job['error'])
     finally:
+        # Unlike the initial catalogue scan, the explicit 10-episode batch
+        # previously persisted ONLY to the local library, leaving discovered
+        # direct links absent from the Supabase episodes used by TV clients.
+        # Save verified replacements immediately, then enqueue every episode
+        # for server-side source renewal even after the studio is closed.
+        with state.lock:
+            eligible = (not job.get('cancel') and state.catalogue is cat
+                        and state.capture is job and state.db is not None)
+            snapshot = deepcopy(cat) if eligible else None
+            database = state.db if eligible else None
+            if eligible:
+                job['phase'] = 'saving'
+                job['db_sync'] = 'saving'
+                _capture_event(job, phase='saving',
+                               message='جاري حفظ الروابط المكتشفة وربطها بالحلقات')
+        if snapshot is not None and database is not None:
+            try:
+                with state.save_lock, _capture_write_lock:
+                    stored = store(snapshot, database, publish=False,
+                                   rights=False, capture_merge=True)
+                    AUTOSYNC.remember_saved(snapshot, stored, capture=True,
+                                            refresh=True)
+                with state.lock:
+                    if state.capture is job:
+                        job['db_sync'] = 'saved'
+                        job['db_synced_episodes'] = len(snapshot.episodes)
+                        _capture_event(job, phase='saved',
+                                       message='تم حفظ روابط الحلقات وجدولة تجديدها تلقائيًا')
+            except Exception as exc:
+                with state.lock:
+                    if state.capture is job:
+                        job['db_sync'] = 'failed'
+                        job['db_sync_error'] = safe_error(exc)
+                        _capture_event(job, phase='save_error',
+                                       message='تعذر حفظ روابط الحلقات: '+job['db_sync_error'])
         with state.lock:
             if state.capture is job:
                 job['running']=False
@@ -1830,6 +1865,7 @@ async def episode_capture_batches_start(request:Request,data:EpisodeCaptureBatch
              'batch_number':0,'batch_total':0,'batch_done':0,
              'next_index':data.start_index,'done':data.start_index,'total':total,
              'verified':0,'candidates':0,'failed':0,'timed_out':0,'error':'',
+             'db_sync':'pending','db_synced_episodes':0,
              'message':'جاري تجهيز فحص الحلقات المتتابع','events':[],'cancel':False}
         state.capture=job
         _capture_event(job,phase='starting',message=job['message'])
