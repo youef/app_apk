@@ -69,15 +69,11 @@ jobs:
             sleep 5
             for key in 19 20 21 22 23 4; do adb shell input keyevent "$key"; done
             sleep 2
-            adb shell dumpsys activity activities > activity-state.txt
-            if ! grep -q 'sa.alezz.tv.redclassic.local' activity-state.txt; then
-              echo 'App is not in activity stack'; exit 1
-            fi
-            if adb logcat -d -t 5000 | grep -E 'FATAL EXCEPTION.*sa.alezz|Process: sa.alezz.tv.redclassic.local'; then
-              echo 'Android crash detected'; exit 1
-            fi
             adb shell screencap -p /sdcard/smoke.png
             adb pull /sdcard/smoke.png "android-${{ matrix.api }}-smoke.png"
+            adb shell dumpsys activity activities > activity-state.txt
+            grep -q 'sa.alezz.tv.redclassic.local' activity-state.txt
+            ! adb logcat -d -t 5000 | grep -E 'FATAL EXCEPTION.*sa.alezz|Process: sa.alezz.tv.redclassic.local'
       - uses: actions/upload-artifact@v4
         if: always()
         with:
