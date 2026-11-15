@@ -304,6 +304,26 @@ class AutoSyncTests(unittest.TestCase):
         recovered = second.claim(NOW+601)
         self.assertEqual(recovered['target_id'], row['id'])
 
+    def test_remote_restore_does_not_reupload_unchanged_sources(self):
+        row = self.row()
+        key = hashlib.sha256(ROOT.encode()).hexdigest()
+        with self.worker.queue.db() as conn:
+            conn.execute("update auto_sources set synced=1 where table_name=? and target_id=? and source_key=?",
+                         ('aseel_movies',row['id'],key))
+        self.worker.queue.remember('aseel_movies',row['id'],{
+            'url':ROOT,'kind':'original','last_checked_at':NOW
+        },restored=True)
+        source = next(s for s in self.worker.queue.sources('aseel_movies',row['id']) if s['url']==ROOT)
+        self.assertEqual(source['synced'],1)
+
+    def test_due_queue_prioritizes_series_and_expiring_signed_media(self):
+        standard = self.row(name='standard')
+        signed = self.row(name='signed',stream='https://cdn.example.org/video.m3u8?expires='+str(int(NOW+300)))
+        series = self.row(table='aseel_series',name='series',source=SERIES,stream='')
+        self.assertEqual(self.worker.queue.claim(NOW)['target_id'],series['id'])
+        self.assertEqual(self.worker.queue.claim(NOW)['target_id'],signed['id'])
+        self.assertEqual(self.worker.queue.claim(NOW)['target_id'],standard['id'])
+
     def test_worker_process_lock_excludes_duplicate_instance(self):
         path = Path(self.tmp.name)/'leader.lock'
         a,b = ProcessLock(path),ProcessLock(path)
