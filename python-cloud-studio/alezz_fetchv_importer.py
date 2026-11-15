@@ -21,7 +21,8 @@ import time
 import threading
 from urllib.parse import urljoin, urlsplit
 from pathlib import Path
-from title_cleaner import content_title
+from title_cleaner import content_title, content_description
+from series_episode_guard import SeriesEpisodeGuard
 
 try:
     import requests
@@ -272,7 +273,7 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
                  heading.get_text(' ', strip=True) if heading else '', meta('og:title'),
                  soup.title.get_text() if soup.title else '')
                  if (title := content_title(value, final, site_name))), '')
-    description = field_of(main, "description") or meta("og:description") or meta("description")
+    description = content_description(field_of(main, "description") or meta("og:description") or meta("description"), final, site_name)
     poster = absolutize(final, field_of(main, "image", "thumbnailUrl") or meta("og:image"))
     year_match = re.search(r"(?:19|20)\d{2}", field_of(main,"datePublished","startDate") or "")
     year = int(year_match.group()) if year_match else None
@@ -318,6 +319,12 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
         image=soup.select_one('[itemprop="image"], img.poster, .poster img, img[itemprop="thumbnailUrl"]')
         if image:
             poster=absolutize(final,image.get("src") or image.get("data-src") or image.get("data-original") or image.get("content") or "")
+    # Bind the source to the show itself, not the related episodes sidebar.
+    guard = SeriesEpisodeGuard(final, title, soup, site_name) if detected == "series" else None
+    if guard is not None and guard.is_episode_page:
+        title = guard.series_title or title
+        if guard.series_story:
+            description = guard.series_story
     out = Catalogue(kind=detected, title=title or "بدون عنوان",url=final,description=description,
                     poster_url=poster,backdrop_url=poster,year=year,original_title=original)
     out.backdrop_url=absolutize(final,meta("og:image:secure_url") or meta("twitter:image")) or poster
@@ -363,14 +370,16 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
     for row in resume_progress.get('episodes',[])[:max_episodes]:
         try:
             ep=Episode(**row)
-            episode_map[(ep.season,ep.number)]=ep
+            if guard and guard.matches(ep.page_url, ep.title):
+                episode_map[(ep.season,ep.number)]=ep
         except (ValueError,TypeError):continue
     def checkpoint():
         if progress_hook:
             progress_hook({'seen_pages':list(seen_pages), 'queued':list(in_flight)+queued[:],
                            'episodes':[asdict(e) for e in episode_map.values()]})
     root_host=urlsplit(final).hostname
-    def add_episode(link: str, label: str, data: dict | None=None, display_title: str=""):
+    def add_episode(link: str, label: str, data: dict | None=None,
+                    display_title: str="", episode_group: bool=False):
         parsed=episode_numbers(label)
         if not parsed and data:
             try:
@@ -381,13 +390,13 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
             except (TypeError,ValueError):pass
         if not parsed or parsed[1]<1 or parsed[1]>10000 or parsed[0]<1 or parsed[0]>200:return
         link=absolutize(final,link)
-        if not link:return
+        if not link or not guard.matches(link, label, episode_group=episode_group, data=data):
+            return
         key=parsed
         if key not in episode_map:
-            ep=Episode(parsed[0],parsed[1],content_title(display_title or label, final, site_name,
-                       fallback='الحلقة '+str(parsed[1])),link)
+            ep=Episode(parsed[0],parsed[1],'الحلقة '+str(parsed[1]),link)
             if data:
-                ep.description=field_of(data,"description")
+                ep.description=content_description(field_of(data,"description"), link, site_name)
                 ep.poster_url=absolutize(final,field_of(data,"image","thumbnailUrl"))
                 v=field_of(data,"contentUrl","embedUrl")
                 ep.media_url=absolutize(final,v) if MEDIA_EXT.search(v) else ""
@@ -396,7 +405,7 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
             prior=episode_map[key]
             if prior.page_url==final and link!=final:prior.page_url=link
             if data:
-                if not prior.description:prior.description=field_of(data,"description")
+                if not prior.description:prior.description=content_description(field_of(data,"description"), link, site_name)
                 if not prior.poster_url:prior.poster_url=absolutize(final,field_of(data,"image","thumbnailUrl"))
     def queue_page(link,base):
         nonlocal skipped_pages
