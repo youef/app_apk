@@ -368,14 +368,17 @@
       ' • الدفعة '+(job.batch_number||0);
     const elapsed=job.batch_started_at ? Math.max(0,Math.round(Date.now()/1000-job.batch_started_at)) : 0;
     $('episodeBatchElapsed').textContent=(job.running?Math.min(elapsed,45):job.last_batch_seconds||elapsed)+' / 45 ثانية';
-    $('episodeBatchFound').textContent=String(job.candidates||0);
-    $('episodeBatchStatus').textContent=job.message||
-      ('الدفعة '+(job.batch_number||0)+' — جلب الحلقات تلقائيًا');
+    $('episodeBatchFound').textContent=(job.verified||0)+' رابط مؤكد / '+(job.candidates||0)+' مرشح';
+    $('episodeBatchStatus').textContent=(job.message||
+      ('الدفعة '+(job.batch_number||0)+' — جلب الحلقات تلقائيًا'))+
+      (job.db_sync==='saved'?' • ✓ حُفظت روابط الحلقات وجدولت مراجعتها':
+       job.db_sync==='failed'?' • ⚠ فشل حفظ الروابط في قاعدة البيانات':'');
     $('episodeBatchProgress').max=Math.max(1,total);
     $('episodeBatchProgress').value=done;
     $('episodeBatchLive').classList.toggle('is-done',!job.running);
     $('episodeBatchLive').classList.toggle('is-off',!job.running);
-    $('episodeBatchLive').textContent=job.running?'● LIVE · فحص الحلقات':'✓ النتائج متاحة';
+    $('episodeBatchLive').textContent=job.running?'● LIVE · فحص الحلقات':
+      (job.verified>0?'✓ روابط مباشرة متحققة':'◷ لم يُتحقق من رابط مباشر');
     $('episodeBatchStop').disabled=!job.running;
     $('edgeCaptureBtn').disabled=job.running||app.busy;
     $('edgeCaptureBtn').textContent=job.running?'◷ اكتشاف الحلقات جارٍ…':
@@ -385,7 +388,8 @@
     if(!job.running){
       closeEpisodeBatchConnection();
       if(job.error)activity(job.error,'error');
-      else activity(job.message,job.phase==='cancelled'?'info':'success');
+      else activity(job.message,job.db_sync==='failed'?'error':
+        job.phase==='cancelled'||!job.verified?'info':'success');
     }
   }
   function applyEpisodeBatchEvent(item){
