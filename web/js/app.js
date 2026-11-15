@@ -1066,9 +1066,10 @@
       });
     });
     var signout=$("customerSignout");
-    if(signout)signout.addEventListener("click",function(){
-      window.AlezzCustomerAuth.logout();
-    });
+    if(signout) {
+      signout.hidden = true;
+      signout.addEventListener("click",function(){ window.AlezzCustomerAuth.logout(); });
+    }
   }
 
   /* ---------------------------------------------------------------- events */
@@ -1282,8 +1283,10 @@
 
     if (!window.AlezzCustomerAuth) { gateShow(); return; }
     window.AlezzCustomerAuth.restore().then(function(valid) {
-      if (valid) bootCatalog();
-      else gateShow();
+      if (valid) {
+        if($("customerSignout"))$("customerSignout").hidden = false;
+        bootCatalog();
+      } else gateShow();
     }, function() { gateShow(); });
   }
 
