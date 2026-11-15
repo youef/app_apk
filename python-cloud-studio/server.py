@@ -942,3 +942,44 @@ if __name__ == '__main__':
     import uvicorn
     uvicorn.run(app, host='127.0.0.1', port=int(os.getenv('ALEZZ_PORT','8765')),
                 log_level='warning', access_log=False)
+
+# Optional discovery-feeds control plane. Does not import or modify the
+# original November 3 player extraction code.
+class DiscoveryFeedForm(BaseModel):
+    action: str = Field(default='add', max_length=20)
+    id: str = Field(default='', max_length=80)
+    url: str = Field(default='', max_length=2048)
+    kind: str = Field(default='auto', max_length=10)
+    interval_minutes: int = Field(default=240, ge=60, le=10080)
+
+
+@app.get('/api/autosync/feeds')
+async def autosync_feeds(request: Request):
+    find_state(request)
+    try:
+        return JSONResponse({'feeds': await run_in_threadpool(AUTOSYNC.discovery.feeds)},
+                            headers={'Cache-Control':'no-store'})
+    except Exception as exc:
+        raise HTTPException(503,'تعذّر قراءة مصادر الاكتشاف: '+clean(exc,150)) from None
+
+
+@app.post('/api/autosync/feed')
+async def autosync_feed(request: Request, body: DiscoveryFeedForm):
+    protected(request)
+    try:
+        if body.action == 'add':
+            if not body.url:
+                raise ValueError('أدخل صفحة فهرس الأفلام أو المسلسلات')
+            row=await run_in_threadpool(AUTOSYNC.discovery.add,
+                body.url,body.kind,body.interval_minutes)
+        elif body.action in ('scan','pause','resume'):
+            row=await run_in_threadpool(AUTOSYNC.discovery.action,
+                body.id,body.action)
+        else:
+            raise ValueError('أمر غير مدعوم')
+        return JSONResponse({'ok':True,'feed':row},
+                            headers={'Cache-Control':'no-store'})
+    except ValueError as exc:
+        raise HTTPException(400,clean(exc,180)) from None
+    except Exception as exc:
+        raise HTTPException(503,'تعذّر تنفيذ طلب المصدر: '+clean(exc,150)) from None
