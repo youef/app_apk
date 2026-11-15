@@ -414,12 +414,15 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
         if len(seen_pages)+len(queued)+len(in_flight)<max_pages:queued.append(uri)
         else:skipped_pages+=1
     def scan_doc(s: BeautifulSoup, base: str):
+        if not guard.matches_page(base):
+            return
         for item in json_nodes(s):
             if "tvepisode" in str(item.get("@type", "")).lower():
                 name=field_of(item,"name")
                 uri=field_of(item,"url","@id")
                 if uri:add_episode(urljoin(base,uri),name or uri,item)
-        for a in s.select("a[href]"):
+        episode_links, scoped_group = guard.candidate_links(s)
+        for a in episode_links:
             href=a.get("href") or ""
             label=clean((a.get("title") or "")+" "+a.get_text(" ",strip=True),250)
             combined=" ".join((label,href))
@@ -428,7 +431,9 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
             if data_episode.isdigit() and data_season.isdigit():
                 combined=f"S{int(data_season):02}E{int(data_episode):02} {combined}"
             if episode_numbers(combined):
-                add_episode(urljoin(base,href),combined,display_title=label or f"الحلقة {episode_numbers(combined)[1]}")
+                add_episode(urljoin(base,href),combined,
+                            display_title=label or f"الحلقة {episode_numbers(combined)[1]}",
+                            episode_group=scoped_group)
                 continue
             uri=absolutize(base,href)
             if not uri or urlsplit(uri).hostname != root_host:continue
@@ -445,7 +450,9 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
                 and target.path.rstrip('/')==here.path.rstrip('/')
             )
             season_link=bool(SEASON_RE.search(combined)) and len(seen_pages)+len(queued)<max_pages
-            if is_pagination or season_link:queue_page(uri,base)
+            if (is_pagination or season_link) and guard.can_crawl_season(
+                    uri, combined, episode_group=scoped_group):
+                queue_page(uri,base)
     scan_doc(soup,final)
     checkpoint()
     # Always continue after a failed page. Every pagination link is a separate
@@ -587,7 +594,7 @@ def hydrate_episode_metadata(cat: Catalogue, *, max_pages:int=150, workers:int=6
             def meta(name):
                 node=soup.select_one(f'meta[property="{name}"],meta[name="{name}"]')
                 return clean(node.get("content","")) if node else ""
-            description=meta("og:description") or meta("description")
+            description=content_description(meta("og:description") or meta("description"), url, meta("og:site_name"))
             poster=absolutize(url,meta("og:image") or meta("twitter:image"))
             media=find_static_media(soup,url)
             return ep,description,poster,(media[0] if media else "")
