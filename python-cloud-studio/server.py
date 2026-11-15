@@ -38,6 +38,7 @@ from metadata_enrichment import enrich
 from library_sync import JobDB,collect_pages,collect_works
 import cloud_auth
 from cloud_auth import site_auth_middleware, site_login, site_logout, site_health
+from customer_auth import customer_auth
 from auto_sync import AutoSync, target_key
 from smart_sync_management import SmartSyncManagement
 from smart_discovery import SmartDiscovery
