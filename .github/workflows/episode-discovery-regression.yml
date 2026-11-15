@@ -1,0 +1,35 @@
+name: Episode discovery scope regression
+
+on:
+  pull_request:
+    paths:
+      - "python-cloud-studio/**"
+      - ".github/workflows/episode-discovery-regression.yml"
+  push:
+    branches: [main]
+    paths:
+      - "python-cloud-studio/**"
+      - ".github/workflows/episode-discovery-regression.yml"
+
+jobs:
+  episode-identity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install importer test dependencies
+        run: python -m pip install requests beautifulsoup4
+      - name: Check changed modules compile
+        run: |
+          python -m py_compile \
+            python-cloud-studio/title_cleaner.py \
+            python-cloud-studio/series_episode_guard.py \
+            python-cloud-studio/alezz_fetchv_importer.py \
+            python-cloud-studio/server.py
+      - name: Verify exact-show episode matching and clean metadata
+        env:
+          PYTHONPATH: python-cloud-studio
+        run: python -m unittest discover -s python-cloud-studio/tests -p 'test_episode_scope.py' -v
