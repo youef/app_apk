@@ -390,7 +390,11 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
             except (TypeError,ValueError):pass
         if not parsed or parsed[1]<1 or parsed[1]>10000 or parsed[0]<1 or parsed[0]>200:return
         link=absolutize(final,link)
-        if not link or not guard.matches(link, label, episode_group=episode_group, data=data):
+        # Use the visible anchor title for identity checks; `label` may also
+        # contain its href for number parsing (e.g. /series/a/episode-2).
+        # The href itself is checked separately by the guard.
+        if not link or not guard.matches(link, display_title or label,
+                                         episode_group=episode_group, data=data):
             return
         key=parsed
         if key not in episode_map:
