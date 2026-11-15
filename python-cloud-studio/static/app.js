@@ -420,11 +420,11 @@
       toast(note,found?'success':'info');
     });
     $('episodeSearch').oninput=()=>{if(app.catalogue?.kind==='series')renderEpisodes();};
-    $('loginForm').onsubmit=doLogin;
+    $('loginForm').onsubmit=e=>{e.preventDefault();window.location.assign('/login');};
     $('loginToggle').onclick=async()=>{
-      if(!app.authenticated){openModal('loginModal');return;}
-      if(!confirm('تسجيل خروج مسؤول العز TV من هذا الموقع المحلي؟'))return;
-      try{await API('logout',{});const fresh=await API('status');updateStatus(fresh);toast('تم تسجيل الخروج.','success');}
+      if(!app.authenticated){window.location.assign('/login');return;}
+      if(!confirm('تسجيل الخروج من استوديو العز TV؟'))return;
+      try{await API('logout',{});window.location.assign('/login');}
       catch(e){toast(e.message,'error');}
     };
     $('syncLogin').onclick=()=>$('loginToggle').click();

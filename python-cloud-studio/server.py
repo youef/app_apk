@@ -36,6 +36,7 @@ from alezz_fetchv_importer import (
 
 from metadata_enrichment import enrich
 from library_sync import JobDB,collect_pages,collect_works
+import cloud_auth
 from cloud_auth import site_auth_middleware, site_login, site_logout, site_health
 from auto_sync import AutoSync, target_key
 from studio_control import Control
@@ -117,6 +118,10 @@ def find_state(request: Request, create: bool = False) -> tuple[str, UserState]:
             state = UserState()
             _states[sid] = state
         state.last_used = now
+        # One verified site sign-in also authorizes Supabase studio operations.
+        # Never reuse the previous account across different site sessions.
+        if cloud_auth.ENABLED:
+            state.db = cloud_auth.get_site_admin(request)
     return sid, state
 
 
@@ -676,6 +681,8 @@ class LoginForm(BaseModel):
 @app.post('/api/login')
 async def login(request: Request, body: LoginForm):
     state = protected(request)
+    if cloud_auth.ENABLED:
+        raise HTTPException(409, 'استخدم صفحة الدخول بالبريد الإلكتروني وكلمة المرور بدل تسجيل دخول ثانٍ.')
     if not body.access_token and (not body.email.strip() or not body.password):
         raise HTTPException(400, 'أدخل البريد وكلمة المرور أو رمز جلسة مسؤول صالحًا')
     def task():
@@ -697,7 +704,11 @@ async def logout(request: Request):
     state = protected(request)
     with state.lock:
         state.db = None
-    return {'ok': True}
+    response = JSONResponse({'ok': True})
+    if cloud_auth.ENABLED:
+        cloud_auth.invalidate_site_admin(request)
+        response.delete_cookie(cloud_auth.COOKIE, path='/')
+    return response
 
 
 class SaveForm(BaseModel):

@@ -15,6 +15,6 @@ COPY web/ /app/portal/web/
 COPY admin/ /app/portal/admin/
 ENV ALEZZ_PORTAL_DIR=/app/portal
 EXPOSE 8080
-# Cloud auth deliberately fails startup unless ALEZZ_SITE_PASSWORD (12+ chars)
-# and ALEZZ_SITE_SECRET (32+ chars) are set in Render's secret env vars.
+# Cloud auth requires ALEZZ_SITE_SECRET (32+ chars) in Render env vars.
+# Owners sign in with their existing active Supabase administrator email/password.
 CMD ["sh", "-c", "exec uvicorn server:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1 --proxy-headers --forwarded-allow-ips='*'"]
