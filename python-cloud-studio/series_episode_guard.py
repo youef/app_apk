@@ -67,8 +67,22 @@ def _explicit_name(value: str) -> str:
 
 
 def _url_name(url: str) -> str:
-    path = urlsplit(str(url)).path.rstrip("/").split("/")[-1]
-    return _explicit_name(path)
+    """Read the work's identity from an episode slug, never from site navigation."""
+    path = urlsplit(str(url)).path
+    slug = path.rstrip("/").split("/")[-1]
+    named = _explicit_name(slug)
+    if named:
+        return named
+    # Some sites omit "مسلسل" in their episode permalinks. Only a URL in
+    # the episode namespace may supply an unprefixed work title.
+    if not re.search(r"/episodes?/", path, re.I):
+        return ""
+    stem = _text(slug)
+    if not EP_END.search(stem):
+        return ""
+    prefix = re.split(EP_END, stem, maxsplit=1)[0].strip()
+    key = _key(prefix)
+    return key if len(key) >= 4 and key not in ("episode", "ep", "الحلقه") else ""
 
 
 def _series_title_from_episode(value: str, url: str, site_name: str) -> str:
@@ -95,19 +109,25 @@ class SeriesEpisodeGuard:
         )
         self.series_title = title
         self.series_story = ""
-        # Recognized series link on the requested episode page is strongest;
-        # site-wide recommendations and navigation are not used as identity.
+        # The requested URL is authoritative when its slug explicitly names
+        # a series. Never let an unrelated JSON-LD card or sidebar replace it.
+        source_key = _url_name(source_url) if self.is_episode_page else ""
         link = soup.select_one(
             ".singleSeries .info h2 a[href*='/series/'],"
             ".singleSeries h2 a[href*='/series/']"
         )
-        if link and link.get_text(" ", strip=True):
-            self.series_title = content_title(link.get_text(" ", strip=True), source_url, site_name)
+        linked_title = content_title(link.get_text(" ", strip=True), source_url, site_name) if link else ""
+        linked_is_same = bool(linked_title and (not source_key or _key(linked_title) == source_key))
+        if linked_is_same:
+            self.series_title = linked_title
         elif self.is_episode_page:
             candidate = _series_title_from_episode(title, source_url, site_name)
+            if source_key and _key(candidate) != source_key:
+                slug = _text(urlsplit(source_url).path.rstrip("/").split("/")[-1])
+                candidate = _series_title_from_episode(slug, source_url, site_name)
             if candidate:
                 self.series_title = candidate
-        self.key = _key(self.series_title)
+        self.key = source_key or _key(self.series_title)
         if self.key in ("مسلسل", "series", "tv series") and self.series_root_path:
             self.key = _key(parts[1])
         if self.is_episode_page:
@@ -137,15 +157,11 @@ class SeriesEpisodeGuard:
             return True
         if url.rstrip("/") == self.source_url.rstrip("/"):
             return True
-        # When URLs are generic (/episode-2), only a verified episode tab or
-        # a child of the series detail route may authorize the association.
-        if episode_group:
-            return True
-        if self.is_episode_page:
-            return False
-        if self.series_root_path:
-            return urlsplit(url).path.startswith(self.series_root_path)
-        return True
+        # Ambiguous /episode-2 links are not proof of association, even when
+        # found inside an "episodes" tab (a tab can contain recommendations).
+        # Only a child of a series-specific route can be accepted unnamed.
+        return bool(self.series_root_path and
+                    urlsplit(url).path.startswith(self.series_root_path))
 
     def matches_page(self, url: str) -> bool:
         if urlsplit(url).hostname != self.host:
@@ -153,10 +169,14 @@ class SeriesEpisodeGuard:
         named = _url_name(url)
         if named:
             return named == self.key
-        if self.series_root_path:
-            return (urlsplit(url).path.startswith(self.series_root_path)
-                    or url.rstrip("/") == self.source_url.rstrip("/"))
-        return True
+        if self.series_root_path and urlsplit(url).path.startswith(self.series_root_path):
+            return True
+        # A pagination request must remain under this work's own detail URL.
+        # Do not crawl unrelated /page/2 or generic category/season pages.
+        original = urlsplit(self.source_url).path.rstrip("/")
+        target = urlsplit(url).path.rstrip("/")
+        return (target == original or
+                bool(re.fullmatch(re.escape(original) + r"/(?:page|paged)/\d+", target, re.I)))
 
     def candidate_links(self, soup):
         panel = soup.select_one("#episodes-tab")

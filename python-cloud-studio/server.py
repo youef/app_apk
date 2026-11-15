@@ -197,7 +197,9 @@ def discover_full(source: str, kind: str='auto', deep: bool=True, enrich_metadat
                   max_episodes=5000,max_pages=500,resume_progress=resume_progress,progress_hook=progress_hook)
     if kind!='auto':cat.kind=kind
     if enrich_metadata:
-        enrich(cat,include_episodes=True)
+        # Metadata APIs enrich the work, but must never create phantom episodes
+        # without a matching episode link from the requested source itself.
+        enrich(cat,include_episodes=False)
     if deep and cat.kind=='series' and cat.episodes:
         hydrate_episode_metadata(cat,max_pages=120,workers=6)
     return cat
