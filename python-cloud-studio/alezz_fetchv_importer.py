@@ -1065,7 +1065,11 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
                 for key in ('stream_url','link_health_status'):
                     merged.pop(key,None)
         if entry.sources:
-            merged['stream_variants'] = playback_variants(entry, old.get('stream_variants'), primary=primary)
+            # Exclude the selected NEW primary from fallback variants as well;
+            # otherwise the same stream appears as both primary and backup.
+            merged['stream_variants'] = playback_variants(
+                entry, old.get('stream_variants'),
+                primary=merged.get('stream_url') or primary)
         return merged
 
     if cat.kind=="movie":
