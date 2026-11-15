@@ -186,10 +186,10 @@ class QueueDB:
             if old:
                 db.execute('update auto_sources set last_seen_at=?,page_url=case when ?!=\'\' then ? else page_url end,'
                            'kind=case when ?=\'original\' then ? else kind end,'
-                           'label=case when ?!=\'\' then ? else label end,synced=0 '
+                           'label=case when ?!=\'\' then ? else label end,synced=? '
                            'where table_name=? and target_id=? and source_key=?',
                            (max(now,old['last_seen_at']),page,page,kind,kind,str(source.get('label') or '')[:80],
-                            str(source.get('label') or '')[:80],table,identifier,key))
+                            str(source.get('label') or '')[:80],int(old['synced']) if restored else 0,table,identifier,key))
                 if restored:
                     first=min(old['first_seen_at'],stamp(source.get('first_seen_at')) or old['first_seen_at'])
                     db.execute('update auto_sources set first_seen_at=? where table_name=? and target_id=? and source_key=?',
@@ -225,10 +225,15 @@ class QueueDB:
         now = now or time.time()
         with self.db() as db:
             db.execute('begin immediate')
-            row = db.execute('select * from auto_jobs where lease_until<=? and '
-                             '(next_check<=? or next_refresh<=? or (dirty!=\'\' and upload_at<=?)) '
-                             'order by min(next_check,next_refresh,case when dirty!=\'\' then upload_at else 1e20 end),'
-                             'failures desc limit 1', (now,now,now,now)).fetchone()
+            row = db.execute('select j.* from auto_jobs j where j.lease_until<=? and '
+                             '(j.next_check<=? or j.next_refresh<=? or (j.dirty!=\'\' and j.upload_at<=?)) '
+                             'order by case when j.dirty!=\'\' and j.upload_at<=? then 0 '
+                             'when j.table_name=\'aseel_series\' then 1 '
+                             'when exists (select 1 from auto_sources s where s.table_name=j.table_name '
+                             'and s.target_id=j.target_id and s.url=j.stream_url '
+                             'and s.expires_at>0 and s.expires_at<=?) then 2 else 3 end, '
+                             'min(j.next_check,j.next_refresh,case when j.dirty!=\'\' then j.upload_at else 1e20 end),'
+                             'j.failures desc limit 1', (now,now,now,now,now,now+3600)).fetchone()
             if not row: return None
             db.execute('update auto_jobs set lease_until=? where table_name=? and target_id=?',
                        (now+600,row['table_name'],row['target_id']))
@@ -399,7 +404,7 @@ class AutoSync:
         self.queue.setting('last_import',self.last_import)
 
     def tick(self):
-        if self.force_import or self.clock()-self.last_import>=900:self.import_remote()
+        if self.force_import or self.clock()-self.last_import>=3600:self.import_remote()
         jobs=[]
         for _ in range(self.concurrency):
             job=self.queue.claim(self.clock())
@@ -491,7 +496,7 @@ class AutoSync:
         allowed={s['url'] for s in checked if s.get('verified') or s.get('kind')=='embed' and s.get('reachable')}
         variants=[]
         for source in sorted(history,key=lambda s:(s['kind']=='direct',s['confidence']),reverse=True):
-            if source['url'] in allowed and source['url']!=selected and (not expires_at(source['url']) or expires_at(source['url'])>now+60):
+            if source['url'] in allowed and source['url']!=selected and (not expires_at(source['url']) or expires_at(source['url'])>now+300):
                 variants.append(dict(url=source['url'],label=source['label'] or urlsplit(source['url']).hostname,
                                      kind=source['kind'],page_url=source['page_url']))
         payload=dict(link_health_status=status,link_health_reason=error or None,
