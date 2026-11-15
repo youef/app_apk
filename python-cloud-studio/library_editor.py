@@ -168,7 +168,9 @@ class LibraryEditor:
         with self.worker.queue.db() as conn:
             conn.execute("delete from auto_jobs where table_name=? and target_id=?",(table,identifier))
             conn.execute("delete from auto_sources where table_name=? and target_id=?",(table,identifier))
-            conn.execute("delete from smart_early_refresh where table_name=? and target_id=?",(table,identifier))
+            has_sidecar=conn.execute("select 1 from sqlite_master where type='table' and name='smart_early_refresh'").fetchone()
+            if has_sidecar:
+                conn.execute("delete from smart_early_refresh where table_name=? and target_id=?",(table,identifier))
 
     def _delete_one(self, db, table, identifier):
         identifier = uid(identifier)
