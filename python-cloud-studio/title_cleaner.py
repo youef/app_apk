@@ -22,10 +22,11 @@ def content_title(value, url='', site_name='', fallback=''):
     text = re.sub(r'[\u200b-\u200f\ufeff]', '', text)
     aliases = _aliases(url, site_name)
     brand = '(?:' + '|'.join(re.escape(a) for a in aliases) + ')' if aliases else r'(?!)'
+    brand_tail = r'(?:\s+(?:tv|تي\s*في|أون\s*لاين|اون\s*لاين|online|official|الرسمي))*'
     for _ in range(4):
         previous = text
-        text = re.sub(r'^\s*(?:(?:موقع|شبكة|منصة)\s+)?'+brand+r'\s*[|｜–—:-]\s*', '', text, flags=re.I)
-        text = re.sub(r'\s*[|｜–—-]\s*(?:(?:موقع|شبكة|منصة)\s+)?'+brand+r'(?:\s*[-–—|].*)?\s*$', '', text, flags=re.I)
+        text = re.sub(r'^\s*(?:(?:موقع|شبكة|منصة)\s+)?'+brand+brand_tail+r'\s*[|｜–—:-]\s*', '', text, flags=re.I)
+        text = re.sub(r'\s*[|｜–—-]\s*(?:(?:موقع|شبكة|منصة)\s+)?'+brand+brand_tail+r'(?:\s*[-–—|].*)?\s*$', '', text, flags=re.I)
         text = re.sub(r'\s+(?:موقع|شبكة|منصة)\s+'+brand+r'\s*$', '', text, flags=re.I)
         # Bare site credits also occur after the title without a dash.
         if re.search(r'(?:فيلم|مسلسل|movie|film|series)\s+[^\s]+', text, re.I):
@@ -49,7 +50,8 @@ def content_description(value, url='', site_name=''):
         brand = '(?:' + '|'.join(re.escape(x) for x in aliases) + ')'
         description = re.sub(
             r'(?<![\w])(?:(?:على|في|من)\s+)?(?:(?:موقع|شبكة|منصة)\s+)?'
-            + brand + r'(?![\w])', ' ', description, flags=re.I)
+            + brand + r'(?:\s+(?:tv|تي\s*في|أون\s*لاين|اون\s*لاين|online))?(?![\w])',
+            ' ', description, flags=re.I)
     description = re.sub(r'https?://[^\s،؛]+', ' ', description, flags=re.I)
     description = re.sub(r'\s+([،؛,.])', r'\1', description)
     description = re.sub(r'([،؛,.])\s*\1+', r'\1', description)
