@@ -7,9 +7,34 @@ the existing durable job queue; the legacy worker does all stream resolution.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
+import re
 import threading
 import time
+from urllib.parse import parse_qs, urlsplit
+
+
+def known_signed_expiry(url):
+    """Read legacy CDN signed start and lifetime without touching media."""
+    try:
+        parsed=urlsplit(url)
+        if parsed.scheme!='https' or not parsed.path.lower().endswith('/master.m3u8'):
+            return 0
+        query=parse_qs(parsed.query)
+        start=(query.get('s') or [''])[0]
+        lifetime=(query.get('e') or [''])[0]
+        signature=(query.get('t') or [''])[0]
+        if not signature or not re.fullmatch(r'[0-9]{10}',start):
+            return 0
+        if not re.fullmatch(r'[0-9]{1,6}',lifetime):
+            return 0
+        begin,seconds=int(start),int(lifetime)
+        if 946684800 <= begin <= 4102444800 and 60 <= seconds <= 604800:
+            return float(begin+seconds)
+    except (TypeError,ValueError,OverflowError):
+        return 0
+    return 0
 
 
 class SmartSyncManagement:
@@ -68,12 +93,84 @@ class SmartSyncManagement:
         while not self.stop_event.is_set():
             if self.worker.enabled:
                 try:
+                    self.hydrate_signed_expiries()
                     self.prioritize_expiring()
+                    self.promote_verified_signed()
                     self.last_error=''
                 except Exception as exc:
                     # Exceptions never print signed URLs or provider token strings.
                     self.last_error=type(exc).__name__
             self.stop_event.wait(75)
+
+    def hydrate_signed_expiries(self):
+        """Populate unknown expiry metadata using the signed HLS query clock.
+
+        Never requests video, invents a URL or changes existing expiry values.
+        """
+        updated=0
+        with self.worker.queue.db() as conn:
+            rows=conn.execute("""select table_name,target_id,source_key,url
+                from auto_sources where kind='direct' and expires_at=0
+                and url like '%.m3u8%' limit 500""").fetchall()
+            for row in rows:
+                expiry=known_signed_expiry(row['url'])
+                if not expiry:continue
+                conn.execute("update auto_sources set expires_at=?,synced=0 where "
+                             "table_name=? and target_id=? and source_key=? and expires_at=0",
+                             (expiry,row['table_name'],row['target_id'],row['source_key']))
+                updated+=1
+        return updated
+
+    def promote_verified_signed(self):
+        """Queue a checked, longer-lived token for the *same* HLS resource.
+
+        This is downstream verified-source selection; only the original worker
+        performs network capture, verification and remote database writes.
+        """
+        now=self.clock()
+        changed=0
+        with self.worker.queue.db() as conn:
+            rows=conn.execute("""select j.table_name,j.target_id,j.stream_url,j.dirty,
+                s.url candidate,s.expires_at new_expiry,s.last_checked_at
+                from auto_jobs j join auto_sources s on s.table_name=j.table_name
+                and s.target_id=j.target_id
+                where j.table_name!='aseel_series' and j.dirty=''
+                and j.lease_until<=? and j.stream_url like '%.m3u8%'
+                and s.kind='direct' and s.status='healthy'
+                and s.url!=j.stream_url and s.expires_at>?
+                and s.last_checked_at>=?
+                order by s.expires_at desc limit 250""",
+                (now,now+600,now-3600)).fetchall()
+            done=set()
+            for row in rows:
+                key=(row['table_name'],row['target_id'])
+                if key in done:continue
+                current=urlsplit(row['stream_url'])
+                fresh=urlsplit(row['candidate'])
+                if current.scheme!='https' or fresh.scheme!='https':continue
+                if current.hostname!=fresh.hostname or current.path!=fresh.path:continue
+                prior=known_signed_expiry(row['stream_url'])
+                if not prior:
+                    cached=conn.execute("""select expires_at from auto_sources where
+                        table_name=? and target_id=? and url=? limit 1""",
+                        (row['table_name'],row['target_id'],row['stream_url'])).fetchone()
+                    prior=cached['expires_at'] if cached else 0
+                if row['new_expiry']<=prior+120:continue
+                payload=json.dumps({'stream_url':row['candidate'],
+                                    'link_health_url':row['candidate']},ensure_ascii=False)
+                result=conn.execute("""update auto_jobs set stream_url=?,dirty=?,
+                    upload_at=0,next_check=0 where table_name=? and target_id=?
+                    and stream_url=? and dirty='' and lease_until<=?""",
+                    (row['candidate'],payload,row['table_name'],row['target_id'],
+                     row['stream_url'],now))
+                if result.rowcount:
+                    changed+=1
+                    done.add(key)
+        if changed:
+            self.worker.queue.event('renewal_queued','تجديد '+str(changed)+
+                                    ' رابط تم التحقق منه سابقًا وينتظر الحفظ')
+            self.worker.wake_event.set()
+        return changed
 
     def prioritize_expiring(self):
         """Queue each near-expiry signed resource at most once per URL token.
