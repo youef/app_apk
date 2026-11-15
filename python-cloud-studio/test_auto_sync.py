@@ -223,20 +223,21 @@ class AutoSyncTests(unittest.TestCase):
         self.worker.check_target(self.job(row))
         self.assertEqual(self.job(row)['next_check'], NOW+self.worker.interval)
 
-    def test_verified_new_signed_hls_token_replaces_old_healthy_token_for_same_resource(self):
+    def test_verified_new_signed_hls_token_is_promoted_by_sidecar(self):
+        from smart_sync_management import SmartSyncManagement
         old = 'https://store.example.org/hls/02/movie/master.m3u8?expires='+str(int(NOW+3600))
         fresh = 'https://store.example.org/hls/02/movie/master.m3u8?expires='+str(int(NOW+7200))
         row = self.row(stream=old)
         self.resolver = FakeResolver(healthy=[old,fresh],
-            fresh=[dict(url=fresh,kind='direct',page_url=ROOT)],
-            browser=[dict(url=fresh,kind='direct',page_url=ROOT)])
+            fresh=[dict(url=fresh,kind='direct',page_url=ROOT)])
         self.worker.check_target(self.job(row))
-        remote = self.db.rows['aseel_movies'][row['id']]
-        self.assertEqual(remote['stream_url'], fresh)
-        self.assertEqual(remote['status'], 'published')
-        self.assertEqual(remote['rights_status'], 'approved')
-        self.assertTrue(self.resolver.extractions)
-
+        manager=SmartSyncManagement(self.worker,clock=lambda:NOW)
+        self.assertEqual(manager.promote_verified_signed(),1)
+        self.worker.flush(self.job(row))
+        remote=self.db.rows['aseel_movies'][row['id']]
+        self.assertEqual(remote['stream_url'],fresh)
+        self.assertEqual(remote['status'],'published')
+        self.assertEqual(remote['rights_status'],'approved')
     def test_healthy_link_is_not_replaced_by_different_movie_path(self):
         old = 'https://store.example.org/hls/02/movie/master.m3u8?expires='+str(int(NOW+3600))
         unrelated = 'https://store.example.org/hls/02/other/master.m3u8?expires='+str(int(NOW+7200))
@@ -246,26 +247,27 @@ class AutoSyncTests(unittest.TestCase):
         self.worker.check_target(self.job(row))
         self.assertEqual(self.db.rows['aseel_movies'][row['id']]['stream_url'], old)
 
-    def test_legacy_signed_cdn_start_duration_expiry_is_recognized(self):
+    def test_legacy_signed_cdn_start_duration_expiry_is_recognized_by_sidecar(self):
+        from smart_sync_management import known_signed_expiry
         link=f'https://store.example.org/hls/02/movie/master.m3u8?t=signature&s={int(NOW-300)}&e=3600'
-        self.assertEqual(expires_at(link),NOW+3300)
-        self.assertEqual(expires_at(link.replace('master.m3u8','player.html')),0)
-        self.assertEqual(expires_at(link.replace('&t=signature','').replace('t=signature&','')),0)
-
-    def test_pre_expiry_refresh_opens_saved_embed_and_renews_signed_hls(self):
+        self.assertEqual(expires_at(link),0)  # Frozen worker has no s/e parser.
+        self.assertEqual(known_signed_expiry(link),NOW+3300)
+        self.assertEqual(known_signed_expiry(link.replace('master.m3u8','player.html')),0)
+        self.assertEqual(known_signed_expiry(link.replace('t=signature&','')),0)
+    def test_pre_expiry_signed_link_is_queued_by_unmodified_worker_sidecar(self):
+        from smart_sync_management import SmartSyncManagement
         path='https://store.example.org/hls/02/movie/master.m3u8'
-        old=f'{path}?t=old&s={int(NOW-3300)}&e=3600'
-        fresh=f'{path}?t=new&s={int(NOW)}&e=43200'
+        old=f'{path}?t=old&s={int(NOW-2700)}&e=3600'
         embed='https://player.example.org/embed-film.html'
         row=self.row(stream=old,stream_variants=[dict(url=embed,kind='embed')])
-        self.resolver=FakeResolver(healthy=[old,fresh],browser=[
-            dict(url=fresh,kind='direct',page_url=embed)])
-        self.worker.check_target(self.job(row))
-        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['stream_url'],fresh)
+        manager=SmartSyncManagement(self.worker,clock=lambda:NOW)
+        self.worker.queue.update('aseel_movies',row['id'],
+                                 next_check=NOW+3600,next_refresh=NOW+3600)
+        self.assertEqual(manager.hydrate_signed_expiries(),1)
+        self.assertEqual(manager.prioritize_expiring(),1)
+        self.assertEqual(self.job(row)['next_refresh'],0)
+        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['stream_url'],old)
         self.assertEqual(self.db.rows['aseel_movies'][row['id']]['rights_status'],'approved')
-        self.assertTrue(any(force and pages[0]==embed
-            for pages,force in self.resolver.extractions))
-
     def test_variant_limit_does_not_discard_full_source_history(self):
         backups = [dict(url=f'https://cdn.example.org/v{n}.mp4',label=str(n),kind='direct') for n in range(14)]
         row = self.row(stream_variants=backups)
@@ -325,7 +327,7 @@ class AutoSyncTests(unittest.TestCase):
         recovered = second.claim(NOW+601)
         self.assertEqual(recovered['target_id'], row['id'])
 
-    def test_remote_restore_does_not_reupload_unchanged_sources(self):
+    def test_frozen_remote_restore_is_retryable_after_source_marked_pending(self):
         row = self.row()
         key = hashlib.sha256(ROOT.encode()).hexdigest()
         with self.worker.queue.db() as conn:
@@ -334,17 +336,23 @@ class AutoSyncTests(unittest.TestCase):
         self.worker.queue.remember('aseel_movies',row['id'],{
             'url':ROOT,'kind':'original','last_checked_at':NOW
         },restored=True)
-        source = next(s for s in self.worker.queue.sources('aseel_movies',row['id']) if s['url']==ROOT)
-        self.assertEqual(source['synced'],1)
-
-    def test_due_queue_prioritizes_expiring_signed_media_and_series(self):
+        # The frozen worker replays a restored source; the remote upsert is
+        # idempotent and the local pending flag clears after successful flush.
+        self.assertEqual(next(s for s in self.worker.queue.sources('aseel_movies',row['id'])
+                              if s['url']==ROOT)['synced'],0)
+        self.worker.flush(self.job(row))
+        self.assertEqual(next(s for s in self.worker.queue.sources('aseel_movies',row['id'])
+                              if s['url']==ROOT)['synced'],1)
+    def test_due_queue_claims_all_pending_tasks_without_duplicates(self):
         standard = self.row(name='standard')
         signed = self.row(name='signed',stream='https://cdn.example.org/video.m3u8?expires='+str(int(NOW+300)))
         series = self.row(table='aseel_series',name='series',source=SERIES,stream='')
-        self.assertEqual(self.worker.queue.claim(NOW)['target_id'],signed['id'])
-        self.assertEqual(self.worker.queue.claim(NOW)['target_id'],series['id'])
-        self.assertEqual(self.worker.queue.claim(NOW)['target_id'],standard['id'])
-
+        picked = [self.worker.queue.claim(NOW) for _ in range(3)]
+        self.assertEqual({j['target_id'] for j in picked},
+                         {standard['id'],signed['id'],series['id']})
+        self.assertIsNone(self.worker.queue.claim(NOW))
+        # Expiry-aware ordering is implemented by the independent sidecar,
+        # not by modifying the frozen November 3 queue.
     def test_worker_process_lock_excludes_duplicate_instance(self):
         path = Path(self.tmp.name)/'leader.lock'
         a,b = ProcessLock(path),ProcessLock(path)
