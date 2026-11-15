@@ -1,0 +1,42 @@
+name: Al Ezz Smart Sync - independent scheduler checks
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'python-cloud-studio/smart_sync_management.py'
+      - 'python-cloud-studio/test_smart_sync_management.py'
+      - 'python-cloud-studio/server.py'
+      - 'python-cloud-studio/static/autosync.js'
+      - 'python-cloud-studio/static/autosync.css'
+      - 'python-cloud-studio/templates/index.html'
+      - '.github/workflows/smart-sync-management.yml'
+  workflow_dispatch:
+
+jobs:
+  scheduler:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Preserve frozen November 3 engine files
+        run: |
+          test "$(git rev-parse HEAD:python-cloud-studio/media_resolver.py)" = "faaf4f333612004aea9dfa3035d0d1ddbafdc3c9"
+          test "$(git rev-parse HEAD:python-cloud-studio/alezz_fetchv_importer.py)" = "88cb315576893c418bef229878a6dbf29c852fb9"
+          test "$(git rev-parse HEAD:python-cloud-studio/auto_sync.py)" = "d8afed58383af765c783043ad39bea399d301512"
+      - name: Python and browser dashboard syntax
+        run: |
+          python -m py_compile python-cloud-studio/smart_sync_management.py python-cloud-studio/server.py
+          node --check python-cloud-studio/static/autosync.js
+      - name: Install dependencies
+        run: python -m pip install -r python-cloud-studio/requirements-dev.txt
+      - name: Offline scheduler integration regression tests
+        working-directory: python-cloud-studio
+        env:
+          ALEZZ_AUTOSYNC_ENABLED: '0'
+        run: python -m unittest -v test_smart_sync_management test_smart_discovery test_studio_control
