@@ -24,6 +24,7 @@ import requests
 from alezz_fetchv_importer import SourceClient, public_url, pull_html
 from media_resolver import MediaResolver, safe_error, signed_expiry
 from title_cleaner import content_title
+from smart_discovery import SmartDiscovery
 
 TABLES = ('aseel_movies', 'aseel_episodes', 'aseel_series')
 
@@ -60,7 +61,7 @@ class ServiceDB:
         self.local = threading.local()
 
     def req(self, method, table, params=None, payload=None, upsert=False):
-        if table not in (*TABLES, 'aseel_seasons', 'aseel_media_sources'):
+        if table not in (*TABLES, 'aseel_seasons', 'aseel_media_sources', 'aseel_studio_discovery_feeds'):
             raise ValueError('Unsupported maintenance table')
         if not hasattr(self.local, 'session'):
             session = self.local.session = requests.Session()
@@ -289,15 +290,16 @@ class AutoSync:
     def __init__(self, data_dir, db_factory=None, resolver_factory=None, clock=time.time):
         self.queue=QueueDB(Path(data_dir)/'autosync.sqlite3')
         self.clock=clock
-        self.interval=max(1,float(os.getenv('ALEZZ_AUTOSYNC_INTERVAL_HOURS','24')))*3600
+        self.interval=max(1,float(os.getenv('ALEZZ_AUTOSYNC_INTERVAL_HOURS','4')))*3600
         self.mode=os.getenv('ALEZZ_AUTOSYNC_MODE','auto')
         self.concurrency=max(1,min(4,int(os.getenv('ALEZZ_AUTOSYNC_CONCURRENCY','2'))))
         self.db_factory=db_factory or self._environment_db
         self.resolver_factory=resolver_factory or (lambda:MediaResolver(self.mode))
-        self.stop_event=threading.Event();self.wake_event=threading.Event()
-        self.thread=None;self.db=None;self.last_tick=0;self.last_import=0;self.last_error=''
+        self.stop_event=threading.Event();self.wake_event=threading.Event();self.feed_wake=threading.Event()
+        self.thread=None;self.feed_thread=None;self.db=None;self.last_tick=0;self.last_import=0;self.last_error=''
         self.force_import=True
         self.process_lock=ProcessLock(Path(data_dir)/'autosync.lock')
+        self.discovery=SmartDiscovery(self,clock=self.clock)
 
     def remember_saved(self,cat,result):
         """Preserve all local discoveries, including sources beyond eight variants."""
@@ -336,13 +338,16 @@ class AutoSync:
         self.thread.start()
 
     def stop(self):
-        self.stop_event.set();self.wake_event.set()
+        self.stop_event.set();self.wake_event.set();self.feed_wake.set()
         if self.thread: self.thread.join(timeout=5)
 
     def _run(self):
         if not self.process_lock.acquire():
             self.last_error='توجد نسخة أخرى من العامل على التخزين نفسه';return
         try:
+            # Start independent discovery without blocking the verified-media queue.
+            self.feed_thread=threading.Thread(target=self._feed_loop,name='alezz-smart-discovery',daemon=True)
+            self.feed_thread.start()
             # The process lock proves that previous local claims have no live owner.
             with self.queue.db() as conn: conn.execute('update auto_jobs set lease_until=0')
             while not self.stop_event.is_set():
@@ -358,7 +363,22 @@ class AutoSync:
                     self.last_error=error
                 self.wake_event.wait(15 if self.last_error else 2)
                 self.wake_event.clear()
-        finally:self.process_lock.close()
+        finally:
+            self.stop_event.set();self.feed_wake.set()
+            if self.feed_thread:self.feed_thread.join(timeout=3)
+            self.process_lock.close()
+
+    def _feed_loop(self):
+        # Remote feed schedules are durable in Supabase, not the ephemeral Render disk.
+        while not self.stop_event.is_set():
+            try:
+                if self.enabled and self.db is not None:
+                    self.discovery.process_due()
+            except Exception as exc:
+                self.discovery.last_error=safe_error(exc)
+                self.queue.event('feed_error','مصادر الاكتشاف: '+self.discovery.last_error[:160])
+            self.feed_wake.wait(45 if not self.discovery.last_error else 90)
+            self.feed_wake.clear()
 
     def _rows(self,table,params):
         offset=0
@@ -417,11 +437,13 @@ class AutoSync:
         resolver=self.resolver_factory()
         candidates=[dict(url=r['url'],kind=r['kind'],label=r['label'],page_url=r['page_url'])
                     for r in sources if r['kind']!='original']
-        # Re-extraction happens daily even while current media still works.
+        # Keep the frozen extractor unchanged; refresh discovered URLs on schedule
+        # and before signed tokens expire, even while the old link still works.
         errors=[]
         extracted=False
         browser_requested=False
-        if job['next_refresh']<=now and pages:
+        current_expiry=expires_at(job['stream_url'])
+        if pages and (job['next_refresh']<=now or current_expiry and current_expiry<=now+3600):
             fresh,errors=resolver.extract(pages)
             extracted=True
             browser_requested=self.mode=='headless' or self.mode=='auto' and not any(s.get('kind')=='direct' for s in fresh)
@@ -445,6 +467,15 @@ class AutoSync:
         by_url={s['url']:s for s in history}
         good.sort(key=lambda s:by_url[s['url']]['confidence'],reverse=True)
         selected=next((s['url'] for s in good if s['url']==job['stream_url']),good[0]['url'] if good else job['stream_url'])
+        # A currently working token is not automatically the newest. Only swap
+        # when a freshly verified URL names the same HLS resource and expires
+        # later; never replace a healthy film with an unrelated candidate.
+        if extracted and selected==job['stream_url'] and current_expiry>now:
+            matching=[s for s in good if s['url']!=selected
+                and urlsplit(s['url']).path==urlsplit(selected).path
+                and expires_at(s['url'])>current_expiry+120]
+            if matching:
+                selected=max(matching,key=lambda row:expires_at(row['url']))['url']
         failures=0 if good else job['failures']+1
         status='healthy' if good else 'broken' if failures>=3 else 'suspect'
         error='' if good else ('المصدر الأصلي مفقود؛ أضف صفحة الفيلم أو الحلقة' if not pages else
@@ -460,7 +491,7 @@ class AutoSync:
         allowed={s['url'] for s in checked if s.get('verified') or s.get('kind')=='embed' and s.get('reachable')}
         variants=[]
         for source in sorted(history,key=lambda s:(s['kind']=='direct',s['confidence']),reverse=True):
-            if source['url'] in allowed and source['url']!=selected:
+            if source['url'] in allowed and source['url']!=selected and (not expires_at(source['url']) or expires_at(source['url'])>now+60):
                 variants.append(dict(url=source['url'],label=source['label'] or urlsplit(source['url']).hostname,
                                      kind=source['kind'],page_url=source['page_url']))
         payload=dict(link_health_status=status,link_health_reason=error or None,
@@ -563,9 +594,11 @@ class AutoSync:
         self.queue.event('control',{'pause':'تم إيقاف العامل مؤقتًا','resume':'تم استئناف العامل',
             'check-all':'أضيفت المكتبة إلى طابور الفحص','refresh-all':'أضيفت المكتبة إلى طابور إعادة الاستخراج',
             'import':'طُلب تحديث المكتبة من Supabase'}[action])
-        self.wake_event.set()
+        self.wake_event.set();self.feed_wake.set()
 
     def status(self):
         return dict(running=bool(self.thread and self.thread.is_alive()),enabled=self.enabled,connected=self.db is not None,
                     mode=self.mode,interval_hours=self.interval/3600,last_tick=self.last_tick,last_import=self.last_import,
+                    discovery_last_tick=self.discovery.last_tick,discovery_last_success=self.discovery.last_success,
+                    discovery_last_error=self.discovery.last_error,
                     last_error=self.last_error,**self.queue.snapshot())
