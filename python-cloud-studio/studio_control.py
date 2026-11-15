@@ -338,7 +338,8 @@ class Control:
         """Fetch authoritative Supabase relationships; don't infer from URL title."""
         def pages(table, columns):
             result = []
-            for offset in range(0,2000,250):
+            # Read every available page; the real catalogue can exceed 2,000 episodes.
+            for offset in range(0,25000,250):
                 chunk = db.query(table,{"select":columns,"limit":"250","offset":str(offset)})
                 result += chunk
                 if len(chunk)<250:
