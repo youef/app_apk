@@ -28,7 +28,7 @@ jobs:
       - name: Syntax check modified Python
         run: |
           python -m py_compile \
-            python-cloud-studio/library_editor.py \
+            python-cloud-studio/library_editor.py             python-cloud-studio/instant_scan.py \
             python-cloud-studio/auto_sync.py \
             python-cloud-studio/smart_sync_management.py \
             python-cloud-studio/studio_control.py \
@@ -42,4 +42,5 @@ jobs:
           PYTHONPATH: python-cloud-studio
         run: |
           python -m unittest discover -s python-cloud-studio/tests -p 'test_studio_library_v2.py' -v
+          python -m unittest discover -s python-cloud-studio/tests -p 'test_instant_scan.py' -v
           python -m unittest discover -s python-cloud-studio/tests -p 'test_episode_scope.py' -v

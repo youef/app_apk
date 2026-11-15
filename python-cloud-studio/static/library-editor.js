@@ -6,6 +6,8 @@
   const modal=$('libraryEditorDialog'),body=$('libraryEditorBody');
   if(!modal||!body)return;
   let csrf='',active=null,backSeries='',detail=null,limits={},busy=false;
+  const scans=new Map();
+  const scanMonitor=$('scanMonitor');
   const labels={aseel_movies:'فيلم',aseel_series:'مسلسل',aseel_seasons:'موسم',aseel_episodes:'حلقة'};
   const fields={
     aseel_movies:[['title_ar','عنوان الفيلم','text'],['title_original','العنوان الأصلي','text'],
@@ -125,7 +127,8 @@
       (!creating?'<button type="button" data-library-action="delete" data-table="'+table+'" data-id="'+
       esc(item.id)+'">حذف</button>':'')+'</div></form>';
     const seasons=!creating&&table==='aseel_series'?seasonsHTML(detail):'';
-    body.innerHTML=nav+stage+form+seasons;
+    body.innerHTML=nav+'<div id="inlineScanProgress" aria-live="polite"></div>'+stage+form+seasons;
+    updateInlineScan();
   }
   async function openItem(table,id,parent){
     if(busy)return;
@@ -140,6 +143,16 @@
       detail=await request('/api/control/item?table='+encodeURIComponent(table)+'&id='+encodeURIComponent(id));
       limits={};
       render();
+      // A refresh of the page or reopening a title resumes the visible status.
+      try {
+        const previous=await request('/api/control/check-latest?table='+encodeURIComponent(table)+
+          '&id='+encodeURIComponent(id));
+        if(previous.scan&&previous.scan.status==='running')watch(previous.scan.run_id,table,id,previous.scan);
+        else if(previous.scan) {
+          scans.set(previous.scan.run_id,{table,id,data:previous.scan,notified:true});
+          renderScanMonitor();
+        }
+      } catch(_) {}
     }catch(e){body.textContent=e.message;feedback(e.message,true);}
     finally{busy=false;}
   }
@@ -153,14 +166,91 @@
     render();
     $('edit-title_ar')?.focus();
   }
-  async function scan(table,id,force){
-    if(busy)return;busy=true;
-    try{
-      const r=await request('/api/control/check',{table,id,force:!!force});
-      feedback('أضيف '+r.queued+' عنصر للفحص. تُجدد الروابط غير السليمة تلقائيًا. لن تحتاج لإعادة الاستكشاف.');refreshGrid();
-    }catch(e){feedback(e.message,true);}
-    finally{busy=false;}
+  const scanStatus=status=>({
+    running:'جارٍ الفحص الآن',completed:'مكتمل وسليم',partial:'مكتمل مع ملاحظات',
+    failed:'لم ينجح الفحص',interrupted:'توقف بسبب إعادة تشغيل الخادم'
+  })[status]||'جارٍ الفحص';
+  function scanCard(t,inline=false){
+    const data=t.data||{},num=Math.max(0,Math.min(100,Number(data.progress)||0));
+    const done=data.status&&data.status!=='running';
+    const count=Number(data.total)||0,processed=Number(data.completed)||0;
+    const summary='<div class="scan-stats">'+
+      '<span>تم '+esc(processed)+' / '+esc(count||'…')+'</span>'+
+      '<span>سليم '+esc(data.healthy||0)+'</span>'+
+      '<span>تجدد '+esc(data.renewed||0)+'</span>'+
+      '<span>نُشر '+esc(data.published||0)+'</span>'+
+      '<span>خلل '+esc(data.failed||0)+'</span></div>';
+    const renewal=data.next_refresh?'<p class="scan-renewal">التجديد المجدول: '+prettyDate(data.next_refresh)+'</p>':
+      (done&&data.healthy?'<p class="scan-renewal">روابط بلا انتهاء معروف: إعادة الفحص بعد 48 ساعة والتجديد عند التعطل.</p>':'');
+    const detail=(data.errors||[]).length?'<details class="scan-errors"><summary>أسباب التعطل ('+
+      esc(data.errors.length)+')</summary><ul>'+data.errors.slice(-12).map(err=>
+      '<li>'+esc(err)+'</li>').join('')+'</ul></details>':'';
+    const outcomes=(data.outcomes||[]).length?'<details class="scan-errors"><summary>تفاصيل الحلقات ('+
+      esc(data.outcomes.length)+')</summary><ul>'+data.outcomes.slice(-18).map(row=>
+      '<li>'+esc(row.label)+' — '+esc(row.message)+'</li>').join('')+'</ul></details>':'';
+    return '<div class="scan-task '+esc(data.status||'running')+'">'+
+      '<div class="scan-heading"><strong>'+esc(scanStatus(data.status))+'</strong>'+
+      '<span>'+num+'%</span>'+(inline||!done?'':'<button type="button" aria-label="إخفاء" data-scan-action="dismiss" data-run-id="'+
+      esc(data.run_id)+'">×</button>')+'</div>'+
+      '<div class="scan-progress-track" role="progressbar" aria-label="تقدم الفحص" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+num+
+      '"><span style="width:'+num+'%"></span></div>'+
+      '<p>'+esc(data.message||'جارٍ بدء الفحص…')+'</p>'+summary+renewal+detail+outcomes+
+      (!inline&&done?'<button type="button" class="scan-refresh-grid" data-scan-action="reload">تحديث المكتبة</button>':'')+
+      '</div>';
   }
+  function updateInlineScan(){
+    const target=$('inlineScanProgress');
+    if(!target||!active||active.mode!=='edit')return;
+    const entries=[...scans.values()].filter(t=>t.table===active.table&&t.id===active.id);
+    target.innerHTML=entries.length?scanCard(entries[entries.length-1],true):'';
+  }
+  function renderScanMonitor(){
+    if(!scanMonitor)return;
+    const tasks=[...scans.values()].slice(-4);
+    scanMonitor.hidden=!tasks.length;
+    scanMonitor.innerHTML=tasks.map(t=>'<div class="scan-monitor-title">'+
+      esc(t.table==='aseel_series'?'مسلسل':t.table==='aseel_movies'?'فيلم':'حلقة')+
+      ' · متابعة الفحص المباشر</div>'+scanCard(t)).join('');
+    updateInlineScan();
+  }
+  async function updateScan(runId){
+    const task=scans.get(runId);
+    if(!task)return;
+    try{
+      const data=await request('/api/control/check-progress?run_id='+encodeURIComponent(runId));
+      task.data=data;
+      if(data.status!=='running'&&!task.notified){
+        task.notified=true;
+        feedback(data.message||scanStatus(data.status),data.status==='failed');
+        refreshGrid();
+      }
+      renderScanMonitor();
+    }catch(e){
+      if(!task.errorShown){task.errorShown=true;feedback('تعذر الاتصال بحالة الفحص: '+e.message,true);}
+    }
+  }
+  function watch(runId,table,id,data){
+    let t=scans.get(runId);
+    if(!t){
+      t={table,id,data:data||{run_id:runId,status:'running',progress:2,message:'بدء الفحص المباشر'},notified:false};
+      scans.set(runId,t);
+    }else if(data)t.data=data;
+    renderScanMonitor();
+    updateScan(runId);
+  }
+  async function scan(table,id,force){
+    try{
+      const r=await request('/api/control/check',{table,id,force:true});
+      watch(r.run_id,table,id);
+      if(r.already_running)feedback('الفحص شغال بالفعل؛ يتم عرض تقدمه الحالي.');
+      else feedback('بدأ فحص مباشر؛ ستظهر نتيجة كل رابط أمامك.','success');
+    }catch(e){feedback(e.message,true);}
+  }
+  window.AlEzzInstantScan=scan;
+  setInterval(()=>{
+    if(document.visibilityState==='hidden')return;
+    scans.forEach((task,id)=>{if(task.data?.status==='running')updateScan(id);});
+  },1300);
   async function remove(table,id){
     if(busy)return;
     const name=detail?.item?.title_ar||labels[table];
@@ -206,6 +296,14 @@
     if(event.target?.id==='libraryCrudForm')saveForm(event);
   });
   document.addEventListener('click',event=>{
+    const scanAction=event.target.closest('[data-scan-action]');
+    if(scanAction){
+      event.preventDefault();
+      if(scanAction.dataset.scanAction==='dismiss')scans.delete(scanAction.dataset.runId);
+      if(scanAction.dataset.scanAction==='reload')refreshGrid();
+      renderScanMonitor();
+      return;
+    }
     const action=event.target.closest('[data-library-action]');
     if(!action)return;
     event.preventDefault();

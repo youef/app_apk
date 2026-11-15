@@ -91,3 +91,66 @@
   .editor-episode-actions { width:100%; justify-content:flex-end; }
   .editor-summary .editor-poster,.editor-summary .editor-poster-placeholder { width:65px; height:90px; }
 }
+
+/* Live scan jobs — accessible, compact and independent of the edit dialog. */
+.scan-monitor {
+  position:fixed; left:18px; bottom:19px; z-index:1080;
+  width:min(365px,calc(100vw - 30px)); max-height:min(78dvh,720px);
+  overflow:auto; padding:12px; border-radius:17px;
+  border:1px solid rgba(170,184,206,.26);
+  background:var(--panel,#131b2b); color:var(--text,#fff);
+  box-shadow:0 18px 55px rgba(0,0,0,.4);
+  overscroll-behavior:contain;
+}
+.scan-monitor[hidden]{display:none!important;}
+.scan-monitor-title {
+  font-size:11px; font-weight:700; opacity:.65;
+  padding:5px 4px 7px; line-height:1.5;
+}
+.scan-task {
+  padding:12px; margin:0 0 9px;
+  border:1px solid rgba(145,170,205,.24); border-radius:13px;
+  background:rgba(141,163,193,.06);
+}
+.scan-task:last-child { margin-bottom:0; }
+.scan-task.completed { border-color:rgba(92,184,133,.46); }
+.scan-task.partial,.scan-task.failed,.scan-task.interrupted { border-color:rgba(231,157,102,.47); }
+.scan-heading { display:flex; align-items:center; gap:8px; font-size:13px; margin-bottom:9px; }
+.scan-heading strong { flex:1; }
+.scan-heading>span { font-weight:700; font-variant-numeric:tabular-nums; }
+.scan-heading button { background:transparent; color:inherit; border:0; font-size:23px; line-height:1; cursor:pointer; padding:1px 6px; }
+.scan-progress-track {
+  width:100%; height:8px; border-radius:999px; overflow:hidden;
+  background:rgba(147,164,191,.18); position:relative;
+}
+.scan-progress-track>span {
+  display:block; height:100%; min-width:0;
+  border-radius:inherit;
+  background:linear-gradient(90deg,#9cbeef,#c9a66b,#f6dca1);
+  transition:width .45s ease;
+}
+.scan-task.running .scan-progress-track>span {
+  background-size:180% 100%; animation:scan-glow 2s ease-in-out infinite alternate;
+}
+.scan-task.completed .scan-progress-track>span { background:#73c69b; }
+.scan-task.failed .scan-progress-track>span { background:#dc8686; }
+@keyframes scan-glow { to{background-position:100% 0;} }
+.scan-task>p { font-size:11px; line-height:1.6; margin:9px 0 6px; opacity:.84; overflow-wrap:anywhere; }
+.scan-stats { display:flex; flex-wrap:wrap; gap:5px 11px; font-size:10px; opacity:.88; }
+.scan-stats span { white-space:nowrap; }
+.scan-errors { margin-top:8px; font-size:11px; line-height:1.6; }
+.scan-errors summary { cursor:pointer; color:#d4b37e; font-size:11px; }
+.scan-errors ul { padding-inline-start:17px; margin:6px 0 3px; max-height:180px; overflow:auto; }
+.scan-errors li { overflow-wrap:anywhere; margin:4px 0; }
+.scan-refresh-grid { margin-top:8px; padding:7px 10px; border:1px solid rgba(156,176,205,.26); border-radius:8px;
+  background:rgba(148,160,190,.08); color:inherit; font-size:11px; cursor:pointer; }
+#inlineScanProgress:not(:empty) { margin-bottom:15px; }
+@media(max-width:750px){
+  .scan-monitor { bottom:calc(78px + env(safe-area-inset-bottom,0px)); left:7px; width:calc(100vw - 14px);
+    max-height:35dvh; padding:9px; border-radius:15px; }
+  .scan-task { padding:10px; }
+}
+@media(prefers-reduced-motion:reduce){
+  .scan-task.running .scan-progress-track>span { animation:none; }
+  .scan-progress-track>span { transition:none; }
+}

@@ -100,6 +100,8 @@ class LibraryEditor:
     def __init__(self, worker, control):
         self.worker = worker
         self.control = control
+        from instant_scan import InstantScanManager
+        self.immediate = InstantScanManager(worker,control)
 
     def _fetch(self, db, table, identifier):
         return db.single(table, {"select": READ_FIELDS[table], "id": "eq." + uid(identifier)})
@@ -344,10 +346,37 @@ class LibraryEditor:
         async def check_item(request:Request,body:ScanBody):
             protected(request)
             db=auth(request)
+            from instant_scan import ScanBusy
             try:
-                result=await asyncio.to_thread(editor.scan,db,body)
+                # The immediate worker runs independently from scheduled jobs.
+                result=await asyncio.to_thread(editor.immediate.start,db,body.table,body.id,True)
+            except ScanBusy as exc:
+                raise HTTPException(409,str(exc)) from None
             except (ValueError,TypeError) as exc:
                 raise HTTPException(400,str(exc)[:240]) from None
-            return result
+            return JSONResponse(result,headers={"Cache-Control":"private, no-store"})
+
+        @router.get("/api/control/check-progress")
+        async def check_progress(request:Request,run_id:str):
+            auth(request)
+            try:
+                result=editor.immediate.status(run_id)
+            except (ValueError,TypeError) as exc:
+                raise HTTPException(404,str(exc)[:180]) from None
+            return JSONResponse(result,headers={"Cache-Control":"private, no-store"})
+
+        @router.get("/api/control/check-latest")
+        async def check_latest(request:Request,table:str,id:str):
+            db=auth(request)
+            if table not in ("aseel_movies","aseel_series","aseel_episodes"):
+                raise HTTPException(400,"نوع المحتوى غير مدعوم")
+            try:
+                target=uid(id)
+                if not editor._fetch(db,table,target):
+                    raise HTTPException(404,"العنصر غير موجود")
+                result=editor.immediate.latest(table,target)
+            except (ValueError,TypeError) as exc:
+                raise HTTPException(400,str(exc)[:180]) from None
+            return JSONResponse({"scan":result},headers={"Cache-Control":"private, no-store"})
 
         return router
