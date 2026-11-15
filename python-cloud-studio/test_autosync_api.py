@@ -9,6 +9,7 @@ from auto_sync import AutoSync
 from test_auto_sync import FakeDB, NOW, OLD, ROOT, uid
 import cloud_auth
 import server
+from smart_sync_management import SmartSyncManagement
 
 
 class AutoSyncAPITests(unittest.TestCase):
@@ -31,6 +32,8 @@ class AutoSyncAPITests(unittest.TestCase):
         self.worker.queue.ingest('aseel_movies',self.target)
         worker_patch = patch.object(server,'AUTOSYNC',self.worker)
         worker_patch.start(); self.addCleanup(worker_patch.stop)
+        manager_patch = patch.object(server,'SMART_SYNC',SmartSyncManagement(self.worker,clock=lambda:NOW))
+        manager_patch.start(); self.addCleanup(manager_patch.stop)
         gate_patch = patch.object(cloud_auth,'ENABLED',False)
         gate_patch.start(); self.addCleanup(gate_patch.stop)
         # Deliberately do not enter lifespan; API tests never start a network worker.
