@@ -472,7 +472,17 @@ class AutoSync:
         history=self.queue.sources(table,identifier)
         by_url={s['url']:s for s in history}
         good.sort(key=lambda s:by_url[s['url']]['confidence'],reverse=True)
-        selected=next((s['url'] for s in good if s['url']==job['stream_url']),good[0]['url'] if good else job['stream_url'])
+        selected=next((s['url'] for s in good if s['url']==job['stream_url']),
+                      good[0]['url'] if good else job['stream_url'])
+        # When the currently valid signed token is about to expire, prefer a
+        # verified newer token for the SAME resource, not another episode.
+        if good and nearing_expiry and expiry_current:
+            current=urlsplit(job['stream_url'])
+            renewed=next((s for s in good if s['url']!=job['stream_url']
+                          and urlsplit(s['url']).hostname==current.hostname
+                          and urlsplit(s['url']).path==current.path
+                          and expires_at(s['url'])>expiry_current+120),None)
+            if renewed:selected=renewed['url']
         failures=0 if good else job['failures']+1
         status='healthy' if good else 'broken' if failures>=3 else 'suspect'
         error='' if good else ('المصدر الأصلي مفقود؛ أضف صفحة الفيلم أو الحلقة' if not pages else
