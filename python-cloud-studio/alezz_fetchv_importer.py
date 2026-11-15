@@ -112,61 +112,36 @@ def check_dns(url: str) -> None:
         raise ValueError("Private or nonpublic DNS address refused")
 
 
-class SourceConnectionError(ConnectionError):
-    """A source page could not be read after bounded retries."""
-
-
 class SourceClient:
     def __init__(self, timeout: float = 15):
         self.session = requests.Session()
         self.session.trust_env = False
         self.session.headers.update({"User-Agent": "AlEzzTV-MetadataImporter/1.0", "Accept": "text/html,application/json,*/*"})
         self.timeout = timeout
-        self.deadline = None
-        self.retries = 3
-
-    def request_timeout(self):
-        if self.deadline is None:
-            return self.timeout
-        remaining = self.deadline - time.monotonic()
-        if remaining <= 0:
-            raise TimeoutError('انتهت مهلة فحص المصدر؛ سيُعاد الفحص تلقائيًا')
-        return min(self.timeout, remaining)
 
     def get(self, url: str, max_size: int = 1_500_000):
-        for attempt in range(self.retries):
-            try:
-                return self._get_page(url, max_size)
-            except requests.exceptions.SSLError:
-                raise
-            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout,
-                    requests.exceptions.ChunkedEncodingError, ConnectionResetError):
-                if attempt == self.retries - 1:
-                    raise SourceConnectionError(
-                        'انقطع الاتصال بالموقع المصدر خلال مهلة الفحص.'
-                    ) from None
-                time.sleep(0.4 * 2**attempt)
-
-    def _get_page(self, url: str, max_size: int):
         for _ in range(5):
             check_dns(url)
-            with self.session.get(url, timeout=self.request_timeout(), allow_redirects=False, stream=True) as response:
-                if response.status_code in (301, 302, 303, 307, 308):
-                    location = response.headers.get("Location")
-                    if not location:
-                        raise ValueError("Redirect missing Location")
-                    url = urljoin(url, location)
-                    continue
-                response.raise_for_status()
-                chunks, total = [], 0
+            response = self.session.get(url, timeout=self.timeout, allow_redirects=False, stream=True)
+            if response.status_code in (301, 302, 303, 307, 308):
+                location = response.headers.get("Location")
+                response.close()
+                if not location:
+                    raise ValueError("Redirect missing Location")
+                url = urljoin(url, location)
+                continue
+            response.raise_for_status()
+            chunks, total = [], 0
+            try:
                 for chunk in response.iter_content(64 * 1024):
-                    self.request_timeout()
                     total += len(chunk)
                     if total > max_size:
                         raise ValueError("Page exceeds safe size limit")
                     chunks.append(chunk)
-                data = b"".join(chunks)
-                return url, response.headers.get("Content-Type", ""), data.decode(response.encoding or "utf-8", errors="replace")
+            finally:
+                response.close()
+            data = b"".join(chunks)
+            return url, response.headers.get("Content-Type", ""), data.decode(response.encoding or "utf-8", errors="replace")
         raise ValueError("Too many redirects")
 
     def sample(self, url: str, size: int = 8192) -> tuple[str, str, bytes]:
@@ -174,7 +149,7 @@ class SourceClient:
         for _ in range(5):
             check_dns(url)
             with self.session.get(url, headers={"Range": f"bytes=0-{size-1}", "Accept": "*/*"},
-                                  timeout=self.request_timeout(), allow_redirects=False, stream=True) as response:
+                                  timeout=self.timeout, allow_redirects=False, stream=True) as response:
                 if response.status_code in (301, 302, 303, 307, 308):
                     location = response.headers.get("Location")
                     if not location: raise ValueError("Redirect missing Location")
@@ -183,7 +158,6 @@ class SourceClient:
                 response.raise_for_status()
                 data = bytearray()
                 for chunk in response.iter_content(min(size, 8192)):
-                    self.request_timeout()
                     data.extend(chunk[:size-len(data)])
                     if len(data) >= size: break
                 return url, response.headers.get("Content-Type", "").lower(), bytes(data)
@@ -299,9 +273,6 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
                  soup.title.get_text() if soup.title else '')
                  if (title := content_title(value, final, site_name))), '')
     description = field_of(main, "description") or meta("og:description") or meta("description")
-    if not description:
-        story=soup.select_one('[itemprop="description"], .story, .synopsis, .plot')
-        if story:description=clean(story.get_text(' ',strip=True),2000)
     poster = absolutize(final, field_of(main, "image", "thumbnailUrl") or meta("og:image"))
     year_match = re.search(r"(?:19|20)\d{2}", field_of(main,"datePublished","startDate") or "")
     year = int(year_match.group()) if year_match else None
@@ -344,15 +315,12 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
         m=re.search(r'(?:سنة\s*(?:الإنتاج|الانتاج|العرض)|release\s*year|تاريخ\s*الإنتاج)\s*[:：-]?\s*((?:19|20)\d{2})',soup.get_text(' ',strip=True)[:4500],re.I)
         if m:year=int(m.group(1))
     if not poster:
-        image=soup.select_one('[itemprop="image"], img.poster, .poster img, .cover img, img[itemprop="thumbnailUrl"]')
+        image=soup.select_one('[itemprop="image"], img.poster, .poster img, img[itemprop="thumbnailUrl"]')
         if image:
-            # Lazy images expose a GIF placeholder in src. Keep the full image,
-            # and stay inside the work's cover rather than related-work cards.
-            poster=absolutize(final,image.get("data-original") or image.get("data-src") or image.get("content") or image.get("src") or "")
+            poster=absolutize(final,image.get("src") or image.get("data-src") or image.get("data-original") or image.get("content") or "")
     out = Catalogue(kind=detected, title=title or "بدون عنوان",url=final,description=description,
                     poster_url=poster,backdrop_url=poster,year=year,original_title=original)
     out.backdrop_url=absolutize(final,meta("og:image:secure_url") or meta("twitter:image")) or poster
-    out.source_pages=list(dict.fromkeys([url,final]))
     genre=main.get("genre", [])
     if isinstance(genre,str):genre=[genre]
     out.genres=[GENRE_MAP.get(str(x).lower(),str(x).lower().replace(" ","_")) for x in genre if isinstance(x,str)][:10]
@@ -838,11 +806,11 @@ class Supabase:
         if not admins or not admins[0].get("active"):
             raise ValueError("Authenticated user is not an active Al Ezz TV administrator")
 
-    def req(self, method:str, table:str,params:dict|None=None,payload:dict|None=None, *, upsert=False):
+    def req(self, method:str, table:str,params:dict|None=None,payload:dict|None=None):
         with self.auth_lock:
             if self.refresh_token and time.time() > self.expires_at - 60:
                 self._refresh()
-            return self._request(method, table, params, payload, upsert=upsert)
+            return self._request(method, table, params, payload)
 
     def _refresh(self):
         reply = self.session.post(self.root+'/auth/v1/token?grant_type=refresh_token',
@@ -853,11 +821,11 @@ class Supabase:
         self.expires_at = time.time() + auth.get('expires_in', 3600)
         self.session.headers['Authorization'] = 'Bearer ' + auth['access_token']
 
-    def _request(self, method, table, params, payload, *, upsert=False):
+    def _request(self, method, table, params, payload):
         url=self.root+"/rest/v1/"+table
-        headers={"Prefer":"return=representation"+(",resolution=merge-duplicates" if upsert else "")}
+        headers={"Prefer":"return=representation"}
         res=self.session.request(method,url,params=params,data=json.dumps(payload,ensure_ascii=False) if payload is not None else None,
-                                 headers=headers,timeout=25,allow_redirects=False)
+                                 headers=headers,timeout=25)
         if not res.ok:
             details=""
             try:details=str(res.json().get("message",res.status_code))
@@ -865,9 +833,6 @@ class Supabase:
             raise ValueError("Supabase "+table+": "+details[:300])
         try:return res.json()
         except ValueError:return []
-
-    def upsert_source(self, payload):
-        return self.req("POST", "aseel_media_sources", {"on_conflict":"target_table,target_id,source_key"}, payload, upsert=True)
 
     def query(self,table:str,params:dict):return self.req("GET",table,params)
     def single(self,table:str,params:dict):
@@ -905,24 +870,23 @@ def category_for_genres(categories: list[dict], genres: list[str]) -> str:
     return ""
 
 
-def playback_variants(entry, existing=None, *, primary=None) -> list[dict]:
+def playback_variants(entry, existing=None) -> list[dict]:
     """The production player accepts at most eight {label,url} variants."""
-    rows, seen = [], {entry.media_url if primary is None else primary}
+    rows, seen = [], {entry.media_url}
     for source in entry.sources + (existing or []):
         if not isinstance(source, dict): continue
         url = source.get('url', '')
         if url in seen: continue
         try: public_url(url)
         except ValueError: continue
-        seen.add(url)
         if source.get('error') and not source.get('verified') and not source.get('reachable'): continue
+        seen.add(url)
         rows.append({k: source[k] for k in ('url', 'label', 'kind', 'page_url') if k in source})
     return rows[:8]
 
 
 def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:str="",
-          license_reference:str="",source_id:str="",category_id:str="",capture_merge=False,
-          defer_unverified_episodes=False) -> dict:
+          license_reference:str="",source_id:str="",category_id:str="") -> dict:
     if publish and not rights:
         raise ValueError("For public publishing, declare that you are authorized to display the work using --rights-authorized")
     # Parent works have a rights_holder column, but aseel_episodes does not.
@@ -934,63 +898,39 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
     if source_id:
         work_rights["source_id"]=source_id
         episode_rights["source_id"]=source_id
-    result={"kind":cat.kind,"title":cat.title,"works_new":0,"works_updated":0,"seasons_new":0,"episodes_new":0,"episodes_updated":0,"media_verified":0,"metadata_only":0,"embed_reachable":0,"bindings":[]}
-
-    def approved_embed_page(entry) -> bool:
-        # Store only an explicitly allowed and reachable iframe page as a
-        # separately unverified source. Publication still requires rights.
-        if not entry.media_url:
-            return False
-        from media_resolver import supported_source_kind
-        return (supported_source_kind(entry.media_url) == 'embed' and
-                any(src.get('kind') == 'embed' and src.get('reachable')
-                    and src.get('url') == entry.media_url for src in entry.sources))
+    result={"kind":cat.kind,"title":cat.title,"works_new":0,"works_updated":0,"seasons_new":0,"episodes_new":0,"episodes_updated":0,"media_verified":0,"metadata_only":0,"bindings":[]}
     fields=imported_fields(cat,category_id)
-    def merge_capture(payload, old, entry):
-        if not capture_merge or not old:
-            return payload
-        primary = old.get('stream_url')
-        merged = {k:v for k,v in payload.items() if not old.get(k)}
-        if primary:
-            for key in ('stream_url','link_health_status'):
-                merged.pop(key,None)
-        if entry.sources:
-            merged['stream_variants'] = playback_variants(entry, old.get('stream_variants'), primary=primary)
-        return merged
-
     if cat.kind=="movie":
         # Update existing match by page source to avoid a second copy of the work.
-        movie=db.single("aseel_movies",{"select":"*" if capture_merge else "id,title_ar,stream_variants","source_page_url":"eq."+cat.url})
-        if not movie and not capture_merge and cat.original_title and cat.year:
+        movie=db.single("aseel_movies",{"select":"id,title_ar,stream_variants","source_page_url":"eq."+cat.url})
+        if not movie and cat.original_title and cat.year:
             movie=db.single("aseel_movies",{"select":"id,title_ar","title_original":"eq."+cat.original_title,
                                            "release_year":"eq."+str(cat.year)})
         payload={**fields,"source_page_url":cat.url}
         if cat.sources: payload['stream_variants'] = playback_variants(cat, (movie or {}).get('stream_variants'))
-        if cat.verified and cat.media_url or approved_embed_page(cat):
+        if cat.verified and cat.media_url:
             payload["stream_url"]=cat.media_url
-            payload["link_health_status"]="healthy" if cat.verified else "suspect"
-            result["media_verified" if cat.verified else "embed_reachable"]+=1
+            payload["link_health_status"]="healthy"
+            result["media_verified"]+=1
         else:result["metadata_only"]+=1
         if movie:
-            db.patch("aseel_movies",movie["id"],{**merge_capture(payload,movie,cat),**({"status":"published","rights_status":"approved"} if publish and rights else {})})
+            db.patch("aseel_movies",movie["id"],{**payload,**({"status":"published","rights_status":"approved"} if publish and rights else {})})
             result["works_updated"]+=1
         else:
             movie=db.insert("aseel_movies",{**payload,**work_rights})
             result["works_new"]+=1
         result['work_id'] = movie['id']
         result['bindings'].append(dict(season=0,number=0,id=movie['id'],table='aseel_movies'))
-        if capture_merge: result['bindings'][-1]['stream_url']=movie.get('stream_url') or cat.media_url
         return result
-    series=db.single("aseel_series",{"select":"*" if capture_merge else "id,title_ar","source_page_url":"eq."+cat.url})
-    if not series and not capture_merge: series=db.single("aseel_series",{"select":"id,title_ar","title_ar":"eq."+cat.title})
-    if not series and not capture_merge and cat.original_title and cat.year:
+    series=db.single("aseel_series",{"select":"id,title_ar","source_page_url":"eq."+cat.url})
+    if not series: series=db.single("aseel_series",{"select":"id,title_ar","title_ar":"eq."+cat.title})
+    if not series and cat.original_title and cat.year:
         series=db.single("aseel_series",{"select":"id,title_ar","title_original":"eq."+cat.original_title,
                                           "release_year":"eq."+str(cat.year)})
     if series:
         # Do not silently change existing rights or publication status on draft updates.
         patch={**fields,'source_page_url':cat.url,**(work_rights if publish else {})}
-        if capture_merge: patch={key:value for key,value in patch.items() if value and not series.get(key)}
-        if patch: db.patch("aseel_series",series["id"],patch)
+        db.patch("aseel_series",series["id"],patch)
         result["works_updated"]+=1
     else:
         series=db.insert("aseel_series",{**fields,'source_page_url':cat.url,**work_rights})
@@ -1004,29 +944,24 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
                 result["seasons_new"]+=1
             seasons[ep.season]=season["id"]
         season_id=seasons[ep.season]
-        old=db.single("aseel_episodes",{"select":"*" if capture_merge else "id,number,stream_variants","season_id":"eq."+season_id,"number":"eq."+str(ep.number)})
-        episode_page = ep.page_url if ep.page_url.rstrip('/') != cat.url.rstrip('/') else None
+        old=db.single("aseel_episodes",{"select":"id,number,stream_variants","season_id":"eq."+season_id,"number":"eq."+str(ep.number)})
         payload={"title_ar":ep.title[:250] or "الحلقة "+str(ep.number),"description":ep.description or cat.description or None,
-                 "poster_url":ep.poster_url or cat.poster_url or None,'source_page_url':episode_page}
+                 "poster_url":ep.poster_url or cat.poster_url or None,'source_page_url':ep.page_url}
         if ep.sources: payload['stream_variants'] = playback_variants(ep, (old or {}).get('stream_variants'))
         payload={k:v for k,v in payload.items() if v is not None}
-        if ep.verified and ep.media_url or approved_embed_page(ep):
+        if ep.verified and ep.media_url:
             payload["stream_url"]=ep.media_url
-            payload["link_health_status"]="healthy" if ep.verified else "suspect"
-            result["media_verified" if ep.verified else "embed_reachable"]+=1
+            payload["link_health_status"]="healthy"
+            result["media_verified"]+=1
         else:result["metadata_only"]+=1
-        awaiting_playback = defer_unverified_episodes and publish and not payload.get("stream_url")
         if old:
-            db.patch("aseel_episodes",old["id"],{**merge_capture(payload,old,ep),**({"status":"published","rights_status":"approved"} if publish and rights and not awaiting_playback else {})})
+            db.patch("aseel_episodes",old["id"],{**payload,**({"status":"published","rights_status":"approved"} if publish and rights else {})})
             result["episodes_updated"]+=1
         else:
             old=db.insert("aseel_episodes",{"season_id":season_id,"number":ep.number,
-                        **payload,**({"status":"draft","rights_status":"pending"} if awaiting_playback else episode_rights)})
+                        **payload,**episode_rights})
             result["episodes_new"]+=1
         result['bindings'].append(dict(season=ep.season,number=ep.number,id=old['id'],table='aseel_episodes'))
-        if awaiting_playback:
-            result['bindings'][-1]['awaiting_playback'] = True
-        if capture_merge: result['bindings'][-1]['stream_url']=old.get('stream_url') or ep.media_url
     result['work_id'] = series['id']
     return result
 

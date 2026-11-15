@@ -7,7 +7,7 @@
   let dirty = false;
   let lastKnownHealthy = null;
   let redrawScheduled = false;
-  const workspaceReady = () => !!$('workspace') && !$('workspace').hidden && !$('workspace').inert;
+  const workspaceReady = () => !!$('workspace') && !$('workspace').hidden;
   function notify(message){
     const host=$('toastArea');if(!host)return;
     const item=document.createElement('div');item.className='toast';item.textContent=message;
@@ -56,26 +56,39 @@
       empty.hidden=false;empty.textContent='لا توجد نتائج بهذا الفلتر. اختر «كل الحلقات» لعرض الجميع.';
     }else if(empty)empty.hidden=true;
   }
-  const studioPages = {
-    import:'الاستيراد الذكي', library:'بيانات العمل', episodes:'المواسم والحلقات',
-    publish:'الحفظ والنشر', 'smart-sync':'المزامنة الذكية', tools:'الإضافات والمميزات'
-  };
-  function showStudioPage(){
-    const route=location.hash.slice(1);
-    const id=Object.hasOwn(studioPages,route)?route:'import';
-    document.querySelectorAll('[data-studio-page]').forEach(page=>{
-      page.hidden=page.dataset.studioPage!==id;
-    });
-    const needsWork=['library','episodes','publish'].includes(id);
-    $('studioEmptyPage').hidden=!needsWork||!$('workspace').hidden;
-    $('studioEmptyTitle').textContent=studioPages[id];
-    document.querySelector('.breadcrumbs strong').textContent=studioPages[id];
-    document.querySelectorAll('.sidebar a[href^="#"], .mobile-dock a').forEach(anchor=>{
-      const current=anchor.hash==='#'+id;
-      anchor.classList.toggle('active',current);
-      if(current)anchor.setAttribute('aria-current','page');
+  function filterLibrary(){
+    const list=$('libraryWorkList');if(!list)return;
+    const query=$('libraryWorkSearch')?.value.trim().toLocaleLowerCase()||'';
+    const mode=$('libraryWorkFilter')?.value||'all';
+    let shown=0;
+    const cards=Array.from(list.querySelectorAll('.lib-work'));
+    for(const card of cards){
+      const state=card.classList.contains('failed')?'failed':card.classList.contains('done')?'done':'pending';
+      const matches=(mode==='all'||state===mode) && (!query||card.textContent.toLocaleLowerCase().includes(query));
+      card.hidden=!matches;if(matches)shown++;
+    }
+    if($('libraryWorkCount'))$('libraryWorkCount').textContent='عرض '+shown+' من '+cards.length+' عمل';
+  }
+  function switchTo(id,event){
+    const target=$(id);
+    if(!target || target.closest('[hidden]')){
+      event.preventDefault();
+      notify('لإدارة الحلقات أو النشر، افتح عملًا من الاستيراد أو المكتبات أولًا.');
+      return;
+    }
+    event.preventDefault();
+    history.replaceState(null,'','#'+id);
+    target.scrollIntoView({behavior:'smooth',block:'start'});
+    setCurrent(id);
+  }
+  function setCurrent(id){
+    document.querySelectorAll('.mobile-dock a').forEach(anchor=>{
+      if(anchor.hash==='#'+id)anchor.setAttribute('aria-current','page');
       else anchor.removeAttribute('aria-current');
     });
+    const name={import:'الاستيراد الذكي',librarySync:'مزامنة المكتبات',episodes:'المواسم والحلقات',publish:'الحفظ والنشر','smart-sync':'المزامنة الذكية'};
+    const crumb=document.querySelector('.breadcrumbs strong');
+    if(crumb)crumb.textContent=name[id]||name.import;
   }
   async function checkHealth(){
     const label=$('serverHealthText'),mobile=$('studioMobileHealth');
@@ -98,7 +111,7 @@
     lastKnownHealthy=healthy;
   }
   function start(){
-    if(!$('episodeList'))return;
+    if(!$('episodeList')||!$('libraryWorkList'))return;
     // Render runs the scan in headless Chromium; desktop installations use Edge.
     if($('edgeCaptureBtn'))$('edgeCaptureBtn').hidden=false;
     const health=document.createElement('span');
@@ -109,6 +122,8 @@
     document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkHealth();});
     const rowObserver=new MutationObserver(scheduleEpisodes);
     rowObserver.observe($('episodeList'),{childList:true});
+    const libraryObserver=new MutationObserver(filterLibrary);
+    libraryObserver.observe($('libraryWorkList'),{childList:true});
     const workspaceObserver=new MutationObserver(editStatus);
     workspaceObserver.observe($('workspace'),{attributes:true,attributeFilter:['hidden']});
     $('episodeList').addEventListener('change',event=>{
@@ -139,12 +154,13 @@
       applyEpisodes();
     });
     $('clearSelectionBtn').textContent='إلغاء تحديد الموسم';
+    $('libraryWorkSearch')?.addEventListener('input',filterLibrary);
+    $('libraryWorkFilter')?.addEventListener('change',filterLibrary);
+    document.querySelectorAll('.mobile-dock a').forEach(a=>a.addEventListener('click',event=>switchTo(a.hash.slice(1),event)));
     window.addEventListener('hashchange',()=>{
-      showStudioPage();
-      window.scrollTo(0,0);
+      const h=location.hash.slice(1);if(['import','librarySync','episodes','publish'].includes(h))setCurrent(h);
     });
-    document.addEventListener('studio:catalogue',()=>{showStudioPage();editStatus();});
-    showStudioPage();
+    setCurrent(['import','librarySync','episodes','publish'].includes(location.hash.slice(1))?location.hash.slice(1):'import');
     $('studioQuickSync')?.addEventListener('click',()=>{
       if(workspaceReady())$('updateBtn')?.click();
       else notify('اختر فيلمًا أو مسلسلًا قبل الحفظ.');
@@ -168,41 +184,6 @@
     window.addEventListener('beforeunload',event=>{
       if(!dirty)return;event.preventDefault();event.returnValue='';
     });
-
-    // The input stays passive while the user types; one scan begins after a
-    // short idle delay. Ambiguous title matches still require selecting a work.
-    const autoInput=$('sourceUrl'),autoType=$('sourceKind');
-    let autoTimer=0,lastAutoQuery='';
-    function scheduleAutomaticDiscovery(){
-      clearTimeout(autoTimer);
-      if(!autoInput)return;
-      const value=autoInput.value.trim(),kind=autoType?.value||'auto';
-      const label=$('autoDiscoveryStatus');
-      if(value.length<3){
-        if(label)label.textContent='اكتب اسمًا أو الصق رابط HTTPS؛ سيبدأ البحث تلقائيًا';
-        return;
-      }
-      if(value.toLowerCase().startsWith('http://')){
-        if(label)label.textContent='المصدر يجب أن يستخدم HTTPS الآمن';
-        return;
-      }
-      if(label)label.textContent='جاري الاستعداد للبحث التلقائي بعد توقف الكتابة…';
-      autoTimer=setTimeout(()=>{
-        const signature=kind+'|'+value;
-        if(autoInput.value.trim()!==value || signature===lastAutoQuery)return;
-        if($('discoverBtn')?.disabled){
-          autoTimer=setTimeout(scheduleAutomaticDiscovery,1200);
-          return;
-        }
-        lastAutoQuery=signature;
-        if(label)label.textContent='يبحث عن العمل ويجلب المصادر تلقائيًا…';
-        const form=$('discoveryForm');
-        if(form?.requestSubmit)form.requestSubmit();
-        else form?.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
-      },value.startsWith('https://')?900:1250);
-    }
-    autoInput?.addEventListener('input',scheduleAutomaticDiscovery);
-    autoType?.addEventListener('change',scheduleAutomaticDiscovery);
     // Link paste is opt-in and works with HTTPS clipboard permissions on modern Safari.
     const paste=document.createElement('button');
     paste.type='button';paste.className='secondary-btn studio-paste-btn';paste.textContent='▣ لصق الرابط من الآيفون';
@@ -212,11 +193,11 @@
         const value=(await navigator.clipboard.readText()).trim();
         if(!/^https:\/\//i.test(value)){notify('المنسوخ ليس رابط HTTPS صحيحًا.');return;}
         $('sourceUrl').value=value;$('sourceUrl').dispatchEvent(new Event('input',{bubbles:true}));
-        $('sourceUrl').focus();notify('تم لصق الرابط؛ سيبدأ اكتشاف الفيديوهات تلقائيًا.');
+        $('sourceUrl').focus();notify('تم لصق الرابط. اضغط «اكتشف المحتوى».');
       }catch(_){$('sourceUrl')?.focus();notify('اضغط مطولًا على حقل الرابط ثم اختر «لصق» من لوحة الآيفون.');}
     });
     $('discoverBtn')?.insertAdjacentElement('afterend',paste);
-    applyEpisodes();editStatus();
+    applyEpisodes();filterLibrary();editStatus();
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});
   else start();

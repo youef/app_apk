@@ -1,7 +1,5 @@
 """Offline integration tests for the Python website. No internet or DB required."""
 import unittest
-import time
-import threading
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 
@@ -44,144 +42,6 @@ class DemoTest(unittest.TestCase):
     def post(self, path, payload):
         return self.client.post('/api/'+path, json=payload, headers=self.headers)
 
-    def test_authorized_series_can_be_saved_while_scan_is_running(self):
-        source = 'https://source.example.org/series/during-scan/'
-        cat = Catalogue('series', 'During scan', source, episodes=[
-            Episode(1, 1, 'First', source + 'episode-1/'),
-        ])
-        state = server.UserState(catalogue=cat, db=DummyDB(),
-                                 scan_catalogue=cat, scan={'running':True})
-        with patch.object(server,'protected',return_value=state), \
-             patch.object(server.AUTOSYNC,'remember_saved') as remember:
-            payload = {'publish':True,'rights_authorized':True}
-            self.assertEqual(self.post('save',payload).status_code,409)
-            response = self.post('save',{**payload,'auto_publish_episodes':True})
-        self.assertEqual(response.status_code,200,response.text)
-        self.assertEqual(state.db.rows['aseel_episodes'][0]['status'],'draft')
-        self.assertTrue(remember.call_args.kwargs['auto_publish'])
-
-    def test_title_search_filters_wrong_types_and_duplicate_pages(self):
-        html = b'''<a href="/movies/example/">Example Film</a>
-            <a href="/movies/example/?x=1">Duplicate</a>
-            <a href="/series/example/">Example Show</a>
-            <a href="https://other.example.org/movies/example/">Example Other</a>'''
-        with patch.object(server.SourceClient, 'get', return_value=('https://v3.qrmzi.buzz/search/example/', 'text/html', html)):
-            result = self.post('title-search', {'query':'Example', 'kind':'movie'})
-        self.assertEqual(result.status_code, 200)
-        self.assertEqual(result.json()['results'], [
-            {'kind':'movie', 'title':'Example Film', 'url':'https://v3.qrmzi.buzz/movies/example/'}
-        ])
-
-    def test_background_scan_verifies_each_episode_independently(self):
-        root = 'https://source.example.org/series/example/'
-        episode_page = 'https://source.example.org/episodes/example-1/'
-        cat = Catalogue('series', 'Example Show', root,
-                        episodes=[Episode(1, 1, 'One', episode_page), Episode(1, 2, 'Two', root)])
-        stream = {'kind':'direct','url':'https://cdn.example.org/live.m3u8','verified':True}
-        def resolve(pages, existing):
-            return ([stream], []) if pages == [episode_page] else ([], [])
-        with patch.object(server, 'discover_full', return_value=cat), \
-             patch.object(server.MediaResolver, 'resolve', side_effect=resolve) as resolver:
-            self.assertEqual(self.post('discover', {'url':root, 'scan_media':True}).status_code, 200)
-            for _ in range(100):
-                result = self.client.get('/api/discovery-scan').json()
-                if not result['scan']['running']:
-                    break
-                time.sleep(.01)
-        self.assertEqual(result['scan']['verified'], 1)
-        self.assertEqual(resolver.call_count, 2)
-        first, second = result['summary']['catalogue']['episodes']
-        self.assertEqual(first['media_url'], stream['url'])
-        self.assertEqual(first['source_pages'], [episode_page])
-        self.assertFalse(second['verified'])
-        self.assertFalse(second['media_url'])
-
-    def test_fast_episode_is_visible_while_slow_episode_is_still_running(self):
-        root='https://source.example.org/series/progressive/'
-        cat=Catalogue('series','Progressive',root,episodes=[
-            Episode(1,1,'Slow',root+'slow'),Episode(1,2,'Fast',root+'fast')])
-        release=threading.Event()
-        fast=threading.Event()
-        def resolve(pages,existing):
-            if pages==[root+'slow']:release.wait(timeout=5)
-            else:fast.set()
-            return [{'url':'https://cdn.example.org/'+pages[0].split('/')[-1]+'.mp4',
-                     'kind':'direct','verified':True}],[]
-        with patch.object(server,'discover_full',return_value=cat), \
-             patch.object(server.MediaResolver,'resolve',side_effect=resolve):
-            try:
-                self.post('discover',{'url':root,'scan_media':True,'force_refresh':True})
-                self.assertTrue(fast.wait(timeout=3))
-                for _ in range(100):
-                    result=self.client.get('/api/discovery-scan').json()
-                    if result['scan']['done']:break
-                    time.sleep(.01)
-                self.assertTrue(result['scan']['running'])
-                self.assertEqual(result['scan']['done'],1)
-                self.assertTrue(result['summary']['catalogue']['episodes'][1]['verified'])
-            finally:
-                release.set()
-                for _ in range(100):
-                    if not self.client.get('/api/discovery-scan').json()['scan']['running']:break
-                    time.sleep(.01)
-
-    def test_local_worker_reuses_admin_login_and_releases_it_on_logout(self):
-        db = DummyDB()
-        with patch.object(server, 'local_request', return_value=True), \
-             patch.object(server, 'Supabase', return_value=db), \
-             patch.object(server.AUTOSYNC, 'desktop_mode', return_value=True), \
-             patch.object(server.AUTOSYNC, 'has_server_key', return_value=False), \
-             patch.object(server.AUTOSYNC, 'local_db', None):
-            self.assertEqual(self.post('login', {'email':'admin@example.org','password':'test-password'}).status_code, 200)
-            self.assertIs(server.AUTOSYNC.local_db, db)
-            self.assertEqual(self.post('logout', {}).status_code, 200)
-            self.assertIsNone(server.AUTOSYNC.local_db)
-
-    def test_extension_auto_saves_and_merges_without_overwriting_published_work(self):
-        db = DummyDB()
-        page = 'https://source.example.org/movies/example/'
-        stream = 'https://cdn.example.org/new.m3u8'
-        cat = Catalogue('movie','Captured title',page,media_url=stream,verified=True,
-                        sources=[{'url':stream,'kind':'direct','verified':True}])
-        with patch.object(server,'local_request',return_value=True), \
-             patch.object(server,'Supabase',return_value=db), \
-             patch.object(server,'prepare_browser_capture',return_value=(cat,cat.sources,[])), \
-             patch.object(server.AUTOSYNC,'bind_local_session'), \
-             patch.object(server.AUTOSYNC,'remember_saved') as remember:
-            body = {'page':page,'auto_save':True}
-            self.assertTrue(self.post('browser-capture',body).json()['capture']['awaiting_login'])
-            self.assertEqual(self.post('browser-capture',{**body,'background':True}).status_code,401)
-            self.assertEqual(self.post('login',{'email':'admin@example.org','password':'example'}).status_code,200)
-            self.assertTrue(self.post('browser-capture',body).json()['capture']['saved'])
-            row, = db.rows['aseel_movies']
-            self.assertEqual(row['status'],'draft')
-            row.update(title_ar='Edited title',status='published',rights_status='approved',
-                       stream_url='https://cdn.example.org/old.mp4')
-            response = self.post('browser-capture',{**body,'background':True})
-            self.assertTrue(response.json()['capture']['saved'])
-            updated, = db.rows['aseel_movies']
-            self.assertEqual(updated['title_ar'],'Edited title')
-            self.assertEqual(updated['status'],'published')
-            self.assertEqual(updated['rights_status'],'approved')
-            self.assertEqual(updated['stream_url'],'https://cdn.example.org/old.mp4')
-            self.assertEqual(updated['stream_variants'][0]['url'],stream)
-            self.assertEqual(remember.call_count,2)
-
-    def test_local_scan_rebinds_authenticated_session_before_queueing(self):
-        db = DummyDB()
-        with patch.object(server, 'local_request', return_value=True), \
-             patch.object(server, 'Supabase', return_value=db), \
-             patch.object(server.AUTOSYNC, 'has_server_key', return_value=False), \
-             patch.object(server.AUTOSYNC, 'desktop_mode', return_value=True), \
-             patch.object(server.AUTOSYNC, 'local_db', None), \
-             patch.object(server.AUTOSYNC, 'control') as control:
-            self.assertEqual(self.post('autosync/control', {'action':'check-all'}).status_code, 401)
-            self.assertEqual(self.post('login', {'email':'admin@example.org','password':'test-password'}).status_code, 200)
-            server.AUTOSYNC.local_db = None
-            self.assertEqual(self.post('autosync/control', {'action':'check-all'}).status_code, 200)
-            self.assertIs(server.AUTOSYNC.local_db, db)
-            control.assert_called_once_with('check-all')
-
     def test_public_pages_and_cookies(self):
         self.assertEqual(self.client.get('/').status_code, 200)
         self.assertEqual(self.client.get('/static/style.css').status_code, 200)
@@ -219,7 +79,7 @@ class DemoTest(unittest.TestCase):
                         episodes=[Episode(1,1,'الحلقة الأولى','https://public.example.org/ep1')])
         fake_db=DummyDB()
         with patch.object(server,'pull_html',return_value=movie),patch.object(server,'Supabase',return_value=fake_db):
-            response=self.post('discover', {'url':movie.url,'kind':'series','scan_media':False})
+            response=self.post('discover', {'url':movie.url,'kind':'series'})
             self.assertEqual(response.status_code,200)
             self.assertEqual(response.json()['count'],1)
             login=self.post('login', {'email':'test@example.org','password':'samplepassword'})

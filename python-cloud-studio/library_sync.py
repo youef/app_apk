@@ -106,7 +106,6 @@ class JobDB:
             create table if not exists sources (url text primary key,kind text not null, added_at real);
             create table if not exists pages (url text primary key,source_url text not null,kind text not null,status text not null default 'pending',attempts integer not null default 0,error text not null default '');
             create table if not exists works (url text primary key,source_url text not null,kind text not null,status text not null default 'pending',attempts integer not null default 0,error text not null default '',payload text not null default '',checkpoint text not null default '',saved integer not null default 0,save_error text not null default '');
-            create table if not exists discoveries (url text primary key,payload text not null,updated_at real not null);
             ''')
             if 'checkpoint' not in [r[1] for r in db.execute('pragma table_info(works)')]:
                 db.execute("alter table works add column checkpoint text not null default ''")
@@ -130,22 +129,6 @@ class JobDB:
                 # previously discovered works are rechecked for NEW episodes.
                 db.execute("update pages set status='pending',attempts=0,error='' where source_url=?",(url,))
                 db.execute("update works set status='pending',attempts=0,error='',saved=0,save_error='' where source_url=?",(url,))
-
-    def remember_discovery(self, cat):
-        """Keep the original pages and results even when the studio tab closes."""
-        payload=json.dumps(asdict(cat),ensure_ascii=False)
-        urls={canonical(page) for page in [cat.url,*cat.source_pages]}
-        with self.lock,self._db() as db:
-            db.executemany('insert into discoveries values (?,?,?) on conflict(url) do update '
-                          'set payload=excluded.payload,updated_at=excluded.updated_at',
-                          [(url,payload,time.time()) for url in urls])
-
-    def cached_discovery(self, url, max_age=300):
-        with self.lock,self._db() as db:
-            row=db.execute('select payload,updated_at from discoveries where url=?',(canonical(url),)).fetchone()
-        if row and time.time()-row['updated_at']<=max_age:
-            return json.loads(row['payload'])
-        return None
     def append_works(self,source,kind,urls):
         with self.lock,self._db() as db:
             total=db.execute('select count(*) from works where source_url=?',(source,)).fetchone()[0]
@@ -200,44 +183,6 @@ class JobDB:
                 counts[table]={r['status']:r['n'] for r in db.execute(f'select status,count(*) n from {table} group by status')}
             rows=[dict(r) for r in db.execute("select url,kind,status,attempts,error,saved,save_error,coalesce(case when status='done' then json_array_length(json_extract(payload,'$.discovery_warnings')) else 0 end,0) warnings,coalesce(case when checkpoint!='' then json_array_length(json_extract(checkpoint,'$.episodes')) else 0 end,0) episode_progress from works order by rowid desc limit ?", (limit,))]
             return {'counts':counts,'works':rows,'sources':[dict(r) for r in db.execute('select url,kind from sources order by added_at desc limit 30')]}
-    def series_items(self,limit=150,query=''):
-        term=query.strip().lower()
-        with self.lock,self._db() as db:
-            rows=[dict(r) for r in db.execute(
-                "select url,source_url,kind,status,error,saved,save_error,payload,attempts from works where kind!='movie' order by rowid desc limit 250")]
-        items=[]
-        for row in rows:
-            try:payload=json.loads(row['payload'] or '{}')
-            except (ValueError,TypeError):payload={}
-            if payload.get('kind')=='movie':continue
-            title=payload.get('title') or row['url'].rstrip('/').split('/')[-1].replace('-',' ') or 'مسلسل مستورد'
-            if term and term not in (title+' '+row['url']).lower():continue
-            eps=payload.get('episodes') or []
-            if not isinstance(eps,list):eps=[]
-            items.append({'origin':'library','id':row['url'],'title':title,'url':row['url'],
-               'source_url':row['source_url'],'status':row['status'],'saved':bool(row['saved']),
-               'error':row['error'] or row['save_error'],'episodes':len(eps),
-               'verified':sum(bool(e.get('verified')) for e in eps if isinstance(e,dict)),
-               'direct':sum(bool(e.get('media_url')) for e in eps if isinstance(e,dict)),
-               'attempts':row['attempts']})
-            if len(items)>=limit:break
-        return items
-
-    def retry_work(self,url):
-        url=canonical(url)
-        with self.lock,self._db() as db:
-            exists=db.execute('select 1 from works where url=?',(url,)).fetchone()
-            if not exists:return False
-            db.execute("update works set status='pending',attempts=0,error='',checkpoint='' where url=?",(url,))
-            return True
-
-    def replace_work_payload(self,url,payload):
-        url=canonical(url)
-        with self.lock,self._db() as db:
-            result=db.execute("update works set payload=? where url=? and status='done'",(payload,url))
-            if result.rowcount!=1:raise ValueError('Work is not ready')
-            return True
-
     def get_work(self,url):
         with self.lock,self._db() as db:
             row=db.execute('select * from works where url=? and status=?',(canonical(url),'done')).fetchone()
