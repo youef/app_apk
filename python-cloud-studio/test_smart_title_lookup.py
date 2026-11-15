@@ -34,7 +34,9 @@ class MemoryDB:
                 if field in ("select", "limit", "offset"):
                     continue
                 if value.startswith("eq."):
-                    allowed &= str(row.get(field)) == value[3:]
+                    current=row.get(field)
+                    current=("true" if current else "false") if isinstance(current,bool) else str(current)
+                    allowed &= current == value[3:]
                 elif value.startswith("ilike.*"):
                     text = value[len("ilike.*"):].rstrip("*").replace("*", " ")
                     allowed &= normalized_title(text) in normalized_title(row.get(field, ""))
