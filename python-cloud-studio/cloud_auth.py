@@ -44,38 +44,67 @@ _MAX_SESSIONS = 80
 _MISSING = object()
 
 
+class TemporaryAuthError(Exception):
+    """Supabase/network is unavailable: keep the browser's saved login."""
+
+
 def _cipher() -> Fernet:
     material = hashlib.sha256(("al-ezz-studio-remembered-admin-v2:" + SECRET).encode()).digest()
     return Fernet(base64.urlsafe_b64encode(material))
 
 
-def _token(refresh_token: str) -> str:
+def _session_data(value: str | None) -> dict | None:
+    """Decrypt v2/v3 cookie, validate bounds, and never expose credentials."""
+    if not value or len(value) > 3900 or len(SECRET) < 32:
+        return None
+    try:
+        data = json.loads(_cipher().decrypt(value.encode(), ttl=VALID_FOR))
+        version = data.get("version")
+        if version not in (2, 3):
+            return None
+        refresh = data.get("refresh_token", "")
+        if not isinstance(refresh, str) or not 10 <= len(refresh) <= 2000:
+            return None
+        access = data.get("access_token", "") if version == 3 else ""
+        expiry = data.get("access_expires_at", 0) if version == 3 else 0
+        if not isinstance(access, str) or len(access) > 3000:
+            return None
+        try:
+            expiry = float(expiry)
+        except (ValueError, TypeError):
+            return None
+        if expiry < 0 or expiry > time.time() + VALID_FOR + 86400:
+            return None
+        return {"refresh": refresh, "access": access, "expiry": expiry}
+    except (InvalidToken, ValueError, TypeError, UnicodeError, json.JSONDecodeError):
+        return None
+
+
+def _token(refresh_token: str, access_token: str = "", access_expires_at: float = 0) -> str:
     if not refresh_token:
         raise ValueError("Missing administrator refresh token")
-    # Fernet provides authenticated encryption, a timestamp, and an explicit
-    # maximum age when decoded; it never embeds plaintext account secrets.
-    return _cipher().encrypt(json.dumps(
-        {"version":2, "refresh_token": refresh_token},
-        separators=(",", ":")).encode()).decode()
+    data = {
+        "version": 3 if access_token else 2,
+        "refresh_token": refresh_token,
+    }
+    if access_token:
+        data["access_token"] = access_token
+        data["access_expires_at"] = float(access_expires_at)
+    token = _cipher().encrypt(json.dumps(
+        data, separators=(",", ":")).encode()).decode()
+    if len(token) > 3800:
+        raise ValueError("Browser session token is too large")
+    return token
 
 
 def _decode(value: str | None) -> str:
-    if not value or len(value) > 3200 or len(SECRET) < 32:
-        return ""
-    try:
-        data = json.loads(_cipher().decrypt(value.encode(), ttl=VALID_FOR))
-        if data.get("version") != 2:
-            return ""
-        refresh_token = data.get("refresh_token", "")
-        if not isinstance(refresh_token, str) or not 10 <= len(refresh_token) <= 2000:
-            return ""
-        return refresh_token
-    except (InvalidToken, ValueError, TypeError, UnicodeError, json.JSONDecodeError):
-        return ""
+    """Compatibility shim for existing cookie tests and in-flight v2 users."""
+    data = _session_data(value)
+    return data["refresh"] if data else ""
 
 
 def _valid(value: str | None) -> bool:
-    return bool(_decode(value))
+    return _session_data(value) is not None
 
 
 def _prune() -> None:
@@ -126,12 +155,17 @@ def _restore_admin(refresh_token: str):
     key = os.getenv("ALEZZ_SUPABASE_PUBLISHABLE_KEY", DEFAULT_PUBLIC_KEY)
     session = requests.Session()
     session.trust_env = False
-    response = session.post(
-        root + "/auth/v1/token?grant_type=refresh_token",
-        headers={"apikey":key, "Content-Type":"application/json"},
-        json={"refresh_token": refresh_token}, timeout=18,
-        allow_redirects=False,
-    )
+    try:
+        response = session.post(
+            root + "/auth/v1/token?grant_type=refresh_token",
+            headers={"apikey":key, "Content-Type":"application/json"},
+            json={"refresh_token": refresh_token}, timeout=18,
+            allow_redirects=False,
+        )
+    except Exception as exc:
+        raise TemporaryAuthError("Supabase session server unreachable") from exc
+    if response.status_code >= 500 or response.status_code == 429:
+        raise TemporaryAuthError("Supabase session server unavailable")
     if not response.ok:
         raise ValueError("Supabase administrator refresh failed")
     payload = response.json()
@@ -147,6 +181,35 @@ def _restore_admin(refresh_token: str):
     return admin
 
 
+def _restore_saved_session(data: dict):
+    """Recover from a restart without needlessly spending a refresh token.
+
+    Supabase refresh tokens rotate after use. Re-validating a still-live access
+    token first prevents forced reauthentication on frequent Render redeploys.
+    The Supabase constructor checks both the user and active admin membership.
+    """
+    access = data.get("access") or ""
+    expiry = float(data.get("expiry") or 0)
+    if access and expiry > time.time() + 90:
+        from alezz_fetchv_importer import Supabase
+        root = os.getenv("ALEZZ_SUPABASE_URL", DEFAULT_DB_URL).rstrip("/")
+        key = os.getenv("ALEZZ_SUPABASE_PUBLISHABLE_KEY", DEFAULT_PUBLIC_KEY)
+        try:
+            admin = Supabase(root, key, access_token=access)
+            admin.refresh_token = data["refresh"]
+            admin.expires_at = expiry
+            return admin
+        except ValueError as exc:
+            message = str(exc)
+            # Temporary REST/provider failure must never destroy a remembered
+            # login. A truly invalid JWT may still be recovered by refresh.
+            if any(text in message for text in (" 500", " 502", " 503", " 504", "timeout")):
+                raise TemporaryAuthError("Supabase temporarily unavailable") from exc
+        except Exception as exc:
+            raise TemporaryAuthError("Supabase session validation unavailable") from exc
+    return _restore_admin(data["refresh"])
+
+
 async def _ensure_admin(request: Request):
     if not ENABLED:
         return None
@@ -155,8 +218,8 @@ async def _ensure_admin(request: Request):
     if cached is not None:
         request.state.site_admin = cached
         return cached
-    old_refresh = _decode(token)
-    if not old_refresh:
+    saved = _session_data(token)
+    if not saved:
         request.state.site_admin = None
         return None
     # Prevent concurrent requests after a deploy from consuming the same
@@ -167,7 +230,11 @@ async def _ensure_admin(request: Request):
             request.state.site_admin = cached
             return cached
         try:
-            admin = await run_in_threadpool(_restore_admin, old_refresh)
+            admin = await run_in_threadpool(_restore_saved_session, saved)
+        except TemporaryAuthError:
+            request.state.site_admin = None
+            request.state.auth_temporarily_unavailable = True
+            return None
         except Exception:
             request.state.site_admin = None
             return None
@@ -180,14 +247,28 @@ async def _ensure_admin(request: Request):
 
 def _session_cookie(response, admin, request: Request) -> None:
     previous = request.cookies.get(COOKIE, "")
+    stored = _session_data(previous)
     current_refresh = getattr(admin, "refresh_token", "")
-    old_refresh = _decode(previous)
+    access_header = getattr(getattr(admin, "session", None), "headers", {}).get("Authorization", "")
+    current_access = access_header[7:] if access_header.startswith("Bearer ") else ""
+    current_expiry = float(getattr(admin, "expires_at", 0) or 0)
     if not current_refresh:
         return
-    # Rotate the secure cookie when GoTrue refreshes its token, or on first
-    # login. Reissuing also supports regular active sessions indefinitely.
-    if not old_refresh or old_refresh != current_refresh:
-        sealed = _token(current_refresh)
+    # Only reissue the cookie after a credential change or a quiet 24-hour
+    # period; a restart by itself should not rotate Supabase refresh tokens.
+    elapsed = 0
+    if previous and stored:
+        try:
+            elapsed = time.time() - _cipher().extract_timestamp(previous.encode())
+        except (InvalidToken, ValueError):
+            elapsed = VALID_FOR
+    changed = (not stored
+               or stored["refresh"] != current_refresh
+               or stored["access"] != current_access
+               or abs(stored["expiry"] - current_expiry) > 1
+               or elapsed > 24 * 3600)
+    if changed:
+        sealed = _token(current_refresh, current_access, current_expiry)
         with _SESSION_LOCK:
             _SESSIONS[sealed] = admin
             _prune()
@@ -253,6 +334,16 @@ async def site_auth_middleware(request: Request, call_next):
         return await call_next(request)
     admin = await _ensure_admin(request)
     if admin is None:
+        if getattr(request.state, "auth_temporarily_unavailable", False):
+            return HTMLResponse(
+                '<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8">'
+                '<meta name="viewport" content="width=device-width,initial-scale=1">'
+                '<title>الاتصال قيد الاستعادة</title><body style="background:#10151e;'
+                'color:#f1f0e8;font:18px system-ui;padding:38px">'
+                '<h2>جلسة المسؤول محفوظة</h2>'
+                '<p>تعذر الاتصال بخادم تسجيل الدخول مؤقتًا. لا حاجة لتسجيل الدخول مجددًا.</p>'
+                '<a style="color:#e8bf78" href="/">إعادة المحاولة</a></body></html>',
+                status_code=503, headers={"Retry-After":"5", "Cache-Control":"no-store"})
         if request.url.path.startswith("/api/"):
             return JSONResponse(
                 {"detail":"انتهت جلسة المسؤول؛ سجّل الدخول بالبريد وكلمة المرور"},
@@ -278,6 +369,8 @@ async def site_login(request: Request):
             response = RedirectResponse("/", status_code=303)
             _session_cookie(response, admin, request)
             return response
+        if getattr(request.state, "auth_temporarily_unavailable", False):
+            return _login_page("جلسة الدخول محفوظة، لكن Supabase لا يستجيب مؤقتًا. أعد تحميل الصفحة دون إدخال كلمة المرور.", 503)
         return _login_page()
     if "application/x-www-form-urlencoded" not in request.headers.get("content-type",""):
         return _login_page("نوع الطلب غير صحيح", 400)
