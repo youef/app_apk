@@ -30,8 +30,8 @@ FIELDS = {
 }
 URL_FIELDS = {"poster_url", "backdrop_url", "source_page_url", "stream_url"}
 READ_FIELDS = {
-    "aseel_movies": "id,title_ar,description,poster_url,backdrop_url,source_page_url,stream_url,status,rights_status,link_health_status,link_health_checked_at",
-    "aseel_series": "id,title_ar,description,poster_url,backdrop_url,source_page_url,status,rights_status",
+    "aseel_movies": "id,title_ar,title_original,release_year,description,poster_url,backdrop_url,source_page_url,stream_url,status,rights_status,link_health_status,link_health_checked_at",
+    "aseel_series": "id,title_ar,title_original,release_year,description,poster_url,backdrop_url,source_page_url,status,rights_status",
     "aseel_seasons": "id,series_id,number,title_ar",
     "aseel_episodes": "id,season_id,number,title_ar,description,poster_url,source_page_url,stream_url,status,rights_status,link_health_status,link_health_checked_at",
 }
@@ -113,14 +113,13 @@ class LibraryEditor:
             raise ValueError("العنصر غير موجود أو لم يُسمح بعرضه")
         details = {"item": item, "table": table, "seasons": []}
         if table == "aseel_series":
-            seasons = db.query("aseel_seasons", {
+            seasons = self._rows(db,"aseel_seasons", {
                 "select": READ_FIELDS["aseel_seasons"],
-                "series_id": "eq." + identifier, "order": "number.asc", "limit": "200"})
+                "series_id": "eq." + identifier, "order": "number.asc"})
             for season in seasons:
-                season["episodes"] = db.query("aseel_episodes", {
+                season["episodes"] = self._rows(db,"aseel_episodes", {
                     "select": READ_FIELDS["aseel_episodes"],
-                    "season_id": "eq." + season["id"],
-                    "order": "number.asc", "limit": "10000"})
+                    "season_id": "eq." + season["id"], "order": "number.asc"})
             details["seasons"] = seasons
         # Safe scheduling metadata only; the source history remains private.
         with self.worker.queue.db() as conn:
@@ -137,6 +136,14 @@ class LibraryEditor:
                 if row: jobs[t+":"+i] = dict(row)
             details["schedule"] = jobs
         return details
+
+    def _rows(self, db, table, params):
+        rows=[]
+        for offset in range(0,25000,500):
+            chunk=db.query(table,{**params,"limit":"500","offset":str(offset)})
+            rows.extend(chunk)
+            if len(chunk)<500:break
+        return rows
 
     def _season(self, db, series_id, number, create=False):
         series_id = uid(series_id)
@@ -179,23 +186,26 @@ class LibraryEditor:
         self.control.audit("delete",table,identifier,detail="حذف بواسطة المسؤول")
 
     def delete(self, db, body: EditBody):
-        table, identifier = body.table, uid(body.id)
+        table = body.table
+        if table not in WORK_TABLES:
+            raise ValueError("نوع المحتوى غير مدعوم")
+        identifier = uid(body.id)
         if body.confirm != identifier:
             raise ValueError("يجب تأكيد الحذف بمعرّف العنصر")
         count = 0
         if table == "aseel_series":
-            seasons = db.query("aseel_seasons",{"select":"id","series_id":"eq."+identifier})
+            seasons = self._rows(db,"aseel_seasons",{"select":"id","series_id":"eq."+identifier})
             if seasons and not body.cascade:
                 raise ValueError("لحذف مسلسل ومواسمه يجب تأكيد حذف جميع حلقاته")
             for season in seasons:
-                episodes = db.query("aseel_episodes",{"select":"id","season_id":"eq."+season["id"]})
+                episodes = self._rows(db,"aseel_episodes",{"select":"id","season_id":"eq."+season["id"]})
                 for ep in episodes:
                     self._delete_one(db,"aseel_episodes",ep["id"])
                     count += 1
                 self._delete_one(db,"aseel_seasons",season["id"])
                 count += 1
         elif table == "aseel_seasons":
-            episodes = db.query("aseel_episodes",{"select":"id","season_id":"eq."+identifier})
+            episodes = self._rows(db,"aseel_episodes",{"select":"id","season_id":"eq."+identifier})
             if episodes and not body.cascade:
                 raise ValueError("الموسم يحوي حلقات؛ يلزم تأكيد حذفها")
             for ep in episodes:
@@ -280,9 +290,9 @@ class LibraryEditor:
             raise ValueError("العنصر غير موجود")
         targets=[(table,identifier)]
         if table=="aseel_series":
-            seasons=db.query("aseel_seasons",{"select":"id","series_id":"eq."+identifier})
+            seasons=self._rows(db,"aseel_seasons",{"select":"id","series_id":"eq."+identifier})
             for season in seasons:
-                eps=db.query("aseel_episodes",{"select":"id","season_id":"eq."+season["id"]})
+                eps=self._rows(db,"aseel_episodes",{"select":"id","season_id":"eq."+season["id"]})
                 targets += [("aseel_episodes",ep["id"]) for ep in eps]
         with self.worker.queue.db() as conn:
             available = {(r["table_name"],r["target_id"]) for r in conn.execute(
