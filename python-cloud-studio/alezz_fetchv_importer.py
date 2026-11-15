@@ -994,7 +994,7 @@ def playback_variants(entry, existing=None, *, primary=None) -> list[dict]:
     rows, seen = [], {entry.media_url if primary is None else primary}
     # Prefer newly verified direct players over old embed candidates when
     # the production player can retain only eight alternatives.
-    ordered = sorted(entry.sources, key=lambda row: (
+    ordered = sorted((row for row in entry.sources if isinstance(row, dict)), key=lambda row: (
         bool(row.get('verified')), row.get('kind') == 'direct',
         row.get('checked_at') or 0), reverse=True)
     for source in ordered + (existing or []):
@@ -1017,7 +1017,7 @@ def playback_variants(entry, existing=None, *, primary=None) -> list[dict]:
 
 def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:str="",
           license_reference:str="",source_id:str="",category_id:str="",capture_merge=False,
-          defer_unverified_episodes=False) -> dict:
+          defer_unverified_episodes=False, replace_verified_streams=False) -> dict:
     if publish and not rights:
         raise ValueError("For public publishing, declare that you are authorized to display the work using --rights-authorized")
     # Parent works have a rights_holder column, but aseel_episodes does not.
@@ -1056,7 +1056,7 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
             # Keep the existing primary unless a NEW direct URL has passed an
             # actual playback-byte probe. An iframe is never sufficient.
             from media_resolver import supported_source_kind
-            if (entry.verified and payload.get('stream_url') and
+            if (replace_verified_streams and entry.verified and payload.get('stream_url') and
                     payload['stream_url'] != primary and
                     supported_source_kind(payload['stream_url']) == 'direct'):
                 merged['stream_url'] = payload['stream_url']
