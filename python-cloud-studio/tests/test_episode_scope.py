@@ -109,6 +109,7 @@ class SeriesScopeTests(unittest.TestCase):
         self.assertIn("حكاية الكرامة", description)
         self.assertNotIn("قرمزي", description)
         self.assertNotIn("qrmzi", description.casefold())
+        self.assertNotIn(".tv", description.casefold())
 
 
 if __name__ == "__main__":
