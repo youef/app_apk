@@ -82,6 +82,8 @@ app.mount('/static', StaticFiles(directory=str(BASE / 'static')), name='static')
 app.middleware('http')(site_auth_middleware)
 app.add_api_route('/login', site_login, methods=['GET', 'POST'], include_in_schema=False)
 app.add_api_route('/logout-site', site_logout, methods=['POST'], include_in_schema=False)
+app.add_api_route('/customer-auth/login', customer_auth, methods=['POST', 'OPTIONS'], include_in_schema=False)
+app.add_api_route('/customer-auth/session', customer_auth, methods=['POST', 'OPTIONS'], include_in_schema=False)
 async def worker_health():
     info=AUTOSYNC.status()
     return JSONResponse({'ok':True,'service':'al-ezz-tv-python-studio',
