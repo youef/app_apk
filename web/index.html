@@ -33,6 +33,7 @@
 <link rel="stylesheet" href="css/glass.css?v=glass-v19-20261107">
 <link rel="stylesheet" href="css/red-cinema.css?v=red-neon-v26-20261108">
 <link rel="stylesheet" href="css/watermark-v28.css?v=official-logo-20261108">
+<link rel="stylesheet" href="css/customer-login.css?v=customer-login-20261116">
 </head>
 <body data-boot="loading">
 <script>
@@ -69,9 +70,7 @@ try {
     <button class="iconbtn" id="tvBtn" aria-label="وضع التلفزيون" title="وضع التلفزيون (T)">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2.5"/><path d="M9 21h6M12 17v4"/></svg>
     </button>
-    <a class="iconbtn admin-link" href="../admin/" aria-label="لوحة الإدارة" title="استوديو العز">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6"/><path d="M4.5 20c1.4-3.6 4.1-5.2 7.5-5.2s6.1 1.6 7.5 5.2"/></svg>
-    </a>
+    <button class="customer-signout" type="button" id="customerSignout" aria-label="تسجيل الخروج">خروج</button>
     <a class="iconbtn mylist-link" href="#/mylist" title="قائمتي" aria-label="قائمتي">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 8.2c0 4.1-8.8 10.1-8.8 10.1S3.2 12.3 3.2 8.2a4.4 4.4 0 018.8-.3 4.4 4.4 0 018.8.3z"/></svg>
     </a>
@@ -218,22 +217,24 @@ try {
   </div>
 </div>
 
-<!-- ============ activation gate ============ -->
+<!-- ============ customer sign-in ============ -->
 <div class="gate" id="gate" hidden>
   <div class="gate__card">
     <img src="assets/logo.svg" width="90" height="90" alt="العز TV" class="gate__mark">
-    <p class="eyebrow">تفعيل لمرة واحدة</p>
-    <h1>رمز الدخول إلى العز</h1>
-    <p class="gate__sub">أدخل الرمز المكوّن من ستة أرقام. يُحفظ التفعيل على هذا الجهاز ولا يُطلب مرة أخرى.</p>
-    <div class="gate__dots" id="gateDots" aria-hidden="true"></div>
-    <div class="gate__pad" id="gatePad">
-      <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
-      <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
-      <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
-      <button data-k="clear" class="is-muted">مسح</button><button data-k="0">0</button><button data-k="back" class="is-muted">⌫</button>
-    </div>
-    <p class="gate__error" id="gateError" hidden>الرمز غير صحيح. حاول مرة أخرى.</p>
-    <p class="gate__hint">يعمل التفعيل على هذا المتصفح أو الجهاز فقط.</p>
+    <p class="eyebrow">العز TV • حساب المشترك</p>
+    <h1>مرحبًا بك في العز TV</h1>
+    <p class="gate__sub">سجل دخولك باسم المستخدم وكلمة المرور لمتابعة الأفلام والمسلسلات والبث المباشر.</p>
+    <form class="customer-form" id="customerLoginForm" autocomplete="on">
+      <div><label for="gateUsername">اسم المستخدم</label>
+      <input id="gateUsername" name="username" type="text" dir="auto" autocomplete="username"
+        placeholder="اسم المستخدم الخاص بك" maxlength="64" autocapitalize="off" required></div>
+      <div><label for="gatePassword">كلمة المرور</label>
+      <input id="gatePassword" name="password" type="password" dir="ltr"
+        autocomplete="current-password" placeholder="••••••••" maxlength="256" required></div>
+      <p class="customer-form__error" id="gateError" role="alert" aria-live="polite" hidden></p>
+      <button class="customer-form__action" type="submit" id="customerLoginSubmit">دخول العز TV</button>
+      <p class="customer-form__note">للمشتركين فقط • يتم حفظ تسجيل الدخول على جهازك.</p>
+    </form>
   </div>
 </div>
 
@@ -244,6 +245,7 @@ try {
 
 <script src="js/legacy-polyfills.js"></script>
 <script src="js/config.js"></script>
+<script src="js/customer-auth.js?v=customer-login-20261116"></script>
 <script src="js/api.js?v=publication-refresh-20261113-v2"></script>
 <script src="js/explore.js?v=netflix-taxonomy-20261101"></script>
 <script src="js/store.js"></script>
