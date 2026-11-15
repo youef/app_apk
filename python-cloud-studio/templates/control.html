@@ -10,9 +10,9 @@
 <title>مركز العمليات | استوديو العز TV</title>
 <link rel="icon" href="/static/studio-icon.svg">
 <link rel="stylesheet" href="/static/control.css?v=1">
-<link rel="stylesheet" href="/static/library-modern.css?v=2">
+<link rel="stylesheet" href="/static/library-modern.css?v=3">
 <script src="/static/control.js?v=2" defer></script>
-<script src="/static/library-editor.js?v=2" defer></script>
+<script src="/static/library-editor.js?v=3" defer></script>
 </head>
 <body>
 <div class="control-app" id="controlApp">
@@ -97,6 +97,7 @@
   <button data-view="alerts"><span>♧</span>التنبيهات</button>
   <button data-view="history"><span>≡</span>السجل</button>
 </nav>
+<aside id="scanMonitor" class="scan-monitor" aria-live="polite" aria-label="فحوص التشغيل المباشرة" hidden></aside>
 <div id="toastHost" class="toast-host" aria-live="polite"></div>
 <dialog id="authDialog" class="modal"><form method="dialog" class="modal-head"><h2>دخول مسؤول Supabase</h2><button class="modal-close" aria-label="إغلاق">✕</button></form><p>تحتاج تسجيل الدخول بحساب مسؤول معتمد لعرض المكتبة وتغيير حالات النشر. لا تُخزّن بيانات الدخول في المتصفح.</p><form id="authForm"><label>البريد الإلكتروني<input type="email" name="email" required autocomplete="username"></label><label>كلمة المرور<input type="password" name="password" required autocomplete="current-password"></label><button type="submit" class="gold-button">دخول آمن</button></form></dialog>
 <dialog id="detailDialog" class="modal"><form method="dialog" class="modal-head"><h2 id="detailTitle">تاريخ مصادر التشغيل</h2><button class="modal-close" aria-label="إغلاق">✕</button></form><div id="detailContent"></div></dialog>
