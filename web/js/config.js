@@ -6,9 +6,6 @@ window.ALEZZ_CONFIG = Object.freeze({
   supabaseUrl: "https://qyzmlwtvzzgooccqxglq.supabase.co",
   publishableKey: "sb_publishable_Mcev7qFw9oLWgKO7GBT8Kg_nHvaQ3ES",
 
-  /* one-time activation code for the viewing surface */
-  activationCode: "556622",
-
   /* network timeouts (ms) */
   requestTimeout: 6000,
 
