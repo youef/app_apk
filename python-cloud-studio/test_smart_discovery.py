@@ -24,7 +24,7 @@ class MemoryDatabase:
         for key,val in params.items():
             if key in ("select","order","limit"):continue
             if isinstance(val,str) and val.startswith("eq."):
-                rows=[row for row in rows if str(row.get(key))==val[3:]]
+                rows=[row for row in rows if str(row.get(key)).lower()==val[3:].lower()]
             if isinstance(val,str) and val.startswith("lte."):
                 rows=[row for row in rows if str(row.get(key) or "")<=val[4:]]
         if params.get("order")=="next_scan.asc":
