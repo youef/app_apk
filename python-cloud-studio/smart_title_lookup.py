@@ -193,8 +193,13 @@ def queue_title_refresh(db, worker, table, identifier, max_episodes=900):
     if table not in ("aseel_movies", "aseel_series"):
         raise ValueError("اختر فيلمًا أو مسلسلًا من نتائج البحث")
     UUID(identifier)
+    # A series has no stream_url/stream_variants columns: only its
+    # episodes store playback links. Keep the movie projection unchanged.
+    fields = ("id,title_ar,source_page_url"
+              if table == "aseel_series"
+              else "id,title_ar,source_page_url,stream_url,stream_variants")
     item = db.single(table, {
-        "select": "id,title_ar,source_page_url,stream_url,stream_variants",
+        "select": fields,
         "id": "eq." + identifier,
     })
     if not item:
