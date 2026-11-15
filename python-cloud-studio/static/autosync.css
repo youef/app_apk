@@ -17,3 +17,19 @@
 .auto-feed-row .auto-target-buttons{display:flex;flex-wrap:wrap;gap:6px}
 @media(max-width:920px){.auto-feed-form{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.auto-feed-url{grid-column:1/-1}.auto-feed-form .primary-btn{grid-column:1/-1}}
 @media(max-width:500px){.auto-feeds{padding:13px}.auto-feed-form{grid-template-columns:1fr}.auto-feed-form .field,.auto-feed-url,.auto-feed-form .primary-btn{grid-column:1/-1}.auto-feed-row{display:block}.auto-feed-row .auto-target-buttons{margin-top:12px}}
+
+
+/* Smart-sync scheduler and live queue diagnostics; legacy capture remains isolated. */
+.auto-queue-insights{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:16px 0}
+.auto-queue-insights>div{background:rgba(10,20,37,.7);border:1px solid rgba(137,159,189,.24);border-radius:14px;padding:15px;min-width:0}
+.auto-queue-insights span{display:block;color:#a9b8ce;font-size:12px;line-height:1.55}
+.auto-queue-insights strong{display:block;font-size:26px;color:#f0d09a;font-weight:800;margin-top:5px;font-variant-numeric:tabular-nums}
+.auto-schedule-form{display:grid;grid-template-columns:minmax(190px,1.8fr) repeat(2,minmax(135px,1fr)) auto;gap:12px;align-items:end;border:1px solid rgba(220,181,109,.28);background:linear-gradient(145deg,rgba(190,139,66,.10),rgba(17,29,45,.85));border-radius:16px;padding:17px;margin:18px 0}
+.auto-schedule-title{align-self:center}.auto-schedule-title strong{display:block;color:#f6d49e;font-size:15px}.auto-schedule-title small{display:block;color:#a9b8ca;font-size:12px;line-height:1.7;margin-top:4px}
+.auto-schedule-form .field{margin:0;min-width:0}.auto-schedule-form select{display:block;width:100%;min-height:45px}
+.auto-schedule-form button{white-space:nowrap;min-height:45px}
+.auto-list-toolbar>label{min-width:145px}.auto-list-toolbar select{min-height:44px;width:100%}
+.auto-expires-critical{color:#ff9b9b!important;font-weight:700}.auto-expires-soon{color:#ffd29a!important;font-weight:700}
+@media(max-width:960px){.auto-schedule-form{grid-template-columns:repeat(2,minmax(0,1fr))}.auto-schedule-title{grid-column:1/-1}.auto-schedule-form button{grid-column:1/-1}}
+@media(max-width:720px){.auto-queue-insights{grid-template-columns:repeat(2,minmax(0,1fr))}.auto-queue-insights>div{padding:12px}.auto-queue-insights strong{font-size:23px}.auto-list-toolbar>label{min-width:0;flex:1 1 100%}}
+@media(max-width:380px){.auto-schedule-form{grid-template-columns:1fr}.auto-schedule-title,.auto-schedule-form button{grid-column:1}}
