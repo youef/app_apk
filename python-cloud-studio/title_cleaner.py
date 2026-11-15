@@ -52,7 +52,11 @@ def content_description(value, url='', site_name=''):
             r'(?<![\w])(?:(?:على|في|من)\s+)?(?:(?:موقع|شبكة|منصة)\s+)?'
             + brand + r'(?:\s+(?:tv|تي\s*في|أون\s*لاين|اون\s*لاين|online))?(?![\w])',
             ' ', description, flags=re.I)
-    description = re.sub(r'https?://[^\s،؛]+', ' ', description, flags=re.I)
+    # Remove both complete links and bare domain mentions (e.g. qrmzi.tv),
+    # not just the host token; otherwise ".tv" can leak into synopses.
+    description = re.sub(
+        r'(?<![\w])(?:https?://)?(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+){1,4}(?:/[^\s،؛]*)?',
+        ' ', description, flags=re.I)
     description = re.sub(r'\s+([،؛,.])', r'\1', description)
     description = re.sub(r'([،؛,.])\s*\1+', r'\1', description)
     return ' '.join(description.split()).strip(' ،؛.:-')[:3000]
