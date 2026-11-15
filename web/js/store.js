@@ -8,6 +8,14 @@
   var ctx = window.ALEZZ_MEMBER_CONTEXT || null;
   var accountKey = ctx && ctx.authenticated === true && /^[a-f0-9]{32}$/.test(ctx.accountKey || "")
     ? ctx.accountKey : "";
+  // Isolate local favourites and watch history for each signed-in customer.
+  if (!accountKey) {
+    try {
+      var savedSession = JSON.parse(localStorage.getItem("alezz.customer.session.v1") || "null");
+      var customerId = String(savedSession && savedSession.user_id || "").replace(/-/g, "");
+      if (/^[a-f0-9]{32}$/i.test(customerId)) accountKey = customerId.toLowerCase();
+    } catch (_) {}
+  }
   // The server provides an opaque, non-credential account key after authentication.
   // Unauthenticated legacy/native shells retain the previous device-local namespace.
   var NS = accountKey ? "alezz.member.v1." + accountKey + "." : "alezz.v10.";
@@ -43,7 +51,7 @@
     isMember: !!accountKey,
 
     /* ---- activation ---- */
-    isActivated: function () { return !!accountKey || read("activated") === true; },
+    isActivated: function () { return !!(window.AlezzCustomerAuth && window.AlezzCustomerAuth.isAuthenticated()); },
     activate: function () { write("activated", true); },
     deactivate: function () { write("activated", false); },
 
