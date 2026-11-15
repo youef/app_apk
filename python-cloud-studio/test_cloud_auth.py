@@ -36,7 +36,8 @@ with TestClient(app, base_url='https://studio.example.test') as c:
     page = c.get('/login').text
     assert 'البريد الإلكتروني' in page and 'name="email"' in page
     assert 'كلمة مرور الموقع' not in page
-    assert 'غير صحيحة' in c.post('/login', data={'email':'bad@example.com','password':'bad'}).text
+    with patch.object(cloud_auth, '_verify_admin', side_effect=ValueError('invalid credentials')):
+        assert 'غير صحيحة' in c.post('/login', data={'email':'bad@example.com','password':'bad'}).text
     with patch.object(cloud_auth, '_verify_admin', return_value=FakeAdmin()) as verify:
         login = c.post('/login', data={'email':'admin@example.com', 'password':'good'},
                        follow_redirects=False)
