@@ -42,7 +42,8 @@ class InstantScanManager:
               progress integer not null default 0,total integer not null default 0,
               completed integer not null default 0,healthy integer not null default 0,
               renewed integer not null default 0,published integer not null default 0,
-              failed integer not null default 0,errors text not null default '[]',
+              failed integer not null default 0,next_refresh real not null default 0,
+              errors text not null default '[]',
               outcomes text not null default '[]',created_at real not null,
               updated_at real not null,finished_at real not null default 0);
             create index if not exists instant_scans_target
@@ -215,6 +216,7 @@ class InstantScanManager:
         fractions={}
         fraction_lock=threading.RLock()
         total=1
+        next_renewal=0
         def report(stage,message,amount):
             amount=max(0.0,min(1.0,float(amount)))
             percent=int(5+90*amount) if table!="aseel_series" else int(2+18*amount)
@@ -263,6 +265,10 @@ class InstantScanManager:
                                 counters["healthy"]+=int(success)
                                 counters["renewed"]+=int(result["renewed"])
                                 counters["published"]+=int(result["published"])
+                                renewal=float(result.get("next_refresh") or 0)
+                                if renewal and renewal<self.clock()+9*365*86400:
+                                    if not next_renewal or renewal<next_renewal:
+                                        next_renewal=renewal
                                 counters["failed"]+=int(not success)
                                 status="healthy" if success else "broken"
                                 note=result.get("error") or ("تم التحقق والتجديد" if result["renewed"] else "المشغل سليم")
@@ -280,7 +286,8 @@ class InstantScanManager:
                             self._save(run_id,stage="episodes",message="اكتمل "+label+" · "+str(counters["completed"])+
                                        " من "+str(total),progress=min(94,progress),
                                        **counters,errors=json.dumps(errors[-20:],ensure_ascii=False),
-                                       outcomes=json.dumps(outcomes[-30:],ensure_ascii=False))
+                                       outcomes=json.dumps(outcomes[-30:],ensure_ascii=False),
+                                    next_refresh=next_renewal)
                     try:
                         eligible=counters["published"]>0
                         if not eligible and counters["healthy"]:
@@ -304,6 +311,8 @@ class InstantScanManager:
                     ok=result["status"]=="healthy"
                     counters.update(completed=1,healthy=int(ok),failed=int(not ok),
                                     renewed=int(result["renewed"]),published=int(result["published"]))
+                    next_renewal=float(result.get("next_refresh") or 0)
+                    if next_renewal>self.clock()+9*365*86400:next_renewal=0
                     note=result.get("error") or ("تم التجديد والتحقق" if result["renewed"] else "الرابط سليم")
                     if not ok:errors.append(safe_error(note))
                     outcomes.append({"label":"الفيلم" if table=="aseel_movies" else "الحلقة",
@@ -321,7 +330,7 @@ class InstantScanManager:
                 message="لم يجتز أي رابط الفحص؛ راجع الأسباب والمصادر الأصلية"
             if stage=="partial":message="اكتمل الفحص جزئيًا؛ توجد حلقات أو روابط تحتاج معالجة"
             self._save(run_id,status=stage,stage=stage,message=message,progress=100,
-                       finished_at=self.clock(),**counters,
+                       finished_at=self.clock(),**counters,next_refresh=next_renewal,
                        errors=json.dumps(errors[-20:],ensure_ascii=False),
                        outcomes=json.dumps(outcomes[-30:],ensure_ascii=False))
             self.control.audit("immediate_scan",table,identifier,
