@@ -515,4 +515,6 @@ class Control:
                         "dry_run":body.dry_run,"status":body.status}
             return await asyncio.to_thread(work)
 
+        from library_editor import LibraryEditor
+        router.include_router(LibraryEditor(control.autosync, control).router(get_state, protected))
         return router
