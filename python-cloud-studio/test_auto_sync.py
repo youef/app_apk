@@ -221,7 +221,29 @@ class AutoSyncTests(unittest.TestCase):
         row = self.row()
         self.resolver = FakeResolver(healthy=[OLD])
         self.worker.check_target(self.job(row))
-        self.assertEqual(self.job(row)['next_check'], NOW+24*3600)
+        self.assertEqual(self.job(row)['next_check'], NOW+self.worker.interval)
+
+    def test_verified_new_signed_hls_token_replaces_old_healthy_token_for_same_resource(self):
+        old = 'https://store.example.org/hls/02/movie/master.m3u8?expires='+str(int(NOW+3600))
+        fresh = 'https://store.example.org/hls/02/movie/master.m3u8?expires='+str(int(NOW+7200))
+        row = self.row(stream=old)
+        self.resolver = FakeResolver(healthy=[old,fresh],
+            fresh=[dict(url=fresh,kind='direct',page_url=ROOT)])
+        self.worker.check_target(self.job(row))
+        remote = self.db.rows['aseel_movies'][row['id']]
+        self.assertEqual(remote['stream_url'], fresh)
+        self.assertEqual(remote['status'], 'published')
+        self.assertEqual(remote['rights_status'], 'approved')
+        self.assertTrue(self.resolver.extractions)
+
+    def test_healthy_link_is_not_replaced_by_different_movie_path(self):
+        old = 'https://store.example.org/hls/02/movie/master.m3u8?expires='+str(int(NOW+3600))
+        unrelated = 'https://store.example.org/hls/02/other/master.m3u8?expires='+str(int(NOW+7200))
+        row = self.row(stream=old)
+        self.resolver = FakeResolver(healthy=[old,unrelated],
+            fresh=[dict(url=unrelated,kind='direct',page_url=ROOT)])
+        self.worker.check_target(self.job(row))
+        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['stream_url'], old)
 
     def test_variant_limit_does_not_discard_full_source_history(self):
         backups = [dict(url=f'https://cdn.example.org/v{n}.mp4',label=str(n),kind='direct') for n in range(14)]
