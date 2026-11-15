@@ -22,6 +22,20 @@ from alezz_fetchv_importer import MEDIA_EXT, SourceClient, check_dns, clean, fin
 MAX_CANDIDATES = 128
 _BROWSER_SLOTS = threading.BoundedSemaphore(2)
 
+def is_public_hls_manifest_request(url: str, method: str = 'GET') -> bool:
+    """Permit only manifest requests to finish in the discovery browser.
+
+    HLS manifests are small metadata documents needed by JS players to select
+    a stream. Actual segments and full MP4/WebM downloads remain blocked.
+    Every request still passes the existing public-host and DNS checks.
+    """
+    try:
+        return (method.upper() == 'GET' and
+                urlsplit(public_url(url)).path.lower().endswith('.m3u8'))
+    except (AttributeError, TypeError, ValueError):
+        return False
+
+
 # Reachability of an embed page is not evidence of playable media.
 ONEVID_EMBED_PATH = re.compile(r'^/embed-[A-Za-z0-9_-]+\.html$', re.I)
 OK_RU_VIDEO_PATH = re.compile(r'^/video(?:embed)?/([0-9]{1,20})/?$')
@@ -351,7 +365,14 @@ class MediaResolver:
         """Return candidates. Use resolve() to retry headless after expired URLs."""
         deadline = time.monotonic()+self.max_seconds
         sources, errors = self._http(pages, deadline=deadline)
-        if self.mode == 'headless' or self.mode == 'auto' and (force_browser or not any(x.get('kind') == 'direct' for x in sources)):
+        # A working but soon-to-expire signed URL is not sufficient for the
+        # next refresh; run the real player to discover a newly signed one.
+        fresh_direct = any(
+            item.get('kind') == 'direct' and
+            (signed_expiry(item.get('url', '')) is None or
+             signed_expiry(item['url']) > time.time() + 300)
+            for item in sources)
+        if self.mode == 'headless' or self.mode == 'auto' and (force_browser or not fresh_direct):
             player_pages = getattr(self, '_http_player_pages', [])
             browser_pages = list(dict.fromkeys([*player_pages[:3], *pages]))
             browser_sources, browser_errors = self._browser(browser_pages, deadline=deadline)
@@ -424,8 +445,15 @@ class MediaResolver:
             checked = merge_sources(self.check(directs, deadline=http_deadline), embeds)
         else:
             checked = self.check(all_candidates, deadline=http_deadline)
-        need_browser = browser_enabled and (self.mode == 'headless' or
-                                            not any(x.get('verified') for x in checked))
+        # Renew from the actual player BEFORE a signed manifest expires.
+        # A reachable embed page or a valid but expiring manifest must not
+        # suppress Chromium-based discovery of the replacement URL.
+        healthy_direct = any(
+            item.get('kind') == 'direct' and item.get('verified') and
+            (signed_expiry(item.get('url', '')) is None or
+             signed_expiry(item['url']) > time.time() + 300)
+            for item in checked)
+        need_browser = browser_enabled and (self.mode == 'headless' or not healthy_direct)
         if need_browser and time.monotonic() < deadline:
             previous = {x['url'] for x in checked}
             # Direct player pages first, original episode wrapper last.
@@ -556,8 +584,16 @@ def _capture_headless(url: str, *, max_seconds=35) -> list[dict]:
                         if len(hosts) >= 24: raise ValueError('Host limit')
                         check_dns(target); hosts.add(host)
                     observe(route.request)
-                    # Only the URL is needed; prevent browser media downloads.
-                    if route.request.resource_type in ('image', 'font', 'media') or re.search(r'\.(?:ts|m4s)(?:[?#]|$)', target, re.I):
+                    # Let the HLS manifest request complete so the player
+                    # can initialize and reveal its signed master.m3u8 URL.
+                    # Still block segments, full video downloads and images.
+                    # Browser observation alone never marks a video verified.
+                    is_manifest = is_public_hls_manifest_request(
+                        target, route.request.method)
+                    if ((route.request.resource_type in ('image', 'font', 'media')
+                         and not is_manifest) or
+                            re.search(r'\.(?:ts|m4s|mp4|m4v|webm)(?:[?#]|$)',
+                                      target, re.I)):
                         route.abort('blockedbyclient'); return
                     if route.request.is_navigation_request() and route.request.frame.page != page:
                         route.abort('blockedbyclient'); return
@@ -596,22 +632,40 @@ def _capture_headless(url: str, *, max_seconds=35) -> list[dict]:
             try: page.goto(url, wait_until='domcontentloaded', timeout=max(1,min(18000,(max_seconds-(time.monotonic()-started))*1000)))
             except Exception:
                 if page.is_closed(): return merge_sources(found)
-            page.wait_for_timeout(max(0,min(1500,(max_seconds-(time.monotonic()-started))*1000)))
+            page.wait_for_timeout(max(0,min(1000,(max_seconds-(time.monotonic()-started))*1000)))
             for frame in page.frames[:8]:
                 if time.monotonic()-started > max_seconds: break
                 try:
                     check_dns(frame.url)
                     found.extend(extract_candidates(frame.content(), frame.url)[0])
                 except Exception: continue
-                for selector in ('video', 'button[aria-label*="play" i]', 'button[title*="play" i]',
-                                 '[data-server]', '.server-item'):
-                    if time.monotonic()-started > max_seconds: break
+                # Click only playback controls or explicit server selectors
+                # in the actual player frame. Modern HLS players often create
+                # the signed URL only after a real user-gesture-like click.
+                clicks = 0
+                for selector in (
+                    '.vjs-big-play-button', '.jw-display-icon-container',
+                    '.jw-icon-playback', '.plyr__control[data-plyr="play"]',
+                    'button[aria-label*="play" i]',
+                    'button[title*="play" i]',
+                    'button[aria-label*="تشغيل"]',
+                    '.play-button', '#play', 'video',
+                    '[data-server]', '.server-item',
+                ):
+                    if time.monotonic()-started > max_seconds or clicks >= 5:
+                        break
                     try:
                         controls = frame.locator(selector)
-                        for index in range(min(controls.count(), 3)):
-                            if time.monotonic()-started > max_seconds: break
-                            controls.nth(index).click(timeout=1000)
-                            page.wait_for_timeout(700)
-                    except Exception: pass
+                        for index in range(min(controls.count(), 2)):
+                            if time.monotonic()-started > max_seconds or clicks >= 5:
+                                break
+                            control = controls.nth(index)
+                            if not control.is_visible(): continue
+                            control.click(timeout=900)
+                            clicks += 1
+                            page.wait_for_timeout(max(0,min(
+                                500,(max_seconds-(time.monotonic()-started))*1000)))
+                    except Exception:
+                        pass
             return merge_sources(found, limit=MAX_CANDIDATES)
         finally: browser.close()
