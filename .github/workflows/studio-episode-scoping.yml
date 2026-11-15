@@ -1,0 +1,27 @@
+name: Al Ezz Studio - Same series only regression
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'python-cloud-studio/series_episode_guard.py'
+      - 'python-cloud-studio/alezz_fetchv_importer.py'
+      - 'python-cloud-studio/title_cleaner.py'
+      - 'python-cloud-studio/test_series_episode_guard.py'
+      - '.github/workflows/studio-episode-scoping.yml'
+  workflow_dispatch:
+jobs:
+  episodes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install studio dependencies
+        run: pip install -r python-cloud-studio/requirements-dev.txt
+      - name: Compile metadata modules
+        run: python -m py_compile python-cloud-studio/alezz_fetchv_importer.py python-cloud-studio/title_cleaner.py python-cloud-studio/series_episode_guard.py
+      - name: No unrelated episodes or source-branding in metadata
+        working-directory: python-cloud-studio
+        run: python -m unittest test_series_episode_guard test_title_cleaner test_importer -v
