@@ -466,11 +466,29 @@ class AutoSyncTests(unittest.TestCase):
     def test_periodic_refresh_discovers_direct_media_when_primary_is_embed(self):
         embed='https://1vid.xyz/embed-example.html'
         row=self.row(stream=embed)
-        self.resolver=FakeResolver(healthy=[NEW],fresh=[dict(url=NEW,kind='direct')])
+        self.resolver=FakeResolver(healthy=[NEW],browser=[dict(url=NEW,kind='direct')])
         self.worker.check_target(self.job(row))
         self.assertEqual(self.db.rows['aseel_movies'][row['id']]['stream_url'],NEW)
         self.assertIn(embed,self.resolver.extractions[0][0])
+        self.assertTrue(self.resolver.extractions[0][1])
         self.assertGreater(self.job(row)['next_refresh'],NOW)
+
+    def test_periodic_embed_refresh_replaces_still_valid_signed_url(self):
+        current='https://cdn.example.org/film/master.m3u8?expires='+str(int(NOW+7200))
+        replacement='https://cdn.example.org/film/master.m3u8?expires='+str(int(NOW+43200))
+        embed='https://player.example.org/embed-abc.html'
+        row=self.row(name='signed-refresh',stream=current,
+                     stream_variants=[dict(url=embed,kind='embed',label='player')])
+        self.resolver=FakeResolver(healthy=[current,replacement],
+            browser=[dict(url=replacement,kind='direct',page_url=embed)])
+        self.worker.check_target(self.job(row))
+        self.assertTrue(self.resolver.extractions[0][1])
+        remote=self.db.rows['aseel_movies'][row['id']]
+        self.assertEqual(remote['stream_url'],replacement)
+        self.assertEqual(remote['status'],'published')
+        self.assertEqual(remote['rights_status'],'approved')
+        self.assertIn(current,{item['url'] for item in
+            self.worker.queue.sources('aseel_movies',row['id'])})
 
     def test_renewal_can_switch_to_verified_alternative_on_another_cdn(self):
         current=OLD+'?expires='+str(int(NOW+120))
