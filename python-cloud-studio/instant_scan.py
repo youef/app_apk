@@ -206,6 +206,9 @@ class InstantScanManager:
         return True
 
     def _run(self,db,table,identifier,run_id,force):
+        # User-scoped RLS was checked at start(); use the server maintenance
+        # connection for writes where available, including source history.
+        db=self.worker.db or db
         counters={"completed":0,"healthy":0,"renewed":0,"published":0,"failed":0}
         errors=[]
         outcomes=[]
@@ -279,7 +282,18 @@ class InstantScanManager:
                                        **counters,errors=json.dumps(errors[-20:],ensure_ascii=False),
                                        outcomes=json.dumps(outcomes[-30:],ensure_ascii=False))
                     try:
-                        if self._series_publish(db,identifier,counters["published"]):
+                        eligible=counters["published"]>0
+                        if not eligible and counters["healthy"]:
+                            # An already-published, rights-approved episode also
+                            # qualifies the parent; don't depend on a new publish.
+                            for eid,_,_ in episodes:
+                                record=db.single("aseel_episodes",{
+                                    "select":"status,rights_status,link_health_status",
+                                    "id":"eq."+eid})
+                                if record and record.get("status")=="published" and record.get("rights_status")=="approved" and record.get("link_health_status")=="healthy":
+                                    eligible=True
+                                    break
+                        if self._series_publish(db,identifier,eligible):
                             counters["published"]+=1
                     except Exception as exc:
                         errors.append("تعذر تحديث حالة نشر المسلسل: "+safe_error(exc))
