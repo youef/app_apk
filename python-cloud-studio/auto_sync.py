@@ -282,13 +282,68 @@ class QueueDB:
             row=db.execute('select min(next_check),max(last_check),sum(dirty!=\'\') from auto_jobs').fetchone()
             return dict(counts=counts,next_check=row[0],last_check=row[1],pending_uploads=row[2] or 0)
 
-    def targets(self, limit=50, offset=0, query=''):
+    @staticmethod
+    def _target_where(query='', filter_status='all', now=None):
+        """Bounded parameterized filtering, including due and expiring streams."""
+        allowed={'all','healthy','suspect','broken','unchecked','missing_source','due','expiring'}
+        if filter_status not in allowed:raise ValueError('فلتر المزامنة غير معروف')
+        now=time.time() if now is None else now
+        where=" where (j.title like ? or j.target_id=?)"
+        args=['%'+query+'%',query]
+        if filter_status in ('healthy','suspect','broken','unchecked'):
+            where+=" and j.status=?"
+            args.append(filter_status)
+        elif filter_status=='missing_source':
+            where+=(" and j.table_name!='aseel_series' and not exists "
+                    "(select 1 from auto_sources s where s.table_name=j.table_name "
+                    "and s.target_id=j.target_id and s.kind='original')")
+        elif filter_status=='due':
+            where+=(" and j.lease_until<=? and (j.next_check<=? or j.next_refresh<=? "
+                    "or (j.dirty!='' and j.upload_at<=?))")
+            args.extend((now,now,now,now))
+        elif filter_status=='expiring':
+            where+=(" and j.table_name!='aseel_series' and exists "
+                    "(select 1 from auto_sources s where s.table_name=j.table_name "
+                    "and s.target_id=j.target_id and s.url=j.stream_url and "
+                    "s.expires_at>0 and s.expires_at<=?)")
+            args.append(now+3600)
+        return where,args
+
+    def targets(self, limit=50, offset=0, query='', filter_status='all', now=None):
+        now=time.time() if now is None else now
+        where,args=self._target_where(query,filter_status,now)
         with self.db() as db:
             return [dict(r) for r in db.execute('select j.*, '
                 '(select count(*) from auto_sources s where s.table_name=j.table_name and s.target_id=j.target_id) source_count,'
-                '(select count(*) from auto_sources s where s.table_name=j.table_name and s.target_id=j.target_id and s.status=\'healthy\' and s.kind=\'direct\') valid_sources '
-                'from auto_jobs j where title like ? or target_id=? order by failures desc,next_check limit ? offset ?',
-                ('%'+query+'%',query,limit,offset))]
+                '(select count(*) from auto_sources s where s.table_name=j.table_name and s.target_id=j.target_id and s.status=\'healthy\' and s.kind=\'direct\') valid_sources,'
+                '(select max(s.expires_at) from auto_sources s where s.table_name=j.table_name and s.target_id=j.target_id and s.url=j.stream_url) primary_expires_at '
+                'from auto_jobs j'+where+' order by case when j.next_check<=? or j.next_refresh<=? then 0 else 1 end,'
+                'j.failures desc,j.next_check limit ? offset ?',
+                (*args,now,now,limit,offset))]
+
+    def count_targets(self, query='', filter_status='all', now=None):
+        where,args=self._target_where(query,filter_status,now)
+        with self.db() as db:
+            return int(db.execute('select count(*) from auto_jobs j'+where,args).fetchone()[0])
+
+    def monitor(self, now=None, expiry_window=3600):
+        """Dashboard counters with no saved stream URLs or row JSON."""
+        now=time.time() if now is None else now
+        with self.db() as db:
+            due=db.execute("select count(*) from auto_jobs where lease_until<=? and "
+                "(next_check<=? or next_refresh<=? or (dirty!='' and upload_at<=?))",
+                (now,now,now,now)).fetchone()[0]
+            active=db.execute('select count(*) from auto_jobs where lease_until>?',(now,)).fetchone()[0]
+            expiring=db.execute(
+                "select count(*) from auto_jobs j where j.table_name!='aseel_series' "
+                "and exists (select 1 from auto_sources s where s.table_name=j.table_name "
+                "and s.target_id=j.target_id and s.url=j.stream_url and "
+                "s.expires_at>0 and s.expires_at<=?)",(now+expiry_window,)).fetchone()[0]
+            retrying=db.execute("select count(*) from auto_jobs where "
+                "status in ('suspect','broken') and failures>0").fetchone()[0]
+            pending=db.execute('select count(*) from auto_sources where synced=0').fetchone()[0]
+        return dict(due_count=due,in_progress=active,expiring_soon=expiring,
+                    retrying=retrying,pending_sources=pending)
 
 
 class ProcessLock:
@@ -313,7 +368,9 @@ class AutoSync:
     def __init__(self, data_dir, db_factory=None, resolver_factory=None, clock=time.time):
         self.queue=QueueDB(Path(data_dir)/'autosync.sqlite3')
         self.clock=clock
-        self.interval=max(1,float(os.getenv('ALEZZ_AUTOSYNC_INTERVAL_HOURS','4')))*3600
+        default_hours=max(1,min(48,float(os.getenv('ALEZZ_AUTOSYNC_INTERVAL_HOURS','4'))))
+        self.interval=max(1,min(48,float(self.queue.get_setting('interval_hours',default_hours))))*3600
+        self.expiry_lead_seconds=max(300,min(10800,int(self.queue.get_setting('expiry_lead_minutes',5))*60))
         self.mode=os.getenv('ALEZZ_AUTOSYNC_MODE','auto')
         self.concurrency=max(1,min(4,int(os.getenv('ALEZZ_AUTOSYNC_CONCURRENCY','2'))))
         self.db_factory=db_factory or self._environment_db
@@ -346,6 +403,21 @@ class AutoSync:
             except ValueError:pass
         self.force_import=True
         self.wake_event.set()
+
+    def configure(self, interval_hours, expiry_lead_minutes):
+        """Persist health-check cadence without touching the frozen extractor."""
+        if type(interval_hours) is not int or not 1<=interval_hours<=48:
+            raise ValueError('الفاصل الزمني يجب أن يكون من ساعة إلى 48 ساعة')
+        if type(expiry_lead_minutes) is not int or not 5<=expiry_lead_minutes<=180:
+            raise ValueError('التجديد المسبق يجب أن يكون من 5 إلى 180 دقيقة')
+        self.queue.setting('interval_hours',interval_hours)
+        self.queue.setting('expiry_lead_minutes',expiry_lead_minutes)
+        self.interval=interval_hours*3600
+        self.expiry_lead_seconds=expiry_lead_minutes*60
+        self.queue.event('schedule','تم تحديث الجدولة الذكية (الفحص: '+str(interval_hours)+
+                         ' ساعة؛ التجديد المسبق: '+str(expiry_lead_minutes)+' دقيقة)')
+        self.wake_event.set()
+        return dict(interval_hours=interval_hours,expiry_lead_minutes=expiry_lead_minutes)
 
     @property
     def enabled(self): return self.queue.get_setting('enabled',os.getenv('ALEZZ_AUTOSYNC_ENABLED','1')=='1')
@@ -479,10 +551,10 @@ class AutoSync:
         extracted=False
         browser_requested=False
         current_expiry=expires_at(job['stream_url'])
-        if pages and (job['next_refresh']<=now or current_expiry and current_expiry<=now+3600):
+        if pages and (job['next_refresh']<=now or current_expiry and current_expiry<=now+self.expiry_lead_seconds):
             # Ask the FROZEN browser extractor for a new signed token before
             # the old (still-healthy) one expires. Prefer known embed origins.
-            signing_refresh=bool(current_expiry and current_expiry<=now+3600)
+            signing_refresh=bool(current_expiry and current_expiry<=now+self.expiry_lead_seconds)
             embed_pages=[source['url'] for source in sources if source['kind']=='embed']
             discovery_pages=(embed_pages[:2]+pages if signing_refresh else pages)
             fresh,errors=resolver.extract(discovery_pages,
@@ -530,7 +602,11 @@ class AutoSync:
         expiry=expires_at(selected)
         if good and expiry>now:
             next_check=min(next_check,max(now+60,expiry-300))
-            next_refresh=min(next_refresh,max(now+60,expiry-300))
+            # Respect early-refresh preferences while avoiding repeated
+            # browser capture while the upstream has no newer signature.
+            refresh_floor=600 if expiry-now>900 else 60
+            next_refresh=min(next_refresh,max(now+refresh_floor,
+                                             expiry-self.expiry_lead_seconds))
         allowed={s['url'] for s in checked if s.get('verified') or s.get('kind')=='embed' and s.get('reachable')}
         variants=[]
         for source in sorted(history,key=lambda s:(s['kind']=='direct',s['confidence']),reverse=True):
@@ -641,9 +717,10 @@ class AutoSync:
 
     def status(self):
         return dict(running=bool(self.thread and self.thread.is_alive()),enabled=self.enabled,connected=self.db is not None,
-                    mode=self.mode,interval_hours=self.interval/3600,last_tick=self.last_tick,last_import=self.last_import,
+                    mode=self.mode,interval_hours=self.interval/3600,expiry_lead_minutes=self.expiry_lead_seconds/60,last_tick=self.last_tick,last_import=self.last_import,
                     discovery_last_tick=self.discovery.last_tick,discovery_last_success=self.discovery.last_success,
                     discovery_last_error=self.discovery.last_error,
                     import_phase=self.import_phase,import_seen=self.import_seen,
                     last_error_type=self.last_error_type,
-                    last_error=self.last_error,**self.queue.snapshot())
+                    last_error=self.last_error,**self.queue.snapshot(),
+                    **self.queue.monitor(self.clock(),max(3600,self.expiry_lead_seconds)))
