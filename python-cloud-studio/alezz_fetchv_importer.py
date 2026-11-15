@@ -992,15 +992,23 @@ def category_for_genres(categories: list[dict], genres: list[str]) -> str:
 def playback_variants(entry, existing=None, *, primary=None) -> list[dict]:
     """The production player accepts at most eight {label,url} variants."""
     rows, seen = [], {entry.media_url if primary is None else primary}
-    for source in entry.sources + (existing or []):
+    # Prefer newly verified direct players over old embed candidates when
+    # the production player can retain only eight alternatives.
+    ordered = sorted(entry.sources, key=lambda row: (
+        bool(row.get('verified')), row.get('kind') == 'direct',
+        row.get('checked_at') or 0), reverse=True)
+    for source in ordered + (existing or []):
         if not isinstance(source, dict): continue
         url = source.get('url', '')
         if url in seen: continue
         try: public_url(url)
         except ValueError: continue
-        from media_resolver import normalized_source_url
+        from media_resolver import normalized_source_url, signed_expiry
         url = normalized_source_url(url)
         if url in seen: continue
+        expiry = signed_expiry(url)
+        if expiry is not None and expiry <= time.time() + 300:
+            continue  # Never offer a nearly expired, signed fallback.
         seen.add(url)
         if source.get('error') and not source.get('verified') and not source.get('reachable'): continue
         rows.append({k: source[k] for k in ('url', 'label', 'kind', 'page_url') if k in source})
@@ -1045,8 +1053,17 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
         primary = old.get('stream_url')
         merged = {k:v for k,v in payload.items() if not old.get(k)}
         if primary:
-            for key in ('stream_url','link_health_status'):
-                merged.pop(key,None)
+            # Keep the existing primary unless a NEW direct URL has passed an
+            # actual playback-byte probe. An iframe is never sufficient.
+            from media_resolver import supported_source_kind
+            if (entry.verified and payload.get('stream_url') and
+                    payload['stream_url'] != primary and
+                    supported_source_kind(payload['stream_url']) == 'direct'):
+                merged['stream_url'] = payload['stream_url']
+                merged['link_health_status'] = 'healthy'
+            else:
+                for key in ('stream_url','link_health_status'):
+                    merged.pop(key,None)
         if entry.sources:
             merged['stream_variants'] = playback_variants(entry, old.get('stream_variants'), primary=primary)
         return merged
