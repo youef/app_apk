@@ -17,7 +17,9 @@
   <script src="/static/app.js?v=cloudstudio8" defer></script>
   <script src="/static/studio-pro.js?v=studio7" defer></script>
   <link rel="stylesheet" href="/static/autosync.css?v=smart-sync-20261115">
+  <link rel="stylesheet" href="/static/title-search.css?v=title-lookup-1">
   <script src="/static/autosync.js?v=smart-sync-20261115" defer></script>
+  <script src="/static/title-search.js?v=title-lookup-1" defer></script>
 </head>
 <body>
   <div class="app-shell" id="app">
@@ -60,7 +62,21 @@
         </section>
 
         <section class="section-panel discover-panel" aria-labelledby="discoverTitle">
-          <div class="section-head"><div class="section-count">01</div><div class="section-head-main"><h2 id="discoverTitle">اكتشاف محتوى جديد</h2><p>أضف رابط الفيلم أو صفحة المسلسل، وسنستخرج البيانات المتاحة تلقائيًا.</p></div><span class="head-tag">AUTO DISCOVERY</span></div>
+          <div class="section-head"><div class="section-count">01</div><div class="section-head-main"><h2 id="discoverTitle">اكتشاف محتوى جديد</h2><p>ابحث باسم الفيلم أو المسلسل داخل مكتبة العز ومصادرها المسجلة، أو استخدم رابط المصدر كالسابق.</p></div><span class="head-tag">AUTO DISCOVERY</span></div>
+          <section class="title-finder" aria-label="اكتشف المحتوى بالاسم">
+            <div class="title-finder-head">
+              <span class="title-finder-icon" aria-hidden="true">⌕</span>
+              <div><h3>ابحث باسم الفيلم أو المسلسل</h3><p>حدد العمل من مكتبتك لتحديث بياناته وطلب تجديد روابطه باستخدام محرك العز الأصلي.</p></div>
+            </div>
+            <form id="titleSearchForm" class="title-finder-form">
+              <label class="field title-finder-input"><span class="field-label">اسم الفيلم أو المسلسل</span><input id="titleSearchInput" type="search" placeholder="مثال: لا يعقل أو حيث تشرق الشمس" minlength="2" maxlength="120" autocomplete="off" required></label>
+              <label class="field title-finder-kind"><span class="field-label">نوع المحتوى</span><select id="titleSearchKind"><option value="auto">الكل</option><option value="movie">أفلام</option><option value="series">مسلسلات</option></select></label>
+              <button class="primary-btn" type="submit" id="titleSearchBtn">بحث بالاسم</button>
+              <button class="secondary-btn" type="button" id="titleSearchFeedsBtn" title="البحث في صفحات الفهارس التي سجّلتها في المزامنة الذكية">بحث في المصادر المسجلة</button>
+            </form>
+            <p id="titleSearchStatus" class="title-finder-status" role="status" aria-live="polite">البحث في مكتبتك سريع. البحث في المصادر المسجلة يفحص صفحات الفهرس المتاحة وقد يستغرق وقتًا أطول.</p>
+            <div id="titleSearchResults" class="title-finder-results" aria-live="polite"></div>
+          </section>
           <div class="source-form"><label class="field field--source"><span class="field-label">رابط المصدر <span class="field-hint">HTTPS</span></span><span class="input-icon">↗</span><input type="url" id="sourceUrl" dir="ltr" spellcheck="false" autocomplete="url" placeholder="https://example.com/series/..."></label><label class="field field--type"><span class="field-label">نوع المحتوى</span><select id="sourceKind"><option value="auto">✦ اكتشاف تلقائي</option><option value="series">▦ مسلسل وحلقات</option><option value="movie">▷ فيلم</option></select></label></div>
           <div class="action-row"><button id="discoverBtn" class="primary-btn"><span class="btn-icon">✧</span> اكتشف المحتوى <span class="btn-arrow">←</span></button><button id="demoBtn" class="secondary-btn">معاينة تجريبية</button><p class="discovery-note">يدعم JSON-LD وصفحات المواسم وروابط الوسائط العامة.</p></div>
           <div class="smart-extras">

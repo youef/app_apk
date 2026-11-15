@@ -1,0 +1,23 @@
+.title-finder{margin:16px 0 20px;padding:18px;border:1px solid rgba(225,188,115,.3);border-radius:18px;background:linear-gradient(120deg,rgba(180,137,55,.10),rgba(17,25,40,.22))}
+.title-finder-head{display:flex;gap:12px;align-items:center;margin-bottom:15px}
+.title-finder-head h3{font-size:1.08rem;margin:0 0 5px;color:#ebd29e}
+.title-finder-head p,.title-finder-status{font-size:.83rem;color:#b6bcc7;line-height:1.7;margin:0}
+.title-finder-icon{width:45px;height:45px;display:grid;place-items:center;border-radius:13px;background:#443620;color:#f4ca75;font-size:1.8rem;flex:none}
+.title-finder-form{display:flex;flex-wrap:wrap;align-items:end;gap:10px}
+.title-finder-form .field{margin:0;min-width:0}
+.title-finder-form input,.title-finder-form select{min-height:45px}
+.title-finder-input{flex:1 1 230px}.title-finder-kind{flex:0 1 145px}
+.title-finder-form button{min-height:46px;white-space:normal}
+.title-finder-status{margin-top:11px;min-height:24px}
+.title-finder-status[data-error="true"]{color:#ffb6b6}
+.title-finder-results{display:grid;gap:10px;margin-top:10px}
+.title-finder-result{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:13px;border:1px solid rgba(255,255,255,.11);border-radius:14px;background:rgba(10,16,26,.67)}
+.title-finder-text{flex:1 1 200px;min-width:0;display:grid;gap:3px}
+.title-finder-text strong{color:#f5f3ee;overflow-wrap:anywhere;font-size:.95rem}
+.title-finder-text small{color:#adb7c7;overflow-wrap:anywhere;font-size:.76rem}
+.title-finder-actions{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.title-finder-actions button{padding:9px 13px;border-radius:10px;border:1px solid rgba(224,188,111,.45);cursor:pointer;font:inherit;font-size:.81rem;font-weight:700;color:#edcf91;background:rgba(142,110,53,.2)}
+.title-finder-actions button[data-main="true"]{background:#e8bf78;color:#17150d}
+.title-finder-actions button:disabled{opacity:.48;cursor:wait}
+.title-finder-empty{padding:14px;border:1px dashed rgba(244,210,146,.25);border-radius:12px;color:#afb8c7;font-size:.85rem}
+@media(max-width:570px){.title-finder{padding:13px}.title-finder-kind{flex:1 1 120px}.title-finder-form button{flex:1 1 140px}.title-finder-actions{width:100%}.title-finder-actions button{flex:1 1 115px}}
