@@ -28,6 +28,7 @@ from unittest.mock import patch
 from server import app
 import cloud_auth
 class FakeAdmin:
+    refresh_token = 'offline-test-refresh-token'
     def query(self, *args, **kwargs): return []
 with TestClient(app, base_url='https://studio.example.test') as c:
     assert c.get('/healthz').json()['ok']
@@ -82,13 +83,69 @@ print('Inactive administrator rejected')
         result = self.subprocess(script)
         self.assertEqual(result.returncode, 0, result.stdout+'\n'+result.stderr)
 
+
+    def test_session_restores_after_process_restart_and_rotates_cookie(self):
+        script = '''
+from fastapi.testclient import TestClient
+from unittest.mock import patch
+import cloud_auth
+from server import app
+
+class FakeAdmin:
+    def __init__(self, token): self.refresh_token = token
+    def query(self, *args, **kwargs): return []
+
+with TestClient(app,base_url='https://studio.example.test') as c:
+    with patch.object(cloud_auth,'_verify_admin',return_value=FakeAdmin('initial-refresh-token')):
+        login=c.post('/login',data={'email':'admin@example.com','password':'pass'},follow_redirects=False)
+    assert login.status_code==303
+    old_cookie=c.cookies.get(cloud_auth.COOKIE)
+    assert cloud_auth._decode(old_cookie)=='initial-refresh-token'
+    assert len(old_cookie)>80 and 'initial-refresh-token' not in old_cookie
+    cloud_auth._SESSIONS.clear()  # Simulates a new Render process
+    with patch.object(cloud_auth,'_restore_admin',return_value=FakeAdmin('rotated-refresh-token')) as restored:
+        init=c.get('/api/init')
+        restored.assert_called_once_with('initial-refresh-token')
+    assert init.status_code==200 and init.json()['authenticated']
+    fresh_cookie=c.cookies.get(cloud_auth.COOKIE)
+    assert fresh_cookie!=old_cookie
+    assert cloud_auth._decode(fresh_cookie)=='rotated-refresh-token'
+    assert c.get('/login',follow_redirects=False).status_code==303
+    csrf=init.json()['csrf']
+    out=c.post('/api/logout',json={},headers={'X-CSRF-Token':csrf})
+    assert out.status_code==200
+    assert not c.cookies.get(cloud_auth.COOKIE)
+    assert c.get('/api/init').status_code==401
+print('Persistent admin cookie rotation and logout passed')
+'''
+        result=self.subprocess(script)
+        self.assertEqual(result.returncode,0,result.stdout+'\n'+result.stderr)
+
+    def test_tampered_or_expired_encrypted_cookie_does_not_authenticate(self):
+        script = '''
+from fastapi.testclient import TestClient
+from server import app
+import cloud_auth
+with TestClient(app,base_url='https://studio.example.test') as c:
+    candidate=cloud_auth._token('offline-rotatable-refresh-token')
+    assert cloud_auth._valid(candidate)
+    modified=('A' if candidate[0]!='A' else 'B')+candidate[1:]
+    assert not cloud_auth._valid(modified)
+    c.cookies.set(cloud_auth.COOKIE,modified)
+    assert c.get('/api/init').status_code==401
+print('Tampered auth cookie rejected')
+'''
+        result=self.subprocess(script)
+        self.assertEqual(result.returncode,0,result.stdout+'\n'+result.stderr)
+
     def test_cloud_mode_rejects_remote_edge_capture(self):
         script = '''
 from fastapi.testclient import TestClient
 from unittest.mock import patch
 from server import app
 import cloud_auth
-class FakeAdmin: pass
+class FakeAdmin:
+    refresh_token = 'offline-test-refresh-token'
 with TestClient(app,base_url='https://studio.example.test') as c:
     with patch.object(cloud_auth, '_verify_admin', return_value=FakeAdmin()):
         assert c.post('/login',data={'email':'admin@example.com','password':'pass'}).status_code == 200
