@@ -144,6 +144,42 @@ class Tests(unittest.TestCase):
         self.assertEqual(db.rows["aseel_episodes"][0]["stream_url"],cat.episodes[0].media_url)
         self.assertEqual(db.rows["aseel_series"][0]["rights_status"],"approved")
 
+    def test_verified_refresh_replaces_old_episode_link_without_changing_rights(self):
+        old='https://cdn.example.org/old.m3u8?expires=1900000000'
+        new='https://cdn.example.org/new.m3u8?expires=1950000000'
+        episode=mod.Episode(1, 1, 'Episode 1', 'https://source.example.org/episode/1',
+                            media_url=old, verified=True)
+        cat=mod.Catalogue('series', 'Licensed show', 'https://source.example.org/show',
+                          episodes=[episode])
+        db=FakeDB()
+        mod.store(cat,db,publish=True,rights=True)
+        original=db.rows['aseel_episodes'][0]
+        self.assertEqual(original['stream_url'],old)
+        episode.media_url=new
+        episode.verified=False
+        mod.store(cat,db,publish=False,rights=False,capture_merge=True)
+        self.assertEqual(original['stream_url'],old)
+        episode.verified=True
+        episode.sources=[dict(url=new, kind='direct', verified=True)]
+        mod.store(cat,db,publish=False,rights=False,capture_merge=True)
+        self.assertEqual(original['stream_url'],new)
+        self.assertEqual(original['link_health_status'],'healthy')
+        self.assertEqual(original['status'],'published')
+        self.assertEqual(original['rights_status'],'approved')
+        self.assertEqual(len(db.rows['aseel_episodes']),1)
+
+    def test_expired_signed_stream_is_never_saved_as_fallback(self):
+        cat=mod.Catalogue('movie','Movie','https://source.example.org/movie')
+        cat.sources=[
+            dict(url='https://cdn.example.org/expired.m3u8?expires=1700000000',
+                 kind='direct',verified=True),
+            dict(url='https://cdn.example.org/working.m3u8?expires=1950000000',
+                 kind='direct',verified=True),
+        ]
+        links=mod.playback_variants(cat,primary='https://cdn.example.org/current.mp4')
+        self.assertEqual([item['url'] for item in links],
+            ['https://cdn.example.org/working.m3u8?expires=1950000000'])
+
     def test_auto_category(self):
         cats=[{"id":"drama-id","name_ar":"دراما"},{"id":"action-id","name_ar":"أكشن"}]
         self.assertEqual(mod.category_for_genres(cats,["drama","romance"]),"drama-id")
