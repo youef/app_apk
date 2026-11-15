@@ -129,6 +129,7 @@ class TitleLookupTests(unittest.TestCase):
         discovery=Recorder()
         manager=SmartSyncManagement(self.worker,discovery=discovery)
         self.worker.db=self.db
+        self.worker.queue.setting("enabled",True)
         manager._run_feeds()
         self.assertEqual(discovery.calls,1)
 
