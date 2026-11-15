@@ -84,6 +84,15 @@ class SeriesEpisodeGuard:
         self.host = urlsplit(source_url).hostname
         self.is_episode_page = "/episode/" in urlsplit(source_url).path.lower() or bool(EP_END.search(_text(source_url)))
         self.site_name = site_name
+        parts = urlsplit(source_url).path.strip("/").split("/")
+        # A series detail route has its own namespace; generic "episode-2"
+        # children must stay beneath it, not another show's directory.
+        self.series_root_path = (
+            "/" + "/".join(parts[:2]) + "/"
+            if not self.is_episode_page and len(parts) >= 2
+            and parts[0].lower() in ("series", "serial", "shows", "show", "tvseries")
+            else ""
+        )
         self.series_title = title
         self.series_story = ""
         # Recognized series link on the requested episode page is strongest;
@@ -99,6 +108,8 @@ class SeriesEpisodeGuard:
             if candidate:
                 self.series_title = candidate
         self.key = _key(self.series_title)
+        if self.key in ("مسلسل", "series", "tv series") and self.series_root_path:
+            self.key = _key(parts[1])
         if self.is_episode_page:
             story = soup.select_one(".singleSeries .series-story")
             if story:
@@ -126,15 +137,26 @@ class SeriesEpisodeGuard:
             return True
         if url.rstrip("/") == self.source_url.rstrip("/"):
             return True
-        # When every URL is generic (/episode-2), accept it only in a true
-        # episode list, never a sidebar or an unrelated article's navigation.
-        return bool(episode_group or not self.is_episode_page)
+        # When URLs are generic (/episode-2), only a verified episode tab or
+        # a child of the series detail route may authorize the association.
+        if episode_group:
+            return True
+        if self.is_episode_page:
+            return False
+        if self.series_root_path:
+            return urlsplit(url).path.startswith(self.series_root_path)
+        return True
 
     def matches_page(self, url: str) -> bool:
         if urlsplit(url).hostname != self.host:
             return False
         named = _url_name(url)
-        return not named or named == self.key
+        if named:
+            return named == self.key
+        if self.series_root_path:
+            return (urlsplit(url).path.startswith(self.series_root_path)
+                    or url.rstrip("/") == self.source_url.rstrip("/"))
+        return True
 
     def candidate_links(self, soup):
         panel = soup.select_one("#episodes-tab")
