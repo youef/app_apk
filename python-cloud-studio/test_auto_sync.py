@@ -228,7 +228,8 @@ class AutoSyncTests(unittest.TestCase):
         fresh = 'https://store.example.org/hls/02/movie/master.m3u8?expires='+str(int(NOW+7200))
         row = self.row(stream=old)
         self.resolver = FakeResolver(healthy=[old,fresh],
-            fresh=[dict(url=fresh,kind='direct',page_url=ROOT)])
+            fresh=[dict(url=fresh,kind='direct',page_url=ROOT)],
+            browser=[dict(url=fresh,kind='direct',page_url=ROOT)])
         self.worker.check_target(self.job(row))
         remote = self.db.rows['aseel_movies'][row['id']]
         self.assertEqual(remote['stream_url'], fresh)
@@ -336,12 +337,12 @@ class AutoSyncTests(unittest.TestCase):
         source = next(s for s in self.worker.queue.sources('aseel_movies',row['id']) if s['url']==ROOT)
         self.assertEqual(source['synced'],1)
 
-    def test_due_queue_prioritizes_series_and_expiring_signed_media(self):
+    def test_due_queue_prioritizes_expiring_signed_media_and_series(self):
         standard = self.row(name='standard')
         signed = self.row(name='signed',stream='https://cdn.example.org/video.m3u8?expires='+str(int(NOW+300)))
         series = self.row(table='aseel_series',name='series',source=SERIES,stream='')
-        self.assertEqual(self.worker.queue.claim(NOW)['target_id'],series['id'])
         self.assertEqual(self.worker.queue.claim(NOW)['target_id'],signed['id'])
+        self.assertEqual(self.worker.queue.claim(NOW)['target_id'],series['id'])
         self.assertEqual(self.worker.queue.claim(NOW)['target_id'],standard['id'])
 
     def test_worker_process_lock_excludes_duplicate_instance(self):
