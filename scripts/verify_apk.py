@@ -7,7 +7,9 @@ EXPECTED_PACKAGE=os.environ.get("AL_EZZ_EXPECTED_PACKAGE", "sa.alezz.tv.redclass
 MIN_SDK=19
 EXPECTED_TARGET_SDK=int(os.environ.get("AL_EZZ_EXPECTED_TARGET_SDK", "31"))
 MIN_VERSION=int(os.environ.get("AL_EZZ_MIN_VERSION", "19"))
-REQUIRED_ABIS=("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+ABI_MODE=os.environ.get("AL_EZZ_APK_ABI_MODE","universal")
+if ABI_MODE not in ("universal","huidi-armv7"): raise RuntimeError("Invalid ABI mode")
+REQUIRED_ABIS=("armeabi-v7a",) if ABI_MODE=="huidi-armv7" else ("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
 ELF_MACHINE={"armeabi-v7a": 40, "arm64-v8a": 183, "x86": 3, "x86_64": 62}
 ELF_CLASS={"armeabi-v7a": 1, "arm64-v8a": 2, "x86": 1, "x86_64": 2}
 
@@ -39,7 +41,7 @@ def main():
         native=[path for path in paths if path.startswith("lib/") and path.endswith(".so")]
         native_arches=set(path.split("/")[1] for path in native)
         check(native_arches==set(REQUIRED_ABIS),
-              "Universal APK includes ARMv7, ARM64, x86 and x86_64 native libraries")
+              "Native libraries match required ABIs ("+ABI_MODE+")")
         for abi in REQUIRED_ABIS:
             matches=[p for p in native if p.startswith("lib/"+abi+"/") and "conscrypt" in p]
             check(bool(matches),abi+" Conscrypt TLS JNI bundled")
@@ -87,7 +89,7 @@ def main():
     print("PACKAGE="+EXPECTED_PACKAGE)
     print("VERSION_CODE="+version.group(1))
     print("SUPPORTED_ABIS="+",".join(REQUIRED_ABIS))
-    print("UNIVERSAL_APK=true")
+    print("UNIVERSAL_APK="+str(ABI_MODE=="universal").lower())
     print("RESULT: STATIC INSTALL CHECKS PASSED — real-device installation not proven")
 
 try:

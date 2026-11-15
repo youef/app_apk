@@ -123,7 +123,8 @@ public final class TVHomeActivity extends Activity {
     private boolean loading=false,unlocked=false;
     private static final long CATALOG_REFRESH_INTERVAL_MS=2L*60L*1000L;
     private String browseKind="movie",browseMode="all",browseKey="",browseTitle="عرض الكل",browseOrigin="home";
-    private static final int BROWSE_PAGE_SIZE=48;
+    private int browsePageSize=48;
+    private int cardGridStep=72,liveGuideStep=48;
     private int browsePage;
     private int cardGridLimit=72;
     private final Runnable libraryHeartbeat=new Runnable(){public void run(){
@@ -346,6 +347,11 @@ public final class TVHomeActivity extends Activity {
     }
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
+        // Huidi Android 4.4.4 and other low-heap TVs show fewer decoded posters.
+        if(DeviceCapacity.isConstrained(this)){
+            cardGridStep=18;cardGridLimit=18;browsePageSize=18;
+            liveGuideStep=24;liveGuideLimit=24;
+        }
         applyCinemaImmersiveLayout();
         catalog=new CatalogApi(this);
         appUpdater=new AppUpdater(this);
@@ -641,7 +647,7 @@ public final class TVHomeActivity extends Activity {
     }
     private void goTo(String target){
         if("developer".equals(target)){startActivity(new Intent(this,DeveloperActivity.class));return;}
-        episodeGeneration++;detailVisible=false;section=target;cardGridLimit=72;
+        episodeGeneration++;detailVisible=false;section=target;cardGridLimit=cardGridStep;
         render();if(scroller!=null)scroller.scrollTo(0,0);
     }
     private void updateNav(){
@@ -1186,11 +1192,11 @@ public final class TVHomeActivity extends Activity {
         if(!browseOriginFocus.isEmpty())restorePosition(browseOriginFocus,browseOriginScroll);
     }
     private int browseStart(int count){
-        browsePage=Math.min(browsePage,Math.max(0,count-1)/BROWSE_PAGE_SIZE);
-        return browsePage*BROWSE_PAGE_SIZE;
+        browsePage=Math.min(browsePage,Math.max(0,count-1)/browsePageSize);
+        return browsePage*browsePageSize;
     }
     private void browsePageControls(final ArrayList<JSONObject> list){
-        final int lastPage=(list.size()-1)/BROWSE_PAGE_SIZE;
+        final int lastPage=(list.size()-1)/browsePageSize;
         if(lastPage==0)return;
         LinearLayout controls=row();
         content.addView(controls,space(-1,dp(66),4));
@@ -1200,7 +1206,7 @@ public final class TVHomeActivity extends Activity {
             controls.addView(button,new LinearLayout.LayoutParams(0,dp(52),1));
             button.setOnClickListener(v->{
                 browsePage+=direction;
-                JSONObject first=list.get(browsePage*BROWSE_PAGE_SIZE);
+                JSONObject first=list.get(browsePage*browsePageSize);
                 render();
                 restorePosition(("channel".equals(browseKind)?"channel:":"item:"+browseKind+":")
                     +value(first,"id"),0);
@@ -1780,7 +1786,7 @@ public final class TVHomeActivity extends Activity {
             return;
         }
         int start=browseStart(list.size());
-        int end=Math.min(start+BROWSE_PAGE_SIZE,list.size());
+        int end=Math.min(start+browsePageSize,list.size());
         boolean paired=screenWidthDp()>=1000;
         LinearLayout pair=null;
         for(int i=start;i<end;i++){
@@ -1939,7 +1945,7 @@ public final class TVHomeActivity extends Activity {
             b.setTag("company:"+network);
             companyFilters.addView(b,space(dp(168),dp(52),3));
             b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-                activeChannelCompany=network;liveGuideLimit=48;
+                activeChannelCompany=network;liveGuideLimit=liveGuideStep;
                 getSharedPreferences("alezz_tv_settings_v14",MODE_PRIVATE).edit()
                     .putString("live_selected_company",network).apply();
                 render();
@@ -1976,7 +1982,7 @@ public final class TVHomeActivity extends Activity {
             b.setTag("filter:"+type);
             filters.addView(b,space(dp(156),dp(52),3));
             b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-                activeChannelCategory=type;liveGuideLimit=48;
+                activeChannelCategory=type;liveGuideLimit=liveGuideStep;
                 getSharedPreferences("alezz_tv_settings_v14",MODE_PRIVATE).edit()
                     .putString("live_selected_group",type).apply();
                 render();
@@ -2013,7 +2019,7 @@ public final class TVHomeActivity extends Activity {
             more.setTag("live:more");
             actions.addView(more,space(dp(275),dp(56),3));
             more.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-                liveGuideLimit=Math.min(channels.size(),liveGuideLimit+48);render();
+                liveGuideLimit=Math.min(channels.size(),liveGuideLimit+liveGuideStep);render();
             }});
             Button all=primaryButton("عرض الكل • "+matching+" قناة  ❯");
             all.setTag("live:all");
@@ -2062,7 +2068,7 @@ public final class TVHomeActivity extends Activity {
         if(list.isEmpty()){heading("لا يوجد محتوى منشور في هذا القسم","يمكن تحديث المكتبة أو إضافة أعمال من لوحة الإدارة.");return;}
         final boolean browsing="browse".equals(section);
         final int start=browsing?browseStart(list.size()):0;
-        final int end=Math.min(list.size(),browsing?start+BROWSE_PAGE_SIZE:cardGridLimit);
+        final int end=Math.min(list.size(),browsing?start+browsePageSize:cardGridLimit);
         final int columns=screenWidthDp()>=1060?5:screenWidthDp()>=760?4:3;
         for(int base=start;base<end;base+=columns){
             LinearLayout row=row();row.setGravity(Gravity.TOP);
@@ -2077,7 +2083,7 @@ public final class TVHomeActivity extends Activity {
             more.setTag("grid:more");
             content.addView(more,space(-1,dp(56),5));
             more.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-                cardGridLimit=Math.min(list.size(),cardGridLimit+72);render();
+                cardGridLimit=Math.min(list.size(),cardGridLimit+cardGridStep);render();
             }});
         }
     }
@@ -2682,7 +2688,7 @@ public final class TVHomeActivity extends Activity {
         super.onResume();
         PhoneRemote.setForeground(this);
         ui.removeCallbacks(featureRotation);
-        if("home".equals(section))ui.postDelayed(featureRotation,10000L);
+        if("home".equals(section)&&!DeviceCapacity.isConstrained(this))ui.postDelayed(featureRotation,10000L);
         if(unlocked){
             ui.removeCallbacks(entitlementGuard);
             ui.post(entitlementGuard);
@@ -2708,6 +2714,13 @@ public final class TVHomeActivity extends Activity {
         ui.removeCallbacks(entitlementGuard);
         ui.removeCallbacks(libraryHeartbeat);
         super.onPause();
+    }
+    @Override public void onLowMemory(){
+        super.onLowMemory();PosterLoader.releaseMemory();
+    }
+    @Override public void onTrimMemory(int level){
+        super.onTrimMemory(level);
+        if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW)PosterLoader.releaseMemory();
     }
     @Override protected void onDestroy(){
         PhoneRemote.stop();

@@ -1,0 +1,13 @@
+const fs=require("fs"),assert=require("assert");
+const read=p=>fs.readFileSync(p,"utf8");
+const home=read("app/src/main/java/sa/aseel/tv/TVHomeActivity.java");
+const post=read("app/src/main/java/sa/aseel/tv/PosterLoader.java");
+const grad=read("app/build.gradle");
+const manifest=read("app/src/main/AndroidManifest.xml");
+for(const token of ["DeviceCapacity.isConstrained(this)","cardGridStep=18","browsePageSize=18","liveGuideStep=24","onLowMemory()","onTrimMemory(int level)"])assert(home.includes(token),token);
+assert(post.includes("SDK_INT<=19?480:720"));
+assert(post.includes("SDK_INT<=19?1:2"));
+assert(grad.includes("huidi-armv7"));
+assert(manifest.includes('android:minSdkVersion="19"'));
+assert(read("scripts/verify_apk.py").includes('ABI_MODE=="huidi-armv7"'));
+console.log("PASS Huidi Android 4.4.4 low-RAM and ARMv7 profile");

@@ -28,7 +28,7 @@ public final class PosterLoader {
         new java.util.concurrent.LinkedBlockingDeque<Runnable>(28),
         new java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy());
     private static final Handler ui=new Handler(Looper.getMainLooper());
-    private static final LruCache<String,Bitmap> bitmaps=new LruCache<String,Bitmap>(2*1024*1024){
+    private static final LruCache<String,Bitmap> bitmaps=new LruCache<String,Bitmap>((android.os.Build.VERSION.SDK_INT<=19?1:2)*1024*1024){
         @Override protected int sizeOf(String key,Bitmap value){return value.getByteCount();}
     };
     private PosterLoader(){}
@@ -94,7 +94,9 @@ public final class PosterLoader {
         opt.inJustDecodeBounds=false;
         opt.inPreferredConfig=Bitmap.Config.RGB_565;
         int sample=1;
-        while(opt.outWidth/sample>720||opt.outHeight/sample>500)sample*=2;
+        int width=android.os.Build.VERSION.SDK_INT<=19?480:720;
+        int height=android.os.Build.VERSION.SDK_INT<=19?320:500;
+        while(opt.outWidth/sample>width||opt.outHeight/sample>height)sample*=2;
         opt.inSampleSize=sample;
         return BitmapFactory.decodeByteArray(data,0,data.length,opt);
     }
