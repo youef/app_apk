@@ -1035,62 +1035,39 @@
     }
   }
 
-  /* ---------------------------------------------------------------- gate */
-
-  var gateBuffer = "";
-
+  /* ---------------------------------------------------------------- customer login */
   function gateShow() {
     $("gate").hidden = false;
     document.body.style.overflow = "hidden";
-    renderGateDots();
-  }
-
-  function renderGateDots() {
-    var dots = $("gateDots");
-    var html = "";
-    for (var i = 0; i < 6; i++) html += '<i class="' + (i < gateBuffer.length ? "is-on" : "") + '"></i>';
-    dots.innerHTML = html;
-  }
-
-  function gatePush(ch) {
-    if (gateBuffer.length >= 6) return;
-    gateBuffer += ch;
-    renderGateDots();
-    if (gateBuffer.length === 6) setTimeout(gateCheck, 130);
-  }
-
-  function gateCheck() {
-    if (gateBuffer === CFG.activationCode) {
-      Store.activate();
-      $("gate").hidden = true;
-      document.body.style.overflow = "";
-      toast("تم التفعيل — أهلًا بك في العز TV");
-      bootCatalog();
-    } else {
-      $("gateError").hidden = false;
-      $("gate").classList.add("is-shaking");
-      setTimeout(function () {
-        gateBuffer = "";
-        renderGateDots();
-        $("gateError").hidden = true;
-      }, 900);
-    }
+    $("gateUsername").focus();
   }
 
   function wireGate() {
-    $("gatePad").addEventListener("click", function (e) {
-      var btn = e.target.closest("[data-k]");
-      if (!btn) return;
-      var k = btn.getAttribute("data-k");
-      if (k === "clear") { gateBuffer = ""; renderGateDots(); }
-      else if (k === "back") { gateBuffer = gateBuffer.slice(0, -1); renderGateDots(); }
-      else gatePush(k);
+    var form = $("customerLoginForm");
+    var button = $("customerLoginSubmit");
+    var error = $("gateError");
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      if (button.disabled) return;
+      button.disabled = true;
+      button.textContent = "جارٍ التحقق…";
+      error.hidden = true;
+      var username = $("gateUsername").value.trim();
+      var password = $("gatePassword").value;
+      window.AlezzCustomerAuth.login(username,password).then(function(){
+        $("gatePassword").value = "";
+        window.location.reload();
+      }).catch(function(e) {
+        error.textContent = e.message || "تعذر تسجيل الدخول";
+        error.hidden = false;
+      }).then(function(){
+        button.disabled = false;
+        button.textContent = "دخول العز TV";
+      });
     });
-    document.addEventListener("keydown", function (e) {
-      if ($("gate").hidden) return;
-      if (/^[0-9]$/.test(e.key)) gatePush(e.key);
-      else if (e.key === "Backspace") { gateBuffer = gateBuffer.slice(0, -1); renderGateDots(); }
-      else if (e.key === "Enter" && gateBuffer.length === 6) gateCheck();
+    var signout=$("customerSignout");
+    if(signout)signout.addEventListener("click",function(){
+      window.AlezzCustomerAuth.logout();
     });
   }
 
@@ -1303,11 +1280,11 @@
     window.addEventListener("online", refreshVisibleCatalog);
     setInterval(refreshVisibleCatalog, 30000);
 
-    if (!Store.isActivated()) {
-      gateShow();
-      return;
-    }
-    bootCatalog();
+    if (!window.AlezzCustomerAuth) { gateShow(); return; }
+    window.AlezzCustomerAuth.restore().then(function(valid) {
+      if (valid) bootCatalog();
+      else gateShow();
+    }, function() { gateShow(); });
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
