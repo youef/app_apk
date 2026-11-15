@@ -180,6 +180,8 @@
       '<span>تجدد '+esc(data.renewed||0)+'</span>'+
       '<span>نُشر '+esc(data.published||0)+'</span>'+
       '<span>خلل '+esc(data.failed||0)+'</span></div>';
+    const renewal=data.next_refresh?'<p class="scan-renewal">التجديد المجدول: '+prettyDate(data.next_refresh)+'</p>':
+      (done&&data.healthy?'<p class="scan-renewal">روابط بلا انتهاء معروف: إعادة الفحص بعد 48 ساعة والتجديد عند التعطل.</p>':'');
     const detail=(data.errors||[]).length?'<details class="scan-errors"><summary>أسباب التعطل ('+
       esc(data.errors.length)+')</summary><ul>'+data.errors.slice(-12).map(err=>
       '<li>'+esc(err)+'</li>').join('')+'</ul></details>':'';
@@ -192,7 +194,7 @@
       esc(data.run_id)+'">×</button>')+'</div>'+
       '<div class="scan-progress-track" role="progressbar" aria-label="تقدم الفحص" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+num+
       '"><span style="width:'+num+'%"></span></div>'+
-      '<p>'+esc(data.message||'جارٍ بدء الفحص…')+'</p>'+summary+detail+outcomes+
+      '<p>'+esc(data.message||'جارٍ بدء الفحص…')+'</p>'+summary+renewal+detail+outcomes+
       (!inline&&done?'<button type="button" class="scan-refresh-grid" data-scan-action="reload">تحديث المكتبة</button>':'')+
       '</div>';
   }
