@@ -29,7 +29,7 @@ try:
 except ImportError as exc:
     raise SystemExit("Install dependencies: python -m pip install -r requirements.txt") from exc
 
-MEDIA_EXT = re.compile(r"\.(?:mp4|m4v|webm|m3u8|mpd)(?:[?#]|$)", re.I)
+MEDIA_EXT = re.compile(r"\.(?:mp4|m4v|webm|m3u8)(?:[?#]|$)", re.I)
 WEB_MEDIA = re.compile(r"\.(?:mp4|m4v|webm|m3u8|mpd)(?:[?#]|$)", re.I)
 EP_RE = re.compile(r"(?:\bS(\d{1,2})[.\-_ ]?E(\d{1,3})\b|(?:الحلقة|الحلقه|episode|ep)[\s:_#-]*(\d{1,3}))", re.I)
 SEASON_RE = re.compile(r"(?:الموسم|season)[\s:_#-]*(\d{1,2})", re.I)
@@ -190,13 +190,8 @@ class SourceClient:
         raise ValueError("Too many redirects")
 
     def media_verified(self, url: str) -> tuple[bool, str]:
-        # Signed video endpoints often have no filename extension. A public
-        # HTTPS URL may be probed, but verification still requires actual
-        # HLS playlist/segment bytes or MP4/WebM container magic.
-        try:
-            public_url(url)
-        except (ValueError, TypeError, AttributeError):
-            return False, "Unsupported or nonpublic video URL"
+        if not MEDIA_EXT.search(url):
+            return False, "Unsupported: media must be MP4/WebM/M4V/HLS"
         try:
             # A 200 response or a MIME type alone is not proof of playable media.
             for depth in range(3):
@@ -225,14 +220,6 @@ class SourceClient:
                             valid = bool(segment) and b'ftyp' in header[:32] and any(
                                 marker in segment[:64] for marker in (b'styp',b'moof',b'mdat')) and 'html' not in segment_type
                     return (True, "HLS playlist and segment respond") if valid else (False, "HLS segment is unavailable or invalid")
-                if urlsplit(final).path.lower().endswith('.mpd'):
-                    text = sample.decode('utf-8-sig', errors='replace')
-                    if '<MPD' not in text:
-                        return False, 'DASH MPD manifest not detected'
-                    if '<ContentProtection' in text:
-                        return False, 'DRM-protected DASH requires the official licensed player'
-                    # Checking only the XML playlist is not proof of playable segments.
-                    return False, 'DASH manifest responds; verify playback inside the device'
                 if '.m3u8' in urlsplit(final).path.lower(): return False, "HLS manifest not detected"
                 valid = b'ftyp' in sample[:32] or sample.startswith(b'\x1aE\xdf\xa3')
                 return (True, "Media header responds") if valid else (False, "Video header not detected")
@@ -289,33 +276,6 @@ def episode_numbers(value: str) -> tuple[int, int] | None:
     season = SEASON_RE.search(value)
     season_number = int(m.group(1) or (season.group(1) if season else 1))
     return season_number, int(m.group(2) or m.group(3))
-
-
-def belongs_to_series_episode(series_url: str, candidate_url: str, label: str = "") -> bool:
-    """Avoid importing unrelated 'recommended episode' cards into a series.
-
-    On sites with a descriptive /series/<slug> path, the corresponding episode
-    link normally contains the same distinctive title words in its URL or
-    link text. Generic numeric series IDs and short titles remain compatible.
-    """
-    from urllib.parse import unquote
-    source, target = urlsplit(series_url), urlsplit(candidate_url)
-    if source.hostname != target.hostname or target.scheme != "https":
-        return False
-    source_path = unquote(source.path).strip("/")
-    if not re.search(r"(?:^|/)(?:series|tv-series|shows|مسلسلات)(?:/|$)", source_path, re.I):
-        return True
-    slug = source_path.rsplit("/", 1)[-1]
-    normalized = lambda value: re.sub(r"[^\w\u0600-\u06ff]+", " ", unquote(value).casefold())
-    ignored = {"مسلسل", "مسلسلات", "series", "tv", "show", "season", "الموسم", "حلقة", "الحلقة"}
-    title_words = [word for word in normalized(slug).split()
-                   if len(word) >= 4 and word not in ignored and
-                   not re.fullmatch(r"(?:19|20)\d{2}|\d+", word)]
-    if not title_words:
-        return True  # Generic ID/short title: existing discovery behavior.
-    text = normalized(target.path + " " + label)
-    return all(re.search(r"(?<!\w)" + re.escape(word) + r"(?!\w)", text)
-               for word in title_words)
 
 
 def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int=100,
@@ -427,11 +387,8 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
     from concurrent.futures import ThreadPoolExecutor, as_completed
     from urllib.parse import parse_qsl
     resume_progress=resume_progress or {}
-    # A fast first pass might inspect only three pages. Keep unvisited page
-    # links across batches so continuation does not silently discard season
-    # pagination when max_pages is small.
-    seen_pages: set[str] = {final.rstrip('/')} | set(resume_progress.get('seen_pages',[])[:5000])
-    queued: list[str] = list(resume_progress.get('queued',[])[:1200])
+    seen_pages: set[str] = {final.rstrip('/')} | set(resume_progress.get('seen_pages',[])[:max_pages])
+    queued: list[str] = list(resume_progress.get('queued',[])[:max_pages])
     episode_map: dict[tuple[int,int],Episode] = {}
     in_flight: set[str] = set()
     skipped_pages=0
@@ -445,7 +402,6 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
             progress_hook({'seen_pages':list(seen_pages), 'queued':list(in_flight)+queued[:],
                            'episodes':[asdict(e) for e in episode_map.values()]})
     root_host=urlsplit(final).hostname
-    exploration_seeded=False
     def add_episode(link: str, label: str, data: dict | None=None, display_title: str=""):
         parsed=episode_numbers(label)
         if not parsed and data:
@@ -457,8 +413,7 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
             except (TypeError,ValueError):pass
         if not parsed or parsed[1]<1 or parsed[1]>10000 or parsed[0]<1 or parsed[0]>200:return
         link=absolutize(final,link)
-        if not link or not belongs_to_series_episode(final,link,display_title or label):
-            return
+        if not link:return
         key=parsed
         if key not in episode_map:
             ep=Episode(parsed[0],parsed[1],content_title(display_title or label, final, site_name,
@@ -479,12 +434,9 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
         nonlocal skipped_pages
         uri=absolutize(base,link)
         if not uri or urlsplit(uri).hostname != root_host or uri.rstrip('/') in seen_pages or uri in queued or uri in in_flight:return
-        # max_pages is a per-batch fetch budget, NOT the queue capacity.
-        # Previously pages > the fast budget were dropped permanently.
-        if len(queued)+len(in_flight)<1200:queued.append(uri)
+        if len(seen_pages)+len(queued)+len(in_flight)<max_pages:queued.append(uri)
         else:skipped_pages+=1
     def scan_doc(s: BeautifulSoup, base: str):
-        nonlocal exploration_seeded
         for item in json_nodes(s):
             if "tvepisode" in str(item.get("@type", "")).lower():
                 name=field_of(item,"name")
@@ -499,16 +451,7 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
             if data_episode.isdigit() and data_season.isdigit():
                 combined=f"S{int(data_season):02}E{int(data_episode):02} {combined}"
             if episode_numbers(combined):
-                candidate=urljoin(base,href)
-                if not belongs_to_series_episode(final,candidate,label):
-                    continue
-                add_episode(candidate,combined,display_title=label or f"الحلقة {episode_numbers(combined)[1]}")
-                # Some series indexes show only their newest episode. That
-                # episode's own page links to the full season. Fetch just one
-                # representative page, not every episode (fast + bounded).
-                if not exploration_seeded and base.rstrip('/')==final.rstrip('/'):
-                    queue_page(candidate,base)
-                    exploration_seeded=True
+                add_episode(urljoin(base,href),combined,display_title=label or f"الحلقة {episode_numbers(combined)[1]}")
                 continue
             uri=absolutize(base,href)
             if not uri or urlsplit(uri).hostname != root_host:continue
@@ -541,16 +484,7 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
         in_flight=set(slice_urls)
         def fetch_page(page):
             worker=SourceClient(timeout=getattr(client,'timeout',11)) if isinstance(client,SourceClient) else client
-            # Quick discovery has one shared deadline across its pagination
-            # requests; never reset retries or timeout for each page.
-            if worker is not client and isinstance(worker,SourceClient):
-                worker.deadline=getattr(client,'deadline',None)
-                worker.retries=getattr(client,'retries',3)
-            try:
-                return worker.get(page)
-            finally:
-                if worker is not client and hasattr(worker,'session'):
-                    worker.session.close()
+            return worker.get(page)
         with ThreadPoolExecutor(max_workers=len(slice_urls)) as executor:
             futures={executor.submit(fetch_page,page):page for page in slice_urls}
             for future in as_completed(futures):
@@ -879,8 +813,7 @@ def collect_edge_network(
 
 
 class Supabase:
-    def __init__(self,url: str,key: str,access_token: str="",email: str="",password: str="",
-                 *, trusted_admin_uid: str=""):
+    def __init__(self,url: str,key: str,access_token: str="",email: str="",password: str=""):
         self.root=url.rstrip("/")
         self.session=requests.Session()
         self.session.trust_env=False
@@ -888,23 +821,6 @@ class Supabase:
         self.refresh_token = ''
         self.expires_at = 0
         self.auth_lock = threading.RLock()
-        self.trusted_admin_uid = trusted_admin_uid or ""
-        # Only backend routes that have verified an active portal admin may use
-        # this path. Never send an elevated key or token back to the browser.
-        if trusted_admin_uid:
-            secret=(os.getenv("ALEZZ_SUPABASE_SECRET_KEY") or
-                    os.getenv("ALEZZ_SUPABASE_SERVICE_ROLE_KEY") or "")
-            if not secret or key != secret or access_token or email or password:
-                raise ValueError("Trusted studio login requires server-side credentials")
-            # Modern sb_secret keys are NOT JWTs. Legacy service_role JWTs still
-            # require Authorization: Bearer; both use apikey.
-            if not key.startswith("sb_secret_"):
-                self.session.headers["Authorization"]="Bearer "+key
-            admins=self.query("aseel_admins",{"select":"user_id,active",
-                          "user_id":"eq."+trusted_admin_uid,"active":"eq.true","limit":"1"})
-            if not admins:
-                raise ValueError("Portal session administrator is not active")
-            return
         if not access_token and email and password:
             reply=self.session.post(self.root+"/auth/v1/token?grant_type=password",json={"email":email,"password":password},timeout=20)
             if not reply.ok:raise ValueError("Failed to authenticate admin: "+str(reply.status_code))
@@ -992,23 +908,12 @@ def category_for_genres(categories: list[dict], genres: list[str]) -> str:
 def playback_variants(entry, existing=None, *, primary=None) -> list[dict]:
     """The production player accepts at most eight {label,url} variants."""
     rows, seen = [], {entry.media_url if primary is None else primary}
-    # Prefer newly verified direct players over old embed candidates when
-    # the production player can retain only eight alternatives.
-    ordered = sorted((row for row in entry.sources if isinstance(row, dict)), key=lambda row: (
-        bool(row.get('verified')), row.get('kind') == 'direct',
-        row.get('checked_at') or 0), reverse=True)
-    for source in ordered + (existing or []):
+    for source in entry.sources + (existing or []):
         if not isinstance(source, dict): continue
         url = source.get('url', '')
         if url in seen: continue
         try: public_url(url)
         except ValueError: continue
-        from media_resolver import normalized_source_url, signed_expiry
-        url = normalized_source_url(url)
-        if url in seen: continue
-        expiry = signed_expiry(url)
-        if expiry is not None and expiry <= time.time() + 300:
-            continue  # Never offer a nearly expired, signed fallback.
         seen.add(url)
         if source.get('error') and not source.get('verified') and not source.get('reachable'): continue
         rows.append({k: source[k] for k in ('url', 'label', 'kind', 'page_url') if k in source})
@@ -1017,7 +922,7 @@ def playback_variants(entry, existing=None, *, primary=None) -> list[dict]:
 
 def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:str="",
           license_reference:str="",source_id:str="",category_id:str="",capture_merge=False,
-          defer_unverified_episodes=False, replace_verified_streams=False) -> dict:
+          defer_unverified_episodes=False) -> dict:
     if publish and not rights:
         raise ValueError("For public publishing, declare that you are authorized to display the work using --rights-authorized")
     # Parent works have a rights_holder column, but aseel_episodes does not.
@@ -1036,16 +941,10 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
         # separately unverified source. Publication still requires rights.
         if not entry.media_url:
             return False
-        from media_resolver import supported_source_kind, official_ok_embed
-        if supported_source_kind(entry.media_url) != 'embed':
-            return False
-        # The first-party OK.ru iframe URL may play on client devices even when
-        # the provider blocks our server IP. Save it as unverified/suspect, not
-        # healthy; a separate verified licence is still required to publish.
-        if official_ok_embed(entry.media_url):
-            return True
-        return any(src.get('kind') == 'embed' and src.get('reachable')
-                   and src.get('url') == entry.media_url for src in entry.sources)
+        from media_resolver import supported_source_kind
+        return (supported_source_kind(entry.media_url) == 'embed' and
+                any(src.get('kind') == 'embed' and src.get('reachable')
+                    and src.get('url') == entry.media_url for src in entry.sources))
     fields=imported_fields(cat,category_id)
     def merge_capture(payload, old, entry):
         if not capture_merge or not old:
@@ -1053,23 +952,10 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
         primary = old.get('stream_url')
         merged = {k:v for k,v in payload.items() if not old.get(k)}
         if primary:
-            # Keep the existing primary unless a NEW direct URL has passed an
-            # actual playback-byte probe. An iframe is never sufficient.
-            from media_resolver import supported_source_kind
-            if (replace_verified_streams and entry.verified and payload.get('stream_url') and
-                    payload['stream_url'] != primary and
-                    supported_source_kind(payload['stream_url']) == 'direct'):
-                merged['stream_url'] = payload['stream_url']
-                merged['link_health_status'] = 'healthy'
-            else:
-                for key in ('stream_url','link_health_status'):
-                    merged.pop(key,None)
+            for key in ('stream_url','link_health_status'):
+                merged.pop(key,None)
         if entry.sources:
-            # Exclude the selected NEW primary from fallback variants as well;
-            # otherwise the same stream appears as both primary and backup.
-            merged['stream_variants'] = playback_variants(
-                entry, old.get('stream_variants'),
-                primary=merged.get('stream_url') or primary)
+            merged['stream_variants'] = playback_variants(entry, old.get('stream_variants'), primary=primary)
         return merged
 
     if cat.kind=="movie":
@@ -1086,10 +972,7 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
             result["media_verified" if cat.verified else "embed_reachable"]+=1
         else:result["metadata_only"]+=1
         if movie:
-            changes={**merge_capture(payload,movie,cat),**({"status":"published","rights_status":"approved"} if publish and rights else {})}
-            # PostgREST PATCH {} is not a successful row update. If no metadata
-            # changed, the existing record is already saved: do not issue it.
-            if changes: db.patch("aseel_movies",movie["id"],changes)
+            db.patch("aseel_movies",movie["id"],{**merge_capture(payload,movie,cat),**({"status":"published","rights_status":"approved"} if publish and rights else {})})
             result["works_updated"]+=1
         else:
             movie=db.insert("aseel_movies",{**payload,**work_rights})
@@ -1134,20 +1017,11 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
         else:result["metadata_only"]+=1
         awaiting_playback = defer_unverified_episodes and publish and not payload.get("stream_url")
         if old:
-            # Explicitly approved rights survive the playback-pending state.
-            # Do not mark an unverified episode published; AutoSync promotes
-            # the approved draft only after an actual direct-media probe.
-            authorization = ({"rights_status":"approved","license_reference":license_reference}
-                             if publish and rights and awaiting_playback else
-                             {"status":"published","rights_status":"approved"}
-                             if publish and rights else {})
-            changes={**merge_capture(payload,old,ep),**authorization}
-            if changes: db.patch("aseel_episodes",old["id"],changes)
+            db.patch("aseel_episodes",old["id"],{**merge_capture(payload,old,ep),**({"status":"published","rights_status":"approved"} if publish and rights and not awaiting_playback else {})})
             result["episodes_updated"]+=1
         else:
-            awaiting_rights=({**episode_rights,"status":"draft"} if awaiting_playback else episode_rights)
             old=db.insert("aseel_episodes",{"season_id":season_id,"number":ep.number,
-                        **payload,**awaiting_rights})
+                        **payload,**({"status":"draft","rights_status":"pending"} if awaiting_playback else episode_rights)})
             result["episodes_new"]+=1
         result['bindings'].append(dict(season=ep.season,number=ep.number,id=old['id'],table='aseel_episodes'))
         if awaiting_playback:

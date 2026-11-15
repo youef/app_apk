@@ -2,17 +2,5 @@ fastapi==0.115.14
 uvicorn==0.54.0
 requests==2.34.2
 beautifulsoup4==4.15.0
-tzdata==2025.2; sys_platform == "win32"
 # For cloud Chromium capture and optional desktop Edge inspection.
 playwright==1.64.1
-
-# Bounded, metadata-only public video source analysis (no cookie or DRM bypass)
-yt-dlp==2026.10.26
-# Bounded public DNS nslookup, SPF/DMARC, CAA and PTR queries for SiteGuard.
-dnspython==2.9.2
-
-# Server-side S3 API signer for multi-provider resumable multipart uploads
-boto3>=1.36,<2
-
-# Encrypt cloud storage credentials at rest in service-role-only Supabase tables
-cryptography>=44,<47

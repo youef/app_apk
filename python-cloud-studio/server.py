@@ -10,13 +10,12 @@ import asyncio
 from copy import deepcopy
 from ipaddress import ip_address
 from contextlib import asynccontextmanager
-from concurrent.futures import ThreadPoolExecutor, FIRST_COMPLETED, wait, wait, FIRST_COMPLETED
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 import io
 import json
 import os
-import requests
 from pathlib import Path
 import secrets
 import threading
@@ -35,17 +34,16 @@ from alezz_fetchv_importer import (
     Catalogue, Episode, MEDIA_EXT, SourceClient, SourceConnectionError, Supabase, category_for_genres,
     hydrate_episode_metadata,
     collect_edge_network,
-    clean, inspect_episodes, public_url, pull_html, store, episode_numbers,
+    clean, inspect_episodes, public_url, pull_html, store,
 )
 
 from metadata_enrichment import enrich
 from library_sync import JobDB,collect_pages,collect_works
 from auto_sync import AutoSync, target_key
-from media_resolver import MediaResolver, read_public_html, safe_error, supported_source_kind, normalized_source_url, merge_sources, signed_expiry
+from media_resolver import MediaResolver, read_public_html, safe_error, supported_source_kind
 from title_cleaner import content_title
 from launch import studio_revision
 from member_portal import Portal
-from studio_scan_checkpoints import save as save_scan_checkpoint, load as load_scan_checkpoint, available as scan_checkpoint_available, recent as recent_scan_checkpoints
 
 BASE = Path(__file__).resolve().parent
 STUDIO_REVISION = studio_revision()
@@ -67,9 +65,6 @@ async def lifespan(app):
     AUTOSYNC.start()
     if any(LIBRARY.snapshot()['counts'][k].get('pending',0) for k in ('pages','works')):
         _start_library_worker()
-    if os.getenv('ALEZZ_R2_BOOTSTRAP') == '1':
-        from r2_bootstrap import bootstrap
-        await asyncio.to_thread(bootstrap, portal)
     try: yield
     finally: AUTOSYNC.stop()
 
@@ -82,40 +77,6 @@ portal = Portal(os.getenv('ALEZZ_PORTAL_DIR', str(BASE.parent)),
                 os.getenv('ALEZZ_SUPABASE_PUBLISHABLE_KEY', DEFAULT_PUBLIC_KEY),
                 secure=os.getenv('ALEZZ_PUBLIC_MODE') == '1')
 app.middleware('http')(portal.middleware)
-from private_video import router as private_video_router, register_playback
-register_playback(portal)
-app.include_router(private_video_router)
-from private_film_import import router as private_film_router, register as register_private_film
-register_private_film(private_film_router,portal)
-app.include_router(private_film_router)
-from private_film_probe import router as private_film_probe_router, register as register_film_probe
-register_film_probe(portal)
-app.include_router(private_film_probe_router)
-from private_page_discovery import router as private_discovery_router, register as register_private_discovery
-register_private_discovery(portal)
-app.include_router(private_discovery_router)
-from private_browser_diagnostics import router as browser_diagnostics_router, register as register_browser_diagnostics
-register_browser_diagnostics(portal)
-app.include_router(browser_diagnostics_router)
-from private_deep_discovery import router as deep_discovery_router, register as register_deep_discovery
-register_deep_discovery(portal)
-app.include_router(deep_discovery_router)
-from studio_quality import router as studio_quality_router, register as register_studio_quality
-register_studio_quality(portal)
-app.include_router(studio_quality_router)
-from video_upload import router as video_upload_router, register as register_video_upload
-register_video_upload(portal, BASE / 'templates' / 'video-upload.html')
-app.include_router(video_upload_router)
-
-from site_security import router as security_center_router, register as register_security_center
-register_security_center(portal)
-app.include_router(security_center_router)
-from security_tools import router as security_import_router, register as register_security_tools
-register_security_tools(portal)
-app.include_router(security_import_router)
-# Standalone, rate-limited public website audit; does not alter the admin portal.
-from public_siteguard import router as public_siteguard_router
-app.include_router(public_siteguard_router)
 @app.api_route('/login',methods=['GET','POST'],include_in_schema=False)
 async def legacy_login():
     return RedirectResponse('/account/admin',status_code=303)
@@ -134,16 +95,6 @@ async def worker_health():
 
 app.add_api_route('/healthz', worker_health, methods=['GET'], include_in_schema=False)
 
-# OS and browser icon fallbacks, publicly cacheable and free of account data.
-@app.get('/favicon.ico',include_in_schema=False)
-@app.get('/apple-touch-icon.png',include_in_schema=False)
-@app.get('/apple-touch-icon-precomposed.png',include_in_schema=False)
-async def studio_device_icon():
-    return FileResponse(portal.root/'web'/'alizz-tv-transparent.png',
-        media_type='image/png',headers={'Cache-Control':'public, max-age=86400'})
-
-
-
 
 @dataclass
 class UserState:
@@ -156,9 +107,6 @@ class UserState:
     demo: bool = False
     scan: dict | None = None
     scan_catalogue: Catalogue | None = None
-    scan_owner_uid: str | None = None
-    capture: dict | None = None
-    tracking: dict | None = None
     last_used: float = field(default_factory=time.monotonic)
     lock: Any = field(default_factory=threading.RLock)
     save_lock: Any = field(default_factory=threading.Lock)
@@ -207,104 +155,8 @@ def current_catalogue(state: UserState) -> Catalogue:
     return state.catalogue
 
 
-SCAN_EVENTS_LIMIT=400
-SCAN_SAVERS=ThreadPoolExecutor(max_workers=1,thread_name_prefix="studio-v6-checkpoint")
-
-def _scan_public(progress):
-    """Small, never expose server-only owner IDs, queued events or crawler URLs."""
-    if not progress:return None
-    hidden={"events","last_result","completed_keys","owner_id","crawl_checkpoint",
-            "last_checkpoint_at","checkpoint_inflight"}
-    return {key:value for key,value in progress.items() if key not in hidden}
-
-def _scan_key(episode,kind):
-    return "movie" if kind=="movie" else f"{episode.season}:{episode.number}"
-
-def _portal_scan_uid(request):
-    """Use the same server-validated admin session as the parent portal."""
-    token=request.cookies.get("alezz_member","")
-    if not token:return None
-    try:
-        found=portal.admin_sessions.get(token)
-        if not found:return None
-        record=found[0]
-        if record[1]!="admin" or record[2]<=time.monotonic():return None
-        uid=str(record[0])
-        return uid if portal.admin_active(uid) else None
-    except (ValueError,TypeError,IndexError,KeyError):
-        return None
-
-def _emit_scan_event(state,progress,kind,delta=None):
-    """Caller holds the state lock; bounded replay prevents missed SSE deltas."""
-    progress["seq"]=int(progress.get("seq",0))+1
-    progress["revision"]=progress["seq"]
-    event={"seq":progress["seq"],"kind":kind}
-    if delta is not None:event["delta"]=delta
-    events=progress.setdefault("events",[])
-    events.append(event)
-    if len(events)>SCAN_EVENTS_LIMIT:del events[:len(events)-SCAN_EVENTS_LIMIT]
-    return event
-
-def _schedule_scan_checkpoint(state,cat,progress,*,force=False):
-    """Coalesce frequent episode updates into one in-flight Supabase write.
-
-    Never block the media scanner on database latency. A newer completed
-    episode makes the in-flight snapshot stale, so the saver sends the latest
-    catalogue again, with a bounded number of catch-up writes.
-    """
-    owner=progress.get("owner_id")
-    if not owner or not scan_checkpoint_available():return
-    now=time.monotonic()
-    if progress.get("checkpoint_inflight"):
-        progress["checkpoint_pending"]=True
-        return
-    if not force and now-progress.get("last_checkpoint_at",0)<2:
-        return
-    progress["last_checkpoint_at"]=now
-    progress["checkpoint_inflight"]=True
-    job_id=progress["id"]
-
-    def persist():
-        try:
-            for attempt in range(3):
-                with state.lock:
-                    if state.scan is not progress or state.scan_catalogue is not cat:
-                        return
-                    record=asdict(cat)
-                    public=_scan_public(progress)
-                    public["crawl_checkpoint"]=deepcopy(progress.get("crawl_checkpoint") or {})
-                    completed=list(progress.get("completed_keys",[]))
-                    if progress.get("running"):
-                        status="scanning"
-                    elif progress.get("stop_requested") or progress.get("crawl_paused"):
-                        status="interrupted"
-                    else:
-                        status="completed"
-                    progress["checkpoint_pending"]=False
-                ok=save_scan_checkpoint(job_id,owner,cat.url,record,public,
-                                        completed,status=status)
-                with state.lock:
-                    if state.scan is not progress:return
-                    progress["checkpoint_saved"]=bool(ok)
-                    progress["checkpoint_checked_at"]=time.time()
-                    _emit_scan_event(state,progress,"checkpoint",{"saved":bool(ok)})
-                    # Coalesce every update produced during the write into
-                    # one newer snapshot. Never put unbounded tasks in queue.
-                    if not progress.get("checkpoint_pending"):
-                        return
-        finally:
-            with state.lock:
-                progress["checkpoint_inflight"]=False
-                if state.scan is progress and progress.get("checkpoint_pending"):
-                    progress["checkpoint_pending"]=False
-                    # Schedule one final catch-up snapshot without recursion
-                    # from a worker that currently holds this state lock.
-                    _schedule_scan_checkpoint(state,cat,progress,force=True)
-
-    SCAN_SAVERS.submit(persist)
-
 def scan_status(state: UserState) -> dict | None:
-    return _scan_public(state.scan) if state.scan_catalogue is state.catalogue and state.scan else None
+    return dict(state.scan) if state.scan_catalogue is state.catalogue and state.scan else None
 
 
 def get_summary(state: UserState) -> dict:
@@ -318,11 +170,7 @@ def get_summary(state: UserState) -> dict:
                                 year=c.year,poster_url=c.poster_url,original_title=c.original_title,
                                 verified=sum(ep.verified for ep in c.episodes) if c.kind=='series' else int(c.verified))
                            for i,c in enumerate(state.catalogues)],
-                    batch_errors=state.batch_errors[:25],current_index=state.current_index,
-                    tracking=dict(state.tracking) if state.tracking else None,
-                    capture=(_capture_summary(state.capture)
-                             if cat and state.capture and state.capture.get('catalogue_url')==cat.url
-                             else None))
+                    batch_errors=state.batch_errors[:25],current_index=state.current_index)
 
 
 @app.get('/')
@@ -337,71 +185,17 @@ async def studio_short():
 async def studio_homepage():
     return FileResponse(BASE/'templates'/'index.html',headers={'Cache-Control':'private, no-store'})
 
-@app.get('/studio/private-videos')
-async def private_video_import_page():
-    return FileResponse(BASE/'templates'/'private-videos.html',headers={'Cache-Control':'private, no-store'})
-
 @app.get('/studio/sources')
 async def series_review_page():
     return FileResponse(BASE/'templates'/'series-review.html',headers={'Cache-Control':'private, no-store'})
 
 
-def _connect_portal_admin_studio(request: Request, state: UserState) -> bool:
-    """Rebind an authorized portal session to the Studio after redeploy.
-
-    Only a server-validated administrator may use the server-side Supabase
-    secret. Never trust browser claims or expose the key in API responses.
-    """
-    token=request.cookies.get("alezz_member","")
-    if not token:
-        return False
-    found=portal.admin_sessions.get(token)
-    if not found:
-        return False
-    session, _renewed, _check_role=found
-    if session[1]!="admin" or session[2]<=time.monotonic():
-        return False
-    uid=session[0]
-    with state.lock:
-        existing=state.db
-        if existing is not None and getattr(existing,"trusted_admin_uid","")==uid:
-            return True
-    if not portal.admin_active(uid):
-        return False
-    secret=(os.getenv("ALEZZ_SUPABASE_SECRET_KEY") or
-            os.getenv("ALEZZ_SUPABASE_SERVICE_ROLE_KEY") or "")
-    if not secret:
-        # Keep the manual admin login as fallback if the service secret is
-        # unconfigured. Never silently overwrite a working user JWT with None.
-        return existing is not None
-    db=Supabase(os.getenv("ALEZZ_SUPABASE_URL",DEFAULT_DB_URL),secret,
-                trusted_admin_uid=uid)
-    with state.lock:
-        if state.db is not None and getattr(state.db,"trusted_admin_uid","")==uid:
-            db.session.close()
-        else:
-            # Replace stale short-lived JWT sessions with the portal-verified,
-            # server-only client. Leave the old client open for any save already
-            # running; the object is discarded after that request completes.
-            state.db=db
-    return True
-
 @app.get('/api/init')
 async def init(request: Request):
     sid, state = find_state(request, True)
-    # The portal login is authoritative: avoid a second password prompt for
-    # the same active administrator on every Render restart or new studio tab.
-    auth_mode="manual"
-    try:
-        if await run_in_threadpool(_connect_portal_admin_studio,request,state):
-            auth_mode="portal"
-    except (ValueError,requests.RequestException,RuntimeError,OSError):
-        # Keep traditional user-JWT login available when the server-side
-        # secret or Supabase is temporarily unavailable.
-        auth_mode="manual"
     if any(LIBRARY.snapshot()["counts"][k].get("pending",0) for k in ("pages","works")):
         _start_library_worker()
-    res = JSONResponse({'csrf': state.csrf, 'auth_mode': auth_mode, **get_summary(state)}, headers={'Cache-Control': 'no-store'})
+    res = JSONResponse({'csrf': state.csrf, **get_summary(state)}, headers={'Cache-Control': 'no-store'})
     res.set_cookie(COOKIE, sid, httponly=True, samesite='strict', max_age=EXPIRY_SECONDS,
                    secure=os.getenv('ALEZZ_PUBLIC_MODE') == '1' or request.url.scheme == 'https', path='/')
     return res
@@ -432,27 +226,16 @@ class DiscoverySourceClient(SourceClient):
 
 
 def discover_full(source: str, kind: str='auto', deep: bool=True, enrich_metadata: bool=True,
-                  resume_progress:dict|None=None,progress_hook=None, *, fast:bool=False) -> Catalogue:
+                  resume_progress:dict|None=None,progress_hook=None) -> Catalogue:
     source=public_url(source)
     client=DiscoverySourceClient(source)
-    if fast:
-        # Quick first pass: display the catalogue before expensive metadata
-        # enrichment or pagination across hundreds of external pages.
-        client.retries=1
-        client.timeout=6
-        client.deadline=time.monotonic()+20
     try:
         cat=pull_html(source,client,kind,max_seasons=500,
-                      max_episodes=5000,max_pages=3 if fast else 500,
-                      resume_progress=resume_progress,progress_hook=progress_hook)
+                      max_episodes=5000,max_pages=500,resume_progress=resume_progress,progress_hook=progress_hook)
     finally:
         client.session.close()
     if kind!='auto':cat.kind=kind
     cat.source_pages=list(dict.fromkeys([source,cat.url,*cat.source_pages]))
-    if fast:
-        if any('حد الصفحات' in message for message in cat.discovery_warnings):
-            cat.discovery_warnings.append('الفحص السريع يعرض الدفعة الأولى فقط؛ استخدم الوضع الشامل للصفحات المتبقية.')
-        return cat
     if enrich_metadata:
         enrich(cat,include_episodes=True)
     if deep and cat.kind=='series' and cat.episodes:
@@ -553,12 +336,6 @@ async def library_load(request:Request,body:LibraryLoadForm):
 
 
 _discovery_scans = ThreadPoolExecutor(max_workers=2, thread_name_prefix='studio-scan')
-# One active browser-intensive scan job at a time, four bounded source workers.
-_episode_capture_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix='studio-episode-probe')
-_episode_capture_jobs = ThreadPoolExecutor(max_workers=1, thread_name_prefix='studio-episode-batches')
-_EPISODE_BATCH_SIZE = 10
-_EPISODE_BATCH_SECONDS = 45
-_discovery_save_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='studio-fast-save')
 
 
 class TitleSearchForm(BaseModel):
@@ -570,7 +347,7 @@ def search_titles(query: str, kind: str) -> list[dict]:
     root = public_url(os.getenv('ALEZZ_TITLE_SEARCH_URL', 'https://v3.qrmzi.buzz/'))
     parts = urlsplit(root)
     address = urlunsplit((parts.scheme, parts.netloc, parts.path or '/', urlencode({'s': query}), ''))
-    client = DiscoverySourceClient(address)
+    client = SourceClient(timeout=10)
     try:
         final, typ, html = client.get(address)
     finally:
@@ -619,31 +396,7 @@ async def title_search(request: Request, body: TitleSearchForm):
     return {'results': results}
 
 
-def _provisional_player_url(sources) -> str:
-    """Keep an episode-scoped candidate visible without claiming playback.
-
-    Expired signed URLs are never selected. A failed probe is still useful
-    for future source refresh, but cannot make an episode 'verified' or public.
-    """
-    now=time.time()
-    possible=[]
-    for source in sources or []:
-        if not isinstance(source,dict) or source.get('kind')!='direct':
-            continue
-        address=source.get('url') or ''
-        if not supported_source_kind(address)=='direct':
-            continue
-        expiry=signed_expiry(address)
-        if expiry is not None and expiry<=now+90:
-            continue
-        possible.append(source)
-    possible.sort(key=lambda source:(bool(source.get('verified')),
-                                      not bool(source.get('error')),
-                                      bool(source.get('reachable'))),reverse=True)
-    return possible[0]['url'] if possible else ''
-
-
-def _scan_media_entry(cat: Catalogue, entry, force_browser:bool=False, on_candidates=None):
+def _scan_media_entry(cat: Catalogue, entry):
     """Bounded, independent discovery worker. Only its own result is returned.
 
     Public HTTPS pages and media candidates are inspected. Embedded pages are
@@ -655,309 +408,93 @@ def _scan_media_entry(cat: Catalogue, entry, force_browser:bool=False, on_candid
         candidates.append({'url': entry.media_url,
                            'kind': supported_source_kind(entry.media_url) or 'direct',
                            'page_url': page})
-    embed_pages = [item['url'] for item in candidates if item.get('kind') == 'embed' and item.get('url')]
-    # Prioritize player frames over unrelated source-page links. A series
-    # episode with the same URL as the work page must still be inspected.
-    pages = list(dict.fromkeys(url for url in [page, *embed_pages, *entry.source_pages]
-                               if url and (cat.kind == 'movie' or url.rstrip('/') != cat.url.rstrip('/')
-                                           or url == page)))
+    pages = list(dict.fromkeys(url for url in [page, *entry.source_pages]
+                               if url and (cat.kind == 'movie' or url.rstrip('/') != cat.url.rstrip('/'))))
     checked, playable, error = candidates, None, ''
     try:
-        # 18s bounded budget lets public Chromium discover JS-created media
-        # after the quick HTTP pass. Five pages include ordinary iframe frames.
-        # Auth/DRM/403 restrictions are not bypassed.
-        budget = max(8, min(24, int(os.getenv('ALEZZ_STUDIO_SCAN_SECONDS', '18'))))
-        resolver = MediaResolver(mode='auto' if force_browser or AUTOSYNC.mode == 'auto' else AUTOSYNC.mode,
-                                 timeout=5,max_pages=5,workers=3,max_seconds=budget)
-        checked, errors = resolver.resolve(pages, existing=candidates,
-                                           on_candidates=on_candidates)
+        # HTTP checks run concurrently. Browser extraction is a controlled
+        # fallback and can take longer on source sites that throttle access.
+        resolver = MediaResolver(mode=AUTOSYNC.mode, timeout=9, max_pages=5)
+        if entry.media_url and supported_source_kind(entry.media_url) == 'embed':
+            checked = resolver.check(candidates)
+            errors = []
+        else:
+            checked, errors = resolver.resolve(pages, existing=candidates)
         playable = next((item for item in checked
                          if item.get('verified') and item.get('kind') == 'direct'), None)
         embedded = any(item.get('kind') == 'embed' and item.get('reachable')
                        and item.get('url') == entry.media_url for item in checked)
         if not playable and not embedded:
-            direct_candidates=sum(row.get('kind')=='direct' for row in checked)
-            error = ('اكتُشف '+str(direct_candidates)+' رابط فيديو محتمل لكنه لم يجتز فحص التشغيل. '
-                     if direct_candidates else 'لم يُعثر على رابط مباشر عام. ') + (
-                        '; '.join(errors[:2]) if errors else
-                        'قد يحتاج المصدر مشغّل JavaScript أو يرفض الطلب من الخادم.')
+            error = '; '.join(errors[:2]) or 'لم يُعثر على رابط مباشر اجتاز الفحص.'
     except Exception as exc:
         error = safe_error(exc)
     return entry, checked, pages, playable, error
 
 
-def _extend_catalogue(state: UserState, cat: Catalogue, progress: dict, checkpoint: dict):
-    """Continue paginated seasons in bounded chunks without delaying quick results.
-
-    A 30-second quick pass only examines a few pages; the remaining public
-    pagination queue is retained. Run several bounded continuation chunks, and
-    checkpoint unfinished work so an administrator can resume later.
-    """
-    started=time.monotonic()
-    overall_deadline=started+170
-    snapshot=deepcopy(checkpoint or {})
-    chunks=0
-    try:
-        while chunks<6 and time.monotonic()<overall_deadline:
-            with state.lock:
-                if state.scan is not progress or state.catalogue is not cat or progress.get("stop_requested"):
-                    break
-            client=DiscoverySourceClient(cat.url)
-            client.timeout=5
-            client.retries=1
-            client.deadline=min(overall_deadline,time.monotonic()+34)
-            def on_progress(updated):
-                if not isinstance(updated,dict):return
-                rows=updated.get("episodes",[])
-                if not isinstance(rows,list):return
-                with state.lock:
-                    if state.scan is not progress or state.catalogue is not cat or progress.get("stop_requested"):
-                        raise InterruptedError("Scan stopped or replaced")
-                    known={(ep.season,ep.number) for ep in cat.episodes}
-                    added=[]
-                    for row in rows[:5000]:
-                        if not isinstance(row,dict):continue
-                        try:ep=Episode(**row)
-                        except (ValueError,TypeError):continue
-                        key=(ep.season,ep.number)
-                        if key in known:continue
-                        known.add(key)
-                        cat.episodes.append(ep)
-                        added.append(asdict(ep))
-                    progress["crawl_pages"]=len(updated.get("seen_pages",[]))
-                    progress["crawl_checkpoint"]=deepcopy(updated)
-                    progress["remaining_pages"]=len(updated.get("queued",[]))
-                    if added:
-                        cat.episodes.sort(key=lambda ep:(ep.season,ep.number))
-                        progress["total"]=len(cat.episodes)
-                        _emit_scan_event(state,progress,"episodes_added",{"episodes":added})
-                        _schedule_scan_checkpoint(state,cat,progress)
-            try:
-                # Count pages PER chunk; pending links remain in the snapshot.
-                pull_html(cat.url,client,cat.kind,max_pages=42,max_episodes=5000,
-                          resume_progress=snapshot,progress_hook=on_progress)
-            except (InterruptedError,TimeoutError):
-                pass
-            except Exception as exc:
-                with state.lock:
-                    if state.scan is progress:progress["crawl_error"]=safe_error(exc)
-                break
-            finally:
-                client.session.close()
-            with state.lock:
-                if state.scan is not progress or progress.get("stop_requested"):break
-                latest=progress.get("crawl_checkpoint") or snapshot
-                pending=list(latest.get("queued",[]))
-                progress["remaining_pages"]=len(pending)
-                snapshot=deepcopy(latest)
-                chunks+=1
-                if not pending:break
-        with state.lock:
-            if state.scan is progress:
-                pending=len((progress.get("crawl_checkpoint") or {}).get("queued",[]))
-                progress["crawl_paused"]=bool(pending and not progress.get("stop_requested"))
-                progress["remaining_pages"]=pending
-    finally:
-        with state.lock:
-            if state.scan is progress:
-                progress["crawl_running"]=False
-                _emit_scan_event(state,progress,"crawl_completed",
-                                 {"remaining_pages":progress.get("remaining_pages",0),
-                                  "paused":bool(progress.get("crawl_paused"))})
-                _schedule_scan_checkpoint(state,cat,progress)
-
-
-def _persist_autodiscovered_players(state: UserState, cat: Catalogue, progress: dict):
-    """Update the saved draft after media discovery, without any manual binding.
-
-    Each Episode retains its own page_url, season and number. The existing
-    store() method maps those keys to aseel_seasons / aseel_episodes; verified
-    direct streams become available to the existing AutoSync job. Unverified
-    candidates are never automatically published.
-    """
-    with state.lock:
-        if state.catalogue is not cat or state.scan is not progress or state.db is None:
-            return
-        if not state.tracking or not (state.tracking.get('saved') or state.tracking.get('queued')):
-            return
-        snapshot = deepcopy(cat)
-        database = state.db
-        progress['db_sync'] = 'queued'
-
-    def save():
-        try:
-            # Initial discovery draft and this refreshed snapshot share the
-            # same serial writer; no half-written season/episode mappings.
-            with state.save_lock, _capture_write_lock:
-                saved = store(snapshot, database, publish=False, rights=False,
-                              capture_merge=True, replace_verified_streams=True)
-                AUTOSYNC.remember_saved(snapshot, saved, capture=True, refresh=True)
-            with state.lock:
-                if state.catalogue is cat and state.scan is progress:
-                    progress['db_sync'] = 'saved'
-                    progress['db_synced_episodes'] = len(snapshot.episodes)
-                    _emit_scan_event(state, progress, 'database_synced',
-                                     {'episodes': len(snapshot.episodes),
-                                      'verified': sum(bool(e.verified) for e in snapshot.episodes)})
-        except Exception as exc:
-            with state.lock:
-                if state.catalogue is cat and state.scan is progress:
-                    progress['db_sync'] = 'failed'
-                    progress['db_sync_error'] = safe_error(exc)
-                    _emit_scan_event(state, progress, 'database_sync_error',
-                                     {'message': progress['db_sync_error']})
-
-    _discovery_save_pool.submit(save)
-
-
 def scan_catalogue(state: UserState, cat: Catalogue, progress: dict):
-    """Adaptive parallel worker with per-episode events and durable checkpoints."""
-    completed=set(progress.get("completed_keys",[]))
-    scheduled=set(completed)
-    errors_in_row=0
+    """Inspect episodes concurrently and surface each result as soon as it lands."""
+    from concurrent.futures import as_completed
 
-    def report_candidates(entry, found, phase):
-        """Publish candidate counts at discovery time, before byte verification."""
-        if not found:return
+    targets = list(cat.episodes) if cat.kind == 'series' else [cat]
+    if not targets:
         with state.lock:
-            if state.catalogue is not cat or state.scan is not progress or progress.get("stop_requested"):
-                return
-            before={row.get("url") for row in entry.sources}
-            additions=[row for row in found
-                       if isinstance(row,dict) and row.get("url") not in before]
-            if not additions:return
-            entry.sources=merge_sources(entry.sources,additions,limit=128)
-            if not entry.media_url:
-                entry.media_url=_provisional_player_url(entry.sources)
-            all_sources=[src for media in (cat.episodes if cat.kind=="series" else [cat])
-                         for src in media.sources]
-            progress["sources_found"]=sum(src.get("kind")=="direct" for src in all_sources)
-            progress["embeds_found"]=sum(src.get("kind")=="embed" for src in all_sources)
-            progress["players_found"]=len(all_sources)
-            packet={"sources":list(entry.sources),"phase":phase}
-            if cat.kind=="series":
-                packet.update(season=entry.season,number=entry.number)
-            _emit_scan_event(state,progress,"episode_candidates",packet)
+            if state.scan is progress:
+                progress['running'] = False
+        return
 
+    # Keep the pool bounded so multiple administrators cannot exhaust Render.
+    workers = min(5, len(targets))
+    progress['workers'] = workers
     try:
-        with ThreadPoolExecutor(max_workers=5,thread_name_prefix="studio-media") as executor:
-            futures={}
-            while True:
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix='studio-media') as executor:
+            pending = {executor.submit(_scan_media_entry, cat, entry): entry for entry in targets}
+            for future in as_completed(pending):
                 with state.lock:
-                    if state.catalogue is not cat or state.scan is not progress:return
-                    stopped=bool(progress.get("stop_requested"))
-                    crawls=bool(progress.get("crawl_running"))
-                    limit=progress.get("adaptive_workers",5)
-                    if not stopped:
-                        candidates=list(cat.episodes) if cat.kind=="series" else [cat]
-                        for entry in candidates:
-                            if len(futures)>=limit:break
-                            key=_scan_key(entry,cat.kind)
-                            if key in scheduled:continue
-                            scheduled.add(key)
-                            futures[executor.submit(_scan_media_entry,cat,entry,False,
-                                lambda found,phase,record=entry: report_candidates(record,found,phase))]=(key,entry)
-                    if not futures and (not crawls or stopped):
-                        break
-                if not futures:
-                    time.sleep(.20)
-                    continue
-                done,_=wait(list(futures),timeout=.4,return_when=FIRST_COMPLETED)
-                for future in done:
-                    key,entry=futures.pop(future)
-                    try:
-                        _,checked,pages,playable,error=future.result()
-                    except Exception as exc:
-                        checked,pages,playable,error=list(entry.sources),[],None,safe_error(exc)
-                    with state.lock:
-                        if state.catalogue is not cat or state.scan is not progress:return
-                        entry.sources=merge_sources(entry.sources, checked, limit=128)
-                        if pages:entry.source_pages=list(dict.fromkeys([*entry.source_pages, *pages]))
-                        if playable:
-                            entry.media_url=playable["url"]
-                        elif not entry.media_url or (signed_expiry(entry.media_url) or float('inf'))<=time.time()+90:
-                            entry.media_url=_provisional_player_url(checked) or entry.media_url
-                        entry.verified=playable is not None
-                        entry.error=error
-                        completed.add(key)
-                        progress["completed_keys"]=list(completed)
-                        progress["done"]=len(completed)
-                        progress["total"]=len(cat.episodes) if cat.kind=="series" else 1
-                        progress["verified"]=sum(bool(x.verified) for x in
-                                                  (cat.episodes if cat.kind=="series" else [cat]))
-                        all_sources=[x for item in (cat.episodes if cat.kind=="series" else [cat])
-                                     for x in item.sources]
-                        progress["sources_found"]=sum(x.get("kind")=="direct" for x in all_sources)
-                        progress["embeds_found"]=sum(x.get("kind")=="embed" for x in all_sources)
-                        progress["players_found"]=len(all_sources)
-                        progress["sources_checked"]=sum("checked_at" in x for x in all_sources)
-                        if entry.verified:
-                            errors_in_row=0
-                        else:
-                            errors_in_row+=1
-                        progress["adaptive_workers"]=3 if errors_in_row>=3 else 5
-                        progress["workers"]=progress["adaptive_workers"]
-                        progress["last_result"]=asdict(entry)
-                        _emit_scan_event(state,progress,"episode",asdict(entry))
-                        _schedule_scan_checkpoint(state,cat,progress)
-                        if time.monotonic()-progress.get("persisted_at",0)>=3:
-                            LIBRARY.remember_discovery(cat)
-                            progress["persisted_at"]=time.monotonic()
+                    if state.catalogue is not cat or state.scan is not progress:
+                        for outstanding in pending:
+                            outstanding.cancel()
+                        return
+                try:
+                    entry, checked, pages, playable, error = future.result()
+                except Exception as exc:
+                    entry = pending[future]
+                    checked, pages, playable, error = list(entry.sources), [], None, safe_error(exc)
+                with state.lock:
+                    if state.catalogue is not cat or state.scan is not progress:
+                        return
+                    entry.sources = checked
+                    if pages:
+                        entry.source_pages = pages
+                    if playable:
+                        entry.media_url = playable['url']
+                    entry.verified = playable is not None
+                    entry.error = error
+                    progress['done'] += 1
+                    progress['verified'] += int(entry.verified)
+                    progress['sources_found'] += sum(
+                        item.get('kind') == 'direct' for item in checked)
+                    if time.monotonic()-progress.get('persisted_at',0)>=2:
+                        LIBRARY.remember_discovery(cat)
+                        progress['persisted_at']=time.monotonic()
     except Exception as exc:
-        with state.lock:
-            if state.scan is progress:progress["error"]=safe_error(exc)
+        with state.lock: progress['error']=safe_error(exc)
     finally:
         with state.lock:
             if state.scan is progress:
-                try: LIBRARY.remember_discovery(cat)
-                except Exception as exc:progress["error"]=safe_error(exc)
-                progress["running"]=False
-                _emit_scan_event(state,progress,"stopped" if progress.get("stop_requested") else "complete")
-                _schedule_scan_checkpoint(state,cat,progress,force=True)
-        # Persist all autonomously scanned episode/source associations to the
-        # already enabled draft sync after releasing the UI progress lock.
-        if not progress.get("stop_requested"):
-            _persist_autodiscovered_players(state, cat, progress)
+                try:
+                    LIBRARY.remember_discovery(cat)
+                except Exception as exc:
+                    progress['error'] = safe_error(exc)
+                finally:
+                    progress['running'] = False
 
 
-def start_catalogue_scan(state: UserState, cat: Catalogue, *,
-                         owner_uid=None, crawl_checkpoint=None, resume=None):
-    total=len(cat.episodes) if cat.kind=="series" else 1
-    completed=list((resume or {}).get("completed_keys") or [])
-    progress={
-        "id":(resume or {}).get("id") or secrets.token_hex(8),
-        "running":True,"done":len(completed),"total":total,
-        "verified":sum(bool(x.verified) for x in (cat.episodes if cat.kind=="series" else [cat])),
-        "sources_found":sum(sum(y.get("kind")=="direct" for y in x.sources)
-           for x in (cat.episodes if cat.kind=="series" else [cat])),
-        "embeds_found":sum(sum(y.get("kind")=="embed" for y in x.sources)
-           for x in (cat.episodes if cat.kind=="series" else [cat])),
-        "players_found":sum(len(x.sources) for x in (cat.episodes if cat.kind=="series" else [cat])),
-        "sources_checked":0,
-        "workers":5,"adaptive_workers":5,"error":"",
-        "revision":int((resume or {}).get("revision",0)),
-        "seq":int((resume or {}).get("seq",0)),
-        "events":[],"completed_keys":completed,
-        "started_at":time.time(),"first_batch_target_seconds":30,
-        "owner_id":owner_uid,
-        "checkpoint_saved":None,
-        "checkpoint_available":bool(owner_uid and scan_checkpoint_available()),
-        "crawl_running":bool(crawl_checkpoint is not None and cat.kind=="series"),
-        "crawl_checkpoint":crawl_checkpoint or {},
-        "stop_requested":False,
-    }
-    state.scan=progress
-    state.scan_catalogue=cat
-    state.scan_owner_uid=owner_uid
-    _emit_scan_event(state,progress,"started")
-    _schedule_scan_checkpoint(state,cat,progress,force=True)
-    # Queue media worker before optional longer pagination work. The quick
-    # batch is always eligible to run even on Render's free plan.
-    _discovery_scans.submit(scan_catalogue,state,cat,progress)
-    if progress["crawl_running"]:
-        _discovery_scans.submit(_extend_catalogue,state,cat,progress,
-                                deepcopy(crawl_checkpoint))
-    return progress
+def start_catalogue_scan(state: UserState, cat: Catalogue):
+    total = len(cat.episodes) if cat.kind == 'series' else 1
+    progress = {'id':secrets.token_hex(8),'running':bool(total),'done':0,'total':total,'verified':0,'sources_found':0,'workers':0,'error':''}
+    state.scan = progress
+    state.scan_catalogue = cat
+    if total: _discovery_scans.submit(scan_catalogue,state,cat,progress)
 
 
 @app.get('/api/discovery-scan')
@@ -966,203 +503,10 @@ async def discovery_scan(request: Request):
     with state.lock:
         progress = scan_status(state)
         if progress:
-            # Compatibility endpoint for browsers without EventSource.
-            return {'scan':progress,'summary':get_summary(state)}
+            # Include incremental snapshots so the client shows verified links
+            # and episode status while the concurrent workers are still running.
+            return {'scan':dict(progress),'summary':get_summary(state)}
     return {'scan':None}
-
-
-@app.get('/api/discovery-scan/events')
-async def discovery_scan_events(request: Request, scan_id: str, after: int=0):
-    """Replay missed episode deltas, then push live snapshots in order.
-
-    Every event has a monotonic id. A client behind the 400-event ring
-    receives a full resync rather than losing unobserved episodes.
-    """
-    _,state=find_state(request)
-    if not 0<=after<=10_000_000:raise HTTPException(422,"Invalid cursor")
-    with state.lock:
-        current=state.scan
-        if not current or current.get("id")!=scan_id or state.catalogue is not state.scan_catalogue:
-            raise HTTPException(404,"الفحص غير موجود في هذه الجلسة")
-
-    async def generate():
-        cursor=after
-        idle_at=time.monotonic()
-        while not await request.is_disconnected():
-            with state.lock:
-                current=state.scan
-                if not current or current.get("id")!=scan_id:break
-                events=list(current.get("events") or [])
-                latest=int(current.get("seq",0))
-                missed=bool(events and cursor<events[0]["seq"]-1)
-                if cursor==0 or missed:
-                    packet={"seq":latest,"kind":"resync","scan":_scan_public(current),
-                            "catalogue":asdict(state.catalogue),
-                            "tracking":dict(state.tracking) if state.tracking else None}
-                    batches=[packet]
-                else:
-                    batches=[{"seq":event["seq"],"kind":event["kind"],
-                              "delta":event.get("delta"),
-                              "scan":_scan_public(current),
-                              "tracking":dict(state.tracking) if state.tracking else None}
-                             for event in events if event["seq"]>cursor]
-                active=bool(current.get("running"))
-            if batches:
-                for packet in batches:
-                    cursor=packet["seq"]
-                    yield ("id: "+str(cursor)+"\nevent: snapshot\ndata: "+
-                           json.dumps(packet,ensure_ascii=False,separators=(",",":"))+"\n\n")
-                idle_at=time.monotonic()
-            if not active:break
-            if time.monotonic()-idle_at>=14:
-                yield ": keepalive\n\n"
-                idle_at=time.monotonic()
-            await asyncio.sleep(.25)
-    return StreamingResponse(generate(),media_type="text/event-stream",
-        headers={"Cache-Control":"private, no-store, no-transform",
-                 "X-Accel-Buffering":"no","X-Content-Type-Options":"nosniff"})
-
-
-class ScanControl(BaseModel):
-    scan_id: str = Field(pattern=r"^[0-9a-f]{16}$")
-
-@app.get("/api/discovery-scan/history")
-async def studio_scan_history(request:Request):
-    find_state(request)
-    uid=_portal_scan_uid(request)
-    if uid is None:raise HTTPException(403,"Administrator session is required")
-    rows=await run_in_threadpool(recent_scan_checkpoints,uid,15)
-    # No snapshot contents or signed source URLs are returned in history.
-    return {"jobs":rows,"durable":scan_checkpoint_available()}
-
-@app.get("/api/discovery-scan/recover")
-async def studio_scan_recover(request:Request,scan_id:str):
-    _,state=find_state(request)
-    uid=_portal_scan_uid(request)
-    if uid is None:raise HTTPException(403,"Administrator session is required")
-    with state.lock:
-        if state.scan and state.scan.get("id")==scan_id and state.catalogue:
-            return {"found":True,"active":bool(state.scan.get("running")),
-                    "summary":get_summary(state),"resumable":False}
-    record=await run_in_threadpool(load_scan_checkpoint,scan_id,uid)
-    if not record:raise HTTPException(404,"Checkpoint expired or not found")
-    prog=dict(record.get("progress") or {})
-    prog.pop("crawl_checkpoint",None)
-    prog["running"]=False
-    prog["interrupted"]=record.get("scan_status")=="scanning"
-    return {"found":True,"active":False,"resumable":record.get("scan_status")!="cancelled",
-            "scan":prog,"catalogue":record["payload"],
-            "status":record.get("scan_status"),"updated_at":record.get("updated_at")}
-
-@app.post("/api/discovery-scan/resume")
-async def studio_scan_resume(request:Request,data:ScanControl):
-    state=protected(request)
-    uid=_portal_scan_uid(request)
-    if uid is None:raise HTTPException(403,"Administrator session is required")
-    with state.lock:
-        if state.scan and state.scan.get("running"):
-            raise HTTPException(409,"يوجد فحص نشط؛ أوقفه قبل استعادة مهمة أخرى")
-        if (state.scan and state.scan.get("id")==data.scan_id
-                and state.catalogue is state.scan_catalogue):
-            # No database round trip needed to resume a just-stopped scan.
-            cat=state.catalogue
-            original=state.scan
-            saved_crawl=original.get("crawl_checkpoint") or {}
-            checkpoint=saved_crawl if (original.get("crawl_running") or
-                           saved_crawl.get("queued") or original.get("crawl_paused")) else None
-            start_catalogue_scan(state,cat,owner_uid=uid,
-                crawl_checkpoint=checkpoint,
-                resume={"id":data.scan_id,
-                        "completed_keys":list(original.get("completed_keys",[])),
-                        "seq":int(original.get("seq",0)),
-                        "revision":int(original.get("revision",0))})
-            return {"summary":get_summary(state),"resumed":True,
-                    "pending":max(0,state.scan["total"]-state.scan["done"])}
-    record=await run_in_threadpool(load_scan_checkpoint,data.scan_id,uid)
-    if not record:raise HTTPException(404,"Checkpoint expired or not found")
-    if record.get("scan_status")=="cancelled":
-        raise HTTPException(409,"هذه المهمة أُوقفت؛ ابدأ فحصًا جديدًا")
-    try:
-        payload=dict(record["payload"])
-        episodes=[Episode(**row) for row in payload.pop("episodes",[])]
-        cat=Catalogue(**payload,episodes=episodes)
-    except (KeyError,TypeError,ValueError):
-        raise HTTPException(422,"بيانات المهمة المحفوظة غير صالحة")
-    original=dict(record.get("progress") or {})
-    progress_id=record["scan_id"]
-    resume={"id":progress_id,
-            "completed_keys":record.get("completed") or [],
-            "seq":int(original.get("seq",original.get("revision",0))),
-            "revision":int(original.get("revision",0))}
-    crawl=original.get("crawl_checkpoint") if isinstance(original.get("crawl_checkpoint"),dict) else None
-    with state.lock:
-        state.catalogue=cat
-        state.catalogues=[cat]
-        state.current_index=0
-        state.demo=False
-        state.batch_errors=[]
-        start_catalogue_scan(state,cat,owner_uid=uid,
-                             crawl_checkpoint=crawl,resume=resume)
-        return {"summary":get_summary(state),"resumed":True,
-                "pending":state.scan["total"]-state.scan["done"]}
-
-@app.post("/api/discovery-scan/stop")
-async def studio_scan_stop(request:Request,data:ScanControl):
-    state=protected(request)
-    with state.lock:
-        if not state.scan or state.scan.get("id")!=data.scan_id:
-            raise HTTPException(404,"الفحص المطلوب غير موجود")
-        state.scan["stop_requested"]=True
-        _emit_scan_event(state,state.scan,"stop_requested")
-        return {"stopping":True,"scan":scan_status(state)}
-
-class ScanEpisodeControl(ScanControl):
-    season: int = Field(ge=1,le=200)
-    number: int = Field(ge=1,le=10000)
-
-@app.post("/api/discovery-scan/retry-episode")
-async def studio_scan_retry_episode(request:Request,data:ScanEpisodeControl):
-    state=protected(request)
-    with state.lock:
-        if not state.scan or state.scan.get("id")!=data.scan_id:
-            raise HTTPException(404,"الفحص غير موجود")
-        if state.scan.get("running"):
-            raise HTTPException(409,"انتظر اكتمال الفحص الحالي")
-        cat=current_catalogue(state)
-        if cat.kind!="series":
-            raise HTTPException(422,"الفحص الفردي مخصص للحلقات")
-        target=next((x for x in cat.episodes
-                     if x.season==data.season and x.number==data.number),None)
-        if target is None:
-            raise HTTPException(404,"الحلقة غير موجودة")
-        retained=[_scan_key(x,cat.kind) for x in cat.episodes if x is not target]
-        start_catalogue_scan(state,cat,owner_uid=_portal_scan_uid(request),
-                             resume={"completed_keys":retained})
-        return {"retry":True,"summary":get_summary(state),
-                "episode":{"season":target.season,"number":target.number}}
-
-
-@app.post("/api/discovery-scan/retry-failed")
-async def studio_scan_retry_failed(request:Request,data:ScanControl):
-    state=protected(request)
-    with state.lock:
-        if not state.scan or state.scan.get("id")!=data.scan_id:
-            raise HTTPException(404,"الفحص المطلوب غير موجود")
-        if state.scan.get("running"):
-            raise HTTPException(409,"أوقف الفحص الحالي أو انتظر اكتماله")
-        cat=current_catalogue(state)
-        if cat.kind=="series":
-            passed=[_scan_key(ep,cat.kind) for ep in cat.episodes if ep.verified]
-            missing=sum(not ep.verified for ep in cat.episodes)
-        else:
-            passed=["movie"] if cat.verified else []
-            missing=int(not cat.verified)
-        if not missing:
-            return {"retry":False,"message":"كل العناصر الحالية اجتازت الفحص"}
-        start_catalogue_scan(state,cat,owner_uid=_portal_scan_uid(request),
-                             resume={"completed_keys":passed})
-        return {"retry":True,"summary":get_summary(state),
-                "remaining":missing}
 
 
 class DiscoverForm(BaseModel):
@@ -1172,8 +516,6 @@ class DiscoverForm(BaseModel):
     metadata: bool = True
     scan_media: bool = True
     force_refresh: bool = False
-    auto_track: bool = False
-    fast: bool = False
 
 
 @app.post('/api/discover')
@@ -1184,70 +526,19 @@ async def discover(request: Request, data: DiscoverForm):
     try:
         source = public_url(data.url)
         cached = None if data.force_refresh else LIBRARY.cached_discovery(source)
-        crawl_checkpoint={}
         if cached and (data.kind=='auto' or data.kind==cached['kind']):
             cached=dict(cached)
             episodes=[Episode(**row) for row in cached.pop('episodes',[])]
             cat=Catalogue(**cached,episodes=episodes)
         else:
-            crawl_checkpoint={}
-            def capture_crawl(snapshot):
-                if isinstance(snapshot,dict):
-                    crawl_checkpoint.clear()
-                    crawl_checkpoint.update(deepcopy(snapshot))
-            cat = await run_in_threadpool(lambda: discover_full(
-                source, data.kind, deep=data.deep, enrich_metadata=data.metadata,
-                fast=data.fast, progress_hook=capture_crawl if data.fast and data.deep else None))
+            cat = await run_in_threadpool(lambda: discover_full(source, data.kind, deep=data.deep, enrich_metadata=data.metadata))
         cat.source_pages=list(dict.fromkeys([source,cat.url,*cat.source_pages]))
         LIBRARY.remember_discovery(cat)
-        tracking = None
-        if data.auto_track:
-            if state.db is None:
-                tracking = {'saved':False,'message':'سجّل دخول المسؤول لتفعيل التجديد الدائم لهذا العمل.'}
-            else:
-                db = state.db
-                # Snapshot before the concurrent player scan mutates sources.
-                captured = deepcopy(cat) if data.fast else cat
-                def track():
-                    try:
-                        with state.save_lock, _capture_write_lock:
-                            result = store(captured,db,publish=False,rights=False,capture_merge=True)
-                            AUTOSYNC.remember_saved(captured,result,capture=True,refresh=True)
-                        with state.lock:
-                            if not data.fast or state.tracking is tracking:
-                                state.tracking={'saved':True,'queued':False,'message':'حُفظ العمل كمسودة في قاعدة البيانات وأُضيف للمزامنة.'}
-                                if state.scan and state.scan_catalogue is cat:
-                                    state.scan['revision']=int(state.scan.get('revision',0))+1
-                    except Exception as exc:
-                        with state.lock:
-                            if not data.fast or state.tracking is tracking:
-                                state.tracking={'saved':False,'queued':False,'message':'فشل الحفظ التلقائي: '+safe_error(exc)}
-                                if state.scan and state.scan_catalogue is cat:
-                                    state.scan['revision']=int(state.scan.get('revision',0))+1
-                        if not data.fast:
-                            raise
-                if data.fast:
-                    # Fast discovery must not block the first visible results
-                    # on inserting many episodes over Supabase REST requests.
-                    tracking={'saved':False,'queued':True,
-                              'message':'ظهرت الحلقات؛ يجري حفظ المسودة في الخلفية. راجع حالة الحفظ قبل النشر.'}
-                    with state.lock:state.tracking=tracking
-                    _discovery_save_pool.submit(track)
-                else:
-                    try:
-                        await run_in_threadpool(track)
-                        with state.lock:tracking=state.tracking
-                    except Exception as exc:
-                        tracking={'saved':False,'message':'تعذّر تفعيل التجديد: '+safe_error(exc)}
-                        with state.lock:state.tracking=tracking
         with state.lock:
             state.catalogue, state.catalogues, state.batch_errors = cat, [cat], []
             state.current_index, state.demo = 0, False
-            if not data.auto_track or state.db is None:state.tracking=tracking
-            if data.scan_media:
-                start_catalogue_scan(state,cat,owner_uid=_portal_scan_uid(request),
-                    crawl_checkpoint=crawl_checkpoint if data.fast and data.deep else None)
-        return {**get_summary(state),'tracking':tracking}
+            if data.scan_media: start_catalogue_scan(state,cat)
+        return get_summary(state)
     except SourceConnectionError as exc:
         raise HTTPException(502, str(exc)) from None
     except Exception as exc:
@@ -1391,80 +682,6 @@ async def demo(request: Request):
     return get_summary(state)
 
 
-def _bind_player_source(entry, media_url: str, page_url: str = '') -> None:
-    """Associate a manual HTTPS media candidate with exactly one episode/movie.
-
-    Manual attachment is not playback verification. Keep the candidate and
-    original episode page for retry even when the CDN is temporarily unreachable.
-    """
-    target = normalized_source_url(public_url(media_url))
-    kind = supported_source_kind(target)
-    if not kind:
-        raise ValueError('الرابط يجب أن يكون MP4 أو M3U8 أو WebM أو Embed مدعوم')
-    page = public_url(page_url) if page_url else getattr(entry, 'page_url', '')
-    previous_verified = bool(entry.verified and entry.media_url == target)
-    prior = next((row for row in entry.sources if row.get('url') == target), {})
-    row = {**prior, 'url': target, 'kind': kind, 'page_url': page,
-           'verified': previous_verified,
-           'label': prior.get('label') or (urlsplit(target).hostname or 'مشغل مباشر'),
-           'discovered_at': prior.get('discovered_at') or time.time()}
-    expiry = signed_expiry(target)
-    if expiry is not None:
-        row['expires_at'] = expiry
-    entry.sources = merge_sources(entry.sources, [row], limit=128)
-    if page:
-        entry.source_pages = list(dict.fromkeys([*entry.source_pages, page]))
-    entry.media_url, entry.verified, entry.error = target, previous_verified, ''
-
-
-def _match_episode_by_page(cat: Catalogue, page_url: str) -> Episode | None:
-    """Prefer exact page association; use the episode label only as a fallback."""
-    from urllib.parse import unquote
-    page = page_url.rstrip('/')
-    exact = [ep for ep in cat.episodes if ep.page_url.rstrip('/') == page]
-    if len(exact) == 1:
-        return exact[0]
-    if len(exact) > 1:
-        return None
-    numbers = episode_numbers(unquote(page_url))
-    return next((ep for ep in cat.episodes if (ep.season, ep.number) == numbers), None) if numbers else None
-
-
-class EpisodePlayerLinkForm(BaseModel):
-    page_url: str = Field(min_length=12, max_length=2048)
-    media_url: str = Field(min_length=12, max_length=2048)
-
-
-@app.post('/api/episode-player-link')
-async def episode_player_link(request: Request, data: EpisodePlayerLinkForm):
-    """Bind a known media candidate to an existing episode; never auto-publish."""
-    state = protected(request)
-    cat = current_catalogue(state)
-    if cat.kind != 'series':
-        raise HTTPException(400, 'هذه الميزة للمسلسلات فقط')
-    try:
-        page = public_url(data.page_url.strip())
-        media = public_url(data.media_url.strip())
-    except (ValueError, TypeError) as exc:
-        raise HTTPException(400, 'استخدم رابط HTTPS عامًا للحلقة وللفيديو') from exc
-    with state.lock:
-        episode = _match_episode_by_page(cat, page)
-        if episode is None:
-            raise HTTPException(404, 'لم أجد الحلقة المطابقة. اكتشف الموسم والحلقة أولاً أو استخدم رابط صفحتها الصحيح.')
-        try:
-            _bind_player_source(episode, media, page)
-        except ValueError as exc:
-            raise HTTPException(400, str(exc)) from exc
-        binding = {'season': episode.season, 'number': episode.number,
-                   'media_url': episode.media_url, 'verified': episode.verified,
-                   'status': 'candidate' if not episode.verified else 'verified'}
-        summary = get_summary(state)
-    # This persists the candidate to the discovery cache; Supabase publication
-    # still requires the administrator's explicit save and playback verification.
-    LIBRARY.remember_discovery(cat)
-    return {'linked': binding, **summary}
-
-
 class LinkForm(BaseModel):
     text: str = Field(max_length=120000)
 
@@ -1479,40 +696,34 @@ async def links(request: Request, data: LinkForm):
             line = line.strip()
             if not line or line.startswith('#'):
                 continue
-            if len(line) > 4300:
+            if len(line) > 2200:
                 problems.append(f'السطر {no}: طويل جدًا')
                 continue
             try:
                 if cat.kind == 'movie' and '|' not in line:
-                    _bind_player_source(cat, line, cat.url)
+                    url = public_url(line)
+                    if not supported_source_kind(url):
+                        raise ValueError('الرابط يجب أن يكون MP4/HLS/WebM أو Embed 1vid')
+                    cat.media_url, cat.verified = url, False
                     count += 1
                     continue
                 if '|' not in line:
-                    raise ValueError('المطلوب S01E01|https://... أو رابط الحلقة|رابط الفيديو')
-                label, url = (part.strip() for part in line.split('|', 1))
-                url = public_url(url)
-                if not supported_source_kind(url):
-                    raise ValueError('الرابط يجب أن يكون فيديو مباشرًا مدعومًا')
-                if cat.kind != 'series':
-                    raise ValueError('صيغة المواسم مخصصة للمسلسلات')
-                if label.startswith('https://'):
-                    page = public_url(label)
-                    ep = _match_episode_by_page(cat, page)
-                else:
-                    numbers = episode_numbers(label)
-                    ep = next((e for e in cat.episodes if (e.season, e.number) == numbers), None) if numbers else None
-                    page = ep.page_url if ep else ''
+                    raise ValueError('المطلوب S01E01|https://...')
+                label, url = line.split('|', 1)
+                from alezz_fetchv_importer import episode_numbers
+                numbers = episode_numbers(label.strip())
+                url = public_url(url.strip())
+                if not numbers or not supported_source_kind(url):
+                    raise ValueError('الموسم/الحلقة أو صيغة الرابط غير صحيحة')
+                ep = next((e for e in cat.episodes if (e.season, e.number) == numbers), None)
                 if ep is None:
-                    problems.append(f'السطر {no}: لا توجد حلقة مطابقة في المواسم المكتشفة')
+                    problems.append(f'السطر {no}: الحلقة غير موجودة في الاكتشاف')
                     continue
-                _bind_player_source(ep, url, page)
+                ep.media_url, ep.verified, ep.error = url, False, ''
                 count += 1
             except (ValueError, TypeError) as exc:
                 problems.append(f'السطر {no}: {clean(exc, 100)}')
-        summary = get_summary(state)
-    if count:
-        LIBRARY.remember_discovery(cat)
-    return {'updated': count, 'problems': problems[:30], **summary}
+    return {'updated': count, 'problems': problems[:30], **get_summary(state)}
 
 
 class UpdateForm(BaseModel):
@@ -1574,9 +785,7 @@ async def update(request: Request, data: UpdateForm):
         if data.media_url is not None and cat.kind == 'movie':
             value = optional_url(data.media_url)
             if value and not supported_source_kind(value):
-                raise HTTPException(400, 'رابط الفيلم يجب أن يكون MP4/HLS/WebM أو Embed معتمد (OK.ru أو 1vid)')
-            if supported_source_kind(value) == 'embed':
-                value = normalized_source_url(value)
+                raise HTTPException(400, 'رابط الفيلم يجب أن يكون MP4/HLS/WebM أو Embed 1vid')
             if value != cat.media_url:
                 cat.media_url, cat.verified = value, False
         if data.episodes is not None and cat.kind == 'series':
@@ -1599,13 +808,8 @@ async def update(request: Request, data: UpdateForm):
                     value = optional_url(str(row['media_url']))
                     if value and not supported_source_kind(value):
                         raise HTTPException(400, f'صيغة رابط الموسم {ep.season} الحلقة {ep.number} غير مدعومة')
-                    if supported_source_kind(value) == 'embed':
-                        value = normalized_source_url(value)
                     if value != ep.media_url:
-                        if value:
-                            _bind_player_source(ep, value, ep.page_url)
-                        else:
-                            ep.media_url, ep.verified, ep.error = '', False, ''
+                        ep.media_url, ep.verified, ep.error = value, False, ''
     return get_summary(state)
 
 
@@ -1641,7 +845,7 @@ def verify_entries(cat: Catalogue, indices: list[int]) -> int:
             return False
         # Probe the iframe document only. Its reachability is not video playback.
         checked = MediaResolver(mode='http').check([
-            {'url': item.media_url, 'kind': 'embed', 'label': urlsplit(item.media_url).hostname or 'Embed'}])
+            {'url': item.media_url, 'kind': 'embed', 'label': '1vid'}])
         item.sources = [s for s in item.sources if s.get('url') != item.media_url] + checked
         item.verified = False
         item.error = '' if checked and checked[0].get('reachable') else (
@@ -1680,244 +884,6 @@ async def verify(request: Request, data: VerifyForm):
     except Exception as exc:
         raise HTTPException(400, clean(exc, 200)) from None
     return {'checked': count, **get_summary(state)}
-
-
-def _capture_summary(job:dict) -> dict:
-    return {k:v for k,v in job.items() if k not in ('events','cancel')}
-
-
-def _capture_event(job:dict, *, entry=None, phase:str='progress', message:str=''):
-    job['revision']=int(job.get('revision',0))+1
-    event={'revision':job['revision'],'phase':phase,
-           'message':message,'snapshot':_capture_summary(job)}
-    if entry is not None:event['delta']=asdict(entry)
-    job.setdefault('events',[]).append(event)
-    if len(job['events'])>240:
-        del job['events'][:-240]
-
-
-def _run_episode_capture_batches(state:UserState,cat:Catalogue,job:dict):
-    """Ten public episode pages per bounded 45s batch, then auto-advance.
-
-    All network operations use the existing SSRF-checked MediaResolver. Futures
-    that exceed the batch budget are skipped; at most four run concurrently
-    through the shared worker pool, even if a provider stalls.
-    """
-    try:
-        total=job['total']
-        while True:
-            with state.lock:
-                if (state.catalogue is not cat or state.capture is not job
-                        or job.get('cancel') or job['next_index']>=total):
-                    break
-                start=job['next_index']
-                stop=min(start+_EPISODE_BATCH_SIZE,total)
-                entries=cat.episodes[start:stop] if cat.kind=='series' else [cat]
-                job['batch_number']+=1
-                job['batch_total']=len(entries)
-                job['batch_done']=0
-                job['batch_started_at']=time.time()
-                job['phase']='scanning'
-                job['message']=f"بدأت الدفعة {job['batch_number']} — الحلقات {start+1} إلى {stop}"
-                _capture_event(job,phase='batch',message=job['message'])
-            futures={_episode_capture_pool.submit(_scan_media_entry,cat,item,True):item for item in entries}
-            pending=set(futures)
-            deadline=time.monotonic()+_EPISODE_BATCH_SECONDS
-            while pending:
-                with state.lock:
-                    interrupted=(job.get('cancel') or state.capture is not job
-                                 or state.catalogue is not cat)
-                if interrupted:break
-                remaining=deadline-time.monotonic()
-                if remaining<=0:break
-                completed,pending=wait(pending,timeout=min(1.2,remaining),
-                                       return_when=FIRST_COMPLETED)
-                for future in completed:
-                    item=futures[future]
-                    try:
-                        _,checked,pages,playable,error=future.result()
-                    except Exception as exc:
-                        checked,pages,playable,error=list(item.sources),[],None,safe_error(exc)
-                    with state.lock:
-                        if state.catalogue is not cat or state.capture is not job:
-                            continue
-                        item.sources=merge_sources(item.sources, checked, limit=128)
-                        if pages:item.source_pages=list(dict.fromkeys([*item.source_pages, *pages]))
-                        if playable:
-                            item.media_url=playable['url']
-                        elif not item.media_url or (signed_expiry(item.media_url) or float('inf'))<=time.time()+90:
-                            item.media_url=_provisional_player_url(checked) or item.media_url
-                        item.verified=playable is not None
-                        item.error=error
-                        job['done']+=1
-                        job['batch_done']+=1
-                        job['verified']+=int(bool(playable))
-                        job['candidates']+=sum(bool(x.get('url')) for x in checked)
-                        if error:job['failed']+=1
-                        job['message']=f"تمت مراجعة {job['done']} من {total} حلقة"
-                        _capture_event(job,entry=item,phase='episode',message=job['message'])
-            for future in pending:future.cancel()
-            with state.lock:
-                if state.catalogue is not cat or state.capture is not job:break
-                # A budget timeout is not a confirmed broken source.
-                interrupted=bool(job.get('cancel'))
-                skipped=len(pending)
-                if not interrupted:
-                    job['done']+=skipped
-                    job['batch_done']+=skipped
-                    job['timed_out']+=skipped
-                # Stopping mid-batch leaves it eligible for a clean retry.
-                job['next_index']=start if interrupted else stop
-                job['last_batch_seconds']=round(time.time()-job['batch_started_at'],1)
-                job['phase']='batch_done'
-                job['message']=('تم إيقاف الدفعة، ويمكن استئنافها' if interrupted else
-                                f"انتهت الدفعة {job['batch_number']} خلال "
-                                f"{job['last_batch_seconds']} ثانية؛ "
-                                f"{skipped} حلقة تحتاج إعادة محاولة" if skipped else
-                                f"اكتملت الدفعة {job['batch_number']}؛ الانتقال تلقائيًا")
-                _capture_event(job,phase='batch_done',message=job['message'])
-            try:
-                LIBRARY.remember_discovery(cat)
-            except Exception:
-                # Save failures are visible in the studio, never silently
-                # treated as evidence that a video source failed.
-                with state.lock:
-                    job['save_warning']='تعذّر حفظ آخر دفعة في التخزين المحلي'
-                    _capture_event(job,phase='warning',message=job['save_warning'])
-    except Exception as exc:
-        with state.lock:
-            if state.capture is job:
-                job['error']=safe_error(exc)
-                _capture_event(job,phase='error',message=job['error'])
-    finally:
-        # Unlike the initial catalogue scan, the explicit 10-episode batch
-        # previously persisted ONLY to the local library, leaving discovered
-        # direct links absent from the Supabase episodes used by TV clients.
-        # Save verified replacements immediately, then enqueue every episode
-        # for server-side source renewal even after the studio is closed.
-        with state.lock:
-            eligible = (not job.get('cancel') and state.catalogue is cat
-                        and state.capture is job and getattr(state, 'db', None) is not None)
-            snapshot = deepcopy(cat) if eligible else None
-            database = state.db if eligible else None
-            if eligible:
-                job['phase'] = 'saving'
-                job['db_sync'] = 'saving'
-                _capture_event(job, phase='saving',
-                               message='جاري حفظ الروابط المكتشفة وربطها بالحلقات')
-        if snapshot is not None and database is not None:
-            try:
-                with state.save_lock, _capture_write_lock:
-                    stored = store(snapshot, database, publish=False,
-                                   rights=False, capture_merge=True,
-                                   replace_verified_streams=True)
-                    AUTOSYNC.remember_saved(snapshot, stored, capture=True,
-                                            refresh=True)
-                with state.lock:
-                    if state.capture is job:
-                        job['db_sync'] = 'saved'
-                        job['db_synced_episodes'] = len(snapshot.episodes)
-                        _capture_event(job, phase='saved',
-                                       message='تم حفظ روابط الحلقات وجدولة تجديدها تلقائيًا')
-            except Exception as exc:
-                with state.lock:
-                    if state.capture is job:
-                        job['db_sync'] = 'failed'
-                        job['db_sync_error'] = safe_error(exc)
-                        _capture_event(job, phase='save_error',
-                                       message='تعذر حفظ روابط الحلقات: '+job['db_sync_error'])
-        with state.lock:
-            if state.capture is job:
-                job['running']=False
-                job['phase']='cancelled' if job.get('cancel') else 'complete'
-                job['finished_at']=time.time()
-                job['message']=('تم إيقاف الفحص؛ يمكن استئنافه من آخر دفعة'
-                                if job.get('cancel') else
-                                f"اكتمل فحص {job['done']} من {job['total']} حلقة")
-                _capture_event(job,phase=job['phase'],message=job['message'])
-
-
-class EpisodeCaptureBatchForm(BaseModel):
-    start_index:int=Field(default=0,ge=0,le=5000)
-
-
-@app.post('/api/episode-capture-batches/start')
-async def episode_capture_batches_start(request:Request,data:EpisodeCaptureBatchForm):
-    state=protected(request)
-    cloud=os.getenv('ALEZZ_PUBLIC_MODE')=='1' or bool(os.getenv('RENDER'))
-    if cloud and os.getenv('ALEZZ_BROWSER_CAPTURE')!='1':
-        raise HTTPException(503,'فحص Chromium السحابي غير مفعّل')
-    if cloud and state.db is None:
-        raise HTTPException(401,'سجّل دخول مسؤول Supabase لاستخدام فحص الحلقات')
-    if state.demo:raise HTTPException(400,'اكتشف مسلسلًا فعليًا أولًا')
-    with state.lock:
-        cat=current_catalogue(state)
-        total=len(cat.episodes) if cat.kind=='series' else 1
-        if not total:raise HTTPException(400,'لا توجد حلقات للفحص')
-        existing=state.capture
-        if existing and existing['running']:
-            if existing['catalogue_url']==cat.url:
-                return {'job':_capture_summary(existing),'already_running':True}
-            raise HTTPException(409,'يوجد فحص آخر قيد التشغيل')
-        if data.start_index>=total:raise HTTPException(400,'مؤشر البداية يتجاوز عدد الحلقات')
-        job={'id':secrets.token_hex(12),'running':True,'phase':'starting',
-             'catalogue_url':cat.url,'created_at':time.time(),'revision':0,
-             'batch_size':_EPISODE_BATCH_SIZE,'batch_seconds':_EPISODE_BATCH_SECONDS,
-             'batch_number':0,'batch_total':0,'batch_done':0,
-             'next_index':data.start_index,'done':data.start_index,'total':total,
-             'verified':0,'candidates':0,'failed':0,'timed_out':0,'error':'',
-             'db_sync':'pending','db_synced_episodes':0,
-             'message':'جاري تجهيز فحص الحلقات المتتابع','events':[],'cancel':False}
-        state.capture=job
-        _capture_event(job,phase='starting',message=job['message'])
-    _episode_capture_jobs.submit(_run_episode_capture_batches,state,cat,job)
-    return {'job':_capture_summary(job),'already_running':False}
-
-
-@app.get('/api/episode-capture-batches/status')
-async def episode_capture_batches_status(request:Request,job_id:str,after:int=0):
-    _,state=find_state(request)
-    with state.lock:
-        job=state.capture
-        if not job or job['id']!=job_id:raise HTTPException(404,'مهمة الفحص غير موجودة في هذه الجلسة')
-        return {'job':_capture_summary(job),
-                'events':[deepcopy(item) for item in job['events'] if item['revision']>after][:100]}
-
-
-@app.get('/api/episode-capture-batches/events')
-async def episode_capture_batches_events(request:Request,job_id:str):
-    _,state=find_state(request)
-    with state.lock:
-        if not state.capture or state.capture['id']!=job_id:
-            raise HTTPException(404,'مهمة الفحص غير موجودة في هذه الجلسة')
-    async def events():
-        revision=0
-        while not await request.is_disconnected():
-            with state.lock:
-                job=state.capture
-                if not job or job['id']!=job_id:break
-                updates=[deepcopy(item) for item in job['events'] if item['revision']>revision]
-                running=job['running']
-            for item in updates:
-                revision=item['revision']
-                yield 'event: snapshot\ndata: '+json.dumps(item,ensure_ascii=False,separators=(',',':'))+'\n\n'
-            if not running:break
-            await asyncio.sleep(.45)
-    return StreamingResponse(events(),media_type='text/event-stream',
-                             headers={'Cache-Control':'private, no-store, no-transform',
-                                      'X-Accel-Buffering':'no'})
-
-
-@app.post('/api/episode-capture-batches/stop')
-async def episode_capture_batches_stop(request:Request):
-    state=protected(request)
-    with state.lock:
-        job=state.capture
-        if not job:raise HTTPException(404,'لا توجد مهمة فحص')
-        job['cancel']=True
-        job['message']='جارٍ إيقاف الفحص بعد إنهاء المهمة الجارية'
-        _capture_event(job,phase='stopping',message=job['message'])
-        return {'job':_capture_summary(job)}
 
 
 class EdgeCaptureForm(BaseModel):
@@ -2363,7 +1329,7 @@ async def autosync_targets(request:Request,limit:int=50,offset:int=0,q:str='',sc
     if scope not in scopes: raise HTTPException(400,'قسم غير معروف')
     rows=AUTOSYNC.queue.targets(max(1,min(limit,100)),max(0,offset),q[:250],scopes[scope])
     # Source metadata is returned separately; do not duplicate saved row payloads.
-    fields=('table_name','target_id','title','page_url','status','last_check','next_check','next_refresh','error','source_count','valid_sources')
+    fields=('table_name','target_id','title','page_url','status','last_check','next_check','error','source_count','valid_sources')
     targets=[{k:row[k] for k in fields} for row in rows]
     now = time.time()
     for item,row in zip(targets,rows):

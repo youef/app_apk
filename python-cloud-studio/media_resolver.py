@@ -22,39 +22,8 @@ from alezz_fetchv_importer import MEDIA_EXT, SourceClient, check_dns, clean, fin
 MAX_CANDIDATES = 128
 _BROWSER_SLOTS = threading.BoundedSemaphore(2)
 
-def is_public_hls_manifest_request(url: str, method: str = 'GET') -> bool:
-    """Permit only manifest requests to finish in the discovery browser.
-
-    HLS manifests are small metadata documents needed by JS players to select
-    a stream. Actual segments and full MP4/WebM downloads remain blocked.
-    Every request still passes the existing public-host and DNS checks.
-    """
-    try:
-        return (method.upper() == 'GET' and
-                urlsplit(public_url(url)).path.lower().endswith('.m3u8'))
-    except (AttributeError, TypeError, ValueError):
-        return False
-
-
 # Reachability of an embed page is not evidence of playable media.
 ONEVID_EMBED_PATH = re.compile(r'^/embed-[A-Za-z0-9_-]+\.html$', re.I)
-OK_RU_VIDEO_PATH = re.compile(r'^/video(?:embed)?/([0-9]{1,20})/?$')
-
-
-def official_ok_embed(value: str) -> str:
-    """Canonical public OK.ru share/iframe URL; never use signed CDN URLs."""
-    try:
-        parts = urlsplit(value.strip())
-        if (parts.scheme != 'https' or parts.username or parts.password or
-                parts.port not in (None, 443) or
-                (parts.hostname or '').lower() not in ('ok.ru', 'www.ok.ru') or
-                parts.query or parts.fragment):
-            return ''
-        match = OK_RU_VIDEO_PATH.fullmatch(parts.path)
-        return 'https://ok.ru/videoembed/' + match.group(1) if match else ''
-    except (TypeError, AttributeError, ValueError):
-        return ''
-
 
 
 def supported_source_kind(value: str) -> str:
@@ -66,8 +35,6 @@ def supported_source_kind(value: str) -> str:
             return ''
         if MEDIA_EXT.search(parts.path):
             return 'direct'
-        if official_ok_embed(value):
-            return 'embed'
         if (parts.hostname.lower() in ('1vid.xyz', 'www.1vid.xyz') and
                 ONEVID_EMBED_PATH.fullmatch(parts.path)):
             return 'embed'
@@ -89,8 +56,6 @@ def safe_error(exc) -> str:
 def normalized_source_url(value: str) -> str:
     """Drop browser fragments, preserving query order and signed query values."""
     value = public_url(value)
-    if official := official_ok_embed(value):
-        return official
     url = urlsplit(value)
     return urlunsplit((url.scheme, url.netloc.lower(), url.path, url.query, ''))
 
@@ -165,16 +130,14 @@ def extract_candidates(body: str, base: str, *, now: float | None = None) -> tup
     soup = BeautifulSoup(body, 'html.parser')
     sources, pages = [], []
 
-    def add(value, label='', embed=False, direct_hint=False):
+    def add(value, label='', embed=False):
         if not isinstance(value, str) or len(sources) >= MAX_CANDIDATES: return
         value = html_lib.unescape(value.strip())
         if not value or value.startswith(('#', 'javascript:', 'data:', 'blob:')): return
         try: url = normalized_source_url(urljoin(base, value))
         except (ValueError, TypeError): return
-        # Many authorized CDNs use signed, extensionless /play?token= URLs.
-        # An explicit video field is a CANDIDATE, not proof of playback.
-        kind = 'direct' if MEDIA_EXT.search(urlsplit(url).path) or direct_hint else 'embed'
-        if kind == 'embed' and not embed and not official_ok_embed(url): return
+        kind = 'direct' if MEDIA_EXT.search(url) else 'embed'
+        if kind == 'embed' and not embed: return
         item = dict(url=url, label=clean(label, 80) or urlsplit(url).hostname,
                     kind=kind, page_url=base, verified=False,
                     discovered_at=now, last_seen_at=now)
@@ -192,17 +155,8 @@ def extract_candidates(body: str, base: str, *, now: float | None = None) -> tup
             if isinstance(node, list): stack.extend((x, depth+1) for x in node[:128]); continue
             if not isinstance(node, dict): continue
             label = node.get('label') or node.get('quality') or node.get('name') or ''
-            declared_type = str(node.get('type') or node.get('mimeType') or '').lower()
-            media_context = declared_type.startswith(('video/','application/vnd.apple.',
-                                                     'application/x-mpegurl'))
             for key, value in node.items():
-                if key in ('contentUrl', 'file', 'hls', 'mp4', 'manifest', 'playlist'):
-                    add(value, label, direct_hint=True)
-                elif key in ('src', 'source'):
-                    # Generic JSON "src" often means a poster, not a video.
-                    # Require media type or a known video extension.
-                    add(value, label, direct_hint=media_context)
-                elif key == 'url':
+                if key in ('contentUrl', 'file', 'src', 'url', 'source', 'hls', 'mp4'):
                     add(value, label)
                 elif key in ('embedUrl', 'iframe', 'player_url'):
                     add(value, label, embed=True)
@@ -214,37 +168,11 @@ def extract_candidates(body: str, base: str, *, now: float | None = None) -> tup
     for url in find_static_media(soup, base): add(url)
     for tag in soup.select('iframe[src],iframe[data-src],embed[src],video[src],source[src],'
                            '[data-file],[data-src],[data-url],[data-embed],[data-player],a[href]')[:1600]:
-        # Episode listings often have recommendations for OTHER series.
-        # Never crawl those episode links as player frames of this episode.
-        if tag.name == 'a' and tag.get('href'):
-            href = urlsplit(urljoin(base, tag['href']))
-            origin = urlsplit(base)
-            if '/episode/' in href.path.lower() and (
-                    href.hostname != origin.hostname or href.path.rstrip('/') != origin.path.rstrip('/')):
-                continue
         label = tag.get('title') or tag.get('data-label') or tag.get_text(' ', strip=True)[:80]
         marker = ' '.join(tag.get('class') or [])
         embed = tag.name in ('iframe', 'embed') or bool(re.search(r'player|server|مشغل|سيرفر|مشاهدة', marker+' '+label, re.I))
         for attr in ('src', 'data-src', 'data-file', 'data-url', 'data-embed', 'data-player', 'href'):
-            if tag.get(attr):
-                direct_hint = (tag.name in ('video','source') and attr in ('src','data-src')) or attr=='data-file'
-                add(tag[attr], label, embed=embed and not direct_hint, direct_hint=direct_hint)
-    # Public multi-server players often expose selectable ?serv=0,1,... links.
-    # Fetch these as distinct documents, not as confirmed video streams.
-    # Only same-origin player selectors are followed; no DRM/auth bypass.
-    base_parts = urlsplit(base)
-    for tag in soup.select('a[href], [data-server][data-url], [data-server][data-src]')[:120]:
-        raw = tag.get('href') or tag.get('data-url') or tag.get('data-src') or ''
-        if not raw: continue
-        try:
-            target = normalized_source_url(urljoin(base, raw))
-            target_parts = urlsplit(target)
-        except (ValueError, TypeError): continue
-        if (target_parts.hostname == base_parts.hostname
-                and target_parts.path.rstrip('/') == base_parts.path.rstrip('/')
-                and any(k in parse_qs(target_parts.query) for k in ('serv', 'server', 'player'))
-                and target != base):
-            add(target, tag.get_text(' ', strip=True)[:65], embed=True)
+            if tag.get(attr): add(tag[attr], label, embed=embed)
     for script in soup.select('script')[:80]:
         text = (script.string or script.get_text())[:250000].replace('\\/', '/')
         if script.get('type') in ('application/ld+json', 'application/json'):
@@ -252,14 +180,6 @@ def extract_candidates(body: str, base: str, *, now: float | None = None) -> tup
             except (ValueError, RecursionError): pass
         for match in re.finditer(r'''["']((?:https://|//|/)[^"'<>\s]+?\.(?:m3u8|mp4|m4v|webm)(?:\?[^"'<>\s]*)?)["']''', text, re.I):
             add(match.group(1).replace('\\u0026', '&'))
-        # Popular public players use extensionless signed URLs in inline config
-        # (file: "...", streamUrl: "...", hlsUrl: "..."). Record them as
-        # unverified candidates; actual bytes determine playability.
-        for match in re.finditer(
-            r'''(?:\b(?:file|streamUrl|hlsUrl|videoUrl|playlistUrl|contentUrl)\b)\s*[:=]\s*["'](?P<url>(?:https://|//)[^"'<> \t\r\n]{8,1500})["']''',
-            text, re.I
-        ):
-            add(match.group('url').replace('\\u0026','&'),direct_hint=True)
     return merge_sources(sources), pages[:12]
 
 
@@ -290,7 +210,7 @@ class MediaResolver:
             if value not in output: output.append(value)
         return output
 
-    def _browser(self, pages, *, deadline=None, known=()):
+    def _browser(self, pages, *, deadline=None):
         deadline = deadline or time.monotonic()+self.max_seconds
         sources, errors = [], []
         for url in self._pages(pages)[:3]:
@@ -302,36 +222,22 @@ class MediaResolver:
                     result = self.browser_capture(url)
                 sources = merge_sources(sources, result)
             except Exception as exc: errors.append(safe_error(exc))
-            # Do not quit at the first direct URL. A movie or episode can have
-            # multiple public player pages; their independent alternatives are
-            # needed when the first HLS/MP4 endpoint is stale.
-            # The deadline, page limit and MAX_CANDIDATES remain enforced.
-        return merge_sources(sources, limit=MAX_CANDIDATES), errors
+            if any(row.get('kind') == 'direct' for row in sources): break
+        return sources, errors
 
     def _http(self, pages: list[str], *, deadline=None) -> tuple[list[dict], list[str]]:
         deadline = deadline or time.monotonic()+self.max_seconds
         roots = self._pages(pages)
         queue = [(url, 0) for url in roots]
         seen, sources, errors = set(), [], []
-        # HTTP-reachable iframe pages can host the actual media player. Let
-        # Chromium visit them directly instead of repeatedly loading only the
-        # series/episode wrapper document.
-        self._http_player_pages = []
 
         def fetch(url):
-            # A direct video URL must NEVER be downloaded as an HTML page:
-            # SourceClient.get() reads up to 1.5 MB and rejects real MP4 files.
-            # Recognize the candidate immediately; check() samples a small
-            # prefix separately and keeps failures visible for diagnosis.
-            if MEDIA_EXT.search(urlsplit(url).path):
-                return [dict(url=url,kind='direct',page_url=url,verified=False,
-                             discovered_at=time.time())], [], ''
             client = self._client(deadline)
             try:
                 if time.monotonic() >= deadline: return [], [], 'انتهت مهلة قراءة المصادر'
                 final, typ, body = client.get(url)
                 public_url(final)
-                if MEDIA_EXT.search(urlsplit(final).path):
+                if MEDIA_EXT.search(final):
                     return [dict(url=final,kind='direct',page_url=url,verified=False)], [], ''
                 if 'html' in typ.lower() or 'json' in typ.lower() or body.lstrip().startswith(('{', '[')):
                     found, embeds = extract_candidates(body, final)
@@ -352,12 +258,7 @@ class MediaResolver:
                 for (_, depth), (found, embeds, error) in zip(batch, pool.map(fetch, [url for url,_ in batch])):
                     sources = merge_sources(sources, found)
                     if error: errors.append(error)
-                    for source_page in embeds:
-                        if source_page not in self._http_player_pages and source_page not in roots:
-                            self._http_player_pages.append(source_page)
                     if depth < 2:
-                        # Put the actual iframe document before optional server
-                        # selectors so it is not starved by the page budget.
                         queue.extend((u, depth+1) for u in embeds if u not in seen and len(queue) < 36)
         return sources, errors[:6]
 
@@ -365,17 +266,8 @@ class MediaResolver:
         """Return candidates. Use resolve() to retry headless after expired URLs."""
         deadline = time.monotonic()+self.max_seconds
         sources, errors = self._http(pages, deadline=deadline)
-        # A working but soon-to-expire signed URL is not sufficient for the
-        # next refresh; run the real player to discover a newly signed one.
-        fresh_direct = any(
-            item.get('kind') == 'direct' and
-            (signed_expiry(item.get('url', '')) is None or
-             signed_expiry(item['url']) > time.time() + 300)
-            for item in sources)
-        if self.mode == 'headless' or self.mode == 'auto' and (force_browser or not fresh_direct):
-            player_pages = getattr(self, '_http_player_pages', [])
-            browser_pages = list(dict.fromkeys([*player_pages[:3], *pages]))
-            browser_sources, browser_errors = self._browser(browser_pages, deadline=deadline)
+        if self.mode == 'headless' or self.mode == 'auto' and (force_browser or not any(x.get('kind') == 'direct' for x in sources)):
+            browser_sources, browser_errors = self._browser(pages, deadline=deadline)
             sources = merge_sources(sources, browser_sources)
             errors.extend(browser_errors)
         return sources, errors[:6]
@@ -385,29 +277,21 @@ class MediaResolver:
         deadline = deadline or time.monotonic()+self.max_seconds
         def probe(item):
             row = dict(item)
-            try:
-                row['url'] = normalized_source_url(row.get('url', ''))
-            except (ValueError, TypeError, AttributeError):
-                pass  # Invalid URLs are recorded as failed without network access.
-            if supported_source_kind(row.get('url','')) == 'embed':
-                row['kind'] = 'embed'
             if time.monotonic() >= deadline:
                 row.update(verified=False,reachable=False,error='انتهت مهلة الفحص؛ سيُعاد تلقائيًا')
                 return row
             client = self._client(deadline)
             try:
-                if supported_source_kind(row.get('url','')) == 'embed':
-                    row['kind'] = 'embed'
+                row = dict(item)
                 try:
                     public_url(row['url'])
                     if row.get('kind') == 'embed':
                         _, typ, body = client.get(row['url'], max_size=750000)
                         row.update(verified=False, reachable=bool(body) and 'html' in typ.lower(),
-                                   error='صفحة مشغل متاحة؛ لم يتم إثبات تشغيل الفيديو')
+                                   error='صفحة مشغل؛ لم يتم إثبات تشغيل الفيديو')
                     else:
                         ok, error = client.media_verified(row['url'])
-                        row.update(verified=bool(ok),reachable=bool(ok),
-                                   error='' if ok else safe_error(error))
+                        row.update(verified=bool(ok), error='' if ok else safe_error(error))
                 except Exception as exc: row.update(verified=False, reachable=False, error=safe_error(exc))
                 row['checked_at'] = time.time()
                 if row.get('kind') != 'embed':
@@ -422,51 +306,17 @@ class MediaResolver:
         with ThreadPoolExecutor(max_workers=self.workers) as pool:
             return list(pool.map(probe, merge_sources(sources)))
 
-    def resolve(self, pages: list[str], existing=(), *, on_candidates=None) -> tuple[list[dict], list[str]]:
-        """Discover public candidates fast; stream previews before verification."""
+    def resolve(self, pages: list[str], existing=()) -> tuple[list[dict], list[str]]:
+        """HTTP first; conditional browser fallback includes all-expired candidates."""
         deadline = time.monotonic()+self.max_seconds
-        browser_enabled = self.mode in ('auto','headless')
-        # Reserve time for JS-created players instead of spending all of it
-        # in HTTP verification. Discovery callback never implies success.
-        reserve = min(10, max(2, self.max_seconds*.5)) if browser_enabled else 0
-        http_deadline = deadline-reserve if browser_enabled else deadline
-        candidates, errors = self._http(pages, deadline=http_deadline)
-        if on_candidates and candidates:
-            try: on_candidates(merge_sources(existing,candidates), 'http')
-            except Exception: pass
-        all_candidates = merge_sources(existing, candidates)
-        if browser_enabled:
-            # Embed URLs were already parsed as reachable documents during
-            # discovery. Re-reading each HTML iframe while racing against the
-            # Chromium deadline can exhaust the whole browser budget.
-            # Check direct-video bytes first, then recover public iframe players.
-            directs = [item for item in all_candidates if item.get('kind') != 'embed']
-            embeds = [item for item in all_candidates if item.get('kind') == 'embed']
-            checked = merge_sources(self.check(directs, deadline=http_deadline), embeds)
-        else:
-            checked = self.check(all_candidates, deadline=http_deadline)
-        # Renew from the actual player BEFORE a signed manifest expires.
-        # A reachable embed page or a valid but expiring manifest must not
-        # suppress Chromium-based discovery of the replacement URL.
-        healthy_direct = any(
-            item.get('kind') == 'direct' and item.get('verified') and
-            (signed_expiry(item.get('url', '')) is None or
-             signed_expiry(item['url']) > time.time() + 300)
-            for item in checked)
-        need_browser = browser_enabled and (self.mode == 'headless' or not healthy_direct)
-        if need_browser and time.monotonic() < deadline:
-            previous = {x['url'] for x in checked}
-            # Direct player pages first, original episode wrapper last.
-            # All belong to this single episode's resolver invocation.
-            player_pages = getattr(self, '_http_player_pages', [])
-            browser_pages = list(dict.fromkeys([*player_pages[:3], *pages]))
-            browser_sources, browser_errors = self._browser(browser_pages, deadline=deadline,
-                                                           known=previous)
+        candidates, errors = self._http(pages, deadline=deadline)
+        checked = self.check(merge_sources(existing, candidates), deadline=deadline)
+        if self.mode == 'headless' or self.mode == 'auto' and not any(x.get('verified') for x in checked):
+            # Leave time to verify captured candidates within the same budget.
+            browser_sources, browser_errors = self._browser(pages, deadline=deadline-min(10,self.max_seconds/3))
             errors.extend(browser_errors)
+            previous = {x['url'] for x in checked}
             new = [x for x in browser_sources if x.get('url') not in previous]
-            if on_candidates and new:
-                try: on_candidates(merge_sources(checked,new), 'chromium')
-                except Exception: pass
             checked = merge_sources(checked, self.check(new, deadline=deadline))
         return checked, errors[:6]
 
@@ -562,11 +412,7 @@ def _capture_headless(url: str, *, max_seconds=35) -> list[dict]:
             context.route_web_socket('**/*', lambda websocket: websocket.close())
 
             def observe(request):
-                if len(found) >= MAX_CANDIDATES: return
-                # Chromium reports 'media' for extensionless video URLs too.
-                # The follow-up bounded byte probe decides if it is playable.
-                if not MEDIA_EXT.search(urlsplit(request.url).path) and request.resource_type!='media':
-                    return
+                if len(found) >= MAX_CANDIDATES or not MEDIA_EXT.search(request.url): return
                 try:
                     target = normalized_source_url(request.url)
                     found.append(dict(url=target, label=urlsplit(target).hostname, kind='direct',
@@ -584,16 +430,8 @@ def _capture_headless(url: str, *, max_seconds=35) -> list[dict]:
                         if len(hosts) >= 24: raise ValueError('Host limit')
                         check_dns(target); hosts.add(host)
                     observe(route.request)
-                    # Let the HLS manifest request complete so the player
-                    # can initialize and reveal its signed master.m3u8 URL.
-                    # Still block segments, full video downloads and images.
-                    # Browser observation alone never marks a video verified.
-                    is_manifest = is_public_hls_manifest_request(
-                        target, route.request.method)
-                    if ((route.request.resource_type in ('image', 'font', 'media')
-                         and not is_manifest) or
-                            re.search(r'\.(?:ts|m4s|mp4|m4v|webm)(?:[?#]|$)',
-                                      target, re.I)):
+                    # Only the URL is needed; prevent browser media downloads.
+                    if route.request.resource_type in ('image', 'font', 'media') or re.search(r'\.(?:ts|m4s)(?:[?#]|$)', target, re.I):
                         route.abort('blockedbyclient'); return
                     if route.request.is_navigation_request() and route.request.frame.page != page:
                         route.abort('blockedbyclient'); return
@@ -609,17 +447,8 @@ def _capture_headless(url: str, *, max_seconds=35) -> list[dict]:
                 try:
                     if time.monotonic()-started > max_seconds or len(found) >= MAX_CANDIDATES: return
                     headers = response.headers
-                    ctype = headers.get('content-type', '').lower()
-                    # Network responses with video MIME are common when the
-                    # delivery URL has no .mp4/.m3u8 file extension.
-                    if ctype.startswith(('video/','application/vnd.apple.mpegurl',
-                                          'application/x-mpegurl')):
-                        target=normalized_source_url(response.url)
-                        found.append(dict(url=target,label=urlsplit(target).hostname,kind='direct',
-                                          page_url=url,verified=False,discovered_at=time.time()))
-                        return
                     size = headers.get('content-length', '')
-                    if 'json' not in ctype: return
+                    if 'json' not in headers.get('content-type', '').lower(): return
                     # Do not buffer unknown-size browser responses in server RAM.
                     if not size.isdecimal() or not 0 < int(size) <= 250000: return
                     public_url(response.url)
@@ -632,40 +461,22 @@ def _capture_headless(url: str, *, max_seconds=35) -> list[dict]:
             try: page.goto(url, wait_until='domcontentloaded', timeout=max(1,min(18000,(max_seconds-(time.monotonic()-started))*1000)))
             except Exception:
                 if page.is_closed(): return merge_sources(found)
-            page.wait_for_timeout(max(0,min(1000,(max_seconds-(time.monotonic()-started))*1000)))
+            page.wait_for_timeout(max(0,min(1500,(max_seconds-(time.monotonic()-started))*1000)))
             for frame in page.frames[:8]:
                 if time.monotonic()-started > max_seconds: break
                 try:
                     check_dns(frame.url)
                     found.extend(extract_candidates(frame.content(), frame.url)[0])
                 except Exception: continue
-                # Click only playback controls or explicit server selectors
-                # in the actual player frame. Modern HLS players often create
-                # the signed URL only after a real user-gesture-like click.
-                clicks = 0
-                for selector in (
-                    '.vjs-big-play-button', '.jw-display-icon-container',
-                    '.jw-icon-playback', '.plyr__control[data-plyr="play"]',
-                    'button[aria-label*="play" i]',
-                    'button[title*="play" i]',
-                    'button[aria-label*="تشغيل"]',
-                    '.play-button', '#play', 'video',
-                    '[data-server]', '.server-item',
-                ):
-                    if time.monotonic()-started > max_seconds or clicks >= 5:
-                        break
+                for selector in ('video', 'button[aria-label*="play" i]', 'button[title*="play" i]',
+                                 '[data-server]', '.server-item'):
+                    if time.monotonic()-started > max_seconds: break
                     try:
                         controls = frame.locator(selector)
-                        for index in range(min(controls.count(), 2)):
-                            if time.monotonic()-started > max_seconds or clicks >= 5:
-                                break
-                            control = controls.nth(index)
-                            if not control.is_visible(): continue
-                            control.click(timeout=900)
-                            clicks += 1
-                            page.wait_for_timeout(max(0,min(
-                                500,(max_seconds-(time.monotonic()-started))*1000)))
-                    except Exception:
-                        pass
+                        for index in range(min(controls.count(), 3)):
+                            if time.monotonic()-started > max_seconds: break
+                            controls.nth(index).click(timeout=1000)
+                            page.wait_for_timeout(700)
+                    except Exception: pass
             return merge_sources(found, limit=MAX_CANDIDATES)
         finally: browser.close()

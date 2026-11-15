@@ -58,35 +58,6 @@ class Tests(unittest.TestCase):
         self.assertEqual([(e.season,e.number) for e in cat.episodes],[(1,1),(1,2),(2,1)])
 
 
-    def test_series_automatically_follows_episode_index_without_related_titles(self):
-        from urllib.parse import quote
-        root='https://www.qrmzi.tv/series/مسلسل-الكرامة/'
-        first='https://www.qrmzi.tv/episode/مسلسل-الكرامة-الحلقة-1/'
-        related='https://www.qrmzi.tv/episode/مسلسل-حب-أعمى-الحلقة-5/'
-        listing=f"""<html><head><title>مسلسل الكرامة</title></head><body>
-            <h1>مسلسل الكرامة</h1>
-            <a href="{first}">الحلقة 1</a>
-            <aside><a href="{related}">مسلسل حب أعمى الحلقة 5</a></aside>
-            </body></html>"""
-        episodes=''.join(
-            f'<a href="https://www.qrmzi.tv/episode/مسلسل-الكرامة-الحلقة-{i}/">مسلسل الكرامة الحلقة {i}</a>'
-            for i in range(1,10))
-        detail=f'<html><h1>مسلسل الكرامة الحلقة 1</h1>{episodes}<a href="{related}">مسلسل حب أعمى الحلقة 5</a></html>'
-        class Source:
-            def __init__(self):self.visited=[]
-            def get(self,url):
-                self.visited.append(url)
-                if url.rstrip('/')==root.rstrip('/'):return url,'text/html',listing
-                if url.rstrip('/')==first.rstrip('/'):return url,'text/html',detail
-                raise ValueError('Unexpected other series crawl')
-        client=Source()
-        result=mod.pull_html(root,client,kind='series',max_pages=3)
-        self.assertEqual([(ep.season,ep.number) for ep in result.episodes],[(1,n) for n in range(1,10)])
-        self.assertIn(first,client.visited)
-        self.assertNotIn(related,client.visited)
-        self.assertTrue(all('الكرامة' in ep.page_url for ep in result.episodes))
-        self.assertTrue(all('حب-أعمى' not in ep.page_url for ep in result.episodes))
-
     def test_static_player_links_and_escaped_scripts(self):
         soup = mod.BeautifulSoup('''
           <html><body>
@@ -121,18 +92,6 @@ class Tests(unittest.TestCase):
         self.assertEqual(len(db.rows["aseel_series"]),1)
         self.assertEqual(len(db.rows["aseel_episodes"]),3)
 
-    def test_ok_ru_embed_is_saved_as_unverified_source_with_rights_guard(self):
-        source='https://ok.ru/videoembed/16115671698037'
-        cat=mod.Catalogue('movie','Approved test','https://source.example.org/film/1',media_url=source)
-        db=FakeDB()
-        result=mod.store(cat,db,publish=False,rights=False)
-        self.assertEqual(result['embed_reachable'],1)
-        self.assertEqual(db.rows['aseel_movies'][0]['stream_url'],source)
-        self.assertEqual(db.rows['aseel_movies'][0]['link_health_status'],'suspect')
-        self.assertEqual(db.rows['aseel_movies'][0]['status'],'draft')
-        with self.assertRaises(ValueError):
-            mod.store(cat,db,publish=True,rights=False)
-
     def test_rights_requirement_for_public_publish(self):
         cat=mod.pull_html("https://public.example.com/series",FakeClient())
         db=FakeDB()
@@ -143,45 +102,6 @@ class Tests(unittest.TestCase):
         self.assertEqual(result["media_verified"],1)
         self.assertEqual(db.rows["aseel_episodes"][0]["stream_url"],cat.episodes[0].media_url)
         self.assertEqual(db.rows["aseel_series"][0]["rights_status"],"approved")
-
-    def test_verified_refresh_replaces_old_episode_link_without_changing_rights(self):
-        old='https://cdn.example.org/old.m3u8?expires=1900000000'
-        new='https://cdn.example.org/new.m3u8?expires=1950000000'
-        episode=mod.Episode(1, 1, 'Episode 1', 'https://source.example.org/episode/1',
-                            media_url=old, verified=True)
-        cat=mod.Catalogue('series', 'Licensed show', 'https://source.example.org/show',
-                          episodes=[episode])
-        db=FakeDB()
-        mod.store(cat,db,publish=True,rights=True)
-        original=db.rows['aseel_episodes'][0]
-        self.assertEqual(original['stream_url'],old)
-        episode.media_url=new
-        episode.verified=False
-        mod.store(cat,db,publish=False,rights=False,capture_merge=True)
-        self.assertEqual(original['stream_url'],old)
-        episode.verified=True
-        episode.sources=[dict(url=new, kind='direct', verified=True)]
-        mod.store(cat,db,publish=False,rights=False,capture_merge=True,
-                  replace_verified_streams=True)
-        self.assertEqual(original['stream_url'],new)
-        self.assertFalse(any(variant.get('url') == new
-                             for variant in original.get('stream_variants', [])))
-        self.assertEqual(original['link_health_status'],'healthy')
-        self.assertEqual(original['status'],'published')
-        self.assertEqual(original['rights_status'],'approved')
-        self.assertEqual(len(db.rows['aseel_episodes']),1)
-
-    def test_expired_signed_stream_is_never_saved_as_fallback(self):
-        cat=mod.Catalogue('movie','Movie','https://source.example.org/movie')
-        cat.sources=[
-            dict(url='https://cdn.example.org/expired.m3u8?expires=1700000000',
-                 kind='direct',verified=True),
-            dict(url='https://cdn.example.org/working.m3u8?expires=1950000000',
-                 kind='direct',verified=True),
-        ]
-        links=mod.playback_variants(cat,primary='https://cdn.example.org/current.mp4')
-        self.assertEqual([item['url'] for item in links],
-            ['https://cdn.example.org/working.m3u8?expires=1950000000'])
 
     def test_auto_category(self):
         cats=[{"id":"drama-id","name_ar":"دراما"},{"id":"action-id","name_ar":"أكشن"}]

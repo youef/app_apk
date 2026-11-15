@@ -58,15 +58,11 @@
   }
   const studioPages = {
     import:'الاستيراد الذكي', library:'بيانات العمل', episodes:'المواسم والحلقات',
-    publish:'الحفظ والنشر', 'smart-sync':'المزامنة الذكية', quality:'جودة المكتبة والإصلاح', tools:'الإضافات والمميزات'
+    publish:'الحفظ والنشر', 'smart-sync':'المزامنة الذكية', tools:'الإضافات والمميزات'
   };
   function showStudioPage(){
     const route=location.hash.slice(1);
     const id=Object.hasOwn(studioPages,route)?route:'import';
-    // The film import promo belongs to the landing page only. Keep quality,
-    // episodes and sync sections focused without repeating a large banner.
-    const promo=$('privateFilmPromo');
-    if(promo) promo.style.display=id==='import'?'flex':'none';
     document.querySelectorAll('[data-studio-page]').forEach(page=>{
       page.hidden=page.dataset.studioPage!==id;
     });

@@ -165,28 +165,27 @@ class AutoSyncTests(unittest.TestCase):
             value = conn.execute('select * from auto_jobs where table_name=? and target_id=?', (table,row['id'])).fetchone()
             return dict(value)
 
-    def test_missing_original_preserves_status_and_reports_missing_page(self):
+    def test_missing_original_auto_drafts_even_when_direct_media_is_healthy(self):
         row = self.row(name='no-source-movie', source='', stream=OLD)
         self.resolver.healthy.add(OLD)
         self.worker.check_target(self.job(row))
         remote = self.db.rows['aseel_movies'][row['id']]
-        self.assertEqual(remote['status'], 'published')
+        self.assertEqual(remote['status'], 'draft')
         self.assertEqual(remote['rights_status'], 'approved')
         self.assertEqual(remote['stream_url'], OLD)
         self.assertEqual(remote['link_health_status'], 'healthy')
         self.assertIn('الأصلي', remote['link_health_reason'])
 
-    def test_three_consecutive_failures_report_broken_without_silent_drafting(self):
+    def test_three_consecutive_media_failures_draft_once_and_never_auto_publish(self):
         row = self.row(name='three-failures')
         for count in (1, 2, 3):
             self.worker.check_target(self.job(row))
             remote = self.db.rows['aseel_movies'][row['id']]
-            self.assertEqual(remote['status'], 'published')
-            self.assertEqual(remote['link_health_status'], 'broken' if count == 3 else 'suspect')
+            self.assertEqual(remote['status'], 'draft' if count == 3 else 'published')
             self.now += 125
         self.resolver.healthy.add(OLD)
         self.worker.check_target(self.job(row))
-        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['status'], 'published')
+        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['status'], 'draft')
         self.assertEqual(self.db.rows['aseel_movies'][row['id']]['rights_status'], 'approved')
 
     def test_working_backup_prevents_draft_and_replaces_failed_primary(self):
@@ -197,18 +196,6 @@ class AutoSyncTests(unittest.TestCase):
         self.assertEqual(remote['status'], 'published')
         self.assertEqual(remote['stream_url'], NEW)
 
-    def test_okru_provider_rate_limit_never_autodrafts_on_inconclusive_probe(self):
-        embed='https://ok.ru/videoembed/16115671698037'
-        row=self.row(name='okru-rate-limited',stream=embed)
-        for _ in range(3):
-            self.worker.check_target(self.job(row))
-            self.now+=125
-        final=self.db.rows['aseel_movies'][row['id']]
-        self.assertEqual(final['status'],'published')
-        self.assertEqual(final['stream_url'],embed)
-        self.assertEqual(final['link_health_status'],'suspect')
-        self.assertEqual(final['link_health_failures'],0)
-
     def test_reachable_embedded_backup_is_not_proof_primary_is_working(self):
         embed = 'https://player.example.org/embed/7'
         row = self.row(name='only-embed-backup',stream_variants=[dict(url=embed,kind='embed')])
@@ -216,18 +203,16 @@ class AutoSyncTests(unittest.TestCase):
         for _ in range(3):
             self.worker.check_target(self.job(row))
             self.now += 125
-        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['status'],'published')
-        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['link_health_status'],'broken')
+        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['status'],'draft')
 
-    def test_missing_original_series_preserves_publication_and_warns(self):
+    def test_missing_original_series_is_drafted(self):
         row = self.row(table='aseel_series', name='no-source-series',source='',stream='')
         self.worker.discover_series(self.job(row,'aseel_series'))
         remote = self.db.rows['aseel_series'][row['id']]
-        self.assertEqual(remote['status'], 'published')
+        self.assertEqual(remote['status'], 'draft')
         self.assertEqual(remote['rights_status'], 'approved')
-        self.assertEqual(self.job(row,'aseel_series')['status'],'missing_source')
 
-    def test_series_without_discovered_episodes_preserves_status_and_records_failure(self):
+    def test_series_without_discovered_episodes_drafts_after_three_scans(self):
         row = self.row(table='aseel_series',name='empty-series',source=ROOT,stream='')
         from alezz_fetchv_importer import Catalogue
         cat = Catalogue(kind='series',title='No episodes',url=ROOT)
@@ -235,8 +220,7 @@ class AutoSyncTests(unittest.TestCase):
             for n in (1,2,3):
                 self.worker.discover_series(self.job(row,'aseel_series'))
                 remote = self.db.rows['aseel_series'][row['id']]
-                self.assertEqual(remote['status'],'published')
-                self.assertEqual(self.job(row,'aseel_series')['status'],'broken' if n==3 else 'suspect')
+                self.assertEqual(remote['status'],'draft' if n==3 else 'published')
                 self.now = self.job(row,'aseel_series')['next_check'] + 1
 
     def test_reimport_preserves_synced_source_history_without_reupload_churn(self):
@@ -305,37 +289,6 @@ class AutoSyncTests(unittest.TestCase):
         self.worker.check_target(self.job(row))
         self.assertTrue(any(force for _,force in self.resolver.extractions))
         self.assertEqual(self.db.rows['aseel_movies'][row['id']]['stream_url'],NEW)
-
-    def test_approved_movie_is_published_after_verified_direct_stream(self):
-        row=self.row(name='approved-draft',status='draft',rights_status='approved')
-        self.resolver.healthy.add(OLD)
-        def update(method,table,filters,payload):
-            self.assertEqual(method,'PATCH')
-            return [self.db.patch(table,item['id'],payload)
-                    for item in self.db.query(table,filters)]
-        with patch.object(self.db,'req',create=True,side_effect=update):
-            self.worker.check_target(self.job(row))
-        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['status'],'published')
-
-    def test_pending_rights_never_publish_after_verified_stream(self):
-        row=self.row(name='pending-draft',status='draft',rights_status='pending')
-        self.resolver.healthy.add(OLD)
-        with patch.object(self.db,'req',create=True) as publish:
-            self.worker.check_target(self.job(row))
-        publish.assert_not_called()
-        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['status'],'draft')
-
-    def test_hidden_approved_media_never_auto_published(self):
-        row=self.row(name='hidden-verified',status='hidden',rights_status='approved')
-        self.resolver.healthy.add(OLD)
-        with patch.object(self.db,'req',create=True) as publish:
-            self.worker.check_target(self.job(row))
-        publish.assert_not_called()
-        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['status'],'hidden')
-
-    def test_worker_four_hour_refresh_default_and_independent_health_checks(self):
-        self.assertEqual(self.worker.interval,4*3600)
-        self.assertEqual(self.worker.check_interval,5*60)
 
     def test_new_episode_publication_requires_opt_in_and_approved_series(self):
         from unittest.mock import Mock
@@ -462,40 +415,6 @@ class AutoSyncTests(unittest.TestCase):
         self.assertEqual(job['next_refresh'], NOW+min(3300,self.worker.interval))
         self.assertEqual(expires_at(OLD), 0)
         self.assertEqual(expires_at(signed), NOW+3600)
-
-    def test_periodic_refresh_discovers_direct_media_when_primary_is_embed(self):
-        embed='https://1vid.xyz/embed-example.html'
-        row=self.row(stream=embed)
-        self.resolver=FakeResolver(healthy=[NEW],browser=[dict(url=NEW,kind='direct')])
-        self.worker.check_target(self.job(row))
-        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['stream_url'],NEW)
-        self.assertIn(embed,self.resolver.extractions[0][0])
-        self.assertTrue(self.resolver.extractions[0][1])
-        self.assertGreater(self.job(row)['next_refresh'],NOW)
-
-    def test_periodic_embed_refresh_replaces_still_valid_signed_url(self):
-        current='https://cdn.example.org/film/master.m3u8?expires='+str(int(NOW+7200))
-        replacement='https://cdn.example.org/film/master.m3u8?expires='+str(int(NOW+43200))
-        embed='https://player.example.org/embed-abc.html'
-        row=self.row(name='signed-refresh',stream=current,
-                     stream_variants=[dict(url=embed,kind='embed',label='player')])
-        self.resolver=FakeResolver(healthy=[current,replacement],
-            browser=[dict(url=replacement,kind='direct',page_url=embed)])
-        self.worker.check_target(self.job(row))
-        self.assertTrue(self.resolver.extractions[0][1])
-        remote=self.db.rows['aseel_movies'][row['id']]
-        self.assertEqual(remote['stream_url'],replacement)
-        self.assertEqual(remote['status'],'published')
-        self.assertEqual(remote['rights_status'],'approved')
-        self.assertIn(current,{item['url'] for item in
-            self.worker.queue.sources('aseel_movies',row['id'])})
-
-    def test_renewal_can_switch_to_verified_alternative_on_another_cdn(self):
-        current=OLD+'?expires='+str(int(NOW+120))
-        row=self.row(stream=current)
-        self.resolver=FakeResolver(healthy=[current,NEW],fresh=[dict(url=NEW,kind='direct')])
-        self.worker.check_target(self.job(row))
-        self.assertEqual(self.db.rows['aseel_movies'][row['id']]['stream_url'],NEW)
 
     def test_verified_backup_expiry_advances_refresh_for_healthy_primary(self):
         signed=NEW+'?expires='+str(int(NOW+600))

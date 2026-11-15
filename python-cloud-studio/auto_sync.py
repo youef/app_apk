@@ -1,8 +1,8 @@
 """Durable, UUID-addressed media maintenance for a single persistent Render service.
 
 The queue and history are committed before remote writes. Network failures use
-backoff; a crash releases a short task lease. Verified replacements change stream_url.
-Only already rights-approved drafts with a verified direct stream can auto-publish.
+backoff; a crash releases a short task lease. Verified replacements and confirmed
+dead links change stream_url. Publication and rights are preserved.
 """
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from uuid import UUID
 
 import requests
 from alezz_fetchv_importer import SourceClient, SourceConnectionError, public_url, pull_html, imported_fields
-from media_resolver import MediaResolver, read_public_html, safe_error, signed_expiry, supported_source_kind, official_ok_embed
+from media_resolver import MediaResolver, read_public_html, safe_error, signed_expiry, supported_source_kind
 from metadata_enrichment import enrich
 from title_cleaner import content_title
 
@@ -323,15 +323,11 @@ class AutoSync:
     def __init__(self, data_dir, db_factory=None, resolver_factory=None, clock=time.time):
         self.queue=QueueDB(Path(data_dir)/'autosync.sqlite3')
         self.clock=clock
-        # Full source discovery every four hours by default. Signed URLs can
-        # trigger an earlier refresh; independent health checks stay frequent.
-        # A separate key prevents pre-existing Render deployments that still
-        # retain the former 0.5-hour variable from overriding the new policy.
-        self.interval=max(0.25,min(24,float(os.getenv('ALEZZ_AUTOSYNC_SOURCE_INTERVAL_HOURS','4'))))*3600
+        # Keep the near-live policy even when Render retains older 24h/30m env vars.
+        self.interval=max(0.25,min(0.5,float(os.getenv('ALEZZ_AUTOSYNC_INTERVAL_HOURS','0.5'))))*3600
         self.check_interval=min(self.interval,max(1,min(5,float(os.getenv('ALEZZ_AUTOSYNC_CHECK_MINUTES','5'))))*60)
         self.mode=os.getenv('ALEZZ_AUTOSYNC_MODE','auto')
         self.concurrency=max(1,min(5,int(os.getenv('ALEZZ_AUTOSYNC_CONCURRENCY','5'))))
-        self.auto_publish_approved=os.getenv('ALEZZ_AUTOSYNC_PUBLISH_APPROVED','1').lower() in ('1','true','yes')
         self.db_factory=db_factory or self._environment_db
         self.resolver_factory=resolver_factory or (lambda:MediaResolver(self.mode))
         self.stop_event=threading.Event();self.wake_event=threading.Event()
@@ -345,8 +341,8 @@ class AutoSync:
         self._reconcile_policy_schedule()
 
     def _reconcile_policy_schedule(self):
-        """Reconcile existing jobs without losing due work or source history."""
-        revision='health-5m-discovery-4h-authorized-publish-v1'
+        """Apply faster checks to existing persistent jobs without a burst."""
+        revision='rapid-check-5m-refresh-30m-draft-v1'
         if self.queue.get_setting('maintenance_policy')==revision:
             return
         now=self.clock()
@@ -357,7 +353,7 @@ class AutoSync:
                          (now,int(self.check_interval),now,int(self.interval)))
         self.queue.setting('maintenance_policy',revision)
 
-    def remember_saved(self,cat,result,*,capture=False,auto_publish=None,refresh=False):
+    def remember_saved(self,cat,result,*,capture=False,auto_publish=None):
         """Preserve all local discoveries, including sources beyond eight variants."""
         by_number={(ep.season,ep.number):ep for ep in cat.episodes}
         if cat.kind=='series' and result.get('work_id'):
@@ -366,7 +362,7 @@ class AutoSync:
                 for page in cat.source_pages:self.queue.remember('aseel_series',result['work_id'],dict(url=page,kind='original'))
                 if auto_publish is not None:
                     self.queue.setting('publish-series:'+result['work_id'],bool(auto_publish))
-                if not capture or refresh:self.queue.queue('aseel_series',result['work_id'],refresh=True)
+                if not capture:self.queue.queue('aseel_series',result['work_id'],refresh=True)
             except ValueError:pass
         for binding in result.get('bindings',[]):
             entry=cat if cat.kind=='movie' else by_number.get((binding['season'],binding['number']))
@@ -383,7 +379,7 @@ class AutoSync:
                         self.queue.remember(table,identifier,dict(url=original,kind='original'))
                 if auto_publish and binding.get('awaiting_playback'):
                     self.queue.setting('discovered-episode:'+identifier,result['work_id'])
-                self.queue.queue(table,identifier,refresh=not capture or refresh)
+                self.queue.queue(table,identifier,refresh=not capture)
             except ValueError:pass
         if not capture:self.force_import=True
         self.wake_event.set()
@@ -553,25 +549,14 @@ class AutoSync:
         candidates=[dict(url=r['url'],kind=r['kind'],label=r['label'],page_url=r['page_url'])
                     for r in sources if r['kind']!='original'
                     and (r['url'] in active_urls or not r['error'].startswith(RETIRED_LINK))]
-        extraction_pages=list(dict.fromkeys([*pages, *(item['url'] for item in candidates
-                                                       if item['kind']=='embed')]))
         # Periodic re-extraction also happens while current media still works.
         errors=[]
         extracted=False
         browser_requested=False
-        fresh_urls=set()
-        if job['next_refresh']<=now and extraction_pages:
-            # Re-open saved iframe players at the scheduled refresh even when
-            # an older signed HLS URL still works. A new page load can issue
-            # a new token long before the old URL expires.
-            browser_refresh = self.mode!='http' and any(
-                item.get('kind')=='embed' for item in candidates)
-            fresh,errors=resolver.extract(
-                extraction_pages, force_browser=browser_refresh)
+        if job['next_refresh']<=now and pages and supported_source_kind(job['stream_url'])!='embed':
+            fresh,errors=resolver.extract(pages)
             extracted=True
-            fresh_urls.update(item['url'] for item in fresh)
-            browser_requested=(browser_refresh or self.mode=='headless' or
-                               self.mode=='auto' and not any(s.get('kind')=='direct' for s in fresh))
+            browser_requested=self.mode=='headless' or self.mode=='auto' and not any(s.get('kind')=='direct' for s in fresh)
             for source in fresh:self.queue.remember(table,identifier,source)
             seen={s['url'] for s in fresh}
             candidates=fresh+[s for s in candidates if s['url'] not in seen]
@@ -579,19 +564,11 @@ class AutoSync:
         good=[s for s in checked if s.get('verified') and s.get('kind','direct')=='direct']
         failed_active=any(not item.get('verified') and not item.get('reachable') and item['url'] in active_urls
                           for item in checked)
-        reachable_primary=any(item.get('kind')=='embed' and item.get('reachable')
-                              and item['url']==job['stream_url'] for item in checked)
-        primary_expiry=expires_at(job['stream_url'])
-        renewal_due=bool(primary_expiry and primary_expiry<=now+300)
-        has_replacement=any(item['url']!=job['stream_url'] and
-                            (not expires_at(item['url']) or expires_at(item['url'])>now+300) for item in good)
-        if ((not good and not reachable_primary) or failed_active or (renewal_due and not has_replacement)
-                ) and extraction_pages and not browser_requested and (not extracted or self.mode!='http'):
+        if (not good or failed_active) and pages and not browser_requested and supported_source_kind(job['stream_url'])!='embed':
             # Includes retry of expired HTTP discoveries with conditional headless fallback.
-            fresh,extra=resolver.extract(extraction_pages,force_browser=self.mode!='http')
+            fresh,extra=resolver.extract(pages,force_browser=self.mode!='http')
             extracted=True
             errors+=extra
-            fresh_urls.update(item['url'] for item in fresh)
             for source in fresh:self.queue.remember(table,identifier,source)
             checked_new=resolver.check(fresh)
             replace={s['url']:s for s in checked+checked_new}
@@ -609,18 +586,6 @@ class AutoSync:
         remove_primary=job['stream_url'] in retired or saved.get('stream_url') in retired
         fallback='' if remove_primary else job['stream_url']
         selected=next((s['url'] for s in good if s['url']==job['stream_url']),good[0]['url'] if good else fallback)
-        # Prefer a newly signed URL for the same manifest resource as soon as
-        # the page itself provides one and the byte probe verifies it. Never
-        # substitute a merely reachable iframe or a different episode path.
-        current_stream=urlsplit(job['stream_url'])
-        if extracted and current_stream.path and expires_at(job['stream_url']):
-            replacements=[
-                source['url'] for source in good
-                if source['url'] in fresh_urls and source['url']!=job['stream_url']
-                and urlsplit(source['url']).path==current_stream.path
-                and expires_at(source['url'])>max(now+300,expires_at(job['stream_url'])+60)
-            ]
-            if replacements: selected=max(replacements,key=expires_at)
         expiry=expires_at(selected)
         if extracted and good and expiry and expiry <= now + 300:
             current=urlsplit(selected)
@@ -633,25 +598,13 @@ class AutoSync:
                         renewed.append(url)
             if renewed:
                 selected=max(renewed,key=expires_at)
-            else:
-                selected=next((item['url'] for item in good if item['url']!=selected and
-                               (not expires_at(item['url']) or expires_at(item['url'])>now+300)),selected)
-        # Render may receive 403/429 from OK.ru while the official iframe
-        # remains playable on the TV. Only a definite 404/410 can count
-        # toward removing such a source after repeated independent checks.
-        uncertain_ok_primary = any(
-            item['url'] == job['stream_url'] and official_ok_embed(item['url']) and
-            not item.get('verified') and not item.get('reachable') and
-            not GONE_RESPONSE.match(str(item.get('error') or '').strip())
-            for item in checked)
-        failures=0 if good or primary_embed_reachable or uncertain_ok_primary else job['failures']+1
-        status='healthy' if good else 'suspect' if primary_embed_reachable or uncertain_ok_primary else 'broken' if failures>=3 else 'suspect'
+        failures=0 if good or primary_embed_reachable else job['failures']+1
+        status='healthy' if good else 'suspect' if primary_embed_reachable else 'broken' if failures>=3 else 'suspect'
         error='' if good else ('صفحة Embed متاحة؛ لم يتم التحقق من تشغيل الفيديو' if primary_embed_reachable else
-                              'تعذر إثبات تشغيل OK.ru من Render؛ جرّب المعاينة على الجهاز' if uncertain_ok_primary else
                               'المصدر الأصلي مفقود؛ أضف صفحة الفيلم أو الحلقة' if not pages else
                               'لا يوجد رابط مباشر اجتاز الفحص؛ '+('; '.join(errors) if errors else 'تعذرت الروابط المحفوظة'))
-        next_check=now+self.check_interval if good or primary_embed_reachable or uncertain_ok_primary else now+min(self.check_interval,60*2**min(failures-1,6))
-        next_refresh=now+self.interval if extracted or not extraction_pages else job['next_refresh']
+        next_check=now+self.check_interval if good or primary_embed_reachable else now+min(self.check_interval,60*2**min(failures-1,6))
+        next_refresh=now+self.interval if extracted or not pages else job['next_refresh']
         if not good and not primary_embed_reachable and pages:next_refresh=min(next_refresh,next_check)
         allowed={s['url'] for s in checked if s.get('verified') or s.get('kind')=='embed' and s.get('reachable')}
         variants=[]
@@ -659,12 +612,22 @@ class AutoSync:
             if source['url'] in allowed and source['url']!=selected:
                 variants.append(dict(url=source['url'],label=source['label'] or urlsplit(source['url']).hostname,
                                      kind=source['kind'],page_url=source['page_url']))
-        # Health checks report failure but never silently change a published item to draft.
-        if not pages:
-            error='المصدر الأصلي مفقود أو غير متاح؛ يرجى تحديث المشغل'
+        # Never leave a published item without an original page, or after three
+        # consecutive independent failures of every playable source. Retain the
+        # source history so an editor can review and restore it later.
+        missing_original=not pages
+        should_draft=missing_original or (failures>=3 and not good and not primary_embed_reachable)
+        if missing_original:
+            error='المصدر الأصلي مفقود؛ حُفظ العمل مسودة حتى مراجعة مصادره'
         payload=dict(link_health_status=status,link_health_reason=error or None,
                      link_health_checked_at=iso(now),link_health_failures=failures,link_health_url=selected or None)
         if extracted:payload.update(self.metadata_patch(job,pages))
+        if should_draft and saved.get('status')=='published':
+            payload['status']='draft'
+            self.queue.event('auto_draft',
+                             'نُقل إلى مسودة: المصدر الأصلي مفقود' if missing_original else
+                             'نُقل إلى مسودة بعد 3 فحوص متتالية دون مصدر صالح',
+                             table,identifier)
         if remove_primary or good:
             payload['stream_url']=selected or None
         if good:
@@ -687,7 +650,7 @@ class AutoSync:
             self.queue.event('replacement','تم تبديل الرابط الأساسي ببديل اجتاز الفحص',table,identifier)
         if retired & active_urls:
             self.queue.event('retired_links','أُزيلت روابط مؤكدة التعطّل من قائمة التشغيل',table,identifier)
-        if not good and not primary_embed_reachable and not uncertain_ok_primary and (job['status']=='healthy' or job['last_check']==0 and candidates):
+        if not good and not primary_embed_reachable and (job['status']=='healthy' or job['last_check']==0 and candidates):
             self.queue.event('all_links_failed','تنبيه: لم ينجح أي رابط لهذا العنصر',table,identifier)
         if not pages and job['last_check']==0:self.queue.event('missing_source','المصدر الأصلي مفقود؛ يمكن فحص الروابط الحالية فقط',table,identifier)
         with self.queue.db() as conn:
@@ -738,66 +701,26 @@ class AutoSync:
         if job['dirty']:
             payload=json.loads(job['dirty'])
             db.patch(table,identifier,payload)
-            if (payload.get('stream_url') and payload.get('link_health_status')=='healthy'):
-                self.publish_approved_target(db,table,identifier)
-                if table=='aseel_episodes':
-                    self.publish_discovered_episode(db, identifier)
+            if (table=='aseel_episodes' and payload.get('stream_url') and
+                    payload.get('link_health_status')=='healthy' and payload.get('status')!='draft'):
+                self.publish_discovered_episode(db, identifier)
             with self.queue.db() as conn:
                 conn.execute('update auto_jobs set dirty=\'\',upload_at=0,data=json_patch(data,?) '
                              'where table_name=? and target_id=? and dirty=?',
                              (job['dirty'],table,identifier,job['dirty']))
 
-    def publish_approved_target(self, db, table, identifier):
-        """Publish *only* pre-approved drafts after a direct media probe succeeds.
-
-        The worker cannot approve rights, re-publish hidden content, or publish
-        an episode whose parent series is not already approved and public.
-        """
-        if not self.auto_publish_approved or table not in ('aseel_movies', 'aseel_episodes'):
-            return
-        if not any(source['kind']=='original' for source in self.queue.sources(table, identifier)):
-            return
-        select_fields='id,status,rights_status,rights_expires_at,stream_url,link_health_status'
-        if table=='aseel_episodes':
-            select_fields+=',season_id'
-        row=db.single(table,{'id':'eq.'+identifier,'select':select_fields})
-        if not row or row.get('status')!='draft' or row.get('rights_status')!='approved':
-            return
-        if row.get('link_health_status')!='healthy' or not row.get('stream_url'):
-            return
-        if stamp(row.get('rights_expires_at')) and stamp(row['rights_expires_at'])<=self.clock():
-            return
-        if table=='aseel_episodes':
-            season=db.single('aseel_seasons',{'id':'eq.'+str(row.get('season_id')),
-                                              'select':'series_id'})
-            if not season:
-                return
-            parent=db.single('aseel_series',{'id':'eq.'+season['series_id'],
-                                             'select':'status,rights_status,rights_expires_at'})
-            if not parent or parent.get('status')!='published' or parent.get('rights_status')!='approved':
-                return
-            if stamp(parent.get('rights_expires_at')) and stamp(parent['rights_expires_at'])<=self.clock():
-                return
-        result=db.req('PATCH',table,{'id':'eq.'+identifier,'status':'eq.draft',
-                                    'rights_status':'eq.approved','link_health_status':'eq.healthy',
-                                    'stream_url':'not.is.null'}, {'status':'published'})
-        if result:
-            if table=='aseel_episodes':
-                self.queue.setting('discovered-episode:'+identifier,None)
-            self.queue.event('auto_published','نُشر المحتوى المعتمد بعد نجاح فحص الفيديو المباشر.',table,identifier)
-
     def publish_discovered_episode(self, db, identifier):
         parent=self.queue.get_setting('discovered-episode:'+identifier)
         if not parent or not self.queue.get_setting('publish-series:'+parent,False):
             return
-        series=db.single('aseel_series',{'id':'eq.'+parent,'select':'id,status,rights_status,rights_expires_at'})
+        series=db.single('aseel_series',{'id':'eq.'+parent,'select':'id,status,rights_status,license_reference'})
         if not series or series.get('status')!='published' or series.get('rights_status')!='approved':
             return
-        if stamp(series.get('rights_expires_at')) and stamp(series['rights_expires_at'])<=self.clock():
-            return
         changed=db.req('PATCH','aseel_episodes',{'id':'eq.'+identifier,
-                        'status':'eq.draft','rights_status':'eq.approved','link_health_status':'eq.healthy',
-                        'stream_url':'not.is.null'}, {'status':'published'})
+                       'status':'eq.draft','rights_status':'eq.pending','link_health_status':'eq.healthy',
+                       'stream_url':'not.is.null'},
+                       {'status':'published','rights_status':'approved',
+                        'license_reference':series.get('license_reference') or ''})
         if changed:
             self.queue.setting('discovered-episode:'+identifier,None)
             self.queue.event('episode_published','نُشرت الحلقة الجديدة بعد التحقق من رابطها.', 'aseel_episodes',identifier)
@@ -808,9 +731,19 @@ class AutoSync:
         pages=[s['url'] for s in self.queue.sources(table,identifier) if s['kind']=='original']
         if not pages:
             now=self.clock()
-            reason='مصدر المسلسل الأصلي مفقود؛ النشر لا يتغير تلقائيًا'
+            saved=json.loads(job['data'])
+            reason='مصدر المسلسل الأصلي مفقود؛ نُقل إلى المسودات'
+            to_draft=saved.get('status')=='published'
             self.queue.update(table,identifier,next_check=now+self.interval,next_refresh=now+self.interval,
-                              last_check=now,status='missing_source',error=reason)
+                              last_check=now,status='missing_source',error=reason,
+                              **(dict(dirty=json.dumps({'status':'draft'},ensure_ascii=False),
+                                      upload_at=now) if to_draft else {}))
+            if to_draft:
+                self.queue.event('auto_draft',reason,table,identifier)
+                with self.queue.db() as conn:
+                    pending=dict(conn.execute('select * from auto_jobs where table_name=? and target_id=?',
+                                              (table,identifier)).fetchone())
+                self.flush(pending)
             return
         found_episodes=False
         metadata={}
@@ -855,14 +788,20 @@ class AutoSync:
         now=self.clock()
         failures=0 if found_episodes else job['failures']+1
         retry=now+(self.interval if found_episodes else min(self.check_interval,60*2**min(failures-1,6)))
+        auto_draft=(not found_episodes and failures>=3 and
+                    json.loads(job['data']).get('status')=='published')
         pending=json.loads(job['dirty'] or '{}')
         pending.update(metadata)
+        if auto_draft:pending['status']='draft'
         self.queue.update(table,identifier,next_check=retry,next_refresh=retry,
                           last_check=now,last_refresh=now,failures=failures,checkpoint='{}',
                           status='discovered' if found_episodes else 'broken' if failures>=3 else 'suspect',
                           error='' if found_episodes else 'لم تظهر صفحات حلقات في المصدر.',
                           **(dict(dirty=json.dumps(pending,ensure_ascii=False),
                                   upload_at=now) if pending else {}))
+        if auto_draft:
+            self.queue.event('auto_draft','نُقل المسلسل إلى مسودة بعد 3 محاولات لم تُرجع حلقات',
+                             table,identifier)
         with self.queue.db() as conn:
             updated=dict(conn.execute('select * from auto_jobs where table_name=? and target_id=?',
                                       (table,identifier)).fetchone())

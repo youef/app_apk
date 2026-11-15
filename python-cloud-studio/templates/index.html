@@ -13,17 +13,13 @@
   <meta name="description" content="AL EZZ TV — استوديو استيراد المسلسلات والأفلام ببايثون">
   <title>العز TV | استوديو الاستيراد الذكي</title>
   <link rel="stylesheet" href="/static/style.css?v=studio-auto-media1">
-  <link rel="stylesheet" href="/static/studio-pro.css?v=studio-okru-preview2">
-  <script src="/static/app.js?v=studio-v7-auto-players-20261114" defer></script>
+  <link rel="stylesheet" href="/static/studio-pro.css?v=studio8">
+  <script src="/static/app.js?v=studio-auto-episodes1" defer></script>
   <script src="/static/studio-pro.js?v=studio-capture2" defer></script>
   <link rel="stylesheet" href="/static/autosync.css?v=autosync2">
-  <script src="/static/autosync.js?v=studio-renewal1" defer></script>
+  <script src="/static/autosync.js?v=autosync-progress1" defer></script>
   <link rel="stylesheet" href="/static/studio-next.css?v=2">
 <link rel="stylesheet" href="/static/studio-unified.css?v=20261108-v1">
-<link rel="stylesheet" href="/static/studio-quality.css?v=studio-v5-1">
-<link rel="stylesheet" href="/static/studio-fast-scan.css?v=studio-v6-complete-20261114">
-<link rel="stylesheet" href="/static/studio-v5-theme.css?v=studio-v5-20261113">
-<script src="/static/studio-quality.js?v=studio-v5-1" defer></script>
 </head>
 <body>
   <div class="app-shell" id="app">
@@ -36,11 +32,7 @@
         <a class="nav-link" href="#episodes"><span class="nav-icon">▦</span><span>المواسم والحلقات</span></a>
         <a class="nav-link" href="#publish"><span class="nav-icon">⇧</span><span>الحفظ والنشر</span></a>
         <a class="nav-link" href="#smart-sync"><span class="nav-icon">⟳</span><span>المزامنة الذكية</span></a>
-        <a class="nav-link" href="#quality"><span class="nav-icon">◉</span><span>جودة المكتبة والإصلاح</span><span class="external">V6</span></a>
-        <a class="nav-link" href="/studio/private-videos?v=studio5-20261113"><span class="nav-icon">▶</span><span>تحميل الأفلام واكتشاف المشغلات</span><span class="external">جديد</span></a>
-        <a class="nav-link" href="/studio/video-upload"><span class="nav-icon">⇧</span><span>رفع فيديوهات MP4</span><span class="external">جديد</span></a>
         <a class="nav-link" href="/studio/sources"><span class="nav-icon">▣</span><span>مراجعة مصادر المسلسلات</span></a>
-        <a class="nav-link" href="/studio/security"><span class="nav-icon">⬡</span><span>مركز أمان مواقعك</span><span class="external">جديد</span></a>
         <a class="nav-link" href="#tools"><span class="nav-icon">⌘</span><span>الإضافات والمميزات</span></a>
       </nav>
       <div class="studio-backlinks">
@@ -62,66 +54,10 @@
         <div class="top-actions"><span class="server-label"><i class="status-dot"></i> <span id="serverHealthText">فحص الاتصال...</span></span><form action="/account/logout" method="POST" style="display:inline-flex;margin:0"><button type="submit" title="الخروج من الموقع" class="icon-btn" style="width:auto;padding:0 12px;white-space:nowrap">خروج الموقع</button></form><button class="icon-btn" title="عرض التنبيهات" id="toastCenterBtn">♧</button><button id="loginToggle" class="account-btn"><span class="avatar">A</span><span id="accountText">تسجيل الدخول</span><span>⌄</span></button></div>
       </header>
       <main class="page">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px;margin:0 0 18px;border:1px solid #66313f;border-radius:18px;background:linear-gradient(110deg,#431523,#1b1a23);color:#fff;flex-wrap:wrap" id="privateFilmPromo">
-          <div><strong style="display:block;font-size:18px">أداة تحميل الأفلام واكتشاف المصادر الجديدة</strong><small style="display:block;opacity:.85;margin-top:6px">رابط صفحة موقع ← اكتشاف الفيديو والحلقات ← فحص المصدر ← استيراد خاص إلى Supabase</small></div>
-          <a href="/studio/private-videos?v=studio5-20261113" style="display:inline-block;background:#ce2644;color:#fff;text-decoration:none;padding:13px 20px;border-radius:12px;font-weight:700">فتح أداة الأفلام الجديدة</a>
-        </div>
         <div class="studio-command-bar" aria-label="مركز التحكم السريع">
           <div class="command-copy"><strong>استوديو المحتوى</strong><small>إدارة الأفلام والمسلسلات</small></div>
           <div class="studio-command-actions"><span class="studio-edit-state" id="studioEditStatus" data-dirty="false" role="status" aria-live="polite">جاهز لإدارة المحتوى</span><button id="studioQuickSync" class="small-gold" type="button" disabled>✓ حفظ تعديلات الجلسة</button></div>
         </div>
-        <section id="quality" data-studio-page="quality" hidden aria-labelledby="qualityTitle">
-          <div id="qualityDashboard" class="quality-page">
-            <div class="quality-hero">
-              <div class="quality-kicker">AL EZZ TV • CONTENT QUALITY CENTER</div>
-              <h1 id="qualityTitle">مركز <em>جودة المكتبة</em> والتحسين</h1>
-              <p>راقب مصادر الفيديو المعطلة والمشكوك فيها، ومدد الحلقات والملصقات الناقصة، بأرقام حقيقية من Supabase. لا يغيّر هذا التقرير حالة أي محتوى دون مراجعتك.</p>
-              <div class="quality-hero-actions">
-                <button type="button" id="qualityRefresh" class="quality-btn primary">⟳ تحديث بيانات الجودة</button>
-                <a class="quality-btn" href="#smart-sync">◉ فحص وإصلاح المصادر</a>
-                <a class="quality-btn" href="/studio/private-videos?v=studio5-20261113">⇧ استيراد ملف خاص</a>
-              </div>
-              <div id="qualityStatus" class="quality-status" role="status" aria-live="polite">افتح القسم لتحديث حالة مكتبة العز TV من Supabase.</div>
-            </div>
-            <div class="quality-grid" aria-label="مؤشرات جودة مكتبة العز TV">
-              <div class="quality-metric"><span class="name">إجمالي الأفلام والمسلسلات</span><strong id="qualityWorks">—</strong><small>الأعمال المسجلة</small></div>
-              <div class="quality-metric danger"><span class="name">مصادر معطلة منشورة</span><strong id="qualityBroken">—</strong><small>Broken • تتطلب إصلاحًا</small></div>
-              <div class="quality-metric warning"><span class="name">مصادر مشكوك فيها</span><strong id="qualitySuspect">—</strong><small>Suspect • بانتظار التحقق</small></div>
-              <div class="quality-metric"><span class="name">مدد ناقصة أو غير منطقية</span><strong id="qualityMissing">—</strong><small>فيلم أو حلقة</small></div>
-            </div>
-            <div class="quality-columns">
-              <div>
-                <section class="quality-panel" aria-labelledby="quality-table-title">
-                  <h2 id="quality-table-title">توزيع المحتوى حسب النوع</h2>
-                  <p>تُعرض الحالات المسجلة في قاعدة البيانات، وليس نتيجة تشغيل الفيديو في اللحظة الحالية.</p>
-                  <div class="quality-table-wrap">
-                    <table class="quality-table">
-                      <thead><tr><th scope="col">النوع</th><th scope="col">المجموع</th><th scope="col">منشور</th><th scope="col">معطّل</th><th scope="col">مشكوك فيه</th><th scope="col">بلا ملصق</th></tr></thead>
-                      <tbody id="qualityTableBody"><tr><td colspan="6">جارٍ جلب بيانات الجودة…</td></tr></tbody>
-                    </table>
-                  </div>
-                </section>
-                <section class="quality-panel" aria-labelledby="quality-help-title">
-                  <h2 id="quality-help-title">إجراءات الإدارة</h2>
-                  <p>العمل المتعطل لا يُحذف. تُراجع مصادره، ثم يُعاد الاختبار، وتُنشر النسخة السليمة بعد التحقق.</p>
-                  <div class="quality-links">
-                    <a href="#smart-sync">فتح المزامنة الذكية</a>
-                    <a href="/admin/#movies" target="_blank" rel="noopener">تحرير الأفلام</a>
-                    <a href="/admin/series-quick.html" target="_blank" rel="noopener">تحرير الحلقات</a>
-                    <a href="/studio/private-videos?v=studio5-20261113">فحص الفيديو المباشر</a>
-                  </div>
-                  <span class="quality-note">النسخة العامة تُخفي حاليًا ملفات الأفلام والحلقات التي تحمل حالة Broken أو Suspect. إعادة الفحص من لوحة الإدارة لا تغيّر حقوق المحتوى.</span>
-                </section>
-              </div>
-              <aside class="quality-panel" aria-labelledby="quality-issues-title">
-                <h2 id="quality-issues-title">أولويات إصلاح المكتبة</h2>
-                <p>تتجدد هذه التوصيات حسب الحالات المسجلة في Supabase.</p>
-                <ol id="qualityIssueList" class="quality-issues"><li>جارٍ تحليل المشاكل…</li></ol>
-              </aside>
-            </div>
-          </div>
-        </section>
-
         <section id="import" data-studio-page="import" aria-labelledby="discoverTitle">
         <div class="heading-row"><div><div class="eyebrow"><span class="eyebrow-dot"></span> مكتبة العز TV</div><h1>اكتشف عملك <span>القادم</span></h1><p class="lead">ابحث عن فيلم أو مسلسل، وافحص روابطه قبل إضافته إلى المكتبة.</p></div><div class="heading-actions"><button class="outline-action" id="exportBatchBtn" hidden><span>↓</span> تصدير الدفعة JSON</button><button class="outline-action" id="exportBtn" disabled><span>↓</span> تصدير العمل JSON</button></div></div>
 
@@ -135,50 +71,13 @@
           <p class="auto-discovery-note" id="autoDiscoveryStatus" role="status" aria-live="polite">
             اكتب اسمًا أو الصق رابط HTTPS؛ يبدأ البحث واكتشاف المصادر تلقائيًا
           </p>
-          <label class="studio-fast-choice"><input type="checkbox" id="studioFastMode" checked><span><b>⚡ اكتشاف سريع ولحظي — هدف 30 ثانية للدفعة الأولى</b><small>تظهر حلقات صفحة العمل بسرعة، ثم يجري فحص المشغلات بالتوازي وتظهر النتائج لحظة اكتشافها. لاستكشاف صفحات جميع المواسم مهما طالت، ألغِ الخيار لبدء الفحص الشامل الأبطأ.</small></span></label>
-          <label class="setting-choice"><input type="checkbox" id="autoTrack" checked><span><b>التجديد التلقائي بعد الاكتشاف</b><small>يحفظ العمل الجديد كمسودة عند دخول المسؤول، ويجدّد روابطه في الخلفية.</small></span></label>
           <section id="titleResults" class="title-results" aria-label="نتائج البحث" hidden></section>
           <ol class="studio-flow" aria-label="خطوات استيراد العمل"><li><span>١</span> اكتشاف العمل</li><li><span>٢</span> فحص المشغلات</li><li><span>٣</span> مراجعة وحفظ</li></ol>
           <section id="discoveryProgress" class="discovery-progress" aria-label="تقدم فحص العمل" hidden>
             <div><strong id="discoveryProgressLabel"></strong><span id="discoveryProgressCount"></span></div>
             <progress id="discoveryProgressBar" max="1" value="0" aria-label="العناصر المفحوصة"></progress>
             <button type="button" class="small-gold" id="discoveryReview" hidden>مراجعة العمل ←</button>
-            <div class="studio-fast-toolbar">
-              <span class="studio-fast-pill is-off" id="studioLivePill">في الانتظار</span>
-              <button type="button" class="small-gold" id="studioExportPlayersCsv" disabled>↓ تصدير CSV الآن</button>
-              <button type="button" class="small-outline" id="studioExportPlayersJson" disabled>↓ تصدير JSON الآن</button>
-              <button type="button" class="small-outline" id="studioCopyPlayers" disabled>⧉ نسخ المصادر</button>
-              <span class="studio-fast-summary" id="studioLiveCounts">لا توجد مصادر بعد</span>
-              <span class="studio-fast-summary" id="studioRemainingPages" aria-live="polite"></span>
-              <span class="studio-fast-summary" id="studioScanTimer">00:00</span>
-            </div>
-            <div class="studio-v6-controls">
-              <button type="button" class="small-outline" id="studioStopScan" hidden>■ إيقاف الفحص</button>
-              <button type="button" class="small-gold" id="studioResumeScan" hidden>▶ استكمال الفحص المحفوظ</button>
-              <button type="button" class="small-outline" id="studioRetryFailed" hidden>↻ إعادة فحص المتعطلين</button>
-              <button type="button" class="small-outline" id="studioScanHistoryBtn">▤ سجل عمليات الإدارة</button>
-              <span id="studioCheckpointStatus" class="studio-v6-checkpoint" role="status">حفظ التقدم: لم يبدأ</span>
-            </div>
-            <div class="studio-v6-filter"><label for="studioPlayerFilter">حالة المصادر</label>
-              <select id="studioPlayerFilter" aria-label="فلترة المصادر">
-                <option value="all">جميع المشغلات</option>
-                <option value="verified">اجتاز الفحص</option>
-                <option value="unverified">بحاجة للتحقق</option>
-                <option value="embed">صفحات مشغّل</option>
-                <option value="hls">قوائم HLS (M3U8)</option>
-                <option value="mp4">فيديو MP4</option>
-                <option value="blocked">رفض وصول 403</option>
-                <option value="expired">روابط منتهية</option>
-                <option value="missing">مصادر غير موجودة 404</option>
-              </select>
-              <button type="button" class="small-outline" id="studioShowAllSources">عرض كل المصادر</button>
-            </div>
-            <p class="studio-fast-hint">المصادر المرشحة ليست مضمونة التشغيل؛ تُعرض حالتها الفعلية ويجب التحقق منها قبل اعتماد النشر. يمكنك تصدير النتائج أثناء استمرار الفحص.</p>
-            <div class="live-media-links studio-fast-stream" id="liveMediaLinks" aria-live="polite" aria-relevant="additions"></div>
-            <details class="studio-v6-history" id="studioScanHistory" hidden>
-              <summary>سجل فحوص المسؤول الأخيرة</summary>
-              <div id="studioScanHistoryEntries" class="studio-v6-history-list">لا توجد سجلات محملة.</div>
-            </details>
+            <div class="live-media-links" id="liveMediaLinks" aria-live="polite"></div>
           </section>
           <div id="activity" class="activity" role="status" aria-live="polite"><span class="activity-ico">✦</span><span id="activityText">جاهز للبحث عن عمل جديد.</span></div>
           <details class="discovery-tools" id="discoveryTools"><summary>خيارات الاستيراد</summary>
@@ -244,25 +143,7 @@ https://example.org/movie/film-one"></textarea></label>
 
           </section>
           <section id="episodes" data-studio-page="episodes" hidden>
-          <div class="section-title-row"><div><span class="overline">روابط التشغيل</span><h2>المواسم <span class="muted-title">والحلقات</span></h2></div><div class="inline-actions"><button id="linksToggle" class="small-outline">+ لصق روابط FetchV</button><button id="edgeCaptureBtn" class="small-outline" title="ابدأ فحصًا متوازيًا لجميع الحلقات؛ 10 حلقات لكل دفعة، والانتقال تلقائيًا خلال ميزانية 45 ثانية للدفعة">⚡ اكتشاف روابط الحلقات تلقائيًا</button><button id="verifyAllBtn" class="small-gold">◈ فحص جميع الروابط</button></div></div>
-          <section id="episodeBatchPanel" class="episode-batch-panel" hidden aria-label="الفحص التلقائي للحلقات">
-            <div class="episode-batch-heading">
-              <div><span class="studio-fast-pill" id="episodeBatchLive">● LIVE · جلب المشغلات</span>
-                <h3>فحص تلقائي: 10 حلقات لكل دفعة</h3>
-                <p id="episodeBatchStatus" role="status" aria-live="polite">تبدأ الدفعة التالية تلقائيًا بمجرد انتهاء الدفعة الحالية، بميزانية تصل إلى 45 ثانية.</p>
-              </div>
-              <button id="episodeBatchStop" type="button" class="small-outline">إيقاف الفحص</button>
-            </div>
-            <div class="episode-batch-metrics">
-              <span>الحلقات المكتملة <strong id="episodeBatchCount">0 / 0</strong></span>
-              <span>الدفعة الحالية <strong id="episodeBatchCurrent">0 / 0</strong></span>
-              <span>الوقت <strong id="episodeBatchElapsed">—</strong></span>
-              <span>المشغلات <strong id="episodeBatchFound">0</strong></span>
-            </div>
-            <progress id="episodeBatchProgress" max="1" value="0" aria-label="تقدم فحص الحلقات"></progress>
-            <div class="episode-batch-results" id="episodeBatchLog" aria-live="polite" aria-relevant="additions"></div>
-            <p class="studio-fast-hint">روابط المشغلات تُسجل كمرشحات حتى تُفحص. يمكن إيقاف المهمة واستكمالها من أول دفعة غير مكتملة.</p>
-          </section>
+          <div class="section-title-row"><div><span class="overline">روابط التشغيل</span><h2>المواسم <span class="muted-title">والحلقات</span></h2></div><div class="inline-actions"><button id="linksToggle" class="small-outline">+ لصق روابط FetchV</button><button id="edgeCaptureBtn" class="small-outline" title="فحص صفحات الحلقات وطلبات الوسائط العامة على Chromium السحابي أو Edge المحلي، على دفعات قابلة للاستكمال">⌁ اكتشاف روابط الحلقات</button><button id="verifyAllBtn" class="small-gold">◈ فحص جميع الروابط</button></div></div>
           <div class="section-panel media-panel">
             <div class="episodes-head"><div id="seasonTabs" class="season-tabs" role="tablist" aria-label="المواسم"></div><div class="episodes-toolbar"><input type="search" id="episodeSearch" placeholder="⌕ بحث في الحلقات"><button id="addEpisodeBtn" class="tiny-btn">+ إضافة حلقة</button></div></div>
             <div class="episode-tools" aria-label="أدوات الحلقات المتقدمة">
@@ -277,7 +158,7 @@ https://example.org/movie/film-one"></textarea></label>
               <div class="episode-select-actions"><button type="button" id="selectVisibleBtn" class="small-outline">☑ تحديد الحلقات الظاهرة</button><button type="button" id="clearSelectionBtn" class="small-outline">إلغاء التحديد</button></div>
             </div>
             <div class="progress-wrap" id="verifyProgressWrap" hidden><div class="progress-header"><span id="verifyProgressText">فحص روابط التشغيل...</span><span id="verifyProgressNum">0%</span></div><div class="progress-rail"><i id="verifyProgressBar"></i></div></div>
-            <div id="movieMedia" hidden><div class="movie-media-form"><label class="field"><span class="field-label">رابط الفيلم MP4 / HLS / OK.ru / Embed</span><input id="movieMediaUrl" type="url" dir="ltr" placeholder="https://ok.ru/video/16115671698037 أو رابط MP4 / HLS"></label><button class="secondary-btn" id="verifyMovieBtn">فحص رابط الفيلم</button><button type="button" id="movieOkPreview" class="small-outline" hidden>معاينة OK.ru</button></div><div id="movieMediaStatus" class="media-state"></div><div id="movieSources"></div></div>
+            <div id="movieMedia" hidden><div class="movie-media-form"><label class="field"><span class="field-label">رابط الفيلم MP4 / HLS / Embed 1vid</span><input id="movieMediaUrl" type="url" dir="ltr" placeholder="https://.../movie.m3u8 أو https://1vid.xyz/embed-xxxx.html"></label><button class="secondary-btn" id="verifyMovieBtn">فحص رابط الفيلم</button></div><div id="movieMediaStatus" class="media-state"></div><div id="movieSources"></div></div>
             <div id="episodeContainer"><div class="episode-list" id="episodeList"></div></div>
             <div class="episodes-foot"><div class="legend"><span><i class="legend-dot good"></i> تم التحقق</span><span><i class="legend-dot warn"></i> ينتظر الفحص</span><span><i class="legend-dot bad"></i> غير صالح وقت الفحص</span></div><button id="verifySelectedBtn" class="tiny-btn">فحص الحلقات المحددة</button></div>
           </div>
@@ -320,21 +201,11 @@ https://example.org/movie/film-one"></textarea></label>
     <a href="#episodes"><span class="dock-icon" aria-hidden="true">▦</span><span>الحلقات</span></a>
     <a href="#publish"><span class="dock-icon" aria-hidden="true">⇧</span><span>الحفظ</span></a>
     <a href="#smart-sync"><span class="dock-icon" aria-hidden="true">⟳</span><span>المزامنة</span></a>
-    <a href="#quality"><span class="dock-icon" aria-hidden="true">◉</span><span>الجودة</span></a>
+    <a href="#tools"><span class="dock-icon" aria-hidden="true">⌘</span><span>الأدوات</span></a>
   </nav>
   <div class="auto-modal-backdrop" id="autoSourcesModal" hidden><section class="auto-modal" role="dialog" aria-modal="true" aria-labelledby="autoSourcesTitle" tabindex="-1"><div class="smart-sync-head"><h2 id="autoSourcesTitle">مصادر التشغيل</h2><button type="button" class="small-outline" id="autoSourcesClose">إغلاق</button></div><p id="autoSourceIdentity" class="auto-source-identity"></p><form id="autoSourceForm" class="auto-source-form"><label class="field"><span class="field-label">إضافة صفحة مصدر أصلية لهذا العنصر</span><input type="url" id="autoSourceUrl" dir="ltr" placeholder="https://…/episode-page" required maxlength="2048"></label><button type="submit" class="primary-btn">حفظ المصدر وإعادة الاستخراج</button></form><p id="autoSourceNotice" role="status" aria-live="polite"></p><div id="autoSourcesList"></div></section></div>
-  <div class="modal-backdrop" id="linksModal" hidden><section class="modal" role="dialog" aria-modal="true" aria-labelledby="linksTitle"><button class="modal-close" data-close="linksModal" aria-label="إغلاق">×</button><div class="modal-kicker">MEDIA LINKS</div><h2 id="linksTitle">إضافة روابط الفيديو من FetchV</h2><p>الصق رابط الفيلم مباشرة، أو اكتب لكل حلقة رقم الموسم والحلقة متبوعًا بالرابط، كل واحد في سطر. انسخ الرابط من الإضافة في متصفحك.</p><div class="inline-actions" aria-label="روابط تثبيت FetchV"><a class="small-outline" target="_blank" rel="noopener noreferrer" href="https://chromewebstore.google.com/detail/fetchv-video-downloader-f/nfmmmhanepmpifddlkkmihkalkoekpfd">تثبيت على Chrome ↗</a><a class="small-outline" target="_blank" rel="noopener noreferrer" href="https://microsoftedge.microsoft.com/addons/detail/fetchv-video-downloader/dbepbhhcmhodojepbagfppgpieeplpik">تثبيت على Edge ↗</a></div><div class="code-example">S01E01|https://your-cdn.example/video1.m3u8<br>S01E02|https://your-cdn.example/video2.mp4<br>https://your-site.example/episode/series-episode-1/|https://your-cdn.example/video1.m3u8</div><textarea id="linksInput" rows="8" dir="ltr" placeholder="S01E01|https://..."></textarea><div class="modal-actions"><button class="secondary-btn" data-close="linksModal">إلغاء</button><button type="button" class="secondary-btn" id="pasteFetchVBtn">لصق من الحافظة</button><button class="primary-btn" id="applyLinksBtn">+ ربط الحلقات</button></div></section></div>
+  <div class="modal-backdrop" id="linksModal" hidden><section class="modal" role="dialog" aria-modal="true" aria-labelledby="linksTitle"><button class="modal-close" data-close="linksModal" aria-label="إغلاق">×</button><div class="modal-kicker">MEDIA LINKS</div><h2 id="linksTitle">إضافة روابط الفيديو من FetchV</h2><p>الصق رابط الفيلم مباشرة، أو اكتب لكل حلقة رقم الموسم والحلقة متبوعًا بالرابط، كل واحد في سطر. انسخ الرابط من الإضافة في متصفحك.</p><div class="inline-actions" aria-label="روابط تثبيت FetchV"><a class="small-outline" target="_blank" rel="noopener noreferrer" href="https://chromewebstore.google.com/detail/fetchv-video-downloader-f/nfmmmhanepmpifddlkkmihkalkoekpfd">تثبيت على Chrome ↗</a><a class="small-outline" target="_blank" rel="noopener noreferrer" href="https://microsoftedge.microsoft.com/addons/detail/fetchv-video-downloader/dbepbhhcmhodojepbagfppgpieeplpik">تثبيت على Edge ↗</a></div><div class="code-example">S01E01|https://your-cdn.example/video1.m3u8<br>S01E02|https://your-cdn.example/video2.mp4</div><textarea id="linksInput" rows="8" dir="ltr" placeholder="S01E01|https://..."></textarea><div class="modal-actions"><button class="secondary-btn" data-close="linksModal">إلغاء</button><button type="button" class="secondary-btn" id="pasteFetchVBtn">لصق من الحافظة</button><button class="primary-btn" id="applyLinksBtn">+ ربط الحلقات</button></div></section></div>
 
-  <div class="modal-backdrop" id="okPreviewModal" hidden>
-    <section class="modal okru-preview-modal" role="dialog" aria-modal="true" aria-labelledby="okPreviewTitle">
-      <button type="button" class="modal-close" data-close="okPreviewModal" id="okPreviewClose" aria-label="إغلاق المعاينة">×</button>
-      <h2 id="okPreviewTitle">معاينة مشغل OK.ru الرسمي</h2>
-      <p>الفحص اليدوي هنا يبين ما إذا كان المشغل يعرض الفيديو على جهازك؛ استجابة الصفحة وحدها ليست إثباتًا أن الفيديو يعمل.</p>
-      <iframe id="okPreviewFrame" title="مشغل OK.ru" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen
-        sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" referrerpolicy="strict-origin-when-cross-origin"></iframe>
-      <div class="modal-actions"><a id="okPreviewOpen" class="small-outline" href="https://ok.ru/" target="_blank" rel="noopener noreferrer">فتح المصدر الرسمي في نافذة مستقلة</a><button type="button" class="secondary-btn" data-close="okPreviewModal">إغلاق المشغل</button></div>
-    </section>
-  </div>
   <div class="modal-backdrop" id="loginModal" hidden><section class="modal modal--login" role="dialog" aria-modal="true" aria-labelledby="loginTitle"><button class="modal-close" data-close="loginModal" aria-label="إغلاق">×</button><div class="login-mark">ع <small>TV</small></div><div class="modal-kicker">ADMIN ACCESS</div><h2 id="loginTitle">دخول مسؤول العز TV</h2><p>أدخل حساب المسؤول في Supabase. تُرسل البيانات من خادم بايثون إلى Supabase مباشرة، ولا تُخزن كلمة المرور محليًا.</p><form id="loginForm"><label class="field"><span class="field-label">البريد الإلكتروني</span><input id="loginEmail" type="email" autocomplete="username" dir="ltr" placeholder="admin@example.com"></label><label class="field"><span class="field-label">كلمة المرور</span><input id="loginPassword" type="password" autocomplete="current-password" dir="ltr" placeholder="••••••••"></label><details class="token-login"><summary>الدخول باستخدام رمز جلسة Supabase بدل كلمة المرور</summary><label class="field"><span class="field-label">رمز جلسة المسؤول (Access Token)</span><textarea id="loginToken" rows="3" dir="ltr" placeholder="eyJ..."></textarea></label><p>استخدم الرمز على جهازك فقط، ولا تشاركه. يُتحقق من صلاحيات المسؤول قبل أي كتابة.</p></details><button class="primary-btn full-btn" type="submit">تسجيل الدخول الآمن</button></form></section></div>
 
   <div class="modal-backdrop" id="episodeModal" hidden><section class="modal modal--small" role="dialog" aria-modal="true" aria-labelledby="epAddTitle"><button class="modal-close" data-close="episodeModal" aria-label="إغلاق">×</button><h2 id="epAddTitle">إضافة حلقة يدويًا</h2><form id="episodeAddForm"><div class="row-fields"><label class="field"><span class="field-label">الموسم</span><input id="addSeason" type="number" min="1" max="100" value="1" required></label><label class="field"><span class="field-label">رقم الحلقة</span><input id="addNumber" type="number" min="1" max="1000" value="1" required></label></div><label class="field"><span class="field-label">عنوان الحلقة</span><input id="addTitle" placeholder="الحلقة الجديدة" maxlength="250"></label><button type="submit" class="primary-btn full-btn">إضافة إلى المسلسل</button></form></section></div>

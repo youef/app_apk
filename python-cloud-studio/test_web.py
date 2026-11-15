@@ -35,54 +35,6 @@ class DummyDB:
 
 
 class DemoTest(unittest.TestCase):
-    def test_discover_can_register_a_draft_for_immediate_renewal(self):
-        source = 'https://source.example.org/movies/example'
-        cat = Catalogue('movie','Example',source)
-        db = DummyDB()
-        with patch.object(server,'Supabase',return_value=db), \
-             patch.object(server.AUTOSYNC,'bind_local_session'), \
-             patch.object(server,'discover_full',return_value=cat), \
-             patch.object(server.AUTOSYNC,'remember_saved') as queue:
-            self.assertEqual(self.post('login',{'email':'admin@example.org','password':'example'}).status_code,200)
-            response=self.post('discover',{'url':source,'scan_media':False,'auto_track':True,'force_refresh':True})
-        self.assertTrue(response.json()['tracking']['saved'])
-        self.assertEqual(db.rows['aseel_movies'][0]['status'],'draft')
-        self.assertTrue(queue.call_args.kwargs['refresh'])
-
-    def test_okru_episode_update_accepts_watch_link_and_normalizes(self):
-        url = 'https://ok.ru/video/16115671698037'
-        series = Catalogue('series','Series','https://source.example.org/series/example/',
-                           episodes=[Episode(1,1,'Ep 1','https://source.example.org/episodes/1/')])
-        state = server.UserState(catalogue=series)
-        with patch.object(server,'protected',return_value=state):
-            response = self.post('update', {'episodes':[{'season':1,'number':1,'media_url':url}]})
-        self.assertEqual(response.status_code,200,response.text)
-        self.assertEqual(series.episodes[0].media_url,'https://ok.ru/videoembed/16115671698037')
-        self.assertFalse(series.episodes[0].verified)
-
-    def test_discovery_extracts_direct_media_from_existing_embed(self):
-        source = 'https://source.example.org/movies/example'
-        embed = 'https://source.example.org/embed/abc'
-        direct = {'url':'https://cdn.example.org/movie.m3u8','kind':'direct','verified':True}
-        cat = Catalogue('movie','Example',source,media_url=embed,
-                        sources=[{'url':embed,'kind':'embed'}])
-        with patch.object(server.MediaResolver,'resolve',return_value=([direct],[])) as resolve:
-            _, _, original_pages, playable, error = server._scan_media_entry(cat,cat)
-        self.assertEqual(resolve.call_args.args[0],[source,embed])
-        self.assertEqual(original_pages,[source,embed])
-        self.assertEqual(playable,direct)
-        self.assertFalse(error)
-
-    def test_title_search_uses_browser_when_source_disconnects(self):
-        final = 'https://v3.qrmzi.buzz/?s=Example'
-        body = '<a href="/movies/example/">Example</a>'
-        with patch.object(server.SourceClient,'get',side_effect=server.SourceConnectionError), \
-             patch.object(server.AUTOSYNC,'mode','auto'), \
-             patch.object(server,'read_public_html',return_value=(final,'text/html',body)) as browser:
-            result = server.search_titles('Example','movie')
-        self.assertEqual(result[0]['url'],'https://v3.qrmzi.buzz/movies/example/')
-        browser.assert_called_once()
-
     def setUp(self):
         self.client = TestClient(server.app)
         init = self.client.get('/api/init')
@@ -126,7 +78,7 @@ class DemoTest(unittest.TestCase):
         cat = Catalogue('series', 'Example Show', root,
                         episodes=[Episode(1, 1, 'One', episode_page), Episode(1, 2, 'Two', root)])
         stream = {'kind':'direct','url':'https://cdn.example.org/live.m3u8','verified':True}
-        def resolve(pages, existing, **kwargs):
+        def resolve(pages, existing):
             return ([stream], []) if pages == [episode_page] else ([], [])
         with patch.object(server, 'discover_full', return_value=cat), \
              patch.object(server.MediaResolver, 'resolve', side_effect=resolve) as resolver:
@@ -150,7 +102,7 @@ class DemoTest(unittest.TestCase):
             Episode(1,1,'Slow',root+'slow'),Episode(1,2,'Fast',root+'fast')])
         release=threading.Event()
         fast=threading.Event()
-        def resolve(pages,existing, **kwargs):
+        def resolve(pages,existing):
             if pages==[root+'slow']:release.wait(timeout=5)
             else:fast.set()
             return [{'url':'https://cdn.example.org/'+pages[0].split('/')[-1]+'.mp4',

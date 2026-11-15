@@ -1,9 +1,9 @@
 {
-  "id": "/studio/",
+  "id": "/",
   "name": "العز TV | استوديو الإدارة",
   "short_name": "استوديو العز",
   "description": "إدارة مكتبة العز TV والمسلسلات والأفلام والحلقات",
-  "start_url": "/studio/",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#080c14",
@@ -16,25 +16,7 @@
       "src": "/static/studio-icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any"
-    },
-    {
-      "src": "/apple-touch-icon.png",
-      "sizes": "any",
-      "type": "image/png",
       "purpose": "any maskable"
-    }
-  ],
-  "shortcuts": [
-    {
-      "name": "جودة المكتبة",
-      "short_name": "الجودة",
-      "url": "/studio/#quality"
-    },
-    {
-      "name": "المزامنة الذكية",
-      "short_name": "المزامنة",
-      "url": "/studio/#smart-sync"
     }
   ]
 }

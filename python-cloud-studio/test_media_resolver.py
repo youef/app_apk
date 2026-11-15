@@ -3,14 +3,12 @@ from datetime import datetime, timezone
 import json
 import unittest
 import threading
-import time
 from unittest.mock import Mock, patch
 
 import requests
 import alezz_fetchv_importer as importer
 from media_resolver import (MediaResolver, confidence, extract_candidates,
-                            merge_sources, safe_error, signed_expiry, supported_source_kind,
-                            is_public_hls_manifest_request)
+                            merge_sources, safe_error, signed_expiry, supported_source_kind)
 
 ROOT = 'https://source.example.org/episode/1'
 OLD = 'https://cdn.example.org/old.m3u8?expires=1700000000&token=secret'
@@ -60,35 +58,6 @@ class ResolverTests(unittest.TestCase):
         self.assertFalse(rows[0]['verified'])
         self.assertNotIn('checked_at',rows[0])
         self.assertNotIn('failures',rows[0])
-
-    def test_ok_ru_watch_url_is_canonical_and_embedded_not_video_verified(self):
-        from media_resolver import normalized_source_url, official_ok_embed
-        share = 'https://ok.ru/video/16115671698037'
-        player = 'https://ok.ru/videoembed/16115671698037'
-        self.assertEqual(official_ok_embed(share), player)
-        self.assertEqual(normalized_source_url(share), player)
-        self.assertEqual(supported_source_kind(share), 'embed')
-        self.assertEqual(supported_source_kind(player), 'embed')
-        for unsafe in ('http://ok.ru/video/16115671698037',
-                       'https://ok.ru.evil.example/video/16115671698037',
-                       'https://ok.ru/video/xyz',
-                       'https://user@ok.ru/video/16115671698037',
-                       'https://ok.ru/video/16115671698037?redirect=https://evil.example'):
-            self.assertEqual(supported_source_kind(unsafe), '', unsafe)
-        page = FakeSite({player: '<html><body>official player</body></html>'})
-        checked = self.resolver(page, mode='http').check([{'url':share,'kind':'direct'}])
-        self.assertEqual(checked[0]['url'], player)
-        self.assertEqual(checked[0]['kind'], 'embed')
-        self.assertTrue(checked[0]['reachable'])
-        self.assertFalse(checked[0]['verified'])
-        self.assertFalse(page.checked)
-
-    def test_ok_ru_link_in_html_becomes_embed_candidate(self):
-        share = 'https://ok.ru/video/16115671698037'
-        src, pages = extract_candidates('<a href="'+share+'">play video</a>', ROOT)
-        self.assertEqual(src[0]['url'], 'https://ok.ru/videoembed/16115671698037')
-        self.assertEqual(src[0]['kind'], 'embed')
-        self.assertEqual(pages, ['https://ok.ru/videoembed/16115671698037'])
 
     def test_1vid_embed_format_and_nonvideo_probe(self):
         url = 'https://1vid.xyz/embed-cnpn8jvjzx9p.html'
@@ -164,54 +133,6 @@ class ResolverTests(unittest.TestCase):
         browser.assert_not_called()
         self.assertEqual(sources[0]['url'], OLD)
         self.assertFalse(sources[0]['verified'])
-
-    def test_hls_manifest_is_allowed_but_video_bytes_are_not_requested(self):
-        signed = ('https://store.example.org/hls2/01/master.m3u8'
-                  '?t=token&s=1794736159&e=43200&v=380771044')
-        self.assertTrue(is_public_hls_manifest_request(signed))
-        for link in (
-            'https://store.example.org/part-001.ts',
-            'https://store.example.org/video.mp4',
-            'https://localhost/master.m3u8',
-            'http://store.example.org/master.m3u8',
-        ):
-            self.assertFalse(is_public_hls_manifest_request(link), link)
-        self.assertFalse(is_public_hls_manifest_request(signed, 'POST'))
-
-    def test_browser_prioritizes_embed_page_to_observe_player_network(self):
-        embed = 'https://player.example.org/embed-video123.html'
-        media = NEW
-        site = FakeSite({
-            ROOT: f'<iframe src="{embed}"></iframe>',
-            embed: '<html><body><button class="play">play</button></body></html>',
-        }, healthy=[media])
-        browser = Mock(side_effect=lambda url: [
-            dict(url=media, kind='direct', page_url=url)] if url == embed else [])
-        found, errors = self.resolver(site, browser).resolve([ROOT])
-        self.assertFalse(errors)
-        self.assertEqual(browser.call_args_list[0].args[0], embed)
-        self.assertTrue(any(x.get('url') == media and x.get('verified')
-                            for x in found))
-
-    def test_nearly_expired_verified_hls_forces_new_player_capture(self):
-        expiring = 'https://cdn.example.org/old.m3u8?expires=' + str(int(time.time()) + 120)
-        site = FakeSite({ROOT: f'<video src="{expiring}"></video>'},
-                        healthy=[expiring, NEW])
-        browser = Mock(return_value=[dict(url=NEW, kind='direct', page_url=ROOT)])
-        found, errors = self.resolver(site, browser).resolve([ROOT])
-        self.assertFalse(errors)
-        browser.assert_called_once_with(ROOT)
-        self.assertTrue(any(x['url'] == NEW and x['verified'] for x in found))
-        self.assertEqual(site.checked.count(expiring), 1)
-
-    def test_extract_refreshes_near_expiry_hls_even_when_http_finds_one(self):
-        expiring = 'https://cdn.example.org/old.m3u8?expires=' + str(int(time.time()) + 120)
-        site = FakeSite({ROOT: f'<video src="{expiring}"></video>'})
-        browser = Mock(return_value=[dict(url=NEW, kind='direct', page_url=ROOT)])
-        found, errors = self.resolver(site, browser).extract([ROOT])
-        self.assertFalse(errors)
-        browser.assert_called_once_with(ROOT)
-        self.assertIn(NEW, {x['url'] for x in found})
 
     def test_html_embed_is_not_a_verified_video(self):
         embed = 'https://player.example.org/embed/5'
