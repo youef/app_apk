@@ -559,10 +559,19 @@ class AutoSync:
         errors=[]
         extracted=False
         browser_requested=False
+        fresh_urls=set()
         if job['next_refresh']<=now and extraction_pages:
-            fresh,errors=resolver.extract(extraction_pages)
+            # Re-open saved iframe players at the scheduled refresh even when
+            # an older signed HLS URL still works. A new page load can issue
+            # a new token long before the old URL expires.
+            browser_refresh = self.mode!='http' and any(
+                item.get('kind')=='embed' for item in candidates)
+            fresh,errors=resolver.extract(
+                extraction_pages, force_browser=browser_refresh)
             extracted=True
-            browser_requested=self.mode=='headless' or self.mode=='auto' and not any(s.get('kind')=='direct' for s in fresh)
+            fresh_urls.update(item['url'] for item in fresh)
+            browser_requested=(browser_refresh or self.mode=='headless' or
+                               self.mode=='auto' and not any(s.get('kind')=='direct' for s in fresh))
             for source in fresh:self.queue.remember(table,identifier,source)
             seen={s['url'] for s in fresh}
             candidates=fresh+[s for s in candidates if s['url'] not in seen]
@@ -582,6 +591,7 @@ class AutoSync:
             fresh,extra=resolver.extract(extraction_pages,force_browser=self.mode!='http')
             extracted=True
             errors+=extra
+            fresh_urls.update(item['url'] for item in fresh)
             for source in fresh:self.queue.remember(table,identifier,source)
             checked_new=resolver.check(fresh)
             replace={s['url']:s for s in checked+checked_new}
@@ -599,6 +609,18 @@ class AutoSync:
         remove_primary=job['stream_url'] in retired or saved.get('stream_url') in retired
         fallback='' if remove_primary else job['stream_url']
         selected=next((s['url'] for s in good if s['url']==job['stream_url']),good[0]['url'] if good else fallback)
+        # Prefer a newly signed URL for the same manifest resource as soon as
+        # the page itself provides one and the byte probe verifies it. Never
+        # substitute a merely reachable iframe or a different episode path.
+        current_stream=urlsplit(job['stream_url'])
+        if extracted and current_stream.path and expires_at(job['stream_url']):
+            replacements=[
+                source['url'] for source in good
+                if source['url'] in fresh_urls and source['url']!=job['stream_url']
+                and urlsplit(source['url']).path==current_stream.path
+                and expires_at(source['url'])>max(now+300,expires_at(job['stream_url'])+60)
+            ]
+            if replacements: selected=max(replacements,key=expires_at)
         expiry=expires_at(selected)
         if extracted and good and expiry and expiry <= now + 300:
             current=urlsplit(selected)
