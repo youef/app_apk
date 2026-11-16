@@ -1,5 +1,5 @@
 {
-  "time": "2026-11-09T18:12:10.787543+00:00",
+  "time": "2026-11-16T12:54:02.996598+00:00",
   "source": "https://www.qanwatlive.com",
   "dry_run": true,
   "discovered": 77,
@@ -668,7 +668,9 @@
       ],
       "network": "on",
       "genre": "general",
-      "sources": [],
+      "sources": [
+        "https://bcovlive-a.akamaihd.net/3dc60bab470f4c9fbf00408ecb7c3d7a/eu-west-1/6057955906001/playlist.m3u8"
+      ],
       "embedded_players": [
         "https://tv.qanwatlive.com/2025/03/blog-post_17.html"
       ],
@@ -685,7 +687,9 @@
       ],
       "network": "mbc",
       "genre": "series",
-      "sources": [],
+      "sources": [
+        "https://shls-live-enc.edgenextcdn.net/out/v1/08eca926a78a41339b8010c882410307/index.m3u8"
+      ],
       "embedded_players": [
         "https://tv.qanwatlive.com/2025/03/blog-post_13.html"
       ],
