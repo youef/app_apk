@@ -70,6 +70,34 @@ class ParallelEpisodeTests(unittest.TestCase):
                 ('aseel_series',row['id'])).fetchone()
         return dict(found)
 
+    def test_batch_discovery_auto_saves_series_without_manual_publish(self):
+        from fastapi.testclient import TestClient
+        import server
+        first='https://source.example.org/series/one'
+        second='https://source.example.org/series/two'
+        def discover_one(url, *args, **kwargs):
+            return Catalogue(kind='series',title='Series '+url.rsplit('/',1)[-1],url=url,
+                episodes=[Episode(1,1,'الحلقة 1',url+'/episode/1')])
+        with patch.object(server.cloud_auth,'ENABLED',False):
+            client=TestClient(server.app)
+            init=client.get('/api/init')
+            self.assertEqual(init.status_code,200)
+            sid=client.cookies.get(server.COOKIE)
+            server._states[sid].db=self.db
+            with patch.object(server,'discover_full',side_effect=discover_one), \
+                 patch.object(server.AUTOSYNC,'remember_saved'), \
+                 patch.object(server.AUTOSYNC.queue,'queue'):
+                reply=client.post('/api/discover-batch',
+                    json={'urls':first+'\\n'+second,'kind':'series'},
+                    headers={'X-CSRF-Token':init.json()['csrf']})
+                self.assertEqual(reply.status_code,200,reply.text)
+                self.assertEqual(reply.json()['auto_save']['status'],'saved')
+                self.assertEqual(reply.json()['auto_save']['works'],2)
+                self.assertEqual(reply.json()['auto_save']['episodes'],2)
+        self.assertEqual(len(self.db.rows['aseel_series']),2)
+        self.assertEqual(len(self.db.rows['aseel_episodes']),2)
+        self.assertTrue(all(row['status']=='draft' for row in self.db.rows['aseel_episodes'].values()))
+
     def test_initial_auto_save_inherits_evidenced_work_license_without_publishing_unverified_video(self):
         parent=self.parent()
         cat=Catalogue(kind='series',title='Authorized series',url=SERIES,episodes=[
