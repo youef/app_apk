@@ -21,7 +21,7 @@ from urllib.parse import parse_qs, urlsplit
 from uuid import UUID
 
 import requests
-from alezz_fetchv_importer import SourceClient, public_url, pull_html, hydrate_episode_metadata
+from alezz_fetchv_importer import SourceClient, public_url, pull_html, hydrate_episode_metadata, MAX_PLAYBACK_VARIANTS
 from media_resolver import MediaResolver, safe_error, signed_expiry
 from title_cleaner import content_title
 
@@ -518,7 +518,7 @@ class AutoSync:
                      link_health_checked_at=iso(now),link_health_failures=failures,link_health_url=selected or None)
         if good:
             payload['stream_url']=selected
-            payload['stream_variants']=variants[:8]
+            payload['stream_variants']=variants[:MAX_PLAYBACK_VARIANTS]
         self.queue.update(table,identifier,last_check=now,next_check=next_check,last_refresh=now if extracted else job['last_refresh'],
                           next_refresh=next_refresh,stream_url=selected,status=status,error=error,failures=failures,
                           dirty=json.dumps(payload,ensure_ascii=False),upload_at=now)
