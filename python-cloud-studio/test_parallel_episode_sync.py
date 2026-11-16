@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from alezz_fetchv_importer import Catalogue, Episode
 from auto_sync import AutoSync
-from test_auto_sync import FakeDB, NOW, SERIES, uid
+from test_auto_sync import FakeDB, FakeResolver, NOW, SERIES, uid
 
 
 class PerEpisodeResolver:
@@ -115,6 +115,28 @@ class ParallelEpisodeTests(unittest.TestCase):
         self.assertEqual(len(episodes),1)
         self.assertEqual(episodes[0]['status'],'hidden')
         self.assertEqual(episodes[0]['link_health_status'],'healthy')
+
+    def test_delayed_browser_retry_also_auto_publishes_licensed_episode(self):
+        parent=self.parent()
+        season=self.db.seed('aseel_seasons',dict(id=uid('browser-retry-season'),
+            series_id=parent['id'],number=1,title_ar='الموسم 1'))
+        page='https://source.example.org/episode/25'
+        stream='https://cdn.example.org/browser-25.mp4'
+        ep=self.db.seed('aseel_episodes',dict(id=uid('browser-retry-episode'),
+            season_id=season['id'],number=25,title_ar='الحلقة 25',
+            status='draft',rights_status='approved',license_reference='licensed-series-123',
+            source_page_url=page,stream_url=''))
+        self.worker.queue.ingest('aseel_episodes',ep)
+        self.worker.resolver_factory=lambda:FakeResolver(
+            healthy=(stream,),browser=[dict(url=stream,kind='direct',page_url=page)])
+        with self.worker.queue.db() as conn:
+            job=dict(conn.execute('select * from auto_jobs where table_name=? and target_id=?',
+                ('aseel_episodes',ep['id'])).fetchone())
+        result=self.worker.check_target(job)
+        self.assertEqual(result['status'],'healthy')
+        self.assertTrue(result['published'])
+        self.assertEqual(self.db.rows['aseel_episodes'][ep['id']]['stream_url'],stream)
+        self.assertEqual(self.db.rows['aseel_episodes'][ep['id']]['status'],'published')
 
     def test_one_episode_failure_does_not_block_sibling_saves(self):
         parent=self.parent()
