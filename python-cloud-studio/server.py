@@ -204,7 +204,7 @@ def discover_full(source: str, kind: str='auto', deep: bool=True, enrich_metadat
         # without a matching episode link from the requested source itself.
         enrich(cat,include_episodes=False)
     if deep and cat.kind=='series' and cat.episodes:
-        hydrate_episode_metadata(cat,max_pages=120,workers=6)
+        hydrate_episode_metadata(cat,max_pages=120,workers=10)
     return cat
 
 
@@ -444,7 +444,7 @@ async def discover_batch(request: Request, data: DiscoverBatchForm):
         raise HTTPException(400,'يُقبل رابط HTTPS عام لكل عمل: '+clean(exc,120)) from None
     def work():
         found,failed=[],[]
-        with ThreadPoolExecutor(max_workers=min(3,len(urls))) as pool:
+        with ThreadPoolExecutor(max_workers=min(10,len(urls))) as pool:
             futures={pool.submit(discover_full,url,data.kind,data.deep,data.metadata):url for url in urls}
             for future in as_completed(futures):
                 url=futures[future]
@@ -665,7 +665,7 @@ def verify_entries(cat: Catalogue, indices: list[int]) -> int:
         temp = Catalogue(kind='series', title=cat.title, url=cat.url, episodes=[item])
         inspect_episodes(temp, SourceClient(timeout=12), delay=0)
         return item.verified
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    with ThreadPoolExecutor(max_workers=min(10, max(1,len(targets)))) as pool:
         results = list(pool.map(inspect, [ep for _, ep in targets]))
     return sum(results)
 
