@@ -83,7 +83,7 @@ class ParallelEpisodeTests(unittest.TestCase):
             self.assertEqual(ep['rights_status'],'approved')
             self.assertEqual(ep['license_reference'],'licensed-series-123')
             self.assertEqual(ep['link_health_status'],'healthy')
-        self.assertEqual(len(self.db.history),28)  # A page URL and verified video for each.
+        self.assertEqual(len(self.db.history),29)  # Parent page, plus each episode's page and video.
 
     def test_unlicensed_work_saves_links_without_publication(self):
         parent=self.parent(status='draft',rights='pending',licence='')
