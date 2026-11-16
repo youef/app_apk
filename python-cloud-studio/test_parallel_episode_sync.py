@@ -88,7 +88,7 @@ class ParallelEpisodeTests(unittest.TestCase):
                  patch.object(server.AUTOSYNC,'remember_saved'), \
                  patch.object(server.AUTOSYNC.queue,'queue'):
                 reply=client.post('/api/discover-batch',
-                    json={'urls':first+'\\n'+second,'kind':'series'},
+                    json={'urls':first+'\n'+second,'kind':'series'},
                     headers={'X-CSRF-Token':init.json()['csrf']})
                 self.assertEqual(reply.status_code,200,reply.text)
                 self.assertEqual(reply.json()['auto_save']['status'],'saved')
