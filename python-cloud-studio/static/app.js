@@ -230,8 +230,14 @@
         deep:$('deepScan').checked,metadata:$('autoMetadata').checked});
       app.selected.clear();app.season=1;$('episodeSearch').value='';
       updateStatus(result);
+      const total = result.catalogue.kind==='series' ? result.catalogue.episodes.length+' حلقة' : 'الفيلم';
+      const saved = result.auto_save?.status === 'saved';
+      if(result.auto_save?.status === 'failed'){
+        toast('تم اكتشاف الحلقات، لكن فشل حفظها التلقائي: '+result.auto_save.error,'error');
+      }
       activity(demo?'تم تجهيز نموذج واجهة تجريبي — لا يمكن رفعه إلى Supabase.':
-        `تم اكتشاف ${result.catalogue.kind==='series' ? result.catalogue.episodes.length+' حلقة' : 'الفيلم'}، ويمكنك الآن تعديل البيانات وفحص الروابط.`,'success');
+        saved ? `تم اكتشاف ${total} وحفظها تلقائيًا؛ بدأ فحص روابط التشغيل بعشر مهام متزامنة، وستُنشر الحلقات المرخّصة بعد التحقق.` :
+        `تم اكتشاف ${total}، ويمكنك الآن تعديل البيانات وفحص الروابط.`,'success');
       $('workspace').scrollIntoView({behavior:'smooth',block:'start'});
     });
   }
