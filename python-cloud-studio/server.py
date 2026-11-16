@@ -448,6 +448,7 @@ class DiscoverBatchForm(BaseModel):
     kind: str = 'auto'
     deep: bool = False
     metadata: bool = True
+    auto_save: bool = True
 
 
 @app.post('/api/discover-batch')
@@ -480,13 +481,38 @@ async def discover_batch(request: Request, data: DiscoverBatchForm):
     catalogues,errors=await run_in_threadpool(work)
     if not catalogues:
         raise HTTPException(400,'تعذر اكتشاف الروابط: '+('؛ '.join(x['error'] for x in errors[:2])))
+    auto_save={'status':'preview'}
+    if data.auto_save and state.db is not None:
+        def save_discovered_series():
+            completed=0
+            saved_episodes=0
+            failures=[]
+            with state.lock:
+                for cat in catalogues:
+                    if cat.kind!='series' or not cat.episodes:continue
+                    try:
+                        result=store(cat,state.db,publish=False,rights=False)
+                        AUTOSYNC.remember_saved(cat,result)
+                        if result.get('work_id'):
+                            AUTOSYNC.queue.queue('aseel_series',result['work_id'],refresh=True)
+                        for binding in result.get('bindings',[]):
+                            if binding['table']=='aseel_episodes':
+                                AUTOSYNC.queue.queue('aseel_episodes',binding['id'],refresh=True)
+                        completed+=1
+                        saved_episodes+=len(result.get('bindings',[]))
+                    except Exception as exc:
+                        failures.append({'title':cat.title,'error':clean(exc,120)})
+                AUTOSYNC.wake_event.set()
+            return {'status':'saved' if completed else 'failed' if failures else 'preview',
+                    'works':completed,'episodes':saved_episodes,'failures':failures[:5]}
+        auto_save=await run_in_threadpool(save_discovered_series)
     with state.lock:
         state.catalogues=catalogues
         state.catalogue=catalogues[0]
         state.current_index=0
         state.batch_errors=errors
         state.demo=False
-    return get_summary(state)
+    return {**get_summary(state),'auto_save':auto_save}
 
 
 class SelectCatalogueForm(BaseModel):
