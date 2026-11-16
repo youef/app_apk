@@ -708,19 +708,27 @@ def collect_edge_network(
                         failed += 1
                         continue
                     page = context.new_page()
-                    found: list[str] = []
+                    found: dict[str, dict] = {}
+                    active_player = ""
 
-                    def observe(uri: str):
+                    def observe(uri: str, player_page: str = "", player_label: str = ""):
                         try:
                             url = public_url(uri)
+                            origin = public_url(player_page) if player_page else page_url
                         except (ValueError, TypeError):
                             return
-                        if MEDIA_EXT.search(url) and url not in found:
-                            found.append(url)
+                        if not MEDIA_EXT.search(url):
+                            return
+                        label = clean(player_label, 80) or (urlsplit(origin).hostname or "مشغل")
+                        if url not in found:
+                            found[url] = {"url": url, "label": label, "kind": "direct",
+                                          "page_url": origin, "verified": False}
 
                     def listen_request(request):
                         if WEB_MEDIA.search(request.url):
-                            observe(request.url)
+                            try: origin = request.frame.url
+                            except Exception: origin = page_url
+                            observe(request.url, origin, active_player)
 
                     def listen_response(response):
                         kind = (response.headers.get("content-type") or "").lower()
@@ -728,7 +736,9 @@ def collect_edge_network(
                             name in kind for name in ("application/vnd.apple.mpegurl",
                               "application/x-mpegurl", "video/mp4", "video/webm")
                         ):
-                            observe(response.url)
+                            try: origin = response.request.frame.url
+                            except Exception: origin = page_url
+                            observe(response.url, origin, active_player)
 
                     page.on("request", listen_request)
                     page.on("response", listen_response)
@@ -740,16 +750,38 @@ def collect_edge_network(
                                 markup = frame.content()
                                 if len(markup) <= 1_000_000:
                                     for uri in find_static_media(BeautifulSoup(markup, "html.parser"), frame.url):
-                                        observe(uri)
+                                        observe(uri, frame.url)
                                 # Recognize dynamically assigned currentSrc that is not
                                 # necessarily present in the rendered HTML attributes.
                                 for uri in frame.eval_on_selector_all(
                                     "video, video source, source",
                                     "(nodes) => nodes.map(n=>n.currentSrc||n.src||n.getAttribute('data-src')||'').filter(Boolean)"
                                 )[:25]:
-                                    observe(uri)
+                                    observe(uri, frame.url)
                             except Exception:
                                 pass
+                        # Inspect each available server tab, even after the first media URL.
+                        # Keep each stream associated with this movie/episode only.
+                        for frame in page.frames[:10]:
+                            for selector in ("[data-server]", ".server-item", ".servers-list a",
+                                             ".server-list a", "[class*='server'] button",
+                                             "[class*='server'] a", "[data-player]"):
+                                try:
+                                    controls = frame.locator(selector)
+                                    for index in range(min(controls.count(), 12)):
+                                        control = controls.nth(index)
+                                        if not control.is_visible(): continue
+                                        active_player = clean(control.inner_text(timeout=700), 80) or "مشغل بديل"
+                                        try: control.click(timeout=1200)
+                                        except Exception: continue
+                                        page.wait_for_timeout(450)
+                                        for current in page.frames[:12]:
+                                            try:
+                                                for uri in find_static_media(BeautifulSoup(current.content(), "html.parser"), current.url):
+                                                    observe(uri, current.url, active_player)
+                                            except Exception: pass
+                                except Exception: continue
+                        active_player = ""
                         if not found:
                             selectors = ("video", ".vjs-big-play-button",
                                          ".plyr__control--overlaid", ".jw-icon-display",
@@ -780,18 +812,32 @@ def collect_edge_network(
                                         observe(uri)
                                 except Exception:
                                     pass
-                        candidate = next((u for u in found if u.lower().split("?")[0].endswith(".m3u8")), "")
-                        candidate = candidate or next((u for u in found if MEDIA_EXT.search(u)), "")
-                        if candidate:
-                            # Browser discovery is not the same as successful playback.
-                            if isinstance(entry, Episode):
-                                entry.media_url = candidate
-                                entry.verified = False
-                                entry.error = ""
-                            else:
-                                out.media_url = candidate
-                                out.verified = False
-                            count += 1
+                        if found:
+                            # Store every independent player as a backup. Probing is
+                            # bounded and separate from discovery: failed URLs remain
+                            # visible for diagnostics, not marked healthy by assumption.
+                            from media_resolver import merge_sources
+                            import concurrent.futures
+                            candidates = list(found.values())[:24]
+                            def probe(item):
+                                checked = dict(item)
+                                try:
+                                    ok, error = SourceClient(timeout=7).media_verified(item["url"])
+                                    checked["verified"] = bool(ok)
+                                    checked["error"] = "" if ok else clean(error, 120)
+                                except Exception as exc:
+                                    checked["error"] = clean(type(exc).__name__, 80)
+                                checked["checked_at"] = time.time()
+                                return checked
+                            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                                checked = list(executor.map(probe, candidates))
+                            entry.sources = merge_sources(entry.sources, checked)
+                            preferred = next((row for row in entry.sources if row.get("verified")), None)
+                            if preferred:
+                                entry.media_url = preferred["url"]
+                                entry.verified = True
+                                if isinstance(entry, Episode): entry.error = ""
+                            count += len(checked)
                     except Exception:
                         failed += 1
                     finally:
@@ -899,7 +945,7 @@ def category_for_genres(categories: list[dict], genres: list[str]) -> str:
 
 
 def playback_variants(entry, existing=None) -> list[dict]:
-    """The production player accepts at most eight {label,url} variants."""
+    """Preserve up to 24 independent source URLs with origin and probe metadata."""
     rows, seen = [], {entry.media_url}
     for source in entry.sources + (existing or []):
         if not isinstance(source, dict): continue
@@ -909,8 +955,8 @@ def playback_variants(entry, existing=None) -> list[dict]:
         except ValueError: continue
         if source.get('error') and not source.get('verified') and not source.get('reachable'): continue
         seen.add(url)
-        rows.append({k: source[k] for k in ('url', 'label', 'kind', 'page_url') if k in source})
-    return rows[:8]
+        rows.append({k: source[k] for k in ('url', 'label', 'kind', 'page_url', 'verified') if k in source})
+    return rows[:24]
 
 
 def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:str="",
