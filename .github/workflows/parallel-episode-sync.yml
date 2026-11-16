@@ -1,0 +1,32 @@
+name: Al Ezz TV - Ten parallel episode sync
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'python-cloud-studio/auto_sync.py'
+      - 'python-cloud-studio/alezz_fetchv_importer.py'
+      - 'python-cloud-studio/test_parallel_episode_sync.py'
+      - '.github/workflows/parallel-episode-sync.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  parallel-episodes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install test dependencies
+        run: python -m pip install -r python-cloud-studio/requirements-dev.txt
+      - name: Check Python syntax
+        run: python -m compileall -q python-cloud-studio
+      - name: Verify ten simultaneous episode link saves and publication guard
+        working-directory: python-cloud-studio
+        env:
+          ALEZZ_AUTOSYNC_ENABLED: '0'
+          ALEZZ_EPISODE_PARALLEL: '10'
+          ALEZZ_AUTOSYNC_CONCURRENCY: '10'
+        run: python -m unittest -v test_parallel_episode_sync
