@@ -6,7 +6,7 @@ import time
 import unittest
 from unittest.mock import patch
 
-from alezz_fetchv_importer import Catalogue, Episode
+from alezz_fetchv_importer import Catalogue, Episode, store
 from auto_sync import AutoSync
 from test_auto_sync import FakeDB, FakeResolver, NOW, SERIES, uid
 
@@ -69,6 +69,43 @@ class ParallelEpisodeTests(unittest.TestCase):
             found=conn.execute('select * from auto_jobs where table_name=? and target_id=?',
                 ('aseel_series',row['id'])).fetchone()
         return dict(found)
+
+    def test_initial_auto_save_inherits_evidenced_work_license_without_publishing_unverified_video(self):
+        parent=self.parent()
+        cat=Catalogue(kind='series',title='Authorized series',url=SERIES,episodes=[
+            Episode(1,1,'الحلقة 1','https://source.example.org/episode/1'),
+            Episode(1,2,'الحلقة 2','https://source.example.org/episode/2')])
+        result=store(cat,self.db,publish=False,rights=False)
+        self.assertEqual(result['episodes_new'],2)
+        for row in self.db.rows['aseel_episodes'].values():
+            self.assertEqual(row['rights_status'],'approved')
+            self.assertEqual(row['license_reference'],'licensed-series-123')
+            self.assertEqual(row['status'],'draft')
+        self.assertEqual(self.db.rows['aseel_series'][parent['id']]['status'],'published')
+
+    def test_api_discovery_auto_saves_series_without_clicking_publish(self):
+        from fastapi.testclient import TestClient
+        import server
+        cat=Catalogue(kind='series',title='Authorized series',url=SERIES,episodes=[
+            Episode(1,1,'الحلقة 1','https://source.example.org/episode/1')])
+        with patch.object(server.cloud_auth,'ENABLED',False):
+            client=TestClient(server.app)
+            init=client.get('/api/init')
+            self.assertEqual(init.status_code,200)
+            sid=client.cookies.get(server.COOKIE)
+            server._states[sid].db=self.db
+            with patch.object(server,'discover_full',return_value=cat), \
+                 patch.object(server.AUTOSYNC,'remember_saved') as remember, \
+                 patch.object(server.AUTOSYNC.queue,'queue') as queued:
+                reply=client.post('/api/discover',json={'url':SERIES,'kind':'series'},
+                    headers={'X-CSRF-Token':init.json()['csrf']})
+                self.assertEqual(reply.status_code,200,reply.text)
+                self.assertEqual(reply.json()['auto_save']['status'],'saved')
+                self.assertEqual(reply.json()['auto_save']['episodes'],1)
+                remember.assert_called_once()
+                self.assertGreaterEqual(queued.call_count,2)
+        self.assertEqual(len(self.db.rows['aseel_episodes']),1)
+        self.assertEqual(next(iter(self.db.rows['aseel_episodes'].values()))['status'],'draft')
 
     def test_ten_concurrent_saves_publish_licensed_episodes_by_identity(self):
         parent=self.parent()
