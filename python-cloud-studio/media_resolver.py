@@ -11,6 +11,7 @@ import html as html_lib
 import json
 import os
 import re
+import threading
 import time
 from urllib.parse import parse_qs, urljoin, urlsplit, urlunsplit
 
@@ -18,6 +19,8 @@ from bs4 import BeautifulSoup
 from alezz_fetchv_importer import MEDIA_EXT, SourceClient, check_dns, clean, find_static_media, public_url
 
 MAX_CANDIDATES = 128
+# Keep Chromium memory bounded while the ten HTTP episode probes run in parallel.
+_HEADLESS_SLOTS = threading.BoundedSemaphore(2)
 
 
 def safe_error(exc) -> str:
@@ -167,9 +170,10 @@ class MediaResolver:
 
     def _browser(self, pages):
         sources, errors = [], []
-        for url in self._pages(pages)[:3]:
-            try: sources = merge_sources(sources, self.browser_capture(url))
-            except Exception as exc: errors.append(safe_error(exc))
+        with _HEADLESS_SLOTS:
+            for url in self._pages(pages)[:3]:
+                try: sources = merge_sources(sources, self.browser_capture(url))
+                except Exception as exc: errors.append(safe_error(exc))
         return sources, errors
 
     def _http(self, pages: list[str]) -> tuple[list[dict], list[str]]:
