@@ -631,7 +631,8 @@ class AutoSync:
                                  table,identifier)
         except Exception as exc:
             # One failed episode never blocks the other nine or loses its page.
-            self.queue.queue(table,identifier,refresh=True)
+            self.queue.update(table,identifier,next_check=self.clock()+60,
+                              next_refresh=self.clock()+60,error=safe_error(exc))
             self.queue.event('episode_quick_error',safe_error(exc),table,identifier)
 
     def discover_series(self,job,remote_db=None,progress_hook=None):
