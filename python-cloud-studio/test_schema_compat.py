@@ -4,7 +4,7 @@ No external network access, credentials or writes are needed.
 """
 import unittest
 
-from alezz_fetchv_importer import Catalogue, Episode, store
+from alezz_fetchv_importer import Catalogue, Episode, store, playback_variants, MAX_PLAYBACK_VARIANTS
 from test_importer import FakeDB
 
 
@@ -37,6 +37,17 @@ class SchemaCheckedDB(FakeDB):
     def patch(self, table, id, payload):
         self._validate(table, payload)
         return super().patch(table, id, payload)
+
+
+
+class VariantConstraintDB(SchemaCheckedDB):
+    """Mirror production constraints to catch overlong playback arrays offline."""
+    def _validate(self, table, payload):
+        super()._validate(table, payload)
+        if table in ('aseel_movies', 'aseel_episodes') and 'stream_variants' in payload:
+            variants = payload['stream_variants']
+            if not isinstance(variants, list) or len(variants) > MAX_PLAYBACK_VARIANTS:
+                raise ValueError('aseel_episode_variants_array / aseel_movie_variants_array')
 
 
 def series():
@@ -90,6 +101,38 @@ class SchemaCompatTests(unittest.TestCase):
                        license_holder='Movie Rights Owner', license_reference='movie-licensed-2026')
         self.assertEqual(result['works_new'], 1)
         self.assertEqual(db.rows['aseel_movies'][0]['rights_holder'], 'Movie Rights Owner')
+
+    def test_many_episode_sources_do_not_violate_live_jsonb_check(self):
+        cat = series()
+        ep = cat.episodes[0]
+        ep.sources = [dict(url=f'https://video.example.org/e1-alternative-{i}.m3u8',
+                           kind='direct', label=f'Player {i}', verified=True)
+                      for i in range(16)]
+        db = VariantConstraintDB()
+        first = store(cat, db, publish=False, rights=False)
+        self.assertEqual(first['episodes_new'], 2)
+        self.assertEqual(len(db.rows['aseel_episodes'][0]['stream_variants']), MAX_PLAYBACK_VARIANTS)
+        second = store(cat, db, publish=False, rights=False)
+        self.assertEqual(second['episodes_updated'], 2)
+        self.assertEqual(len(db.rows['aseel_episodes'][0]['stream_variants']), MAX_PLAYBACK_VARIANTS)
+        self.assertEqual(len(ep.sources), 16)  # Remaining sources still available to AutoSync.
+
+    def test_many_movie_sources_do_not_violate_live_jsonb_check(self):
+        cat = Catalogue(kind='movie', title='Film with player failovers',
+                        url='https://content.example.org/movie-many-players',
+                        media_url='https://video.example.org/main.mp4', verified=True)
+        cat.sources = [dict(url=f'https://video.example.org/movie-{i}.mp4',
+                            kind='direct', label=f'Player {i}', verified=True)
+                       for i in range(16)]
+        db = VariantConstraintDB()
+        first = store(cat, db, publish=False, rights=False)
+        self.assertEqual(first['works_new'], 1)
+        self.assertEqual(len(db.rows['aseel_movies'][0]['stream_variants']), MAX_PLAYBACK_VARIANTS)
+        again = store(cat, db, publish=False, rights=False)
+        self.assertEqual(again['works_updated'], 1)
+        self.assertEqual(len(db.rows['aseel_movies'][0]['stream_variants']), MAX_PLAYBACK_VARIANTS)
+        self.assertEqual(len(cat.sources), 16)
+        self.assertEqual(len(playback_variants(cat)), MAX_PLAYBACK_VARIANTS)
 
 
 if __name__ == '__main__':
