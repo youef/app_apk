@@ -305,6 +305,7 @@ class DiscoverForm(BaseModel):
     kind: str = 'auto'
     deep: bool = True
     metadata: bool = True
+    auto_save: bool = True  # Signed-in series imports persist automatically as drafts.
 
 
 
@@ -354,10 +355,31 @@ async def discover(request: Request, data: DiscoverForm):
     try:
         source = public_url(data.url)
         cat = await run_in_threadpool(lambda: discover_full(source, data.kind, deep=data.deep, enrich_metadata=data.metadata))
+        auto_save={'status':'preview'}
+        if data.auto_save and cat.kind=='series' and cat.episodes and state.db is not None:
+            # Importing episodes no longer requires pressing either Save or Publish.
+            # New/unlicensed entries remain private; licensed shows retain approval.
+            def persist_discovery():
+                with state.lock:
+                    result=store(cat,state.db,publish=False,rights=False)
+                    AUTOSYNC.remember_saved(cat,result)
+                    if result.get('work_id'):
+                        AUTOSYNC.queue.queue('aseel_series',result['work_id'],refresh=True)
+                    for binding in result.get('bindings',[]):
+                        if binding['table']=='aseel_episodes':
+                            AUTOSYNC.queue.queue('aseel_episodes',binding['id'],refresh=True)
+                    AUTOSYNC.wake_event.set()
+                    return result
+            try:
+                saved=await run_in_threadpool(persist_discovery)
+                auto_save={'status':'saved','episodes':len(saved.get('bindings',[])),
+                           'new':saved.get('episodes_new',0)}
+            except Exception as save_exc:
+                auto_save={'status':'failed','error':clean(save_exc,150)}
         with state.lock:
             state.catalogue, state.catalogues, state.batch_errors = cat, [cat], []
             state.current_index, state.demo = 0, False
-        return get_summary(state)
+        return {**get_summary(state),'auto_save':auto_save}
     except Exception as exc:
         raise HTTPException(400, 'تعذر اكتشاف المصدر: ' + clean(exc, 180)) from None
 
