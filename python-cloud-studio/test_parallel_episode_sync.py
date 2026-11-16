@@ -153,7 +153,7 @@ class ParallelEpisodeTests(unittest.TestCase):
         self.assertEqual(episodes[0]['status'],'hidden')
         self.assertEqual(episodes[0]['link_health_status'],'healthy')
 
-    def test_delayed_browser_retry_also_auto_publishes_licensed_episode(self):
+    def test_scheduled_retry_also_auto_publishes_licensed_episode(self):
         parent=self.parent()
         season=self.db.seed('aseel_seasons',dict(id=uid('browser-retry-season'),
             series_id=parent['id'],number=1,title_ar='الموسم 1'))
@@ -165,7 +165,7 @@ class ParallelEpisodeTests(unittest.TestCase):
             source_page_url=page,stream_url=''))
         self.worker.queue.ingest('aseel_episodes',ep)
         self.worker.resolver_factory=lambda:FakeResolver(
-            healthy=(stream,),browser=[dict(url=stream,kind='direct',page_url=page)])
+            healthy=(stream,),fresh=[dict(url=stream,kind='direct',page_url=page)])
         with self.worker.queue.db() as conn:
             job=dict(conn.execute('select * from auto_jobs where table_name=? and target_id=?',
                 ('aseel_episodes',ep['id'])).fetchone())
