@@ -539,8 +539,11 @@ class AutoSync:
             updated=dict(conn.execute('select * from auto_jobs where table_name=? and target_id=?',(table,identifier)).fetchone())
         report('save','حفظ حالة المشغل وموعد تجديده',0.94)
         self.flush(updated,remote_db=remote_db)
+        published=False
+        if good and table=='aseel_episodes':
+            published=self._publish_verified_episode(remote_db or self.db,identifier)
         report('done','اكتمل فحص المشغل',1.0)
-        return {'status':status,'renewed':selected!=job['stream_url'],
+        return {'status':status,'published':published,'renewed':selected!=job['stream_url'],
                 'stream_url':selected,'next_check':next_check,'next_refresh':next_refresh,
                 'error':error,'extracted':extracted}
 
@@ -622,7 +625,7 @@ class AutoSync:
             if not row:return
             result=self.check_target(dict(row),remote_db=db,quick=True)
             if result and result['status']=='healthy':
-                published=self._publish_verified_episode(db,identifier)
+                published=result.get('published',False)
                 self.queue.event('episode_link_saved',
                     'حُفظ رابط الحلقة وتأكد تشغيله' + (' ونُشرت تلقائيًا' if published else ''),
                     table,identifier)
@@ -717,6 +720,7 @@ class AutoSync:
                     # Healthy, current episodes are not pointlessly rechecked.
                     needs_check=(newly_created or not old.get('stream_url')
                         or old.get('link_health_status')!='healthy'
+                        or (old.get('status')=='draft' and old.get('rights_status')=='approved')
                         or 0<expires_at(old.get('stream_url') or '')<=self.clock()+3600)
                     if (episode.page_url!=cat.url and needs_check
                             and old['id'] not in scheduled):
