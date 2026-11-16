@@ -2,11 +2,12 @@
 
 The queue and history are committed before remote writes. Network failures use
 backoff; a crash releases a short task lease. Only verified replacements change
-stream_url. This module never changes rights or publication of existing rows.
+stream_url. Rights remain unchanged. Verified episodes may auto-publish only with existing
+approved work and episode licensing; hidden content never becomes public.
 """
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, FIRST_COMPLETED, wait
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
@@ -308,7 +309,8 @@ class AutoSync:
         self.clock=clock
         self.interval=max(1,float(os.getenv('ALEZZ_AUTOSYNC_INTERVAL_HOURS','24')))*3600
         self.mode=os.getenv('ALEZZ_AUTOSYNC_MODE','auto')
-        self.concurrency=max(1,min(4,int(os.getenv('ALEZZ_AUTOSYNC_CONCURRENCY','2'))))
+        self.concurrency=max(1,min(10,int(os.getenv('ALEZZ_AUTOSYNC_CONCURRENCY','10'))))
+        self.episode_workers=max(1,min(10,int(os.getenv('ALEZZ_EPISODE_PARALLEL','10'))))
         self.db_factory=db_factory or self._environment_db
         self.resolver_factory=resolver_factory or (lambda:MediaResolver(self.mode))
         self.stop_event=threading.Event();self.wake_event=threading.Event()
@@ -427,7 +429,7 @@ class AutoSync:
             self.queue.event('task_error',safe_error(exc),table,identifier)
         finally:self.queue.update(table,identifier,lease_until=0)
 
-    def check_target(self,job,remote_db=None,progress_hook=None):
+    def check_target(self,job,remote_db=None,progress_hook=None,quick=False):
         """Shared health engine used by autonomous and immediate operator scans."""
         report=progress_hook or (lambda stage,message,amount:None)
         now=self.clock();table,identifier=job['table_name'],job['target_id']
@@ -435,6 +437,9 @@ class AutoSync:
         sources=self.queue.sources(table,identifier)
         pages=[r['url'] for r in sources if r['kind']=='original']
         resolver=self.resolver_factory()
+        # The ten-way first pass is HTTP-only: Chromium fallback is retried by
+        # the regular maintenance queue, avoiding ten simultaneous browsers.
+        if quick and isinstance(resolver,MediaResolver): resolver.mode='http'
         candidates=[dict(url=r['url'],kind=r['kind'],label=r['label'],page_url=r['page_url'])
                     for r in sources if r['kind']!='original']
         # Permanent/unknown-expiry links only need a health probe every 48h.
@@ -463,7 +468,7 @@ class AutoSync:
         report('verify','التحقق من روابط التشغيل الفعلية',0.58)
         checked=resolver.check(candidates)
         good=[s for s in checked if s.get('verified') and s.get('kind','direct')=='direct']
-        if not good and pages and not browser_requested:
+        if not good and pages and not browser_requested and not quick:
             # Includes retry of expired HTTP discoveries with conditional headless fallback.
             fresh,extra=resolver.extract(pages,force_browser=self.mode!='http')
             extracted=True
@@ -508,6 +513,10 @@ class AutoSync:
             next_refresh=now+10*365*86400  # no scheduled re-extraction
         else:
             next_refresh=next_check if pages else now+10*365*86400
+        if quick and not good and pages:
+            # Queue an independent full/browser retry shortly after the fast pass.
+            next_check=now+60
+            next_refresh=now+60
         allowed={s['url'] for s in checked if s.get('verified') or s.get('kind')=='embed' and s.get('reachable')}
         variants=[]
         for source in sorted(history,key=lambda s:(s['kind']=='direct',s['confidence']),reverse=True):
@@ -577,6 +586,54 @@ class AutoSync:
                 conn.execute('update auto_jobs set dirty=\'\',upload_at=0 where table_name=? and target_id=? and dirty=?',
                              (table,identifier,job['dirty']))
 
+    def _publish_verified_episode(self, db, identifier):
+        """Publish only explicitly licensed episodes of licensed shows; never unhide."""
+        episode=db.single('aseel_episodes',{'id':'eq.'+identifier,
+            'select':'id,season_id,status,rights_status,license_reference'})
+        if not episode or episode.get('status')!='draft' or episode.get('rights_status')!='approved':
+            return False
+        if not (episode.get('license_reference') or '').strip():
+            return False
+        season=db.single('aseel_seasons',{'id':'eq.'+episode['season_id'],'select':'id,series_id'})
+        if not season:return False
+        show=db.single('aseel_series',{'id':'eq.'+season['series_id'],
+            'select':'id,status,rights_status,license_reference'})
+        if not show or show.get('status') not in ('draft','published'):
+            return False
+        if show.get('rights_status')!='approved' or not (show.get('license_reference') or '').strip():
+            return False
+        # A series may have been licensed but left as a draft: an independently
+        # verified licensed episode is the first safe automatic publishing event.
+        if show['status']=='draft':
+            db.patch('aseel_series',show['id'],{'status':'published'})
+        db.patch('aseel_episodes',identifier,{'status':'published'})
+        self.queue.event('episode_published','تم نشر الحلقة المرخصة بعد نجاح فحص الرابط',
+                         'aseel_episodes',identifier)
+        return True
+
+    def _sync_discovered_episode(self, identifier, db):
+        """Save a discovered episode link independently, while its siblings run."""
+        if self.stop_event.is_set():return
+        table='aseel_episodes'
+        try:
+            with self.queue.db() as conn:
+                row=conn.execute('select * from auto_jobs where table_name=? and target_id=?',
+                                 (table,identifier)).fetchone()
+            if not row:return
+            result=self.check_target(dict(row),remote_db=db,quick=True)
+            if result and result['status']=='healthy':
+                published=self._publish_verified_episode(db,identifier)
+                self.queue.event('episode_link_saved',
+                    'حُفظ رابط الحلقة وتأكد تشغيله' + (' ونُشرت تلقائيًا' if published else ''),
+                    table,identifier)
+            else:
+                self.queue.event('episode_link_retry','لم يثبت تشغيل الرابط؛ أُدرج لإعادة الفحص',
+                                 table,identifier)
+        except Exception as exc:
+            # One failed episode never blocks the other nine or loses its page.
+            self.queue.queue(table,identifier,refresh=True)
+            self.queue.event('episode_quick_error',safe_error(exc),table,identifier)
+
     def discover_series(self,job,remote_db=None,progress_hook=None):
         if min(job['next_refresh'],job['next_check'])>self.clock():return
         db=remote_db or self.db
@@ -589,64 +646,95 @@ class AutoSync:
             self.queue.update(table,identifier,next_check=self.clock()+self.interval,next_refresh=self.clock()+self.interval,
                               error='مصدر المسلسل الأصلي مفقود؛ فحص الحلقات المحفوظة مستمر')
             return
-        for page in pages:
-            def checkpoint(data):
-                self.queue.update(table,identifier,checkpoint=json.dumps(data,ensure_ascii=False))
-                report('series','اكتشاف صفحات المواسم والحلقات',0.07)
-            cat=pull_html(page,SourceClient(timeout=12),kind='series',max_pages=500,max_episodes=5000,
-                resume_progress=json.loads(job['checkpoint']),progress_hook=checkpoint)
-            # A series is a durable source: refresh missing artwork/metadata
-            # and discover newly released seasons without disturbing curated fields.
-            if cat.episodes:
-                report('series','استكمال بيانات الحلقات والصور',0.12)
-                hydrate_episode_metadata(cat,max_pages=80,workers=6)
-            show=db.single('aseel_series',{'id':'eq.'+identifier,
-                'select':'id,poster_url,backdrop_url,description'})
-            if show:
-                artwork={}
-                for field,value in (('poster_url',cat.poster_url),
-                                    ('backdrop_url',cat.backdrop_url),
-                                    ('description',cat.description)):
-                    if value and not show.get(field): artwork[field]=value
-                if artwork:db.patch('aseel_series',identifier,artwork)
-            seasons={}
-            report('series','ربط الحلقات بالمواسم',0.16)
-            for episode_number,episode in enumerate(cat.episodes,1):
-                if episode_number==1 or episode_number%10==0:
-                    report('series','حفظ الحلقة '+str(episode_number)+' من '+str(len(cat.episodes)),
-                           0.16+0.04*episode_number/max(1,len(cat.episodes)))
-                if self.stop_event.is_set():return
-                if episode.season not in seasons:
-                    season=db.single('aseel_seasons',{'series_id':'eq.'+identifier,'number':'eq.'+str(episode.season),'select':'id'})
-                    if not season:season=db.insert('aseel_seasons',dict(series_id=identifier,number=episode.season,title_ar='الموسم '+str(episode.season)))
-                    seasons[episode.season]=season['id']
-                old=db.single('aseel_episodes',{'season_id':'eq.'+seasons[episode.season],'number':'eq.'+str(episode.number),'select':'*'})
-                if not old:
-                    old=db.insert('aseel_episodes',dict(season_id=seasons[episode.season],number=episode.number,
-                        title_ar=content_title(episode.title,page,fallback='الحلقة '+str(episode.number)),
-                        description=episode.description or None,poster_url=episode.poster_url or None,
-                        source_page_url=episode.page_url if episode.page_url!=cat.url else None,status='draft',rights_status='pending'))
-                    self.queue.event('new_episode','تم اكتشاف حلقة جديدة وحفظها مسودة', 'aseel_episodes',old['id'])
-                elif old:
-                    changes={}
-                    if not old.get('source_page_url') and episode.page_url!=cat.url:
-                        changes['source_page_url']=episode.page_url
-                    if not old.get('poster_url') and episode.poster_url:
-                        changes['poster_url']=episode.poster_url
-                    if not old.get('description') and episode.description:
-                        changes['description']=episode.description
-                    if changes:
-                        db.patch('aseel_episodes',old['id'],changes)
-                        old.update(changes)
-                self.queue.ingest('aseel_episodes',old)
-                if episode.page_url!=cat.url:self.queue.remember('aseel_episodes',old['id'],dict(url=episode.page_url,kind='original'))
-            for warning in cat.discovery_warnings:
-                self.queue.event('episode_gap',warning,table,identifier)
+        scheduled=set()
+        with ThreadPoolExecutor(max_workers=self.episode_workers) as pool:
+            in_flight=set()
+            for page in pages:
+                def checkpoint(data):
+                    self.queue.update(table,identifier,checkpoint=json.dumps(data,ensure_ascii=False))
+                    report('series','اكتشاف صفحات المواسم والحلقات',0.07)
+                cat=pull_html(page,SourceClient(timeout=12),kind='series',max_pages=500,max_episodes=5000,
+                    resume_progress=json.loads(job['checkpoint']),progress_hook=checkpoint)
+                if cat.episodes:
+                    report('series','استكمال بيانات الحلقات والصور بعشر دفعات متزامنة',0.12)
+                    hydrate_episode_metadata(cat,max_pages=120,workers=self.episode_workers)
+                show=db.single('aseel_series',{'id':'eq.'+identifier,
+                    'select':'id,poster_url,backdrop_url,description,status,rights_status,license_reference'})
+                if show:
+                    artwork={}
+                    for field,value in (('poster_url',cat.poster_url),
+                                        ('backdrop_url',cat.backdrop_url),
+                                        ('description',cat.description)):
+                        if value and not show.get(field): artwork[field]=value
+                    if artwork:db.patch('aseel_series',identifier,artwork)
+                # Inherit a work-wide license only when explicitly approved and
+                # evidenced; missing rights always leave new episodes in drafts.
+                approved=bool(show and show.get('rights_status')=='approved'
+                    and show.get('status') in ('draft','published')
+                    and (show.get('license_reference') or '').strip())
+                seasons={}
+                report('series','ربط الحلقات بالمواسم وتشغيل الفحص المتزامن',0.16)
+                for episode_number,episode in enumerate(cat.episodes,1):
+                    if episode_number==1 or episode_number%10==0:
+                        report('series','حفظ وفحص الحلقة '+str(episode_number)+' من '+str(len(cat.episodes)),
+                               0.16+0.04*episode_number/max(1,len(cat.episodes)))
+                    if self.stop_event.is_set():return
+                    if episode.season not in seasons:
+                        season=db.single('aseel_seasons',{'series_id':'eq.'+identifier,
+                            'number':'eq.'+str(episode.season),'select':'id'})
+                        if not season:
+                            season=db.insert('aseel_seasons',dict(series_id=identifier,
+                                number=episode.season,title_ar='الموسم '+str(episode.season)))
+                        seasons[episode.season]=season['id']
+                    old=db.single('aseel_episodes',{'season_id':'eq.'+seasons[episode.season],
+                        'number':'eq.'+str(episode.number),'select':'*'})
+                    newly_created=not old
+                    if newly_created:
+                        payload=dict(season_id=seasons[episode.season],number=episode.number,
+                            title_ar=content_title(episode.title,page,fallback='الحلقة '+str(episode.number)),
+                            description=episode.description or None,poster_url=episode.poster_url or None,
+                            source_page_url=episode.page_url if episode.page_url!=cat.url else None,
+                            status='draft',rights_status='approved' if approved else 'pending')
+                        if approved:payload['license_reference']=show['license_reference']
+                        old=db.insert('aseel_episodes',payload)
+                        self.queue.event('new_episode','تم اكتشاف حلقة جديدة وحفظها',table,old['id'])
+                    else:
+                        changes={}
+                        if not old.get('source_page_url') and episode.page_url!=cat.url:
+                            changes['source_page_url']=episode.page_url
+                        if not old.get('poster_url') and episode.poster_url:
+                            changes['poster_url']=episode.poster_url
+                        if not old.get('description') and episode.description:
+                            changes['description']=episode.description
+                        if changes:
+                            db.patch('aseel_episodes',old['id'],changes)
+                            old.update(changes)
+                    self.queue.ingest('aseel_episodes',old)
+                    if episode.page_url!=cat.url:
+                        self.queue.remember('aseel_episodes',old['id'],
+                                            dict(url=episode.page_url,kind='original'))
+                    # Healthy, current episodes are not pointlessly rechecked.
+                    needs_check=(newly_created or not old.get('stream_url')
+                        or old.get('link_health_status')!='healthy'
+                        or 0<expires_at(old.get('stream_url') or '')<=self.clock()+3600)
+                    if (episode.page_url!=cat.url and needs_check
+                            and old['id'] not in scheduled):
+                        scheduled.add(old['id'])
+                        self.queue.queue('aseel_episodes',old['id'],refresh=True)
+                        in_flight.add(pool.submit(self._sync_discovered_episode,old['id'],db))
+                        if len(in_flight)>=self.episode_workers*2:
+                            done,in_flight=wait(in_flight,return_when=FIRST_COMPLETED)
+                            for completed in done:completed.result()
+                for warning in cat.discovery_warnings:
+                    self.queue.event('episode_gap',warning,table,identifier)
+            # The first episode is saved as soon as its own probe succeeds;
+            # finishing the rest does not roll back already-saved siblings.
+            for completed in in_flight:completed.result()
         now=self.clock()
         self.queue.update(table,identifier,next_check=now+self.interval,next_refresh=now+self.interval,
                           last_check=now,last_refresh=now,failures=0,error='',checkpoint='{}')
         self.flush(job,remote_db=remote_db)
-        report('series','اكتمل استيراد المواسم والحلقات',0.20)
+        report('series','اكتمل حفظ روابط الحلقات المتزامن',1.0)
 
     def control(self,action):
         if action in ('pause','resume'):self.queue.setting('enabled',action=='resume')
