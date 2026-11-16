@@ -820,7 +820,7 @@
     preferredQuality = String(Store.pref("source:"+(item.key||"video"), "auto")||"auto");
     function appendSource(raw,label){
       var type=sourceKind(raw),url=canonicalSource(raw);
-      if(!isPlayableUrl(raw)||(item.kids&&type!=="mp4"&&type!=="hls")||qualitySources.length>=9)return;
+      if(!isPlayableUrl(raw)||(item.kids&&type!=="mp4"&&type!=="hls")||qualitySources.length>=25)return;
       if(qualitySources.some(function(s){return s.url===url;}))return;
       qualitySources.push({url:url,label:String(label||sourceTypeLabel(type)).trim().slice(0,36),type:type});
     }
