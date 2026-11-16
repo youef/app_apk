@@ -30,6 +30,7 @@ try:
 except ImportError as exc:
     raise SystemExit("Install dependencies: python -m pip install -r requirements.txt") from exc
 
+MAX_PLAYBACK_VARIANTS = 8  # Production CHECK constraint on movies and episodes.
 MEDIA_EXT = re.compile(r"\.(?:mp4|m4v|webm|m3u8)(?:[?#]|$)", re.I)
 WEB_MEDIA = re.compile(r"\.(?:mp4|m4v|webm|m3u8|mpd)(?:[?#]|$)", re.I)
 EP_RE = re.compile(r"(?:\bS(\d{1,2})[.\-_ ]?E(\d{1,3})\b|(?:الحلقة|الحلقه|episode|ep)[\s:_#-]*(\d{1,3}))", re.I)
@@ -945,7 +946,7 @@ def category_for_genres(categories: list[dict], genres: list[str]) -> str:
 
 
 def playback_variants(entry, existing=None) -> list[dict]:
-    """Preserve up to 24 independent source URLs with origin and probe metadata."""
+    """Keep the database playback array within its limit; AutoSync archives all sources separately."""
     rows, seen = [], {entry.media_url}
     for source in entry.sources + (existing or []):
         if not isinstance(source, dict): continue
@@ -956,7 +957,7 @@ def playback_variants(entry, existing=None) -> list[dict]:
         if source.get('error') and not source.get('verified') and not source.get('reachable'): continue
         seen.add(url)
         rows.append({k: source[k] for k in ('url', 'label', 'kind', 'page_url', 'verified') if k in source})
-    return rows[:24]
+    return rows[:MAX_PLAYBACK_VARIANTS]
 
 
 def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:str="",
