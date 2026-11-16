@@ -128,7 +128,7 @@ class ParallelEpisodeTests(unittest.TestCase):
         with self.worker.queue.db() as conn:
             pending=conn.execute('select next_check from auto_jobs where table_name=? and target_id=?',
                 ('aseel_episodes',by_number[3]['id'])).fetchone()
-        self.assertGreaterEqual(pending['next_check'],NOW)
+        self.assertEqual(pending['next_check'],NOW+60)
 
 
 if __name__=='__main__':
