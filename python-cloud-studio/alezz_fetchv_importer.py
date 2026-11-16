@@ -468,7 +468,7 @@ def pull_html(url: str, client: SourceClient, kind: str="auto", max_seasons: int
     count=0
     while queued and count<max_pages and len(episode_map)<max_episodes:
         slice_urls=[]
-        while queued and len(slice_urls)<5:
+        while queued and len(slice_urls)<10:
             page=queued.pop(0)
             if page.rstrip('/') in seen_pages:continue
             slice_urls.append(page)
@@ -588,7 +588,7 @@ def inspect_episodes(out: Catalogue, client: SourceClient, delay: float=.15):
         if delay:time.sleep(delay)
 
 
-def hydrate_episode_metadata(cat: Catalogue, *, max_pages:int=150, workers:int=6) -> int:
+def hydrate_episode_metadata(cat: Catalogue, *, max_pages:int=150, workers:int=10) -> int:
     """Concurrent metadata-only episode lookups from public HTTPS pages; never unlock streams."""
     if cat.kind!="series":return 0
     from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -613,7 +613,7 @@ def hydrate_episode_metadata(cat: Catalogue, *, max_pages:int=150, workers:int=6
             return ep,description,poster,(media[0] if media else "")
         except (OSError,ValueError,requests.RequestException):return None
     done=0
-    with ThreadPoolExecutor(max_workers=max(1,min(workers,8))) as executor:
+    with ThreadPoolExecutor(max_workers=max(1,min(workers,10))) as executor:
         for future in as_completed([executor.submit(load,ep) for ep in targets]):
             result=future.result()
             if result is None:continue
