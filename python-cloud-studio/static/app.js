@@ -195,7 +195,12 @@
       const result=await API('discover-batch',{urls,kind:$('sourceKind').value,
          deep:$('deepScan').checked,metadata:$('autoMetadata').checked});
       app.selected.clear();app.season=1;$('episodeSearch').value='';updateStatus(result);
-      activity(`اكتُشف ${result.batch.length} عملًا مع ${result.batch.reduce((n,w)=>n+w.episodes,0)} حلقة. راجع الأعمال ثم احفظ الدفعة.`, 'success');
+      const sync = result.auto_save || {};
+      const syncNote=sync.status==='saved'
+        ? ` حُفظ ${sync.works} مسلسلًا و${sync.episodes} حلقة تلقائيًا، وبدأ فحص الروابط بعشر مهام متزامنة.`
+        : ' يمكنك مراجعة الأعمال ثم حفظها.';
+      activity(`اكتُشف ${result.batch.length} عملًا مع ${result.batch.reduce((n,w)=>n+w.episodes,0)} حلقة.${syncNote}`, 'success');
+      if(sync.failures?.length)toast('تعذّر الحفظ التلقائي لبعض الأعمال: '+sync.failures.map(x=>x.title).join('، '),'error');
       if(result.batch_errors.length)toast(`${result.batch_errors.length} رابطًا لم يُكتشف؛ راجع النتائج.`, 'error');
     });
   }
