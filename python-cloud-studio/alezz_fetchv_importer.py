@@ -997,10 +997,10 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
         result['work_id'] = movie['id']
         result['bindings'].append(dict(season=0,number=0,id=movie['id'],table='aseel_movies'))
         return result
-    series=db.single("aseel_series",{"select":"id,title_ar","source_page_url":"eq."+cat.url})
-    if not series: series=db.single("aseel_series",{"select":"id,title_ar","title_ar":"eq."+cat.title})
+    series=db.single("aseel_series",{"select":"id,title_ar,status,rights_status,license_reference","source_page_url":"eq."+cat.url})
+    if not series: series=db.single("aseel_series",{"select":"id,title_ar,status,rights_status,license_reference","title_ar":"eq."+cat.title})
     if not series and cat.original_title and cat.year:
-        series=db.single("aseel_series",{"select":"id,title_ar","title_original":"eq."+cat.original_title,
+        series=db.single("aseel_series",{"select":"id,title_ar,status,rights_status,license_reference","title_original":"eq."+cat.original_title,
                                           "release_year":"eq."+str(cat.year)})
     if series:
         # Do not silently change existing rights or publication status on draft updates.
@@ -1010,6 +1010,11 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
     else:
         series=db.insert("aseel_series",{**fields,'source_page_url':cat.url,**work_rights})
         result["works_new"]+=1
+    # New episodes may inherit an existing explicitly approved show-wide license.
+    # A new or unlicensed series stays pending; we never approve rights by guessing.
+    series_license=(series.get("license_reference") or "").strip()
+    can_inherit_license=(series.get("rights_status")=="approved" and bool(series_license)
+                         and series.get("status") in ("published","draft"))
     seasons={}
     for ep in cat.episodes:
         if ep.season not in seasons:
@@ -1033,8 +1038,9 @@ def store(cat:Catalogue,db:Supabase,*,publish:bool,rights:bool,license_holder:st
             db.patch("aseel_episodes",old["id"],{**payload,**({"status":"published","rights_status":"approved"} if publish and rights else {})})
             result["episodes_updated"]+=1
         else:
+            inherited={"rights_status":"approved","license_reference":series_license} if can_inherit_license else {}
             old=db.insert("aseel_episodes",{"season_id":season_id,"number":ep.number,
-                        **payload,**episode_rights})
+                        **payload,**episode_rights,**inherited})
             result["episodes_new"]+=1
         result['bindings'].append(dict(season=ep.season,number=ep.number,id=old['id'],table='aseel_episodes'))
     result['work_id'] = series['id']
