@@ -44,7 +44,7 @@ test("Native mute persists and ExoPlayer volume follows it",player.includes('put
     player.includes('engine.setVolume(liveMuted?0f:1f)'));
 test("Browser cache keys changed but private shell policy retained",html.includes("tv-studio-v18-balanced-20261107") &&
     /js\/live\.js\?v=[A-Za-z0-9._-]+/.test(html) &&
-    read("web/js/customer-session-guard.js").includes("session") &&
+    read("web/js/customer-session-guard.js").includes('credentials:"same-origin"') &&
     /var CACHE = "alezz-shell-[^"]+"/.test(read("web/sw.js")) &&
     read("web/sw.js").includes("css/glass.css") &&
     read("web/sw.js").includes('request.mode === "navigate"'));
