@@ -12,7 +12,7 @@ check("Native channel information HUD auto hides",player.includes("showLiveHud("
 check("Remote guide and channel keys have dedicated handlers",player.includes("KEYCODE_GUIDE")&&player.includes("KEYCODE_CHANNEL_UP")&&player.includes("KEYCODE_CHANNEL_DOWN")&&player.includes("KEYCODE_DPAD_UP"));
 check("Native guide can be dismissed in live and movies without leaving playback",player.includes("code==KeyEvent.KEYCODE_BACK &&")&&player.includes("hideControls();return true;"));
 check("Native broadcast quality saved per-channel",player.includes('getString("quality_"+itemId,"auto")'));
-check("Native channel catalog uses limited rendering",home.includes("liveGuideLimit=48")&&home.includes("matching>displayed")&&home.includes("liveGuideLimit+48"));
+check("Native channel catalog uses limited rendering",home.includes("liveGuideLimit=48")&&home.includes("matching>displayed")&&home.includes("liveGuideLimit+liveGuideStep"));
 check("Native channel catalog supports favorites",home.includes('types.add("المفضلة")')&&home.includes('isFavorite(x)'));
 check("Immersive layout is responsive",css.includes(".live-page--cinema .live-guide{display:none}")&&css.includes("@media (max-width:650px)"));
 check("Adaptive HLS reports actual playback resolution",js.includes("Hls.Events.LEVEL_SWITCHED")&&js.includes("selected.height"));

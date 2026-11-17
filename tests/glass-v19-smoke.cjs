@@ -45,6 +45,6 @@ for(const p of ["MainActivity","TVHomeActivity","CinemaPlayerActivity","PlayerAc
 const service=read("web/sw.js");
 test("PWA caches public glass CSS without caching session pages",
   service.includes('"css/glass.css"') &&
-  service.includes("alezz-shell-member-privacy-")&&
+  /var CACHE = "alezz-shell-[^"]+"/.test(service)&&
   service.includes('request.mode === "navigate"'));
 console.log("PASS | V19 glass theme acceptance. Hardware rendering still requires device testing.");

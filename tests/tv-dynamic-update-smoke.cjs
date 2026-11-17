@@ -38,7 +38,7 @@ assert.ok(home.includes('if("channel".equals(browseKind))channelBrowse('),
     "channels open the native playable channel list");
 assert.ok(home.includes("goTo(browseOrigin)")&&home.includes("restorePosition(browseOriginFocus,browseOriginScroll)"),
     "back button returns to category directory");
-assert.ok(home.includes('cardGridLimit+72'),"large lists progressively render");
+assert.ok(home.includes('cardGridLimit+cardGridStep'),"large lists progressively render");
 assert.ok(home.includes('UnavailableVideoActivity.show(this,"live",label(item))') &&
     api.includes("officialChannelLink(String external)") &&
     !home.includes("android.content.Intent.ACTION_VIEW"),

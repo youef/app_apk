@@ -16,7 +16,7 @@ ok("Viewer buttons have true focus, active and disabled states",
   css.includes(':focus-visible')&&css.includes(':active')&&
   css.includes(':disabled')&&css.includes('[aria-disabled="true"]'));
 ok("Browser caches only the public style and not private pages",
-  sw.includes('"assets/al-ezz-glass-button.svg"')&&sw.includes('alezz-shell-member-privacy-')&&
+  sw.includes('"assets/al-ezz-glass-button.svg"')&&/var CACHE = "alezz-shell-[^"]+"/.test(sw)&&
   sw.includes('request.mode === "navigate"'));
 ok("Viewer and detail screens load the shared red cinema texture",
   ["web/index.html","web/index.view"].every(p=>

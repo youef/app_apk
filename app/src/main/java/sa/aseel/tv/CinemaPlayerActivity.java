@@ -89,6 +89,8 @@ public final class CinemaPlayerActivity extends Activity {
     private final ExecutorService probeWorker=new ThreadPoolExecutor(2,2,30L,TimeUnit.SECONDS,
         new ArrayBlockingQueue<Runnable>(2),new ThreadPoolExecutor.DiscardOldestPolicy());
     private final HashSet<Integer> attempted=new HashSet<Integer>();
+    // Avoid endless per-source network retries even if playback briefly becomes ready.
+    private final HashSet<Integer> retriedSources=new HashSet<Integer>();
     private int requestToken=0;
     private String lastSourceHint="";
     private ExoPlayer engine;
@@ -260,6 +262,25 @@ public final class CinemaPlayerActivity extends Activity {
     private final ArrayList<JSONObject> mediaPlaylist=new ArrayList<JSONObject>();
     private int mediaIndex=-1;
     private String mediaKind="movie";
+    private final HashSet<Integer> autoSkippedChannels=new HashSet<Integer>();
+    private final HashSet<Integer> autoSkippedMedia=new HashSet<Integer>();
+    private long lastVodPlayhead=-1L;
+    private int vodFrozenTicks=0;
+    private final Runnable vodHealth=new Runnable(){public void run(){
+        if(isFinishing()||engine==null)return;
+        if(!live&&engine.isPlaying()&&engine.getPlaybackState()==Player.STATE_READY){
+            long pos=engine.getCurrentPosition(),duration=engine.getDuration();
+            if(duration<=0||duration==C.TIME_UNSET||pos<duration-1500L){
+                if(lastVodPlayhead>=0&&pos<=lastVodPlayhead+250L)vodFrozenTicks++;
+                else vodFrozenTicks=0;
+                if(vodFrozenTicks>=4){
+                    vodFrozenTicks=0;lastVodPlayhead=-1L;
+                    tryNextOrExplain("تجمد الفيديو؛ جارٍ تجربة مصدر بديل.");
+                }else lastVodPlayhead=pos;
+            }else{vodFrozenTicks=0;lastVodPlayhead=-1L;}
+        }else{vodFrozenTicks=0;lastVodPlayhead=-1L;}
+        handler.postDelayed(this,5000L);
+    }};
     private int tvChannelIndex=-1,aspectMode=0;
     private String remoteNumber="";
     private final Runnable commitRemoteNumber=new Runnable(){public void run(){
@@ -294,7 +315,7 @@ public final class CinemaPlayerActivity extends Activity {
         handler.postDelayed(this,5000L);
     }};
     private final Runnable watchdog=new Runnable(){public void run(){
-        if(isFinishing() || started || engine==null)return;
+        if(isFinishing() || started || engine==null || !engine.getPlayWhenReady())return;
         if(tries<1){
             tries++;
             status.setText("البث بطيء، إعادة الاتصال بالمصدر...");
@@ -587,13 +608,13 @@ public final class CinemaPlayerActivity extends Activity {
         footer.addView(playButton,new LinearLayout.LayoutParams(dp(66),-1));
         playButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
             if(engine==null)return;
-            if(engine.getPlaybackState()==Player.STATE_IDLE){attempted.clear();tries=0;playSource(index);}
+            if(engine.getPlaybackState()==Player.STATE_IDLE){attempted.clear();retriedSources.clear();tries=0;playSource(index);}
             else if(engine.isPlaying())engine.pause();else engine.play();
         }});
         Button retryButton=tvTool("","إعادة الاتصال");
         footer.addView(retryButton,new LinearLayout.LayoutParams(dp(66),-1));
         retryButton.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-            attempted.clear();tries=0;playSource(index);
+            attempted.clear();retriedSources.clear();tries=0;playSource(index);
         }});
         qualityButton=tvTool("","جودة البث");
         footer.addView(qualityButton,new LinearLayout.LayoutParams(dp(66),-1));
@@ -710,6 +731,8 @@ public final class CinemaPlayerActivity extends Activity {
         engine.setVolume((live?liveMuted:mediaMuted)?0f:1f);
         handler.removeCallbacks(liveHealth);
         handler.postDelayed(liveHealth,5000L);
+        handler.removeCallbacks(vodHealth);
+        handler.postDelayed(vodHealth,5000L);
         engine.addListener(new Player.Listener(){
             @Override public void onPlaybackStateChanged(int state){
                 if(state==Player.STATE_BUFFERING){
@@ -744,6 +767,10 @@ public final class CinemaPlayerActivity extends Activity {
                     details.setText((live ? "● القناة "+(tvChannelIndex+1)+" / "+tvChannels.size()
                         : "سينما العز • جودة تلقائية")+"   |  "+sources.get(index).label);
                 }else if(state==Player.STATE_ENDED){
+                    if(live){
+                        tryNextOrExplain("انتهى بث القناة أو أغلق الخادم الاتصال.");
+                        return;
+                    }
                     long endedAtMs=engine.getDuration();
                     if(!live && expectedDurationMinutes>25 && endedAtMs!=C.TIME_UNSET
                        && endedAtMs>0L && endedAtMs<=25L*60000L){
@@ -797,23 +824,75 @@ public final class CinemaPlayerActivity extends Activity {
                     explanation="تعذر الوصول للمصدر أو انتهت صلاحية الرابط. "+lastSourceHint;
                 else explanation="تعذر قراءة المصدر ("+reason+"). "+lastSourceHint;
                 if((reason.contains("NETWORK")||reason.contains("HTTP")||reason.contains("IO"))
-                    &&tries==0 && !SignedStreamExpiry.expired(currentUrl)){
-                    tries=1;
-                    status.setText("فقد الاتصال بالمصدر. محاولة ثانية ثم خفض الجودة إن لزم...");
-                    final int oldIndex=index;
+                    && !retriedSources.contains(index) && !SignedStreamExpiry.expired(currentUrl)){
+                    retriedSources.add(index);
+                    status.setText("فقد الاتصال بالمصدر. إعادة محاولة واحدة ثم تجربة البدائل...");
+                    final int oldIndex=index,oldToken=requestToken;
                     handler.postDelayed(new Runnable(){public void run(){
-                        if(!isFinishing()&&engine!=null)playSource(oldIndex);
+                        if(!isFinishing()&&engine!=null&&requestToken==oldToken&&index==oldIndex)
+                            playSource(oldIndex);
                     }},1800L);
                 }else tryNextOrExplain(explanation);
             }
         });
         surface.setPlayer(engine);
     }
+    private boolean hasHealthyCandidate(JSONObject candidate){
+        ArrayList<StreamQuality.Source> candidates=StreamQuality.parse(candidate.optString("url"),
+            candidate.optString("quality"),candidate.optJSONArray("variants")==null?"[]":
+                candidate.optJSONArray("variants").toString());
+        for(StreamQuality.Source source:candidates)
+            if(!SignedStreamExpiry.expired(source.url)&&!SourceHealth.blocked(this,source.url))
+                return true;
+        return false;
+    }
+
+    /** Exhaust approved streams before advancing; never loop through broken playlist entries. */
+    private boolean skipBrokenItem(){
+        if(!getSharedPreferences("alezz_tv_settings_v14",MODE_PRIVATE)
+            .getBoolean("auto_skip_broken",true))return false;
+        if(live && tvChannelIndex>=0 && tvChannels.size()>1){
+            autoSkippedChannels.add(tvChannelIndex);
+            int next=PlaybackRecovery.findNext(tvChannels.size(),tvChannelIndex,
+                autoSkippedChannels,true,new PlaybackRecovery.CandidateFilter(){
+                    public boolean canPlay(int position){
+                        JSONObject candidate=tvChannels.get(position);
+                        return matchesGroup(candidate)&&hasHealthyCandidate(candidate);
+                    }
+                });
+            if(next>=0){
+                String previous=itemTitle;
+                switchChannel(next);
+                showLiveHud("⚠ تعطل بث "+previous+"\nتم الانتقال تلقائيًا إلى "+itemTitle);
+                return true;
+            }
+        }else if(!live && mediaIndex>=0 && mediaPlaylist.size()>1){
+            autoSkippedMedia.add(mediaIndex);
+            int next=PlaybackRecovery.findNext(mediaPlaylist.size(),mediaIndex,
+                autoSkippedMedia,false,new PlaybackRecovery.CandidateFilter(){
+                    public boolean canPlay(int position){
+                        JSONObject candidate=mediaPlaylist.get(position);
+                        if("episode".equals(mediaKind)&&!seriesId.isEmpty()&&
+                            !seriesId.equals(candidate.optString("series_id","")))return false;
+                        return hasHealthyCandidate(candidate);
+                    }
+                });
+            if(next>=0){
+                String previous=itemTitle;
+                switchMedia(next);
+                status.setText("⚠ تعذر تشغيل "+previous+" • انتقلنا تلقائيًا إلى "+itemTitle);
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void tryNextOrExplain(String explanation){
         handler.removeCallbacks(watchdog);
         if(currentUrl!=null)SourceHealth.failed(this,currentUrl);
         int lower=StreamQuality.lower(sources,index);
-        if(lower>=0&&!attempted.contains(lower)){
+        if(lower>=0&&!attempted.contains(lower)&&
+            !SourceHealth.blocked(this,sources.get(lower).url)){
             status.setText("تعذر تشغيل الجودة الحالية؛ تجربة جودة أقل...");
             tries=0;playSource(lower);return;
         }
@@ -825,14 +904,16 @@ public final class CinemaPlayerActivity extends Activity {
                 tries=0;playSource(next);return;
             }
         }
-        // All authorised direct streams failed; never open a website or external player.
+        // All approved direct streams failed. Keep the user watching where possible.
+        if(skipBrokenItem())return;
+        Log.w("AlezzV11","No playable source or next item: "+explanation);
         UnavailableVideoActivity.show(this,live?"live":mediaKind,itemTitle);
         finish();
     }
     private void playSource(int which){
         if(which<0||which>=sources.size()||engine==null)return;
         index=which;currentUrl=sources.get(which).url;
-        frozenTicks=0;lastLivePlayhead=-1;
+        frozenTicks=0;lastLivePlayhead=-1;vodFrozenTicks=0;lastVodPlayhead=-1L;
         attempted.add(which);
         started=false;firstFrameRendered=false;playbackVisible=false;
         handler.removeCallbacks(autoHide);handler.removeCallbacks(watchdog);
@@ -1263,7 +1344,7 @@ public final class CinemaPlayerActivity extends Activity {
         String quality=savedItem==null?"auto":savedItem.optString("quality","auto");
         index=StreamQuality.choose(sources,quality,Build.VERSION.SDK_INT);
         if(index<0)index=0;
-        attempted.clear();tries=0;requestToken++;liveRestarts=0;frozenTicks=0;lastLivePlayhead=-1;
+        attempted.clear();retriedSources.clear();tries=0;requestToken++;liveRestarts=0;frozenTicks=0;lastLivePlayhead=-1;
         title.setText("▶ "+itemTitle);
         refreshPlayerBadge();
         updateSkipButton();
@@ -1298,7 +1379,7 @@ public final class CinemaPlayerActivity extends Activity {
             .getString("quality_"+itemId,"auto");
         index=StreamQuality.choose(sources,preferred,Build.VERSION.SDK_INT);
         if(index<0)index=0;
-        attempted.clear();tries=0;requestToken++;liveRestarts=0;frozenTicks=0;lastLivePlayhead=-1;
+        attempted.clear();retriedSources.clear();tries=0;requestToken++;liveRestarts=0;frozenTicks=0;lastLivePlayhead=-1;
         title.setText(String.format(Locale.US,"● CH %03d  •  %s",tvChannelIndex+1,itemTitle));
         refreshPlayerBadge();
         updateLiveFavorite();
@@ -1392,7 +1473,7 @@ public final class CinemaPlayerActivity extends Activity {
                 public void onClick(android.content.DialogInterface dialog,int which){
                     getSharedPreferences("alezz_v11_player",MODE_PRIVATE).edit()
                         .putString("quality_"+itemId,sources.get(which).label).apply();
-                    attempted.clear();tries=0;playSource(which);dialog.dismiss();
+                    attempted.clear();retriedSources.clear();tries=0;playSource(which);dialog.dismiss();
                 }
             }).setNegativeButton("إلغاء",null).show();
     }
@@ -1402,7 +1483,7 @@ public final class CinemaPlayerActivity extends Activity {
             UnavailableVideoActivity.show(this,live?"live":mediaKind,itemTitle);
             finish();return;
         }
-        attempted.clear();tries=0;
+        attempted.clear();retriedSources.clear();tries=0;
         playSource(Math.max(0,index));
     }
     @Override public boolean dispatchKeyEvent(KeyEvent event){
@@ -1507,11 +1588,20 @@ public final class CinemaPlayerActivity extends Activity {
         handler.removeCallbacks(subscriptionGuard);
         handler.post(subscriptionGuard);
         if(kidsPlayback){handler.removeCallbacks(kidsClock);handler.postDelayed(kidsClock,1000L);}
+        if(engine!=null){
+            handler.removeCallbacks(liveHealth);
+            handler.removeCallbacks(vodHealth);
+            handler.postDelayed(liveHealth,5000L);
+            handler.postDelayed(vodHealth,5000L);
+        }
     }
     @Override protected void onPause(){
         PhoneRemote.clearForeground(this);
         handler.removeCallbacks(subscriptionGuard);
         handler.removeCallbacks(kidsClock);
+        handler.removeCallbacks(liveHealth);
+        handler.removeCallbacks(vodHealth);
+        handler.removeCallbacks(watchdog);
         handler.removeCallbacks(autoHide);
         handler.removeCallbacks(hideLiveHud);
         handler.removeCallbacks(commitRemoteNumber);
@@ -1524,6 +1614,7 @@ public final class CinemaPlayerActivity extends Activity {
     @Override protected void onDestroy(){
         handler.removeCallbacks(subscriptionGuard);
         handler.removeCallbacks(liveHealth);
+        handler.removeCallbacks(vodHealth);
         saveProgress();requestToken++;probeWorker.shutdownNow();handler.removeCallbacksAndMessages(null);
         if(surface!=null)surface.setPlayer(null);
         if(engine!=null){engine.release();engine=null;}

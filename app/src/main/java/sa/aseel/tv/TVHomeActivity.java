@@ -1461,6 +1461,14 @@ public final class TVHomeActivity extends Activity {
                 PlaybackMemory.setProfile(TVHomeActivity.this,profile);render();
             }});
         }
+        heading("التشغيل الذكي","تجربة المشغلات البديلة، واكتشاف الانقطاع ثم تجاوز المحتوى المعطل دون تدخل");
+        final boolean autoSkip=prefs.getBoolean("auto_skip_broken",true);
+        Button skipBroken=button((autoSkip?"✓  ":"")+"التجاوز التلقائي للقنوات والحلقات والأفلام المعطلة");
+        content.addView(skipBroken,space(-1,dp(62),6));
+        skipBroken.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+            prefs.edit().putBoolean("auto_skip_broken",!prefs.getBoolean("auto_skip_broken",true)).apply();
+            render();
+        }});
         final boolean autoNext=prefs.getBoolean("auto_next",true);
         Button next=button((autoNext?"✓  ":"")+"تشغيل الحلقة التالية تلقائيًا");
         content.addView(next,space(-1,dp(62),6));
@@ -2462,11 +2470,16 @@ public final class TVHomeActivity extends Activity {
         if("movie".equals(kind(item)) || "episode".equals(kind(item))){
             JSONArray mediaQueue=new JSONArray();
             int currentIndex=0;
+            // Include neighbouring films as well as episodes, so a title with no usable
+            // approved players can move forward rather than closing the entire player.
             java.util.List<JSONObject> sourceItems="episode".equals(kind(item))?episodeQueue:
-                java.util.Collections.singletonList(item);
-            int queueStart=Math.max(0,sourceItems.indexOf(item)-20);
+                (movies.contains(item)?movies:java.util.Collections.singletonList(item));
+            if(!sourceItems.contains(item))sourceItems=java.util.Collections.singletonList(item);
+            int queueStart=Math.max(0,sourceItems.indexOf(item)-10);
             for(int i=queueStart;i<Math.min(sourceItems.size(),queueStart+60);i++){
                 JSONObject candidate=sourceItems.get(i);
+                if("episode".equals(kind(item))&&!value(item,"_series_id").isEmpty()&&
+                    !value(item,"_series_id").equals(value(candidate,"_series_id")))continue;
                 if(kidsMode && "movie".equals(kind(candidate)) && !kidsDirect(candidate))continue;
                 
                 String candidateUrl=value(candidate,"stream_url");
