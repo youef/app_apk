@@ -17,6 +17,9 @@ android {
         versionCode Integer.parseInt(project.findProperty('launcherVersionCode') ?: '1001')
         versionName (project.findProperty('launcherVersionName') ?: '1.0.0')
     }
+    // Sideloaded legacy TV launcher, not a Google Play Store submission.
+    // Keep targetSdk 28 so older TV app enumeration and HOME behavior work.
+    lintOptions { checkReleaseBuilds false }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
