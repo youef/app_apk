@@ -1,0 +1,35 @@
+name: Extract Captain Tsubasa 52 player sources
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/way2allah_tsubasa_extract.py'
+      - '.github/workflows/way2allah-tsubasa-extract.yml'
+  workflow_dispatch:
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install collector dependencies
+        run: python -m pip install 'requests==2.32.5' 'beautifulsoup4==4.14.2'
+      - name: Extract all 52 source pages and AJAX media-player responses
+        run: python scripts/way2allah_tsubasa_extract.py --workers 6
+      - name: Validate the 52-episode catalog without importing
+        run: python scripts/import_authorized_series.py data/tsubasa-52-manifest.json
+      - name: Upload audit and manifest for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: way2allah-tsubasa-52-player-links
+          path: |
+            data/tsubasa-52-report.json
+            data/tsubasa-52-manifest.json
+          retention-days: 14
+          if-no-files-found: warn
