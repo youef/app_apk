@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
-<head><meta http-equiv="refresh" content="0;url=https://app-apk-oquy.onrender.com/admin/series-quick.html"><script>window.location.replace("https://app-apk-oquy.onrender.com/admin/series-quick.html"+(window.location.hash||''));</script>
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#090b12">
@@ -99,6 +99,20 @@ footer button{min-width:160px}
   <div class="brand"><img src="../web/assets/logo.svg" alt=""><div><h1>إضافة مسلسل سريعًا</h1><div class="subtitle">العز TV — المسلسل ← المواسم ← الحلقات في حفظ واحد</div></div></div>
   <div class="actions"><span class="pill">نشر تلقائي</span><a href="index.html#series">العودة لإدارة المسلسلات</a><a href="index.html#seasons">المواسم والحلقات</a></div>
 </header>
+<section class="panel hidden" id="loginPanel" aria-labelledby="quickLoginTitle">
+  <h2 id="quickLoginTitle">دخول مسؤول العز TV</h2>
+  <p class="note">سجّل الدخول بصلاحية الإدارة للوصول إلى المسلسلات والمواسم والحلقات. تُحفظ الجلسة على هذا الموقع فقط، ولا تنتقل من جلسة Render.</p>
+  <form id="quickLoginForm" class="grid" autocomplete="on">
+    <label>البريد الإلكتروني
+      <input id="quickLoginEmail" type="email" autocomplete="username" dir="ltr" required placeholder="admin@example.com">
+    </label>
+    <label>كلمة المرور
+      <input id="quickLoginPassword" type="password" autocomplete="current-password" required>
+    </label>
+    <div class="actions"><button id="quickLoginButton" type="submit" class="primary">دخول استوديو المسلسلات</button><a href="https://app-apk-oquy.onrender.com/login">تسجيل الدخول في Render</a></div>
+  </form>
+  <p class="note" id="quickLoginStatus" role="status" aria-live="polite"></p>
+</section>
 <div id="loading">جارٍ التحقق من جلسة المسؤول…</div>
 <div id="authError" class="result error hidden"></div>
 <div id="studio" class="hidden">
