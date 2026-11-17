@@ -56,9 +56,12 @@ jobs:
             adb install -r "$(find huidi-launcher/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
             adb shell am start -n sa.youef.huidi.launcher/.MainActivity
             sleep 4
-            # AOSP KitKat immersive-mode confirmation obscures the first screenshot.
-            adb shell input keyevent 66
-            sleep 2
+            # AOSP KitKat immersive-mode hint can ignore remote Enter until tapped.
+            # Capture original evidence and a second screenshot after dismissing its OK area.
+            adb shell screencap -p /data/local/tmp/huidi-before-hint.png
+            adb pull /data/local/tmp/huidi-before-hint.png huidi-home-before-hint.png
+            adb shell input tap 720 1070
+            sleep 1
             adb shell screencap -p /data/local/tmp/huidi-home.png
             adb pull /data/local/tmp/huidi-home.png huidi-home-api19.png
             for key in 19 20 21 22 23; do adb shell input keyevent "$key"; done
@@ -71,6 +74,7 @@ jobs:
           name: huidi-home-api19-real-screenshot
           path: |
             huidi-home-api19.png
+            huidi-home-before-hint.png
             huidi-home-state.txt
           if-no-files-found: ignore
           retention-days: 30
