@@ -2966,7 +2966,7 @@
       setLoginBusy(false);
       showApp();
       verifyAdmin();
-      openSection('dashboard');
+      openSection(sectionFromHash(), { push: false });
       toast('تم تسجيل الدخول بصلاحيات الإدارة.', 'success');
     }).catch(function (err) {
       setLoginBusy(false);
