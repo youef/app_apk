@@ -837,11 +837,62 @@ public final class CinemaPlayerActivity extends Activity {
         });
         surface.setPlayer(engine);
     }
+    private boolean hasHealthyCandidate(JSONObject candidate){
+        ArrayList<StreamQuality.Source> candidates=StreamQuality.parse(candidate.optString("url"),
+            candidate.optString("quality"),candidate.optJSONArray("variants")==null?"[]":
+                candidate.optJSONArray("variants").toString());
+        for(StreamQuality.Source source:candidates)
+            if(!SignedStreamExpiry.expired(source.url)&&!SourceHealth.blocked(this,source.url))
+                return true;
+        return false;
+    }
+
+    /** Exhaust approved streams before advancing; never loop through broken playlist entries. */
+    private boolean skipBrokenItem(){
+        if(!getSharedPreferences("alezz_tv_settings_v14",MODE_PRIVATE)
+            .getBoolean("auto_skip_broken",true))return false;
+        if(live && tvChannelIndex>=0 && tvChannels.size()>1){
+            autoSkippedChannels.add(tvChannelIndex);
+            int next=PlaybackRecovery.findNext(tvChannels.size(),tvChannelIndex,
+                autoSkippedChannels,true,new PlaybackRecovery.CandidateFilter(){
+                    public boolean canPlay(int position){
+                        JSONObject candidate=tvChannels.get(position);
+                        return matchesGroup(candidate)&&hasHealthyCandidate(candidate);
+                    }
+                });
+            if(next>=0){
+                String previous=itemTitle;
+                switchChannel(next);
+                showLiveHud("⚠ تعطل بث "+previous+"\nتم الانتقال تلقائيًا إلى "+itemTitle);
+                return true;
+            }
+        }else if(!live && mediaIndex>=0 && mediaPlaylist.size()>1){
+            autoSkippedMedia.add(mediaIndex);
+            int next=PlaybackRecovery.findNext(mediaPlaylist.size(),mediaIndex,
+                autoSkippedMedia,false,new PlaybackRecovery.CandidateFilter(){
+                    public boolean canPlay(int position){
+                        JSONObject candidate=mediaPlaylist.get(position);
+                        if("episode".equals(mediaKind)&&!seriesId.isEmpty()&&
+                            !seriesId.equals(candidate.optString("series_id","")))return false;
+                        return hasHealthyCandidate(candidate);
+                    }
+                });
+            if(next>=0){
+                String previous=itemTitle;
+                switchMedia(next);
+                status.setText("⚠ تعذر تشغيل "+previous+" • انتقلنا تلقائيًا إلى "+itemTitle);
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void tryNextOrExplain(String explanation){
         handler.removeCallbacks(watchdog);
         if(currentUrl!=null)SourceHealth.failed(this,currentUrl);
         int lower=StreamQuality.lower(sources,index);
-        if(lower>=0&&!attempted.contains(lower)){
+        if(lower>=0&&!attempted.contains(lower)&&
+            !SourceHealth.blocked(this,sources.get(lower).url)){
             status.setText("تعذر تشغيل الجودة الحالية؛ تجربة جودة أقل...");
             tries=0;playSource(lower);return;
         }
@@ -853,7 +904,9 @@ public final class CinemaPlayerActivity extends Activity {
                 tries=0;playSource(next);return;
             }
         }
-        // All authorised direct streams failed; never open a website or external player.
+        // All approved direct streams failed. Keep the user watching where possible.
+        if(skipBrokenItem())return;
+        Log.w("AlezzV11","No playable source or next item: "+explanation);
         UnavailableVideoActivity.show(this,live?"live":mediaKind,itemTitle);
         finish();
     }
