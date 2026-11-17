@@ -107,4 +107,7 @@ jobs:
         run: |
           set -euo pipefail
           tag="huidi-home-v1.0.${GITHUB_RUN_NUMBER}"
-          gh release create "$tag" dist/huidi-home-android44.apk dist/huidi-home-sha256.txt dist/huidi-home-signature.txt             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA"             --title "Huidi Home v1.0.${GITHUB_RUN_NUMBER} - Android 4.4.4"             --notes "واجهة رئيسية مستقلة لشاشة Huidi SMART_PC822. RTL عربي، ثلاثة ثيمات، تطبيقات الشاشة الفعلية، اختصار العز TV، المفضلة، ريموت D-pad/OK/MENU، إعدادات النظام، ووضع منخفض الذاكرة. يدعم API19 وما فوق ويعمل دون اتصال. لتعيينه افتراضيًا اختر Huidi Home بعد ضغط Home أو من إعدادات تطبيقات النظام، ويمكن الرجوع للواجهة الأصلية. تم التحقق من ملف APK وتوقيع V1 آليًا؛ اختبار الشاشة الفعلية ما زال مطلوبًا."             --latest=false
+          # Build and checksum are authoritative even when Actions has no Release write permission.
+          if ! gh release create "$tag" dist/huidi-home-android44.apk dist/huidi-home-sha256.txt dist/huidi-home-signature.txt             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA"             --title "Huidi Home v1.0.${GITHUB_RUN_NUMBER} - Android 4.4.4"             --notes "واجهة رئيسية مستقلة لشاشة Huidi SMART_PC822. RTL عربي، ثلاثة ثيمات، تطبيقات الشاشة الفعلية، اختصار العز TV، المفضلة، ريموت D-pad/OK/MENU، إعدادات النظام، ووضع منخفض الذاكرة. يدعم API19 وما فوق ويعمل دون اتصال. لتعيينه افتراضيًا اختر Huidi Home بعد ضغط Home أو من إعدادات تطبيقات النظام، ويمكن الرجوع للواجهة الأصلية. تم التحقق من ملف APK وتوقيع V1 آليًا؛ اختبار الشاشة الفعلية ما زال مطلوبًا."             --latest=false; then
+            echo "::warning::Release API denied; signed APK remains in the workflow artifact."
+          fi
