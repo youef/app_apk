@@ -55,7 +55,10 @@ jobs:
             adb shell settings put secure immersive_mode_confirmations confirmed
             adb install -r "$(find huidi-launcher/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
             adb shell am start -n sa.youef.huidi.launcher/.MainActivity
-            sleep 5
+            sleep 4
+            # AOSP KitKat immersive-mode confirmation obscures the first screenshot.
+            adb shell input keyevent 66
+            sleep 2
             adb shell screencap -p /data/local/tmp/huidi-home.png
             adb pull /data/local/tmp/huidi-home.png huidi-home-api19.png
             for key in 19 20 21 22 23; do adb shell input keyevent "$key"; done
