@@ -4,6 +4,8 @@ buildscript {
 }
 apply plugin: 'com.android.application'
 
+repositories { google(); mavenCentral() }
+
 android {
     namespace 'sa.youef.huidi.launcher'
     compileSdkVersion 33
