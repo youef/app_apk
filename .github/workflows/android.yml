@@ -158,6 +158,8 @@ jobs:
           node tests/cast-airplay-smoke.cjs
           node tests/tv-manual-update-policy-smoke.cjs
           node tests/tv-dynamic-update-smoke.cjs
+      - name: Verify automatic playback recovery policy
+        run: gradle testDebugUnitTest --no-daemon --stacktrace
       - name: Build legacy-compatible APK
         shell: bash
         run: |
