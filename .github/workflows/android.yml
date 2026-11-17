@@ -128,36 +128,49 @@ jobs:
           grep -q 'AL_EZZ_EXPECTED_PACKAGE' scripts/verify_apk.py
       - name: Test kids YouTube listing and playback errors
         run: |
-          node tests/tv-kids-playback-smoke.cjs
-          node tests/tv-remote-guide-smoke.cjs
-          node tests/tv-figma-v14-smoke.cjs
-          node tests/tv-smart-v15-smoke.cjs
-          node tests/live-tv-v16-smoke.cjs
-          node tests/live-tv-v17-genre-smoke.cjs
-          node tests/live-tv-v18-balanced-smoke.cjs
-          node tests/roya-official-navigation-smoke.cjs
-          node tests/live-network-alpha-smoke.cjs
-          node tests/native-red-tv-focus-v21-smoke.cjs
-          node tests/cinema-wallpaper-v22-smoke.cjs
-          node tests/cinema-v24-profiles-and-shelves-smoke.cjs
-          node tests/tv-red-glass-v25-profile-smoothness-smoke.cjs
-          node tests/red-neon-v26-developer-smoke.cjs
-          node tests/cinema-pro-v27-smoke.cjs
-          node tests/fixed-watermark-v28-smoke.cjs
-          node tests/fullscreen-v29-layout-smoke.cjs
-          node tests/glossy-red-glass-buttons-v23-smoke.cjs
-          node tests/member-account-login-smoke.cjs
-          node tests/member-cloud-sync-smoke.cjs
-          node tests/glass-v19-smoke.cjs
-          node tests/red-glass-cinema-smoke.cjs
-          node tests/tv-iptv-nimbus-smoke.cjs
-          node tests/quality-picker-smoke.cjs
-          node tests/embed-playback-smoke.cjs
-          node tests/unified-sources-smoke.cjs
-          node tests/kids-world-smoke.cjs
-          node tests/cast-airplay-smoke.cjs
-          node tests/tv-manual-update-policy-smoke.cjs
-          node tests/tv-dynamic-update-smoke.cjs
+          failures=0
+          scripts=(
+            tests/tv-kids-playback-smoke.cjs
+            tests/tv-remote-guide-smoke.cjs
+            tests/tv-figma-v14-smoke.cjs
+            tests/tv-smart-v15-smoke.cjs
+            tests/live-tv-v16-smoke.cjs
+            tests/live-tv-v17-genre-smoke.cjs
+            tests/live-tv-v18-balanced-smoke.cjs
+            tests/roya-official-navigation-smoke.cjs
+            tests/live-network-alpha-smoke.cjs
+            tests/native-red-tv-focus-v21-smoke.cjs
+            tests/cinema-wallpaper-v22-smoke.cjs
+            tests/cinema-v24-profiles-and-shelves-smoke.cjs
+            tests/tv-red-glass-v25-profile-smoothness-smoke.cjs
+            tests/red-neon-v26-developer-smoke.cjs
+            tests/cinema-pro-v27-smoke.cjs
+            tests/fixed-watermark-v28-smoke.cjs
+            tests/fullscreen-v29-layout-smoke.cjs
+            tests/glossy-red-glass-buttons-v23-smoke.cjs
+            tests/member-account-login-smoke.cjs
+            tests/member-cloud-sync-smoke.cjs
+            tests/glass-v19-smoke.cjs
+            tests/red-glass-cinema-smoke.cjs
+            tests/tv-iptv-nimbus-smoke.cjs
+            tests/quality-picker-smoke.cjs
+            tests/embed-playback-smoke.cjs
+            tests/unified-sources-smoke.cjs
+            tests/kids-world-smoke.cjs
+            tests/cast-airplay-smoke.cjs
+            tests/tv-manual-update-policy-smoke.cjs
+            tests/tv-dynamic-update-smoke.cjs
+          )
+          for script in "${scripts[@]}"; do
+            echo "::group::$script"
+            if ! node "$script"; then
+              echo "::error::Smoke test failed: $script"
+              failures=$((failures+1))
+            fi
+            echo "::endgroup::"
+          done
+          echo "Smoke test failures: $failures"
+          test "$failures" -eq 0
       - name: Verify automatic playback recovery policy
         run: gradle testDebugUnitTest --no-daemon --stacktrace
       - name: Build legacy-compatible APK
