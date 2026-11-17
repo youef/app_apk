@@ -53,7 +53,7 @@ jobs:
           script: |
             set -e
             adb shell settings put secure immersive_mode_confirmations confirmed
-            adb install -r huidi-launcher/build/outputs/apk/debug/huidi-launcher-debug.apk
+            adb install -r "$(find huidi-launcher/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
             adb shell am start -n sa.youef.huidi.launcher/.MainActivity
             sleep 5
             adb shell screencap -p /data/local/tmp/huidi-home.png
