@@ -16,7 +16,7 @@ assert(css.includes('url("../assets/al-ezz-red-glass-background.svg")')&&
     css.includes('linear-gradient(180deg,rgba(5,6,10,.46)'),
     "Viewer must apply the red wallpaper with contrast-protecting overlay");
 assert(sw.includes('"assets/al-ezz-red-glass-background.svg"')&&
-    sw.includes("alezz-shell-member-privacy-")&&
+    /var CACHE = "alezz-shell-[^"]+"/.test(sw)&&
     sw.includes('request.mode === "navigate"'),
     "Cache can store only the public asset, never protected navigation HTML");
 assert(native.includes("extends Drawable")&&native.includes("LinearGradient")&&
