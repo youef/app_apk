@@ -11,6 +11,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.ColorFilter;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
@@ -60,7 +61,9 @@ import java.util.Set;
  */
 public final class MainActivity extends Activity {
     private static final int BG = 0xFF090D16, PANEL = 0xEE19212F, WHITE = 0xFFF7F5F0;
-    private static final int MUTED = 0xFFB0B3C1, PALE = 0xFFE2D7C7;
+    private static final int MUTED = 0xFFBEC3D4, PALE = 0xFFF8DFB4;
+    private static final int GLASS = 0xC9253046, GLASS_EDGE = 0x668CC5F4;
+    // KitKat-safe translucent gradients (not unsupported RenderEffect blur).
     private final Handler clockHandler = new Handler();
     private final ArrayList<AppEntry> apps = new ArrayList<AppEntry>();
     private SharedPreferences prefs;
@@ -142,26 +145,46 @@ public final class MainActivity extends Activity {
         if (bold) label.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         return label;
     }
+    private static int mix(int a, int b, float ratio, int opacity) {
+        float inverse = 1f - ratio;
+        int red = (int)(Color.red(a) * inverse + Color.red(b) * ratio);
+        int green = (int)(Color.green(a) * inverse + Color.green(b) * ratio);
+        int blue = (int)(Color.blue(a) * inverse + Color.blue(b) * ratio);
+        return Color.argb(opacity, red, green, blue);
+    }
+    /** Simulated premium glass: efficient KitKat native gradients, outline and sheen. */
     private GradientDrawable panel(int color, int stroke, int radius) {
-        GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(color);
+        int base = color == PANEL ? GLASS : color;
+        GradientDrawable drawable = new GradientDrawable(
+            GradientDrawable.Orientation.TL_BR,
+            new int[] {
+                mix(base, 0xFFFFFFFF, 0.19f, 225),
+                mix(base, 0xFF182134, 0.20f, 211),
+                mix(base, 0xFF080C18, 0.35f, 219)
+            });
         drawable.setCornerRadius(dp(radius));
-        drawable.setStroke(dp(1), stroke);
+        drawable.setStroke(dp(1), mix(stroke, 0xFFFFFFFF, 0.20f, 165));
         return drawable;
     }
     private GradientDrawable heroDrawable() {
         GradientDrawable drawable = new GradientDrawable(
-            GradientDrawable.Orientation.LEFT_RIGHT,
-            new int[] {0xFF241E2C, 0xFF171A28, 0xFF121D29});
-        drawable.setCornerRadius(dp(26));
-        drawable.setStroke(dp(1), (accent & 0x00FFFFFF) | 0x88000000);
+            GradientDrawable.Orientation.TL_BR,
+            new int[] {
+                mix(0xFF272338, accent, 0.28f, 238),
+                0xE9232A3E, 0xEC101827
+            });
+        drawable.setCornerRadius(dp(28));
+        drawable.setStroke(dp(2), mix(accent, 0xFFFFFFFF, 0.22f, 180));
         return drawable;
     }
     private int currentAccent() {
         String color = prefs.getString("theme", "gold");
         if ("red".equals(color)) return 0xFFE04759;
-        if ("blue".equals(color)) return 0xFF66A7E9;
-        return 0xFFE4B86A;
+        if ("blue".equals(color)) return 0xFF58C8F8;
+        if ("violet".equals(color)) return 0xFFB39AFF;
+        if ("emerald".equals(color)) return 0xFF53E0BB;
+        if ("rose".equals(color)) return 0xFFFB8FB0;
+        return 0xFFFFC76D;
     }
     private boolean lite() {
         return prefs.getBoolean("lite", Build.VERSION.SDK_INT <= 19);
@@ -263,12 +286,13 @@ public final class MainActivity extends Activity {
         view.setMinHeight(0); view.setMinimumHeight(0);
         view.setPadding(dp(17), dp(4), dp(17), dp(4));
         view.setFocusable(true);
-        view.setBackgroundDrawable(panel(primary ? (accent & 0x00FFFFFF) | 0x66000000 : PANEL,
-            primary ? accent : 0xFF444E62, 15));
+        view.setBackgroundDrawable(panel(primary ? mix(GLASS, accent, 0.31f, 232) : PANEL,
+            primary ? accent : GLASS_EDGE, 16));
         view.setOnFocusChangeListener(new View.OnFocusChangeListener() {
             @Override public void onFocusChange(View target, boolean focused) {
-                view.setBackgroundDrawable(panel(focused ? (accent & 0x00FFFFFF) | 0x77000000 : PANEL,
-                    focused ? accent : 0xFF444E62, 15));
+                view.setBackgroundDrawable(panel(
+                    focused ? mix(GLASS, accent, 0.52f, 241) : primary ? mix(GLASS, accent, 0.31f, 232) : PANEL,
+                    focused ? 0xFFF9F3E8 : primary ? accent : GLASS_EDGE, 16));
                 view.animate().scaleX(focused ? 1.035f : 1f).scaleY(focused ? 1.035f : 1f).setDuration(120).start();
             }
         });
@@ -287,26 +311,31 @@ public final class MainActivity extends Activity {
         scene.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
         setContentView(scene);
         LinearLayout shell = column();
-        shell.setPadding(dp(22), dp(9), dp(22), dp(10));
+        shell.setPadding(dp(lite() ? 14 : 23), dp(10), dp(lite() ? 14 : 23), dp(10));
         scene.addView(shell, new FrameLayout.LayoutParams(-1, -1));
         LinearLayout top = row();
-        top.setPadding(dp(4), dp(2), dp(4), dp(2));
-        TextView emblem = text("◆", 36, accent, true);
+        top.setPadding(dp(13), dp(5), dp(13), dp(5));
+        top.setBackgroundDrawable(panel(0xCC151D30, GLASS_EDGE, 23));
+        TextView emblem = text("◈", 36, accent, true);
         emblem.setGravity(Gravity.CENTER);
         emblem.setBackgroundDrawable(panel(0xFF24222D, accent, 16));
         top.addView(emblem, lp(62, 57, 4));
         LinearLayout brand = column();
         brand.addView(text("HUIDI  HOME", 23, WHITE, true), lp(-2, -2, 0));
-        brand.addView(text("بيتي  |  شاشة أجمل كل يوم", 12, MUTED, false), lp(-2, -2, 0));
+        brand.addView(text("LIVING GLASS  •  بيتي الذكي", 12, MUTED, false), lp(-2, -2, 0));
         top.addView(brand, lp(-2, -2, 7));
         top.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1f));
+        TextView status = text("●  " + (lite() ? "الوضع الخفيف" : "تصميم زجاجي"), 12, accent, true);
+        status.setBackgroundDrawable(panel(0x991B2638, accent, 13));
+        status.setPadding(dp(12), 0, dp(12), 0);
+        top.addView(status, lp(-2, 37, 7));
         clockView = text("", 18, PALE, true);
         top.addView(clockView, lp(-2, 52, 9));
         shell.addView(top, lp(-1, 71, 0));
 
         LinearLayout menu = row();
-        String[] names = {"الرئيسية", "التطبيقات", "المفضلة", "الإعدادات"};
-        String[] pages = {"home", "apps", "favorites", "settings"};
+        String[] names = {"الرئيسية", "التطبيقات", "المفضلة", "الثيمات", "المطوّر", "الإعدادات"};
+        String[] pages = {"home", "apps", "favorites", "themes", "developer", "settings"};
         for (int i = 0; i < names.length; i++) {
             final String destination = pages[i];
             Button tab = button(names[i], new View.OnClickListener() {
@@ -314,7 +343,9 @@ public final class MainActivity extends Activity {
             }, destination.equals(page));
             menu.addView(tab, lp(-2, 46, 5));
         }
-        shell.addView(menu, lp(-1, 55, 0));
+        menu.setPadding(dp(9), dp(3), dp(9), dp(3));
+        menu.setBackgroundDrawable(panel(0xB3141B2C, GLASS_EDGE, 20));
+        shell.addView(menu, lp(-1, 60, 6));
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
         scroll.setVerticalScrollBarEnabled(false);
@@ -328,12 +359,17 @@ public final class MainActivity extends Activity {
             appGrid(content, true);
         } else if ("settings".equals(section)) {
             settingsPage(content);
+        } else if ("developer".equals(section)) {
+            developerPage(content);
+        } else if ("themes".equals(section)) {
+            themesPage(content);
         } else {
             homePage(content);
         }
         TextView footer = text("الأسهم للتنقل  •  OK للفتح  •  MENU لحفظ التطبيق في المفضلة", 12, 0xFF929AAC, false);
         footer.setGravity(Gravity.CENTER);
-        shell.addView(footer, lp(-1, 31, 2));
+        footer.setBackgroundDrawable(panel(0xA2162236, 0x446B7897, 12));
+        shell.addView(footer, lp(-1, 33, 3));
         tick.run();
     }
 
@@ -347,10 +383,10 @@ public final class MainActivity extends Activity {
         LinearLayout hero = column();
         hero.setPadding(dp(24), dp(17), dp(24), dp(17));
         hero.setBackgroundDrawable(heroDrawable());
-        TextView eyebrow = text("◆  واجهتك الجديدة  ·  تصميم عربي للتلفزيون", 13, accent, true);
+        TextView eyebrow = text("✦  HUIDI HOME  /  GLASS EDITION", 13, accent, true);
         hero.addView(eyebrow, lp(-1, 28, 0));
-        hero.addView(text("خلّ شاشتك على مزاجك.", lite() ? 28 : 34, WHITE, true), lp(-1, 61, 0));
-        hero.addView(text("ثيمات أنيقة  •  تطبيقاتك في مكان واحد  •  تنقل سريع بالريموت",
+        hero.addView(text("تلفزيونك... بإطلالة جديدة.", lite() ? 27 : 36, WHITE, true), lp(-1, 61, 0));
+        hero.addView(text("زجاج داكن  •  ألوان مضيئة  •  وصول سريع  •  تحكم كامل بالريموت",
             16, MUTED, false), lp(-1, 38, 0));
         LinearLayout actions = row();
         final AppEntry tv = alezz();
@@ -358,13 +394,16 @@ public final class MainActivity extends Activity {
             new View.OnClickListener() {
                 @Override public void onClick(View view) { if (tv == null) render("apps"); else openApp(tv); }
             }, true), lp(-2, 52, 4));
-        actions.addView(button("تغيير الثيم", new View.OnClickListener() {
-            @Override public void onClick(View view) { themes(); }
+        actions.addView(button("◈  معرض الثيمات", new View.OnClickListener() {
+            @Override public void onClick(View view) { render("themes"); }
+        }, false), lp(-2, 52, 4));
+        actions.addView(button("⚙  خيارات المطوّر", new View.OnClickListener() {
+            @Override public void onClick(View view) { render("developer"); }
         }, false), lp(-2, 52, 4));
         hero.addView(actions, lp(-1, 58, 0));
         content.addView(hero, lp(-1, -2, 7));
 
-        heading(content, "الوصول السريع", "افتح تطبيقاتك بضغطة واحدة");
+        heading(content, "الوصول السريع  ✦", "اختصارات زجاجية بألوان متناسقة مع الثيم");
         LinearLayout shortcuts = row();
         shortcuts.setWeightSum(4);
         shortcuts.addView(shortcut("العز TV", "مشاهدة الأفلام والقنوات", "▶", tv, false), weightedCard());
@@ -373,7 +412,7 @@ public final class MainActivity extends Activity {
         shortcuts.addView(shortcut("التطبيقات", "جميع التطبيقات", "▦", null, false), weightedCard());
         content.addView(shortcuts, lp(-1, 112, 0));
 
-        heading(content, "المفضلة", "اضغط مطوّلًا OK أو زر MENU على أي تطبيق لحفظه");
+        heading(content, "مفضلتك  ★", "اضغط مطوّلًا OK أو زر MENU على أي تطبيق لإضافته");
         renderGrid(content, true, 8, false);
     }
 
@@ -385,12 +424,16 @@ public final class MainActivity extends Activity {
     private View shortcut(final String title, String subtitle, String symbol, final AppEntry entry, final boolean settings) {
         final LinearLayout tile = row();
         tile.setPadding(dp(12), dp(9), dp(12), dp(9));
-        tile.setBackgroundDrawable(panel(PANEL, 0xFF3F495C, 18));
+        tile.setBackgroundDrawable(panel(GLASS, GLASS_EDGE, 20));
         tile.setFocusable(true);
         tile.setClickable(true);
-        TextView icon = text(symbol, 28, accent, true);
+        int tileColor = "العز TV".equals(title) ? 0xFFFF7689 :
+            "يوتيوب".equals(title) ? 0xFFFFB75E :
+            "الإعدادات".equals(title) ? 0xFF79DCFA : 0xFFBDA6FF;
+        TextView icon = text(symbol, 28, tileColor, true);
         icon.setGravity(Gravity.CENTER);
-        tile.addView(icon, lp(41, 64, 4));
+        icon.setBackgroundDrawable(panel(0xB522293C, tileColor, 16));
+        tile.addView(icon, lp(45, 58, 4));
         LinearLayout labels = column();
         TextView name = text(title, 17, WHITE, true);
         name.setSingleLine(true); name.setEllipsize(TextUtils.TruncateAt.END);
@@ -409,7 +452,7 @@ public final class MainActivity extends Activity {
         });
         tile.setOnFocusChangeListener(new View.OnFocusChangeListener() {
             @Override public void onFocusChange(View v, boolean f) {
-                tile.setBackgroundDrawable(panel(f ? 0xFF303040 : PANEL, f ? accent : 0xFF3F495C, 18));
+                tile.setBackgroundDrawable(panel(f ? mix(GLASS, accent, 0.30f, 238) : GLASS, f ? accent : GLASS_EDGE, 20));
                 tile.animate().scaleX(f ? 1.03f : 1f).scaleY(f ? 1.03f : 1f).setDuration(140).start();
             }
         });
@@ -431,7 +474,7 @@ public final class MainActivity extends Activity {
             TextView empty = text(onlyFavorites ? "لا توجد تطبيقات في المفضلة بعد. افتح «التطبيقات» وأضف ما تحب."
                 : "لم يتعرّف النظام على تطبيقات قابلة للفتح.", 16, MUTED, false);
             empty.setPadding(dp(14), dp(25), dp(14), dp(25));
-            empty.setBackgroundDrawable(panel(PANEL, 0xFF394354, 16));
+            empty.setBackgroundDrawable(panel(GLASS, GLASS_EDGE, 18));
             content.addView(empty, lp(-1, 87, 6));
             return;
         }
@@ -469,11 +512,13 @@ public final class MainActivity extends Activity {
         tile.setPadding(dp(11), dp(7), dp(11), dp(7));
         tile.setFocusable(true);
         tile.setClickable(true);
-        tile.setBackgroundDrawable(panel(PANEL, 0xFF343D50, 18));
+        tile.setBackgroundDrawable(panel(GLASS, GLASS_EDGE, 20));
         ImageView icon = new ImageView(this);
         try { icon.setImageDrawable(getPackageManager().getApplicationIcon(app.pkg)); }
         catch (Exception ignore) { icon.setImageResource(android.R.drawable.sym_def_app_icon); }
         icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        icon.setBackgroundDrawable(panel(0x99242B41, 0x667D97B4, 13));
+        icon.setPadding(dp(5), dp(5), dp(5), dp(5));
         tile.addView(icon, lp(lite() ? 39 : 45, lite() ? 39 : 45, 4));
         LinearLayout labels = column();
         TextView title = text(app.label, 15, WHITE, true);
@@ -488,7 +533,8 @@ public final class MainActivity extends Activity {
             @Override public void onFocusChange(View view, boolean focused) {
                 if (focused) focusedApp = app;
                 else if (focusedApp == app) focusedApp = null;
-                tile.setBackgroundDrawable(panel(focused ? 0xFF353443 : PANEL, focused ? accent : 0xFF343D50, 18));
+                tile.setBackgroundDrawable(panel(focused ? mix(GLASS, accent, 0.33f, 242) : GLASS,
+                    focused ? 0xFFF9F3E8 : GLASS_EDGE, 20));
                 tile.animate().scaleX(focused ? 1.035f : 1f)
                     .scaleY(focused ? 1.035f : 1f).setDuration(130).start();
             }
@@ -503,10 +549,10 @@ public final class MainActivity extends Activity {
     }
 
     private void settingsPage(LinearLayout content) {
-        heading(content, "تخصيص بيتي", "الإعدادات تبقى محفوظة على الشاشة نفسها");
-        content.addView(settingRow("ألوان الثيم", "ذهبي، أحمر سينمائي أو أزرق ليلي", "تغيير الثيم",
+        heading(content, "تخصيص بيتي  ◈", "ألوان زجاجية وإعدادات محلية بدون حساب أو اتصال");
+        content.addView(settingRow("ثيمات زجاجية", "ذهبي، أحمر، أزرق، بنفسجي، زمردي ووردي", "معرض الثيمات",
             new View.OnClickListener() {
-                @Override public void onClick(View v) { themes(); }
+                @Override public void onClick(View v) { render("themes"); }
             }), lp(-1, 98, 6));
         content.addView(settingRow("وضع الشاشات القديمة", lite() ? "مفعّل: بطاقات أقل وسرعة أعلى" : "معطّل: عرض بطاقات إضافية",
             lite() ? "إيقاف الوضع الخفيف" : "تفعيل الوضع الخفيف", new View.OnClickListener() {
@@ -521,6 +567,11 @@ public final class MainActivity extends Activity {
             "طريقة التعيين", new View.OnClickListener() {
                 @Override public void onClick(View v) { chooseHome(); }
             }), lp(-1, 98, 6));
+        content.addView(settingRow("مركز المطوّر",
+            "افتح خيارات المطوّر أو اتبع خطوات تفعيلها من إعدادات Android",
+            "فتح مركز المطوّر", new View.OnClickListener() {
+                @Override public void onClick(View v) { render("developer"); }
+            }), lp(-1, 98, 6));
         content.addView(settingRow("إعدادات الشاشة الأصلية",
             "الواي فاي والصوت والعرض والتطبيقات وتغيير المشغّل الافتراضي",
             "فتح إعدادات النظام", new View.OnClickListener() {
@@ -532,7 +583,7 @@ public final class MainActivity extends Activity {
     private View settingRow(String name, String details, String action, View.OnClickListener listener) {
         LinearLayout line = row();
         line.setPadding(dp(15), dp(6), dp(15), dp(6));
-        line.setBackgroundDrawable(panel(PANEL, 0xFF343D50, 17));
+        line.setBackgroundDrawable(panel(GLASS, GLASS_EDGE, 19));
         LinearLayout copy = column();
         copy.addView(text(name, 18, WHITE, true), lp(-1, 34, 1));
         TextView sub = text(details, 13, MUTED, false);
@@ -543,8 +594,9 @@ public final class MainActivity extends Activity {
         return line;
     }
     private void themes() {
-        final String[] keys = {"gold", "red", "blue"};
-        final String[] names = {"ذهبي فاخر", "أحمر سينمائي", "أزرق ليلي"};
+        final String[] keys = {"gold", "red", "blue", "violet", "emerald", "rose"};
+        final String[] names = {"✦  ذهب الشفق", "◈  أحمر سينمائي", "❖  أزرق جليدي",
+            "✧  بنفسجي ملكي", "◆  زمردي مضيء", "♥  وردي مخملي"};
         int current = 0;
         for (int i = 0; i < keys.length; i++)
             if (keys[i].equals(prefs.getString("theme", "gold"))) current = i;
@@ -557,6 +609,127 @@ public final class MainActivity extends Activity {
                 }
             }).setNegativeButton("إلغاء", null).show();
     }
+
+    /** User-facing palette showroom: all colors are locally rendered, no remote assets. */
+    private void themesPage(LinearLayout content) {
+        heading(content, "معرض الثيمات الزجاجية  ✦", "ستة ألوان مضيئة على واجهة خفيفة متوافقة مع Android 4.4");
+        String[] keys = {"gold", "red", "blue", "violet", "emerald", "rose"};
+        String[] names = {"ذهبي فاخر", "أحمر سينمائي", "أزرق جليدي",
+            "بنفسجي ملكي", "زمردي", "وردي مخملي"};
+        int[] colors = {0xFFFFC76D, 0xFFE04759, 0xFF58C8F8, 0xFFB39AFF, 0xFF53E0BB, 0xFFFB8FB0};
+        for (int i = 0; i < keys.length; i++) {
+            final String key = keys[i];
+            final int color = colors[i];
+            final LinearLayout line = row();
+            line.setPadding(dp(16), dp(6), dp(16), dp(6));
+            line.setBackgroundDrawable(panel(mix(GLASS, color, 0.22f, 215), color, 19));
+            TextView chip = text("◉", 30, color, true);
+            chip.setGravity(Gravity.CENTER);
+            chip.setBackgroundDrawable(panel(0xBB141D2E, color, 13));
+            line.addView(chip, lp(60, 58, 3));
+            LinearLayout labels = column();
+            labels.addView(text(names[i], 19, WHITE, true), lp(-1, 35, 2));
+            labels.addView(text(key.equals(prefs.getString("theme","gold")) ?
+                "✓  الثيم الحالي" : "ألوان متناغمة مع خلفية مضيئة وزجاج داكن",
+                12, key.equals(prefs.getString("theme","gold")) ? color : MUTED, false), lp(-1, 27, 2));
+            line.addView(labels, new LinearLayout.LayoutParams(0, -2, 1f));
+            line.addView(button("تطبيق الثيم", new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    prefs.edit().putString("theme", key).apply();
+                    render("themes");
+                }
+            }, false), lp(-2, 47, 3));
+            content.addView(line, lp(-1, 87, 6));
+        }
+    }
+
+    private boolean isDeveloperModeEnabled() {
+        try {
+            return Settings.Global.getInt(getContentResolver(), "development_settings_enabled", 0) != 0;
+        } catch (Exception ignored) {
+            // Some customized television firmware does not expose this flag.
+            return false;
+        }
+    }
+    private boolean launchSystemAction(String action) {
+        try {
+            Intent intent = new Intent(action);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+            return true;
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+    private void openAboutDevice() {
+        if (!launchSystemAction(Settings.ACTION_DEVICE_INFO_SETTINGS)) {
+            Toast.makeText(this, "هذا النظام لا يوفر صفحة معلومات جهاز مستقلة.", Toast.LENGTH_LONG).show();
+            systemSettings();
+        }
+    }
+    private void openDeveloperOptions() {
+        if (!launchSystemAction(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) {
+            new AlertDialog.Builder(this)
+                .setTitle("خيارات المطوّر غير متاحة")
+                .setMessage("لم يوفّر نظام الشاشة صفحة خيارات المطوّر عبر الرابط القياسي. افتح إعدادات النظام ثم «خيارات المطوّر». إذا لم تظهر، استخدم شرح التفعيل عبر رقم الإصدار.")
+                .setPositiveButton("إعدادات النظام", new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int which) { systemSettings(); }
+                }).setNeutralButton("طريقة التفعيل", new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int which) { enableDeveloperGuide(); }
+                }).setNegativeButton("إغلاق", null).show();
+        }
+    }
+    private void enableDeveloperGuide() {
+        new AlertDialog.Builder(this)
+            .setTitle("تفعيل خيارات المطوّر — من إعدادات Android")
+            .setMessage("١. افتح «حول الجهاز / About device».\n٢. ابحث عن «رقم الإصدار / Build number».\n٣. اضغط عليه بالريموت ٧ مرات (قد يختلف العدد بحسب الشركة).\n٤. أدخل رمز القفل إذا طلبه النظام.\n٥. ارجع إلى «الإعدادات» وافتح «خيارات المطوّر».\n\nبعض شاشات Huidi المعدلة تخفي هذه القائمة. هذا التطبيق لا يغيّر صلاحيات النظام ولا يفعّل USB debugging تلقائيًا.")
+            .setPositiveButton("فتح حول الجهاز", new DialogInterface.OnClickListener() {
+                @Override public void onClick(DialogInterface d, int which) { openAboutDevice(); }
+            }).setNeutralButton("خيارات المطوّر", new DialogInterface.OnClickListener() {
+                @Override public void onClick(DialogInterface d, int which) { openDeveloperOptions(); }
+            }).setNegativeButton("إغلاق", null).show();
+    }
+    private void developerPage(LinearLayout content) {
+        heading(content, "مركز المطوّر  ⚙", "وصول سريع وآمن لإعدادات النظام الأصلية");
+        LinearLayout intro = column();
+        intro.setPadding(dp(19), dp(16), dp(19), dp(13));
+        intro.setBackgroundDrawable(heroDrawable());
+        intro.addView(text("وضع المطوّر على شاشة Huidi", 24, WHITE, true), lp(-1, 49, 0));
+        intro.addView(text(isDeveloperModeEnabled() ?
+            "● حالة النظام: خيارات المطوّر مفعّلة بحسب إعدادات Android" :
+            "○ الحالة غير مؤكدة أو غير مفعّلة حسب إعدادات Android",
+            15, accent, true), lp(-1, 37, 1));
+        intro.addView(text("Android " + Build.VERSION.RELEASE + "  •  API "
+            + Build.VERSION.SDK_INT + "  •  " + Build.MODEL
+            + "  •  ذاكرة التطبيق " + (Runtime.getRuntime().maxMemory() / (1024 * 1024)) + " MB",
+            13, MUTED, false), lp(-1, 37, 0));
+        content.addView(intro, lp(-1, -2, 7));
+        content.addView(settingRow("تفعيل خيارات المطوّر",
+            "يوجّهك إلى «حول الجهاز» للضغط على رقم الإصدار ٧ مرات", "بدء التفعيل",
+            new View.OnClickListener() {
+                @Override public void onClick(View v) { enableDeveloperGuide(); }
+            }), lp(-1, 100, 6));
+        content.addView(settingRow("فتح خيارات المطوّر",
+            "فتح شاشة المطوّر الرسمية إن كانت متاحة على جهازك", "فتح الخيارات",
+            new View.OnClickListener() {
+                @Override public void onClick(View v) { openDeveloperOptions(); }
+            }), lp(-1, 100, 6));
+        content.addView(settingRow("حول الجهاز",
+            "معلومات النظام وإصدار Android ورقم البناء", "معلومات النظام",
+            new View.OnClickListener() {
+                @Override public void onClick(View v) { openAboutDevice(); }
+            }), lp(-1, 100, 6));
+        content.addView(settingRow("الإعدادات الأصلية",
+            "للعودة إلى إعدادات الشبكة والتطبيقات والتحديثات", "فتح الإعدادات",
+            new View.OnClickListener() {
+                @Override public void onClick(View v) { systemSettings(); }
+            }), lp(-1, 100, 6));
+        TextView caution = text("مهم: تفعيل وضع المطوّر يتم من النظام بموافقتك. التطبيق لا يمنح نفسه صلاحيات Root أو ADB أو يتجاوز حماية الجهاز.", 13, MUTED, false);
+        caution.setPadding(dp(13), dp(8), dp(13), dp(8));
+        caution.setBackgroundDrawable(panel(0xA41F2333, GLASS_EDGE, 14));
+        content.addView(caution, lp(-1, 68, 8));
+    }
+
     private void chooseHome() {
         new AlertDialog.Builder(this).setTitle("تعيين واجهة الشاشة الرئيسية")
             .setMessage("اضغط زر Home في الريموت، واختر «Huidi Home | بيتي» ثم «دائمًا» إذا ظهر اختيار المشغّل.\n\nإذا لم يظهر الاختيار، افتح إعدادات النظام ← التطبيقات ← المشغّل الحالي ← مسح الإعدادات الافتراضية، ثم اضغط Home. لا تُحذف تطبيقاتك.")
@@ -582,7 +755,8 @@ public final class MainActivity extends Activity {
         return super.onKeyDown(keyCode, event);
     }
     @Override public void onBackPressed() {
-        if (!"home".equals(page)) render("home");
+        if ("developer".equals(page) || "themes".equals(page)) render("settings");
+        else if (!"home".equals(page)) render("home");
         else new AlertDialog.Builder(this).setMessage("Huidi Home هي واجهتك. لفتح المشغّل الأصلي استخدم إعدادات النظام.")
             .setPositiveButton("الإعدادات", new DialogInterface.OnClickListener() {
                 @Override public void onClick(DialogInterface d, int which) { systemSettings(); }
@@ -612,11 +786,20 @@ public final class MainActivity extends Activity {
             paint.setShader(new LinearGradient(0, 0, w, h,
                 new int[] {BG, 0xFF171320, 0xFF0C1520}, null, Shader.TileMode.CLAMP));
             canvas.drawRect(b, paint);
-            paint.setShader(new RadialGradient(w * 0.8f, h * 0.1f, w * 0.7f,
-                new int[] {(accent & 0x00FFFFFF) | 0x30000000, 0x00000000},
+            paint.setShader(new RadialGradient(w * 0.87f, h * 0.13f, Math.max(w,h) * 0.65f,
+                new int[] {mix(accent, 0xFFFFFFFF, 0.14f, 102), 0x00000000},
+                null, Shader.TileMode.CLAMP));
+            canvas.drawRect(b, paint);
+            paint.setShader(new RadialGradient(w * 0.11f, h * 0.87f, Math.max(w,h) * 0.55f,
+                new int[] {0x554B68A6, 0x00000000},
                 null, Shader.TileMode.CLAMP));
             canvas.drawRect(b, paint);
             paint.setShader(null);
+            // Delicate glass-grid lines: no bitmap allocation, animations or blur shaders.
+            paint.setColor(0x15FFFFFF);
+            paint.setStrokeWidth(1f);
+            for(int x=0;x<w;x+=Math.max(80,w/12))canvas.drawLine(x,0,x,h,paint);
+            for(int y=0;y<h;y+=Math.max(80,h/8))canvas.drawLine(0,y,w,y,paint);
         }
         @Override public void setAlpha(int alpha) { }
         @Override public void setColorFilter(ColorFilter filter) { }

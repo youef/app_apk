@@ -12,4 +12,11 @@ assert "minSdkVersion 19" in build
 assert "v1SigningEnabled true" in build
 for token in ("queryIntentActivities", "KEYCODE_MENU", "setOnLongClickListener", "ACTION_SETTINGS", "chooseHome", "refreshApps", "Wallpaper", "favorites"):
     assert token in code, token
-print("PASS launcher HOME role, remote navigation, settings, offline design, and API19 compatibility checks")
+for token in ("themesPage", "developerPage", "enableDeveloperGuide", "openDeveloperOptions",
+              "ACTION_APPLICATION_DEVELOPMENT_SETTINGS", "ACTION_DEVICE_INFO_SETTINGS",
+              "development_settings_enabled", "GLASS_EDGE", "GradientDrawable.Orientation.TL_BR",
+              "RenderEffect blur", '"violet"', '"emerald"', '"rose"'):
+    assert token in code, "Missing glass/developer feature: " + token
+assert "android.permission.WRITE_SECURE_SETTINGS" not in manifest
+assert "android.permission.WRITE_SETTINGS" not in manifest
+print("PASS KitKat glass themes, six palettes, safe developer settings handoff, remote HOME")
