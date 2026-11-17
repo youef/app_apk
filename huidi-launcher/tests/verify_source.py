@@ -31,3 +31,10 @@ assert "android.permission.INTERNET" not in manifest
 assert "android.permission.ACCESS_WIFI_STATE" in manifest
 assert "android.permission.ACCESS_NETWORK_STATE" in manifest
 print("PASS device dashboard, safe maintenance, wallpapers and local-only PIN gate")
+
+for feature in ("PremierHero","homeAppCard","spotlight","THE CINEMA EXPERIENCE",
+                "morePage","تطبيقاتك","GradientDrawable.Orientation.TL_BR"):
+    assert feature in code, feature
+assert 'String[] names={"الرئيسية","التطبيقات","المفضلة","المظهر","المزيد"}' in code
+assert "HorizontalScrollView navScroll" not in code
+print("PASS cinematic hero, real app icon dock, simplified 5-tab navigation and remote focus")

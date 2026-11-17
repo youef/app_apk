@@ -48,3 +48,14 @@
 - لوحة الأرقام مصممة للتحكم بالريموت بدون الاعتماد على لوحة مفاتيح افتراضية.
 - تبقى إجراءات خيارات المطوّر عبر واجهة Android الرسمية فقط. لا روت ولا ADB تلقائي.
 - تطبيق بدون صلاحية إنترنت؛ صلاحيات معلومات حالة الشبكة فقط لعرض الاتصال. لا يرسل بياناتك.
+
+## Cinema Home redesign (photo-guided iteration)
+
+The real photo of the Huidi display showed: eight tiny tabs, four equal large status boxes, bright purple repeated rectangles, and a hero pushed out of view. This revision:
+- Replaces the first-screen hierarchy with one large cinematic AL EZZ TV hero (if installed) and two secondary action cards.
+- Renders a compact, true installed-app icon dock instead of duplicate purple status cards.
+- Restricts primary navigation to five large, remote-friendly items; the developer center, maintenance, and system tools stay under More.
+- Uses neutral dark translucent surfaces throughout, with accent color reserved for the hero and focus ring.
+- Retains offline native Java and Android 4.4/API19. No copied code, artwork, SDK libraries or web views from external sample repos.
+
+Design research: GlassLauncherTV, GTD Launcher and Plume Launcher; Android TV D-pad focus and 10-foot layout guidance. The implementation is original.
