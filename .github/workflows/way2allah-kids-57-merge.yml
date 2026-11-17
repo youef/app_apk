@@ -1,0 +1,36 @@
+name: Merge Way2Allah kids 57 review manifests
+on:
+  workflow_run:
+    workflows: ["Way2Allah kids group 57 episode inventory"]
+    types: [completed]
+jobs:
+  merge:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download the 12 episode inventory artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p data/way2allah-artifacts
+          gh run download "${{ github.event.workflow_run.id }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "way2allah-kids-57-part-*" \
+            --dir data/way2allah-artifacts
+      - name: Merge, deduplicate and audit every group
+        run: python scripts/merge_way2allah_kids_57.py
+      - name: Publish one consolidated review artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: way2allah-kids-57-complete-review-manifest
+          path: |
+            data/way2allah_kids_57_complete_manifest.json
+            data/way2allah_kids_57_merge_report.json
+          retention-days: 14
+          if-no-files-found: warn
