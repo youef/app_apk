@@ -14,8 +14,11 @@ function message(text,error){
  if(error)node.scrollIntoView({behavior:"smooth",block:"center"});
 }
 function gateError(text){
- $("loading").classList.add("hidden");$("authError").classList.remove("hidden");
- $("authError").textContent=text+" — افتح لوحة الإدارة وسجّل الدخول ثم عُد لهذه الصفحة.";
+ $("loading").classList.add("hidden");
+ $("studio").classList.add("hidden");
+ $("authError").classList.remove("hidden");
+ $("authError").textContent=text||"يجب تسجيل الدخول بصلاحية المسؤول.";
+ $("loginPanel").classList.remove("hidden");
 }
 function readSession(){
  try{var v=JSON.parse(localStorage.getItem(cfg.storagePrefix+"session")||"null");
@@ -741,5 +744,42 @@ async function boot(){
   $("loading").classList.add("hidden");$("studio").classList.remove("hidden");
  }catch(e){gateError(e.message||"فشل التحقق");}
 }
+async function loginQuick(event){
+ event.preventDefault();
+ var button=$("quickLoginButton"),info=$("quickLoginStatus");
+ var email=$("quickLoginEmail").value.trim(),password=$("quickLoginPassword").value;
+ if(!email||!password){info.textContent="أدخل البريد الإلكتروني وكلمة المرور.";return;}
+ button.disabled=true;button.textContent="جارٍ التحقق…";info.textContent="";
+ try{
+  var response=await fetch(cfg.supabaseUrl+"/auth/v1/token?grant_type=password",{
+   method:"POST",
+   headers:{"apikey":cfg.publishableKey,"Content-Type":"application/json"},
+   body:JSON.stringify({email:email,password:password})
+  });
+  var payload=await response.json();
+  if(!response.ok||!payload.access_token||!payload.refresh_token){
+   throw new Error("تعذّر تسجيل الدخول. تحقق من بيانات الحساب.");
+  }
+  session={
+   access_token:payload.access_token,
+   refresh_token:payload.refresh_token,
+   expires_at:Date.now()+(Number(payload.expires_in)||3600)*1000
+  };
+  await verifyAdmin();
+  localStorage.setItem(cfg.storagePrefix+"session",JSON.stringify(session));
+  $("quickLoginPassword").value="";
+  $("loginPanel").classList.add("hidden");
+  $("authError").classList.add("hidden");
+  $("loading").classList.remove("hidden");
+  await boot();
+ }catch(error){
+  session=null;
+  localStorage.removeItem(cfg.storagePrefix+"session");
+  info.textContent=error.message||"تعذّر تسجيل الدخول.";
+ }finally{
+  button.disabled=false;button.textContent="دخول استوديو المسلسلات";
+ }
+}
+$("quickLoginForm").addEventListener("submit",loginQuick);
 boot();
 })();
