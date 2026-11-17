@@ -277,6 +277,7 @@ public final class MainActivity extends Activity {
     }
 
     private void render(String section) {
+        clockHandler.removeCallbacks(tick);
         page = section;
         accent = currentAccent();
         focusedApp = null;
