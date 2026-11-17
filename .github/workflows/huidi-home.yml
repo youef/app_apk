@@ -1,0 +1,109 @@
+name: Huidi Home - Build and publish Android 4.4 Launcher APK
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'huidi-launcher/**'
+      - '.github/workflows/huidi-home.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: huidi-home-release
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    env:
+      AL_EZZ_KEYSTORE_BASE64: ${{ secrets.AL_EZZ_KEYSTORE_BASE64 }}
+      AL_EZZ_STORE_PASSWORD: ${{ secrets.AL_EZZ_STORE_PASSWORD }}
+      AL_EZZ_KEY_ALIAS: ${{ secrets.AL_EZZ_KEY_ALIAS }}
+      AL_EZZ_KEY_PASSWORD: ${{ secrets.AL_EZZ_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify native launcher and HOME category
+        run: python3 huidi-launcher/tests/verify_source.py
+      - name: Require protected, stable signing certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in AL_EZZ_KEYSTORE_BASE64 AL_EZZ_STORE_PASSWORD AL_EZZ_KEY_ALIAS AL_EZZ_KEY_PASSWORD; do
+            [[ -n "${!key}" ]] || { echo "::error::Missing signing secret $key"; exit 1; }
+          done
+          umask 077
+          printf '%s' "$AL_EZZ_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 --decode > "$RUNNER_TEMP/huidi-home-signing.jks"
+          test -s "$RUNNER_TEMP/huidi-home-signing.jks"
+          keytool -list -keystore "$RUNNER_TEMP/huidi-home-signing.jks" -storepass "$AL_EZZ_STORE_PASSWORD" -alias "$AL_EZZ_KEY_ALIAS" >/dev/null
+          echo "ORG_GRADLE_PROJECT_launcherStoreFile=$RUNNER_TEMP/huidi-home-signing.jks" >> "$GITHUB_ENV"
+          echo "ORG_GRADLE_PROJECT_launcherStorePassword=$AL_EZZ_STORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "ORG_GRADLE_PROJECT_launcherKeyAlias=$AL_EZZ_KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "ORG_GRADLE_PROJECT_launcherKeyPassword=$AL_EZZ_KEY_PASSWORD" >> "$GITHUB_ENV"
+          echo "ORG_GRADLE_PROJECT_launcherVersionCode=$((1000+GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+          echo "ORG_GRADLE_PROJECT_launcherVersionName=1.0.$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Use preinstalled Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          test -d "$SDK_ROOT"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          echo "$SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+      - name: Install SDK
+        run: sdkmanager "platforms;android-33" "build-tools;33.0.2"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '7.6'
+      - name: Build signed launcher
+        run: gradle -p huidi-launcher --no-daemon assembleRelease
+      - name: Verify API19, HOME/remote, full signed standalone APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="huidi-launcher/build/outputs/apk/release/huidi-launcher-release.apk"
+          mkdir -p dist
+          cp "$APK" dist/huidi-home-android44.apk
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          TOOLS="$SDK_ROOT/build-tools/33.0.2"
+          "$TOOLS/zipalign" -c -v 4 dist/huidi-home-android44.apk
+          "$TOOLS/aapt" dump badging dist/huidi-home-android44.apk | tee dist/huidi-home-badging.txt
+          grep -q "sdkVersion:'19'" dist/huidi-home-badging.txt
+          grep -q "sa.youef.huidi.launcher" dist/huidi-home-badging.txt
+          "$TOOLS/apksigner" verify --verbose --min-sdk-version 19 dist/huidi-home-android44.apk | tee dist/huidi-home-signature.txt
+          grep -q 'Verified using v1 scheme (JAR signing): true' dist/huidi-home-signature.txt
+          python3 - <<'PY'
+          import zipfile
+          p="dist/huidi-home-android44.apk"
+          with zipfile.ZipFile(p) as z:
+              assert z.testzip() is None
+              assert "AndroidManifest.xml" in z.namelist()
+              assert "classes.dex" in z.namelist()
+              assert z.read("classes.dex")[:8].startswith(b"dex\n035")
+              assert not any(n.startswith("lib/") and n.endswith(".so") for n in z.namelist())
+          print("PASS Android 4.4 DEX035, no ABI-dependent native libraries")
+          PY
+          sha256sum dist/huidi-home-android44.apk | tee dist/huidi-home-sha256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: huidi-home-android44-${{ github.run_number }}
+          path: dist/
+          retention-days: 90
+      - name: Publish direct APK
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="huidi-home-v1.0.${GITHUB_RUN_NUMBER}"
+          gh release create "$tag" dist/huidi-home-android44.apk dist/huidi-home-sha256.txt dist/huidi-home-signature.txt             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA"             --title "Huidi Home v1.0.${GITHUB_RUN_NUMBER} - Android 4.4.4"             --notes "واجهة رئيسية مستقلة لشاشة Huidi SMART_PC822. RTL عربي، ثلاثة ثيمات، تطبيقات الشاشة الفعلية، اختصار العز TV، المفضلة، ريموت D-pad/OK/MENU، إعدادات النظام، ووضع منخفض الذاكرة. يدعم API19 وما فوق ويعمل دون اتصال. لتعيينه افتراضيًا اختر Huidi Home بعد ضغط Home أو من إعدادات تطبيقات النظام، ويمكن الرجوع للواجهة الأصلية. تم التحقق من ملف APK وتوقيع V1 آليًا؛ اختبار الشاشة الفعلية ما زال مطلوبًا."             --latest=false

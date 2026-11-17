@@ -1,0 +1,42 @@
+buildscript {
+    repositories { google(); mavenCentral() }
+    dependencies { classpath 'com.android.tools.build:gradle:7.4.2' }
+}
+apply plugin: 'com.android.application'
+
+android {
+    namespace 'sa.youef.huidi.launcher'
+    compileSdkVersion 33
+    buildToolsVersion '33.0.2'
+    defaultConfig {
+        applicationId 'sa.youef.huidi.launcher'
+        minSdkVersion 19
+        targetSdkVersion 28
+        versionCode Integer.parseInt(project.findProperty('launcherVersionCode') ?: '1001')
+        versionName (project.findProperty('launcherVersionName') ?: '1.0.0')
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    signingConfigs {
+        permanent {
+            def keystore = project.findProperty('launcherStoreFile')
+            if (keystore) {
+                storeFile file(keystore)
+                storePassword project.findProperty('launcherStorePassword').toString()
+                keyAlias project.findProperty('launcherKeyAlias').toString()
+                keyPassword project.findProperty('launcherKeyPassword').toString()
+            }
+            v1SigningEnabled true // Required for Android 4.4.4
+            v2SigningEnabled true
+        }
+    }
+    buildTypes {
+        debug { minifyEnabled false }
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.permanent
+        }
+    }
+}
