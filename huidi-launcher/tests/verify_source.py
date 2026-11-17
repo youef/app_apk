@@ -20,3 +20,14 @@ for token in ("themesPage", "developerPage", "enableDeveloperGuide", "openDevelo
 assert "android.permission.WRITE_SECURE_SETTINGS" not in manifest
 assert "android.permission.WRITE_SETTINGS" not in manifest
 print("PASS KitKat glass themes, six palettes, safe developer settings handoff, remote HOME")
+
+gate=Path("huidi-launcher/src/main/java/sa/youef/huidi/launcher/AppPinGate.java").read_text(encoding="utf-8")
+for feature in ("dashboardCards", "systemPage", "maintenancePage", "clearOwnCache", "wallpapersPage",
+                "numericPin", "managePin", "appActions", "AppPinGate", "ACCESS", "wifiStatus"):
+    if feature != "ACCESS": assert feature in code, feature
+for feature in ("PBKDF2WithHmacSHA1","SecureRandom","MessageDigest.isEqual","setLocked"):
+    assert feature in gate, feature
+assert "android.permission.INTERNET" not in manifest
+assert "android.permission.ACCESS_WIFI_STATE" in manifest
+assert "android.permission.ACCESS_NETWORK_STATE" in manifest
+print("PASS device dashboard, safe maintenance, wallpapers and local-only PIN gate")

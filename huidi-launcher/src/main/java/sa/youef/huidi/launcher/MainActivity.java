@@ -1,14 +1,19 @@
 package sa.youef.huidi.launcher;
 
 import android.app.Activity;
+import android.app.ActivityManager;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.IntentFilter;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
+import android.net.wifi.WifiManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -25,6 +30,9 @@ import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.BatteryManager;
+import android.os.Environment;
+import android.os.StatFs;
 import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.TypedValue;
@@ -35,6 +43,7 @@ import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.GridLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -50,6 +59,7 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.io.File;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -67,6 +77,7 @@ public final class MainActivity extends Activity {
     private final Handler clockHandler = new Handler();
     private final ArrayList<AppEntry> apps = new ArrayList<AppEntry>();
     private SharedPreferences prefs;
+    private AppPinGate pinGate;
     private String page = "home";
     private TextView clockView;
     private AppEntry focusedApp;
@@ -99,6 +110,7 @@ public final class MainActivity extends Activity {
             View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
             | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         prefs = getSharedPreferences("huidi_home_prefs_v1", MODE_PRIVATE);
+        pinGate = new AppPinGate(this);
         refreshApps();
         render("home");
     }
@@ -244,6 +256,18 @@ public final class MainActivity extends Activity {
     }
     private void openApp(AppEntry app) {
         if (app == null) { render("apps"); return; }
+        if (pinGate.isLocked(app.pkg)) {
+            numericPin("فتح " + app.label, new PinAction() {
+                @Override public void onPin(String code) {
+                    if (pinGate.verify(code)) launchAppDirect(app);
+                    else Toast.makeText(MainActivity.this, "رمز غير صحيح", Toast.LENGTH_SHORT).show();
+                }
+            });
+            return;
+        }
+        launchAppDirect(app);
+    }
+    private void launchAppDirect(AppEntry app) {
         Intent intent = new Intent(Intent.ACTION_MAIN);
         intent.setComponent(new ComponentName(app.pkg, app.activity));
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -307,7 +331,8 @@ public final class MainActivity extends Activity {
         focusedApp = null;
         clockView = null;
         FrameLayout scene = new FrameLayout(this);
-        scene.setBackgroundDrawable(new Wallpaper(accent));
+        scene.setBackgroundDrawable(new Wallpaper(accent,
+            prefs.getString("wallpaper", "aurora")));
         scene.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
         setContentView(scene);
         LinearLayout shell = column();
@@ -334,8 +359,8 @@ public final class MainActivity extends Activity {
         shell.addView(top, lp(-1, 71, 0));
 
         LinearLayout menu = row();
-        String[] names = {"الرئيسية", "التطبيقات", "المفضلة", "الثيمات", "المطوّر", "الإعدادات"};
-        String[] pages = {"home", "apps", "favorites", "themes", "developer", "settings"};
+        String[] names = {"الرئيسية", "التطبيقات", "المفضلة", "النظام", "الصيانة", "الثيمات", "المطوّر", "الإعدادات"};
+        String[] pages = {"home", "apps", "favorites", "system", "maintenance", "themes", "developer", "settings"};
         for (int i = 0; i < names.length; i++) {
             final String destination = pages[i];
             Button tab = button(names[i], new View.OnClickListener() {
@@ -345,7 +370,11 @@ public final class MainActivity extends Activity {
         }
         menu.setPadding(dp(9), dp(3), dp(9), dp(3));
         menu.setBackgroundDrawable(panel(0xB3141B2C, GLASS_EDGE, 20));
-        shell.addView(menu, lp(-1, 60, 6));
+        HorizontalScrollView navScroll = new HorizontalScrollView(this);
+        navScroll.setHorizontalScrollBarEnabled(false);
+        navScroll.setFillViewport(true);
+        navScroll.addView(menu, new android.widget.FrameLayout.LayoutParams(-2, dp(59)));
+        shell.addView(navScroll, lp(-1, 65, 6));
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
         scroll.setVerticalScrollBarEnabled(false);
@@ -361,6 +390,12 @@ public final class MainActivity extends Activity {
             settingsPage(content);
         } else if ("developer".equals(section)) {
             developerPage(content);
+        } else if ("system".equals(section)) {
+            systemPage(content);
+        } else if ("maintenance".equals(section)) {
+            maintenancePage(content);
+        } else if ("wallpapers".equals(section)) {
+            wallpapersPage(content);
         } else if ("themes".equals(section)) {
             themesPage(content);
         } else {
@@ -385,11 +420,13 @@ public final class MainActivity extends Activity {
         hero.setBackgroundDrawable(heroDrawable());
         TextView eyebrow = text("✦  HUIDI HOME  /  GLASS EDITION", 13, accent, true);
         hero.addView(eyebrow, lp(-1, 28, 0));
-        hero.addView(text("تلفزيونك... بإطلالة جديدة.", lite() ? 27 : 36, WHITE, true), lp(-1, 61, 0));
+        final AppEntry featureTv = alezz();
+        hero.addView(text(featureTv == null ? "HUIDI HOME  •  شاشتك بأبهى حلّة"
+            : "العز TV  •  عالم الترفيه في بيتك", lite() ? 27 : 36, WHITE, true), lp(-1, 61, 0));
         hero.addView(text("زجاج داكن  •  ألوان مضيئة  •  وصول سريع  •  تحكم كامل بالريموت",
             16, MUTED, false), lp(-1, 38, 0));
         LinearLayout actions = row();
-        final AppEntry tv = alezz();
+        final AppEntry tv = featureTv;
         actions.addView(button(tv == null ? "كل التطبيقات  ←" : "▶  افتح العز TV",
             new View.OnClickListener() {
                 @Override public void onClick(View view) { if (tv == null) render("apps"); else openApp(tv); }
@@ -403,6 +440,8 @@ public final class MainActivity extends Activity {
         hero.addView(actions, lp(-1, 58, 0));
         content.addView(hero, lp(-1, -2, 7));
 
+        heading(content, "لوحة المعلومات  ✦", "حالة الجهاز بدون خدمات خلفية أو استهلاك بيانات");
+        dashboardCards(content, true);
         heading(content, "الوصول السريع  ✦", "اختصارات زجاجية بألوان متناسقة مع الثيم");
         LinearLayout shortcuts = row();
         shortcuts.setWeightSum(4);
@@ -524,7 +563,10 @@ public final class MainActivity extends Activity {
         TextView title = text(app.label, 15, WHITE, true);
         title.setSingleLine(true); title.setEllipsize(TextUtils.TruncateAt.END);
         labels.addView(title, lp(-1, 31, 1));
-        TextView tag = text(favorite ? "★  مفضّل" : "تطبيق  •  MENU للحفظ", 11, favorite ? accent : MUTED, false);
+        final boolean protectedApp = pinGate.isLocked(app.pkg);
+        TextView tag = text(protectedApp ? "🔒 محمي من داخل اللانشر" :
+            favorite ? "★  مفضّل" : "MENU: خيارات التطبيق", 11,
+            protectedApp || favorite ? accent : MUTED, false);
         tag.setSingleLine(true); tag.setEllipsize(TextUtils.TruncateAt.END);
         labels.addView(tag, lp(-1, 25, 1));
         tile.addView(labels, new LinearLayout.LayoutParams(0, -2, 1f));
@@ -543,13 +585,29 @@ public final class MainActivity extends Activity {
             @Override public void onClick(View v) { openApp(app); }
         });
         tile.setOnLongClickListener(new View.OnLongClickListener() {
-            @Override public boolean onLongClick(View v) { toggleFavorite(app); return true; }
+            @Override public boolean onLongClick(View v) { appActions(app); return true; }
         });
         return tile;
     }
 
     private void settingsPage(LinearLayout content) {
         heading(content, "تخصيص بيتي  ◈", "ألوان زجاجية وإعدادات محلية بدون حساب أو اتصال");
+        content.addView(settingRow("لوحة النظام",
+            "الذاكرة، التخزين، شبكة الواي فاي والبطارية", "عرض اللوحة",
+            new View.OnClickListener() { @Override public void onClick(View v) { render("system"); } }),
+            lp(-1, 98, 6));
+        content.addView(settingRow("مركز الصيانة",
+            "تنظيف ملفات التطبيق المؤقتة وتحديث قائمة البرامج", "فتح الصيانة",
+            new View.OnClickListener() { @Override public void onClick(View v) { render("maintenance"); } }),
+            lp(-1, 98, 6));
+        content.addView(settingRow("الخصوصية وقفل التطبيقات",
+            "قفل اختياري برقم سري، يعمل فقط داخل Huidi Home", "إدارة القفل",
+            new View.OnClickListener() { @Override public void onClick(View v) { managePin(); } }),
+            lp(-1, 98, 6));
+        content.addView(settingRow("خلفية الشاشة",
+            "أورورا، نجوم، خطوط أو وضع هادئ منخفض الاستهلاك", "تغيير الخلفية",
+            new View.OnClickListener() { @Override public void onClick(View v) { render("wallpapers"); } }),
+            lp(-1, 98, 6));
         content.addView(settingRow("ثيمات زجاجية", "ذهبي، أحمر، أزرق، بنفسجي، زمردي ووردي", "معرض الثيمات",
             new View.OnClickListener() {
                 @Override public void onClick(View v) { render("themes"); }
@@ -730,6 +788,289 @@ public final class MainActivity extends Activity {
         content.addView(caution, lp(-1, 68, 8));
     }
 
+
+    // Avoid misleading "RAM booster" claims: only launcher-owned cache is deleted.
+    private long clearOwnCache(File path) {
+        if (path == null || !path.exists()) return 0L;
+        long removed = 0L;
+        File[] children = path.listFiles();
+        if (children != null) for (File f : children) {
+            if (f.isDirectory()) removed += clearOwnCache(f);
+            else { long length=f.length(); if (f.delete()) removed += length; }
+        }
+        return removed;
+    }
+    private void maintenancePage(LinearLayout content) {
+        heading(content, "مركز العناية بالجهاز  ◈", "أدوات صيانة آمنة دون حذف تطبيقاتك أو التعديل على النظام");
+        content.addView(settingRow("مسح مؤقتات Huidi Home فقط",
+            "يحذف الملفات المؤقتة لهذا اللانشر ولا يحذف صورك أو المفضلة أو الرموز",
+            "تنظيف الآن", new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    long bytes=clearOwnCache(getCacheDir());
+                    Toast.makeText(MainActivity.this,
+                        "تم تنظيف مؤقتات الواجهة: "+(bytes/1024)+" KB", Toast.LENGTH_LONG).show();
+                    render("maintenance");
+                }
+            }), lp(-1, 100, 6));
+        content.addView(settingRow("تحديث التطبيقات",
+            "إعادة قراءة قائمة التطبيقات المثبتة بدون حذف أو إيقاف أي تطبيق", "تحديث الآن",
+            new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    refreshApps(); render("apps");
+                    Toast.makeText(MainActivity.this, "تم تحديث قائمة التطبيقات", Toast.LENGTH_SHORT).show();
+                }
+            }), lp(-1, 100, 6));
+        content.addView(settingRow("تخفيف الضغط على ذاكرة الشاشة",
+            lite()?"مفعّل: عدد بطاقات أقل على Android القديم":"غير مفعّل: عدد بطاقات أكبر",
+            lite()?"إيقاف الوضع الخفيف":"تشغيل الوضع الخفيف", new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    prefs.edit().putBoolean("lite", !lite()).apply();
+                    showAllApps=false; render("maintenance");
+                }
+            }), lp(-1, 100, 6));
+        content.addView(settingRow("إعدادات إدارة التطبيقات",
+            "مسح مؤقتات التطبيقات الأخرى يتطلب استخدام صفحة النظام الأصلية",
+            "فتح الإعدادات", new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    if (!launchSystemAction(Settings.ACTION_APPLICATION_SETTINGS)) systemSettings();
+                }
+            }), lp(-1, 100, 6));
+        TextView info=text("لا توجد ميزة تسريع وهمية: Android يدير RAM والتطبيق لا يقتل برامج الخلفية أو يغير صلاحياتها.",13,MUTED,false);
+        content.addView(info,lp(-1,60,7));
+    }
+
+    private String size(long amount) {
+        if (amount < 0L) return "غير متاح";
+        if (amount >= 1024L*1024L*1024L)
+            return String.format(Locale.US, "%.1f GB", amount/(1024d*1024d*1024d));
+        return (amount/(1024L*1024L))+" MB";
+    }
+    private String wifiStatus() {
+        try {
+            WifiManager wifi=(WifiManager)getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wifi == null || !wifi.isWifiEnabled()) return "غير مفعّل";
+            ConnectivityManager cm=(ConnectivityManager)getSystemService(CONNECTIVITY_SERVICE);
+            NetworkInfo info=cm==null?null:cm.getActiveNetworkInfo();
+            return info != null && info.isConnected() && info.getType()==ConnectivityManager.TYPE_WIFI
+                ? "متصل" : "مفعّل (غير متصل)";
+        } catch (Exception e) { return "غير متاح"; }
+    }
+    private String batteryStatus() {
+        try {
+            Intent battery=registerReceiver(null,new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            if (battery==null) return "غير متاح";
+            int level=battery.getIntExtra(BatteryManager.EXTRA_LEVEL,-1);
+            int scale=battery.getIntExtra(BatteryManager.EXTRA_SCALE,-1);
+            if (level<0||scale<=0) return "غير متاح";
+            return (level*100/scale)+"%";
+        } catch (Exception ignored) { return "غير متاح"; }
+    }
+    private void dashboardCards(LinearLayout content, boolean compact) {
+        ActivityManager.MemoryInfo info=new ActivityManager.MemoryInfo();
+        String ram="غير متاح";
+        try {
+            ActivityManager am=(ActivityManager)getSystemService(Context.ACTIVITY_SERVICE);
+            if (am!=null) {
+                am.getMemoryInfo(info);
+                ram=size(info.availMem)+" متاح";
+            }
+        } catch (Exception ignored) {}
+        String storage="غير متاح";
+        try {
+            StatFs fs=new StatFs(Environment.getDataDirectory().getPath());
+            storage=size(fs.getAvailableBytes())+" متاح";
+        } catch (Exception ignored) {}
+        String[] names={"الذاكرة","التخزين","الواي فاي","البطارية"};
+        String[] values={ram,storage,wifiStatus(),batteryStatus()};
+        int[] accents={0xFF7DD3FF,0xFFFFCC78,0xFF83EDCE,0xFFD5A9FF};
+        LinearLayout line=row();
+        for (int i=0;i<names.length;i++) {
+            LinearLayout card=column();
+            card.setPadding(dp(14),dp(9),dp(14),dp(7));
+            card.setBackgroundDrawable(panel(GLASS,accents[i],17));
+            card.addView(text(names[i],13,MUTED,true),lp(-1,26,1));
+            TextView value=text(values[i],compact?15:20,WHITE,true);
+            value.setSingleLine(true);value.setEllipsize(TextUtils.TruncateAt.END);
+            card.addView(value,lp(-1,35,1));
+            LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,dp(compact?77:90),1f);
+            params.setMargins(dp(5),dp(4),dp(5),dp(5));
+            line.addView(card,params);
+        }
+        content.addView(line,lp(-1,-2,3));
+    }
+    private void systemPage(LinearLayout content) {
+        heading(content,"لوحة النظام  ◈","معلومات حقيقية من Android، تُحدّث عند فتح الصفحة");
+        dashboardCards(content,false);
+        content.addView(settingRow("معلومات الجهاز","Android "+Build.VERSION.RELEASE+"  •  "+Build.MANUFACTURER+
+            "  •  "+Build.MODEL,"حول الجهاز",new View.OnClickListener() {
+                @Override public void onClick(View v) { openAboutDevice(); }
+            }),lp(-1,100,6));
+        content.addView(settingRow("إعدادات الشبكة","الحالة الحالية: "+wifiStatus(),
+            "فتح الواي فاي",new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    if(!launchSystemAction(Settings.ACTION_WIFI_SETTINGS))systemSettings();
+                }
+            }),lp(-1,100,6));
+        content.addView(settingRow("المطوّر","حالة خيارات المطوّر: "+
+            (isDeveloperModeEnabled()?"مفعّلة":"مخفية أو غير مفعّلة"),
+            "خيارات المطوّر",new View.OnClickListener() {
+                @Override public void onClick(View v) { render("developer"); }
+            }),lp(-1,100,6));
+        content.addView(settingRow("صيانة الواجهة","تنظيف مؤقتات Huidi Home وتحديث التطبيقات",
+            "فتح الصيانة",new View.OnClickListener() {
+                @Override public void onClick(View v) { render("maintenance"); }
+            }),lp(-1,100,6));
+    }
+    private void wallpapersPage(LinearLayout content) {
+        heading(content,"الخلفيات الزجاجية  ✦","اختر النمط؛ تُرسم الخلفيات محليًا بدون ملفات صور كبيرة");
+        final String[] keys={"aurora","nebula","grid","minimal"};
+        final String[] labels={"أورورا مضيئة","سديم سينمائي","شبكة زجاجية","هادئة وسريعة"};
+        for(int i=0;i<keys.length;i++) {
+            final String chosen=keys[i];
+            content.addView(settingRow(labels[i],
+                chosen.equals(prefs.getString("wallpaper","aurora"))?"✓ الخلفية الحالية":"تغيير شكل الإضاءة والأنماط",
+                "تطبيق",new View.OnClickListener(){
+                    @Override public void onClick(View v){
+                        prefs.edit().putString("wallpaper",chosen).apply();
+                        render("wallpapers");
+                    }
+                }),lp(-1,92,5));
+        }
+    }
+
+    private interface PinAction { void onPin(String pin); }
+    /** Accessible, D-pad navigable PIN pad with no system keyboard dependency. */
+    private void numericPin(String title, final PinAction action) {
+        final android.app.AlertDialog dialog=new AlertDialog.Builder(this).create();
+        LinearLayout body=column();
+        body.setPadding(dp(18),dp(14),dp(18),dp(14));
+        body.setBackgroundDrawable(panel(0xEE192135,accent,19));
+        TextView header=text(title,20,WHITE,true);
+        header.setGravity(Gravity.CENTER);
+        body.addView(header,lp(-1,50,3));
+        final StringBuilder digits=new StringBuilder(6);
+        final TextView masked=text("○ ○ ○ ○ ○ ○",22,accent,true);
+        masked.setGravity(Gravity.CENTER);
+        body.addView(masked,lp(-1,41,3));
+        GridLayout keyboard=new GridLayout(this);
+        keyboard.setColumnCount(3);
+        Button first=null;
+        for (int n=1;n<=12;n++) {
+            final int digit=n<=9?n:(n==11?0:-1);
+            String value=n==10?"⌫":n==12?"إلغاء":String.valueOf(digit);
+            final Button key=button(value,new View.OnClickListener(){
+                @Override public void onClick(View v){
+                    if (digit<0) {
+                        if("⌫".contentEquals(((Button)v).getText())) {
+                            if(digits.length()>0)digits.deleteCharAt(digits.length()-1);
+                        } else dialog.dismiss();
+                    } else if(digits.length()<6)digits.append(digit);
+                    StringBuilder display=new StringBuilder();
+                    for(int j=0;j<6;j++)display.append(j<digits.length()?"● ":"○ ");
+                    masked.setText(display.toString());
+                    if(digits.length()==6){
+                        String response=digits.toString();
+                        digits.setLength(0);
+                        dialog.dismiss();
+                        action.onPin(response);
+                    }
+                }
+            },false);
+            if(first==null)first=key;
+            GridLayout.LayoutParams cell=new GridLayout.LayoutParams();
+            cell.width=dp(88); cell.height=dp(46);
+            cell.setMargins(dp(4),dp(4),dp(4),dp(4));
+            keyboard.addView(key,cell);
+        }
+        body.addView(keyboard,lp(-2,-2,3));
+        dialog.setView(body);
+        dialog.setOnShowListener(new DialogInterface.OnShowListener(){
+            @Override public void onShow(DialogInterface d){
+                if(keyboard.getChildCount()>0)keyboard.getChildAt(0).requestFocus();
+            }
+        });
+        dialog.show();
+    }
+    private void createPin() {
+        numericPin("أنشئ رمز القفل (6 أرقام)",new PinAction(){
+            @Override public void onPin(final String first) {
+                numericPin("أعد إدخال الرمز للتأكيد",new PinAction(){
+                    @Override public void onPin(String verify) {
+                        if(!first.equals(verify)) {
+                            Toast.makeText(MainActivity.this,"الرمزان غير متطابقين، لم يتم حفظ رمز",Toast.LENGTH_LONG).show();
+                            return;
+                        }
+                        if(pinGate.savePin(first)) {
+                            Toast.makeText(MainActivity.this,"تم تفعيل رمز حماية اللانشر",Toast.LENGTH_LONG).show();
+                        } else Toast.makeText(MainActivity.this,"تعذّر حفظ الرمز على هذا النظام",Toast.LENGTH_LONG).show();
+                    }
+                });
+            }
+        });
+    }
+    private void appActions(final AppEntry app) {
+        final boolean guarded=pinGate.isLocked(app.pkg);
+        final String[] choices={favorites().contains(app.pkg)?"إزالة من المفضلة":"إضافة للمفضلة",
+            guarded?"إلغاء قفل التطبيق":"قفل التطبيق برمز"};
+        new AlertDialog.Builder(this).setTitle("إدارة "+app.label)
+            .setItems(choices,new DialogInterface.OnClickListener(){
+                @Override public void onClick(DialogInterface d,int which) {
+                    if(which==0)toggleFavorite(app);
+                    else if(!pinGate.hasPin()) {
+                        new AlertDialog.Builder(MainActivity.this).setTitle("إعداد رمز الحماية")
+                            .setMessage("حدّد أولًا رمزًا من 6 أرقام لقفل اختصارات التطبيقات من Huidi Home.")
+                            .setPositiveButton("إنشاء الرمز",new DialogInterface.OnClickListener(){
+                                @Override public void onClick(DialogInterface d,int w){createPin();}
+                            }).setNegativeButton("إلغاء",null).show();
+                    } else {
+                        numericPin("تأكيد الرمز لإدارة القفل",new PinAction(){
+                            @Override public void onPin(String entered){
+                                if(!pinGate.verify(entered)) {
+                                    Toast.makeText(MainActivity.this,"رمز غير صحيح",Toast.LENGTH_SHORT).show();return;
+                                }
+                                pinGate.setLocked(app.pkg,!guarded);
+                                render(page);
+                            }
+                        });
+                    }
+                }
+            }).show();
+    }
+    private void managePin() {
+        if (!pinGate.hasPin()) {
+            new AlertDialog.Builder(this).setTitle("قفل اختصارات التطبيقات")
+                .setMessage("احمِ تشغيل تطبيقات محددة من داخل Huidi Home فقط. يمكن تجاوز الحماية من واجهة النظام الأصلية؛ ليست رقابة أبوية على مستوى الجهاز.")
+                .setPositiveButton("إنشاء رمز من 6 أرقام",new DialogInterface.OnClickListener(){
+                    @Override public void onClick(DialogInterface d,int which){createPin();}
+                }).setNegativeButton("إلغاء",null).show();
+            return;
+        }
+        numericPin("رمز القفل لإدارة الحماية",new PinAction(){
+            @Override public void onPin(String code){
+                if(!pinGate.verify(code)) {
+                    Toast.makeText(MainActivity.this,"رمز غير صحيح",Toast.LENGTH_SHORT).show();return;
+                }
+                final String[] options={"تغيير رمز الحماية","إلغاء رمز الحماية وكل القيود","تصفّح التطبيقات لقفلها"};
+                new AlertDialog.Builder(MainActivity.this).setTitle("إعدادات الحماية")
+                    .setItems(options,new DialogInterface.OnClickListener(){
+                        @Override public void onClick(DialogInterface d,int which){
+                            if(which==0)createPin();
+                            else if(which==1) {
+                                new AlertDialog.Builder(MainActivity.this)
+                                    .setTitle("إزالة القفل")
+                                    .setMessage("سيتم إلغاء كل أقفال التطبيقات من داخل Huidi Home.")
+                                    .setPositiveButton("إزالة",new DialogInterface.OnClickListener(){
+                                        @Override public void onClick(DialogInterface d,int w){
+                                            pinGate.clear();render("settings");
+                                        }
+                                    }).setNegativeButton("إلغاء",null).show();
+                            } else render("apps");
+                        }
+                    }).show();
+            }
+        });
+    }
+
     private void chooseHome() {
         new AlertDialog.Builder(this).setTitle("تعيين واجهة الشاشة الرئيسية")
             .setMessage("اضغط زر Home في الريموت، واختر «Huidi Home | بيتي» ثم «دائمًا» إذا ظهر اختيار المشغّل.\n\nإذا لم يظهر الاختيار، افتح إعدادات النظام ← التطبيقات ← المشغّل الحالي ← مسح الإعدادات الافتراضية، ثم اضغط Home. لا تُحذف تطبيقاتك.")
@@ -749,13 +1090,14 @@ public final class MainActivity extends Activity {
     }
     @Override public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_MENU && event.getRepeatCount() == 0 && focusedApp != null) {
-            toggleFavorite(focusedApp);
+            appActions(focusedApp);
             return true;
         }
         return super.onKeyDown(keyCode, event);
     }
     @Override public void onBackPressed() {
-        if ("developer".equals(page) || "themes".equals(page)) render("settings");
+        if ("developer".equals(page) || "themes".equals(page) ||
+            "wallpapers".equals(page) || "system".equals(page) || "maintenance".equals(page)) render("settings");
         else if (!"home".equals(page)) render("home");
         else new AlertDialog.Builder(this).setMessage("Huidi Home هي واجهتك. لفتح المشغّل الأصلي استخدم إعدادات النظام.")
             .setPositiveButton("الإعدادات", new DialogInterface.OnClickListener() {
@@ -777,8 +1119,9 @@ public final class MainActivity extends Activity {
 
     private static final class Wallpaper extends Drawable {
         private final int accent;
+        private final String style;
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        Wallpaper(int accent) { this.accent = accent; }
+        Wallpaper(int accent, String style) { this.accent = accent; this.style = style; }
         @Override public void draw(Canvas canvas) {
             Rect b = getBounds();
             int w = b.width(), h = b.height();
@@ -786,7 +1129,9 @@ public final class MainActivity extends Activity {
             paint.setShader(new LinearGradient(0, 0, w, h,
                 new int[] {BG, 0xFF171320, 0xFF0C1520}, null, Shader.TileMode.CLAMP));
             canvas.drawRect(b, paint);
-            paint.setShader(new RadialGradient(w * 0.87f, h * 0.13f, Math.max(w,h) * 0.65f,
+            if ("minimal".equals(style)) { paint.setShader(null); return; }
+            float cx="nebula".equals(style)?0.50f:0.87f;
+            paint.setShader(new RadialGradient(w * cx, h * 0.13f, Math.max(w,h) * 0.65f,
                 new int[] {mix(accent, 0xFFFFFFFF, 0.14f, 102), 0x00000000},
                 null, Shader.TileMode.CLAMP));
             canvas.drawRect(b, paint);
@@ -798,8 +1143,17 @@ public final class MainActivity extends Activity {
             // Delicate glass-grid lines: no bitmap allocation, animations or blur shaders.
             paint.setColor(0x15FFFFFF);
             paint.setStrokeWidth(1f);
-            for(int x=0;x<w;x+=Math.max(80,w/12))canvas.drawLine(x,0,x,h,paint);
-            for(int y=0;y<h;y+=Math.max(80,h/8))canvas.drawLine(0,y,w,y,paint);
+            if ("grid".equals(style) || "aurora".equals(style)) {
+                for(int x=0;x<w;x+=Math.max(80,w/12))canvas.drawLine(x,0,x,h,paint);
+                for(int y=0;y<h;y+=Math.max(80,h/8))canvas.drawLine(0,y,w,y,paint);
+            } else if ("nebula".equals(style)) {
+                paint.setColor(0x50FFFFFF);
+                for(int i=0;i<22;i++) {
+                    float x=((i*157L+41)%Math.max(1,w));
+                    float y=((i*97L+29)%Math.max(1,h));
+                    canvas.drawCircle(x,y,Math.max(0.8f,h/720f),paint);
+                }
+            }
         }
         @Override public void setAlpha(int alpha) { }
         @Override public void setColorFilter(ColorFilter filter) { }
