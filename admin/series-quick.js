@@ -63,6 +63,9 @@ async function verifyAdmin(){
  if(!me.ok)throw new Error("سجّل الدخول من جديد");
  var user=await me.json();
  if(!user.id)throw new Error("حساب غير صالح");
+ session.user_id=user.id;
+ session.email=user.email||session.email||"";
+ localStorage.setItem(cfg.storagePrefix+"session",JSON.stringify(session));
  var list=await rest("aseel_admins?select=user_id,active&user_id=eq."+encodeURIComponent(user.id)+"&limit=1");
  if(!Array.isArray(list)||!list.some(function(a){return a.active&&a.user_id===user.id;}))
  throw new Error("الحساب لا يملك صلاحية الإدارة");
