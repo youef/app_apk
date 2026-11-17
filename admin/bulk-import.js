@@ -3,9 +3,33 @@
  const cfg=window.ALEZZ_ADMIN_CONFIG,$=id=>document.getElementById(id);
  let batch=null,items=[],busy=false,stopped=false,saved=0,authenticated=false;
  function msg(v,type){const e=$("batchMessage");e.textContent=v;e.className="batch-message "+(type||"");}
- const savedSession=()=>{try{return JSON.parse(localStorage.getItem(cfg.storagePrefix+"session")||"null");}catch{return null;}};
+ const sessionKey=cfg.storagePrefix+"session";
+ const savedSession=()=>{try{return JSON.parse(localStorage.getItem(sessionKey)||"null");}catch{return null;}};
+ let refreshing=null;
+ async function activeSession(){
+  let s=savedSession();
+  if(!s?.access_token)throw Error("يرجى تسجيل الدخول في لوحة الإدارة");
+  if(s.expires_at&&Date.now()>=Number(s.expires_at)-60000){
+   if(!s.refresh_token)throw Error("انتهت الجلسة. سجّل الدخول مجددًا.");
+   if(!refreshing)refreshing=(async()=>{
+    const response=await fetch(cfg.supabaseUrl+"/auth/v1/token?grant_type=refresh_token",{
+     method:"POST",headers:{"apikey":cfg.publishableKey,"Content-Type":"application/json"},
+     body:JSON.stringify({refresh_token:s.refresh_token}),cache:"no-store"
+    });
+    const data=await response.json();
+    if(!response.ok||!data.access_token)throw Error("تعذر تجديد جلسة الإدارة. سجّل الدخول مجددًا.");
+    const next={...s,access_token:data.access_token,refresh_token:data.refresh_token||s.refresh_token,
+     expires_at:Date.now()+Number(data.expires_in||3600)*1000,user_id:data.user?.id||s.user_id,
+     email:data.user?.email||s.email};
+    localStorage.setItem(sessionKey,JSON.stringify(next));
+    return next;
+   })().finally(()=>{refreshing=null;});
+   s=await refreshing;
+  }
+  return s;
+ }
  async function call(url,init={}){
-  const session=savedSession();if(!session?.access_token)throw Error("يرجى تسجيل الدخول في لوحة الإدارة");
+  const session=await activeSession();
   const r=await fetch(url,{method:init.method||"GET",headers:{"apikey":cfg.publishableKey,"Authorization":"Bearer "+session.access_token,"Content-Type":"application/json",...(init.headers||{})},body:init.body,cache:"no-store"});
   const raw=await r.text();let data;try{data=raw?JSON.parse(raw):null;}catch{data={error:raw.slice(0,100)}}
   if(!r.ok){
@@ -271,10 +295,70 @@
   $("batchIncludeUnverified").addEventListener("change",status);
   $("batchGenres").addEventListener("change",()=>{if(!text("batchCategory"))$("batchCategory").value=bestCategory(parseGenres());});
   $("batchDiscover").onclick=discover;$("batchVerify").onclick=verify;$("batchSave").onclick=save;$("batchExport").onclick=csv;$("batchCancel").onclick=()=>{stopped=true;msg("سيُوقف الفحص بعد إكمال الطلبات الجارية.");};
- (async()=>{try{const sess=savedSession();if(!sess?.user_id)throw Error("سجل الدخول أولًا من صفحة الإدارة");const rs=await rest("aseel_admins","select=active&user_id="+eq(sess.user_id));if(!rs?.some(x=>x.active))throw Error("ليس لديك صلاحية إدارة نشطة");authenticated=true;const data=await rest("aseel_content_sources","select=id,title,verified,license_reference&verified=eq.true&limit=200");
+ async function initializeAdmin(){
+  authenticated=false;
+  try{
+   let sess=await activeSession(),uid=sess.user_id;
+   if(!uid){
+    const me=await fetch(cfg.supabaseUrl+"/auth/v1/user",{
+      headers:{"apikey":cfg.publishableKey,"Authorization":"Bearer "+sess.access_token},cache:"no-store"});
+    if(!me.ok)throw Error("انتهت الجلسة؛ سجّل الدخول من جديد.");
+    const user=await me.json();uid=user.id;
+    if(!uid)throw Error("تعذر التحقق من هوية الحساب.");
+    sess={...sess,user_id:uid,email:user.email||sess.email};
+    localStorage.setItem(sessionKey,JSON.stringify(sess));
+   }
+   const rs=await rest("aseel_admins","select=user_id,active&user_id="+eq(uid)+"&limit=1");
+   if(!rs?.some(x=>x.user_id===uid&&x.active))throw Error("ليس لديك صلاحية إدارة نشطة");
+   authenticated=true;
+   $("batchLoginPanel").hidden=true;
+   const warnings=[];
+   try{
+    const data=await rest("aseel_content_sources","select=id,title,verified,license_reference&verified=eq.true&limit=200");
+    sourceIds.clear();
     for(const source of data||[]){if(!source.license_reference)continue;sourceIds.add(source.id);
-      const opt=document.createElement("option");opt.value=source.id;opt.textContent=source.title;$("batchSource").append(opt);}
+     const opt=document.createElement("option");opt.value=source.id;opt.textContent=source.title;$("batchSource").append(opt);}
+   }catch(e){warnings.push("تعذر تحميل المصادر المرخصة");}
+   try{
     categoryOptions=await rest("aseel_categories","select=id,name_ar&published=eq.true&limit=500");
     for(const cat of categoryOptions||[]){const opt=document.createElement("option");opt.value=cat.id;opt.textContent=cat.name_ar;$("batchCategory").append(opt);}
-    msg("تم التحقق من دخول المسؤول. الصق رابطًا للبدء.","success");}catch(e){msg("فشل فتح الاستيراد: "+e.message,"error");}status();})();
+   }catch(e){warnings.push("تعذر تحميل التصنيفات");}
+   msg(warnings.length?"تم تسجيل الدخول، مع تحذير: "+warnings.join("، "):"تم التحقق من دخول المسؤول. الصق رابطًا للبدء.",warnings.length?"error":"success");
+  }catch(e){
+   authenticated=false;
+   $("batchLoginPanel").hidden=false;
+   msg("يلزم تسجيل دخول مسؤول: "+String(e.message||e),"error");
+  }
+  status();
+ }
+ $("batchLoginForm").addEventListener("submit",async event=>{
+  event.preventDefault();
+  const button=$("batchLoginSubmit"),email=$("batchLoginEmail").value.trim(),
+   password=$("batchLoginPassword").value;
+  if(!email||!password){msg("أدخل البريد الإلكتروني وكلمة المرور.","error");return;}
+  button.disabled=true;button.textContent="جارٍ تسجيل الدخول…";
+  try{
+   const response=await fetch(cfg.supabaseUrl+"/auth/v1/token?grant_type=password",{
+    method:"POST",headers:{"Content-Type":"application/json","apikey":cfg.publishableKey},
+    body:JSON.stringify({email,password}),cache:"no-store"
+   });
+   const data=await response.json();
+   if(!response.ok||!data.access_token||!data.user?.id)throw Error("بيانات الدخول غير صحيحة أو تعذّر الوصول إلى الحساب.");
+   const uid=data.user.id;
+   const authorized=await fetch(cfg.supabaseUrl+"/rest/v1/aseel_admins?select=user_id,active&user_id="+eq(uid)+"&limit=1",{
+    headers:{"apikey":cfg.publishableKey,"Authorization":"Bearer "+data.access_token},cache:"no-store"
+   });
+   const rows=authorized.ok?await authorized.json():[];
+   if(!rows.some(x=>x.user_id===uid&&x.active))throw Error("ليس لهذا الحساب صلاحيات إدارة.");
+   localStorage.setItem(sessionKey,JSON.stringify({
+    access_token:data.access_token,refresh_token:data.refresh_token,
+    expires_at:Date.now()+Number(data.expires_in||3600)*1000,
+    user_id:uid,email:data.user.email||email
+   }));
+   $("batchLoginPassword").value="";
+   await initializeAdmin();
+  }catch(e){msg(String(e.message||e),"error");}
+  finally{button.disabled=false;button.textContent="تسجيل دخول المسؤول";}
+ });
+ initializeAdmin();
 })();
