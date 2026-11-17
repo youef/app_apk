@@ -70,7 +70,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          APK="huidi-launcher/build/outputs/apk/release/huidi-launcher-release.apk"
+          APK="$(find huidi-launcher/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          test -n "$APK" && test -s "$APK"
           mkdir -p dist
           cp "$APK" dist/huidi-home-android44.apk
           SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
