@@ -2,6 +2,15 @@
 </head><body>
 <div class="ambient"><span class="ambient-glow ambient-glow--gold"></span></div><main class="batch">
 <header class="batch-head"><div><p class="eyebrow">AL EZZ SMART IMPORT</p><h1>جلب مسلسل كامل من رابط واحد</h1><p>اكتشاف المواسم والحلقات · تدقيق التشغيل · إزالة التكرارات · حفظ آمن</p></div><a class="btn btn-ghost" href="./#channels">العودة للقنوات</a></header>
+<section class="batch-panel" id="batchLoginPanel" hidden aria-labelledby="batchLoginTitle">
+  <h2 id="batchLoginTitle">تسجيل الدخول إلى الاستيراد الجماعي</h2>
+  <p class="hint">استخدم حساب مسؤول العز TV. سيتم التحقق من صلاحياتك عبر Supabase وتُستخدم الجلسة نفسها في صفحات إدارة GitHub.</p>
+  <form id="batchLoginForm" class="batch-grid">
+    <label>البريد الإلكتروني<input id="batchLoginEmail" type="email" dir="ltr" autocomplete="username" required placeholder="admin@example.com"></label>
+    <label>كلمة المرور<input id="batchLoginPassword" type="password" autocomplete="current-password" required></label>
+    <div class="batch-actions"><button id="batchLoginSubmit" class="btn btn-gold" type="submit">تسجيل دخول المسؤول</button><a href="./#dashboard" class="btn btn-ghost">لوحة الإدارة</a></div>
+  </form>
+</section>
 <p id="batchMessage" class="batch-message" role="status" aria-live="polite">جارٍ التحقق من صلاحية الإدارة...</p>
 <section class="batch-panel"><h2>01 — اكتشاف رابط المصدر</h2><div class="batch-grid"><label>رابط صفحة الفيلم أو المسلسل<input id="batchUrl" type="url" dir="ltr" placeholder="https://archive.org/details/..." required></label><label>نوع العمل<select id="batchKind"><option value="auto">تلقائي</option><option value="movie">فيلم</option><option value="series">مسلسل مع الحلقات</option></select></label></div><p class="hint"><a href="catalog-import.html" style="color:#f3b5be">📦 لديك ملف JSON مرخّص لمئات المسلسلات؟ افتح أداة استيراد الكتالوج الجماعي.</a></p>
 <div class="batch-actions"><button class="btn btn-gold" id="batchDiscover">جلب وفحص تلقائي</button><button class="btn btn-ghost" id="batchVerify" disabled>افحص روابط التشغيل</button><button class="btn btn-ghost" id="batchCancel" disabled>إيقاف</button></div><p class="hint">تقبل الأداة روابط صفحات HTTPS العامة من مواقع مختلفة بعد فحص أمان النطاق. قبول الرابط للفحص لا يعني الموافقة على الحقوق أو ضمان استخلاص روابط التشغيل. لا تتجاوز تسجيل الدخول أو DRM.</p></section>
